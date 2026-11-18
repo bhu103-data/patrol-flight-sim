@@ -25,14 +25,33 @@
   #flightMap.guarding{border-color:#ff795e;color:#ffb2a1;}
   [hidden]{display:none !important;}
   #wrap.smooth-city canvas{image-rendering:auto;}
-  #titleOverlay{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;padding:16px;
+  #titleOverlay{position:absolute;inset:0;display:grid;justify-items:center;align-items:safe center;overflow:auto;padding:16px;
     background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
   .title-badge{width:min(820px,100%);border:1px solid #e88d4f;background:#181123;
     padding:clamp(15px,4vw,30px);box-shadow:0 14px 44px #0009;}
   h1.game-title{font-family:'Press Start 2P',monospace;font-size:clamp(24px,5vw,42px);
     letter-spacing:4px;color:#ffd699;text-shadow:3px 3px #8a2c38;margin:0 0 20px;}
-  .flight-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+  .flight-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
   .flight-options fieldset{min-width:0;border:1px solid #674863;padding:7px;}
+  .flight-options .map-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;}
+  .map-options .map-card{border:1px solid #674863;margin:0;}
+  .map-options .map-card:has(input:checked){border-color:#ffb677;}
+  .map-options .map-card:has(input:focus-visible){outline:2px solid #ffd699;outline-offset:2px;}
+  .map-card canvas{position:static;width:100%;height:auto;aspect-ratio:1.75;object-fit:cover;
+    background:#203552;margin-bottom:5px;image-rendering:auto;}
+  .map-card small{margin-left:0;}
+  #crashOverlay{position:absolute;inset:0;display:grid;place-items:center;z-index:21;
+    background:#120b19aa;padding:15px;}
+  #crashOverlay div{width:min(360px,100%);padding:20px;border:1px solid #ff996a;background:#201523;}
+  #crashOverlay p{margin:10px 0 18px;}
+  #crashOverlay button{background:#f4a259;border:1px solid #ffc690;padding:8px;color:#181123;font:inherit;cursor:pointer;}
+  #groundWarning{position:absolute;z-index:13;top:48px;left:50%;transform:translateX(-50%);
+    color:#fff2d5;background:#7a2830;padding:5px 10px;pointer-events:none;white-space:nowrap;}
+  @media(max-width:620px){
+    .flight-options .map-options{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .map-card canvas{aspect-ratio:2.3;}
+    #groundWarning{top:110px;left:auto;right:14px;transform:none;}
+  }
   .flight-options legend{color:#ffd699;padding:0 5px;}
   .flight-options label{display:block;margin:3px 0;padding:7px;background:#271a32;cursor:pointer;}
   .flight-options label:has(input:checked){background:#573346;color:#fff1db;}
@@ -46,7 +65,7 @@
     pointer-events:none;text-align:center;padding:5px 8px;background:#161020da;color:#ffe1ad;
     font-size:clamp(10px,2vw,14px);border:1px solid #a97458;max-width:40vw;}
   @media(max-width:620px){
-    .flight-options{grid-template-columns:1fr;gap:6px;}
+    .flight-options{gap:6px;}
     #statusBar .bar-right{gap:4px;}
     #missionStatus{top:60px;left:auto;right:14px;transform:none;}
   }
@@ -127,12 +146,12 @@
     <form id="flightSetup" class="title-badge">
       <h1 id="gameTitle" class="game-title">PATROL</h1>
       <div class="flight-options">
-        <fieldset>
+        <fieldset class="map-options">
           <legend>Map</legend>
-          <label><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
-          <label><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
-          <label><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
-          <label><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
+          <label class="map-card"><canvas data-map="coast" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
+          <label class="map-card"><canvas data-map="islands" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
+          <label class="map-card"><canvas data-map="valley" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
+          <label class="map-card"><canvas data-map="manhattan" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
         </fieldset>
         <fieldset>
           <legend>Mode</legend>
@@ -151,6 +170,15 @@
     </form>
   </section>
   <output id="missionStatus" hidden></output>
+  <div id="groundWarning" hidden>PULL UP</div>
+  <section id="crashOverlay" role="dialog" aria-modal="true" aria-labelledby="crashTitle" hidden>
+    <div>
+      <h2 id="crashTitle">Flight ended</h2>
+      <p id="crashDetail"></p>
+      <button id="retryFlight" type="button">Retry Flight</button>
+      <button id="crashMenuBtn" type="button">Choose Map</button>
+    </div>
+  </section>
 
   <div id="touchControls">
     <div id="joyZone"><div id="joyKnob"></div></div>
@@ -197,6 +225,10 @@
   const flightMenuBtn = document.getElementById('flightMenuBtn');
   const missionStatus = document.getElementById('missionStatus');
   const menuError = document.getElementById('menuError');
+  const crashOverlay = document.getElementById('crashOverlay');
+  const crashDetail = document.getElementById('crashDetail');
+  const retryFlight = document.getElementById('retryFlight');
+  const groundWarning = document.getElementById('groundWarning');
   const audioBtn = document.getElementById('audioBtn');
   const viewNameEl = document.getElementById('viewName');
   const pipEls = Array.from(document.querySelectorAll('#missilePips .pip'));
@@ -423,6 +455,11 @@
           const cDot = valueNoise(u * 128, v * 128, 128, 808);
           conifer[idx] = (cPatch > 0.54 && cDot > 0.58) ? 1.0 : 0.0;
         }
+      }
+
+      if (e.data.preview) {
+        self.postMessage({ type: 'preview', key: e.data.key, height }, [height.buffer]);
+        return;
       }
 
       self.postMessage({ type: 'progress', pct: 64, label: 'BAKING SUNSET SHADOWS...' });
@@ -1609,6 +1646,7 @@
   let camBlend = 0; // 0 = CHASE, 1 = COCKPIT, 2 = TOP-DOWN
   let flying = false;
   let flightFrame = 0;
+  let crash = null;
   let loading = false;
   let route = [];
   let gateIndex = 0;
@@ -1652,7 +1690,10 @@
   }
 
   function openFlightMenu() {
-    if (loading || !flying) return;
+    if (loading || (!flying && !crash)) return;
+    crash = null;
+    crashOverlay.hidden = true;
+    groundWarning.hidden = true;
     flying = false;
     cancelAnimationFrame(flightFrame);
     steeringKeys.clear();
@@ -1666,15 +1707,17 @@
     startFlight.focus();
   }
   flightMenuBtn.addEventListener('click', openFlightMenu);
+  document.getElementById('crashMenuBtn').addEventListener('click', openFlightMenu);
+  retryFlight.addEventListener('click', () => flightSetup.requestSubmit());
 
   function cycleView() {
-    if (!flying) return;
+    if (!flying || crash) return;
     viewIdx = (viewIdx + 1) % VIEWS.length;
     viewNameEl.textContent = VIEWS[viewIdx];
   }
 
   function triggerRoll() {
-    if (!flying) return;
+    if (!flying || crash) return;
     if (plane.rollAnim <= 0.001) {
       plane.rollAnim = 0.002;
       plane.rollDir = mouseNorm.x >= 0 ? 1 : -1;
@@ -1682,7 +1725,7 @@
   }
 
   function fireMissile() {
-    if (!flying || selectedAircraft !== "fighter") return;
+    if (!flying || crash || selectedAircraft !== "fighter") return;
     // Pick next loaded hardpoint
     let slot = -1;
     for (let i = 0; i < 4; i++) {
@@ -1725,7 +1768,7 @@
   let leftDownTime = 0;
 
   window.addEventListener('mousemove', (e) => {
-    if (!flying || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
+    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
     mouseClient.x = e.clientX;
     mouseClient.y = e.clientY;
     mouseNorm.x = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
@@ -1733,7 +1776,7 @@
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (!flying || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
+    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
     if (e.button === 0) {
       leftDown = true;
       leftDownTime = performance.now();
@@ -1756,10 +1799,12 @@
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('keydown', (e) => {
-    if (!flying) return;
-    if (e.code === 'Escape') {
+    if (e.code === 'Escape' && (flying || crash)) {
       openFlightMenu();
-    } else if (steeringCodes.has(e.code)) {
+      return;
+    }
+    if (!flying || crash) return;
+    if (steeringCodes.has(e.code)) {
       e.preventDefault();
       steeringKeys.add(e.code);
     } else if (e.code === 'KeyM' && !e.repeat) {
@@ -1960,6 +2005,11 @@
       const sx = Math.round(s[0]);
       const sy = Math.round(s[1]);
 
+      if (ex.crash) {
+        drawCrashBurst(sx, sy, t, ex.isWater);
+        continue;
+      }
+
       // Expanding shock ring
       if (t < 0.55) {
         const rad = Math.round(4 + t * 56);
@@ -1994,6 +2044,8 @@
         }
       }
     }
+
+    if (crash) return;
 
     // Top-Down target reticle when steering
     if (viewIdx === 2) {
@@ -2270,17 +2322,17 @@
   }
   mapToggle.addEventListener('click', toggleFlightMap);
 
-  function bakeFlightMap() {
-    const raster = document.createElement('canvas');
-    raster.width = raster.height = mapWidth;
+  function paintTerrainMap(raster, map, getHeight, preview = false) {
+    const mapWidth = raster.width;
+    const mapScale = mapWidth / MAP_SPAN;
     const ctx = raster.getContext('2d');
     const pixels = ctx.createImageData(mapWidth, mapWidth);
-    const { airfield, city } = selectedMap;
+    const { airfield, city } = map;
     for (let y = 0; y < mapWidth; y++) {
       for (let x = 0; x < mapWidth; x++) {
         const east = (x + 0.5 - mapWidth / 2) / mapScale;
         const north = (mapWidth / 2 - y - 0.5) / mapScale;
-        const h = sampleGroundHeight(east, north);
+        const h = getHeight(east, north);
         const offset = (y * mapWidth + x) * 4;
         const band = Math.floor((h - WATER_H) / 4);
         const water = h <= WATER_H;
@@ -2310,12 +2362,44 @@
         center - (airfield.z + airfield.halfLength) * mapScale,
         airfield.halfWidth * 2 * mapScale, airfield.halfLength * 2 * mapScale);
     }
+    if (preview) return;
     ctx.fillStyle = '#0b1024a6';
     ctx.beginPath();
     ctx.rect(0, 0, mapWidth, mapWidth);
     ctx.arc(mapWidth / 2, mapWidth / 2, FLIGHT_RADIUS * mapScale, 0, 2 * Math.PI);
     ctx.fill('evenodd');
-    return raster;
+  }
+
+  function loadMapPreviews() {
+    const url = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
+    let worker;
+    try {
+      worker = new Worker(url);
+    } catch {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const size = 160;
+    const cards = Array.from(flightSetup.querySelectorAll('canvas[data-map]'));
+    function stop() {
+      worker.terminate();
+      URL.revokeObjectURL(url);
+    }
+    worker.onerror = stop;
+    worker.onmessageerror = stop;
+    worker.onmessage = ({ data }) => {
+      if (data.type !== 'preview') return;
+      const card = cards.find(item => item.dataset.map === data.key);
+      const toIndex = value => clamp(Math.floor((value / MAP_SPAN + 0.5) * size), 0, size-1);
+      paintTerrainMap(card, FLIGHT_MAPS[data.key], (x,z) =>
+        Math.max(WATER_H, data.height[toIndex(z)*size+toIndex(x)] * TERRAIN_SCALE), true);
+      card.dataset.ready = 'true';
+      if (cards.every(item => item.dataset.ready)) stop();
+    };
+    for (const { dataset: { map: key } } of cards) {
+      worker.postMessage({ ...FLIGHT_MAPS[key], key, size, preview: true,
+        span: MAP_SPAN, scale: TERRAIN_SCALE, water: WATER_H });
+    }
   }
 
   function drawFlightMap(now, assisted) {
@@ -2383,6 +2467,9 @@
   function launchFlight(event) {
     event.preventDefault();
     if (loading) return;
+    crash = null;
+    crashOverlay.hidden = true;
+    groundWarning.hidden = true;
     const settings = new FormData(flightSetup);
     selectedMap = FLIGHT_MAPS[settings.get('flightMap')];
     document.getElementById('wrap').classList.toggle('smooth-city', Boolean(selectedMap.city));
@@ -2427,7 +2514,9 @@
         }
         if (data.type !== 'done') return;
         heightField = data.height;
-        mapRaster = bakeFlightMap();
+        mapRaster = document.createElement('canvas');
+        mapRaster.width = mapRaster.height = mapWidth;
+        paintTerrainMap(mapRaster, selectedMap, sampleGroundHeight);
         if (terrainTex) gl.deleteTexture(terrainTex);
         terrainTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, terrainTex);
@@ -2548,27 +2637,8 @@
   let slowFrames = 0;
   let trailAccum = 0;
 
-  function loop(now) {
-    if (!flying) return;
-    const rawDt = (now - lastTime) * 0.001;
-    lastTime = now;
-    const dt = Math.min(rawDt, 0.05);
-    const time = now * 0.001;
-
-    // Auto-lower internal resolution if integrated GPU slows down
-    if (rawDt > 0.036 && resScale > 0.65) {
-      slowFrames++;
-      if (slowFrames > 28) {
-        resScale = Math.max(0.65, resScale - 0.15);
-        resizeTargets();
-        slowFrames = 0;
-      }
-    } else {
-      slowFrames = Math.max(0, slowFrames - 1);
-    }
-
-    // 1. Flight Physics & Arcade Auto-Pullup
-    const prevY = plane.pos[1];
+  function advanceFlight(dt) {
+    const prevPos = [...plane.pos];
     const craft = AIRCRAFT[selectedAircraft];
     const targetSpeed = plane.afterburner ? craft.boost : craft.cruise;
     plane.speed = lerp(plane.speed, targetSpeed, dt * 2.8);
@@ -2641,22 +2711,110 @@
       plane.pos[2] *= limit;
     }
 
-    // Terrain avoidance auto-pullup
-    const gAhead1 = navigationSurface(plane.pos[0], plane.pos[2]);
-    const gAhead2 = navigationSurface(plane.pos[0] + basis.fwd[0] * 14, plane.pos[2] + basis.fwd[2] * 14);
-    const minSafeY = Math.max(gAhead1, gAhead2) + 2.4;
-    if (plane.pos[1] < minSafeY) {
-      plane.pos[1] = lerp(plane.pos[1], minSafeY + 1.2, dt * 7.5);
-      plane.pitch = Math.max(plane.pitch, 0.22);
-    }
-    plane.pos[1] = clamp(plane.pos[1], gAhead1 + 0.6, CEILING);
+    const floor = sampleGroundHeight(plane.pos[0], plane.pos[2]);
+    plane.pos[1] = Math.min(plane.pos[1], CEILING);
+    checkFlightCollision(prevPos, plane.pos);
+    if (!crash) updateMission(dt);
 
-    updateMission(dt);
-    plane.radarAlt = Math.max(0.2, plane.pos[1] - gAhead1);
-    plane.vsi = (plane.pos[1] - prevY) / Math.max(dt, 1e-4);
+    const look = 14;
+    const ahead = navigationSurface(plane.pos[0] + basis.fwd[0] * look, plane.pos[2] + basis.fwd[2] * look);
+    groundWarning.hidden = Boolean(crash) || Math.min(plane.pos[1] - floor, plane.pos[1] + basis.fwd[1]*look - ahead) > 5;
+    plane.radarAlt = Math.max(0.2, plane.pos[1] - floor);
+    plane.vsi = (plane.pos[1] - prevPos[1]) / Math.max(dt, 1e-4);
     const yawRate = (plane.yaw - prevYaw) / Math.max(dt, 1e-4);
     const pitchRate = (plane.pitch - prevPitch) / Math.max(dt, 1e-4);
     plane.gForce = clamp(1.0 + (pitchRate * plane.speed) / 14.0 + Math.abs(yawRate) * 0.9, 0.3, 7.5);
+
+    return { basis, boundaryAssist };
+  }
+
+  function checkFlightCollision(previous, next) {
+    // Substeps keep a fast-moving aircraft from crossing a narrow collision volume in one frame.
+    const steps = Math.max(1, Math.ceil(Math.hypot(...next.map((value, i) => value - previous[i])) / 0.65));
+    for (let i = 1; i <= steps; i++) {
+      const pos = previous.map((value, j) => lerp(value, next[j], i / steps));
+      const [x,y,z] = pos;
+      const surface = sampleGroundHeight(x,z);
+      if (y <= surface + 0.58) {
+        const water = surface <= WATER_H + 0.04;
+        finishFlight([x,surface+0.1,z], water ? 'Water impact' : 'Terrain collision', water);
+        return;
+      }
+      if (!selectedMap.city) continue;
+      for (const mark of NEW_YORK_LANDMARKS) {
+        const level = y - sampleGroundHeight(mark.x, mark.z);
+        if (level < 0 || level > mark.top + 0.58) continue;
+        const scale = mark.kind === 'liberty' ? (level < 13 ? 0.94 : 0.40)
+          : level > mark.top-13 ? 0.16 : level > 43 ? 0.65 : 1;
+        if (Math.abs(x-mark.x) <= mark.w*scale+0.55 && Math.abs(z-mark.z) <= mark.d*scale+0.55) {
+          finishFlight(pos, 'Collision with ' + mark.name, false);
+          return;
+        }
+      }
+    }
+  }
+
+  function finishFlight(position, reason, isWater) {
+    crash = { age: 0, reason };
+    plane.pos = position;
+    plane.speed = 0;
+    plane.afterburner = false;
+    steeringKeys.clear();
+    groundWarning.hidden = true;
+    camInitialized = false;
+    explosions.push({ pos: position, age: 0, maxAge: 1.4, isWater, crash: true });
+    playExplosionSound(isWater);
+    if (audioCtx && engineGain && abGain) {
+      engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+      abGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+    }
+  }
+
+  function drawCrashBurst(x, y, t, water) {
+    const radius = 16 + 70*t;
+    const glow = hudCtx.createRadialGradient(x,y,1,x,y,radius);
+    glow.addColorStop(0, water ? 'rgba(229,252,255,0.92)' : 'rgba(255,242,176,0.98)');
+    glow.addColorStop(0.38, water ? 'rgba(113,194,234,0.52)' : 'rgba(255,137,49,0.72)');
+    glow.addColorStop(1,'rgba(108,89,95,0)');
+    hudCtx.save();
+    hudCtx.globalAlpha = Math.max(0,1-t*1.17);
+    hudCtx.fillStyle = glow;
+    hudCtx.fillRect(x-radius,y-radius,radius*2,radius*2);
+    for (let i=0;i<22;i++) {
+      const angle = i*2.39996;
+      const r = (18 + (i%6)*13)*t;
+      const px = x+Math.cos(angle)*r;
+      const py = y+Math.sin(angle)*r-45*t+10*t*t;
+      hudCtx.fillStyle = water ? '#e3f9ff' : i%3 ? '#feb56b' : '#49373d';
+      hudCtx.beginPath();
+      hudCtx.arc(px,py,1.4+(i%3)*(1+t),0,2*Math.PI);
+      hudCtx.fill();
+    }
+    hudCtx.restore();
+  }
+
+  function loop(now) {
+    if (!flying) return;
+    const rawDt = (now - lastTime) * 0.001;
+    lastTime = now;
+    const dt = Math.min(rawDt, 0.05);
+    const time = now * 0.001;
+
+    // Auto-lower internal resolution if integrated GPU slows down
+    if (rawDt > 0.036 && resScale > 0.65) {
+      slowFrames++;
+      if (slowFrames > 28) {
+        resScale = Math.max(0.65, resScale - 0.15);
+        resizeTargets();
+        slowFrames = 0;
+      }
+    } else {
+      slowFrames = Math.max(0, slowFrames - 1);
+    }
+
+    const { basis, boundaryAssist } = crash
+      ? { basis: getPlaneBasis(), boundaryAssist: false }
+      : advanceFlight(dt);
 
     // 2. Missiles, Reloading & Trails
     for (let i = 0; i < 4; i++) {
@@ -2722,7 +2880,7 @@
 
     // Wingtip vapor trails
     trailAccum += dt;
-    if (trailAccum >= 0.024) {
+    if (!crash && trailAccum >= 0.024) {
       trailAccum = 0;
       for (const side of [-1, 1]) {
         trails.push({
@@ -2747,7 +2905,10 @@
     }
 
     // 3. Smooth ~1.0s Camera Interpolation
-    const targetCam = computeTargetCamera(basis);
+    const targetCam = crash ? {
+      eye: [plane.pos[0]-basis.fwd[0]*16,plane.pos[1]+7,plane.pos[2]-basis.fwd[2]*16],
+      look: plane.pos, up:[0,1,0], fov:58
+    } : computeTargetCamera(basis);
     if (!camInitialized) {
       camPos = [...targetCam.eye];
       camLook = [...targetCam.look];
@@ -2852,7 +3013,7 @@
       }
     }
 
-    if (viewIdx !== 1) {
+    if (!crash && viewIdx !== 1) {
       const planeScale = viewIdx === 2 ? 1.45 : 1.0;
       const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
@@ -2925,8 +3086,19 @@
     drawHudAndCockpit(time, basis, viewProj);
     drawFlightMap(now, boundaryAssist);
 
+    if (crash) {
+      crash.age += dt;
+      if (crash.age >= 1.15) {
+        flying = false;
+        crashDetail.textContent = crash.reason;
+        crashOverlay.hidden = false;
+        retryFlight.focus();
+        return;
+      }
+    }
     flightFrame = requestAnimationFrame(loop);
   }
+  loadMapPreviews();
 })();
 </script>
 </body>
