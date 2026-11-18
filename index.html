@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
@@ -26,11 +26,11 @@
   [hidden]{display:none !important;}
   #titleOverlay{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;padding:16px;
     background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
-  .title-badge{width:min(650px,100%);border:1px solid #e88d4f;background:#181123;
+  .title-badge{width:min(820px,100%);border:1px solid #e88d4f;background:#181123;
     padding:clamp(15px,4vw,30px);box-shadow:0 14px 44px #0009;}
   h1.game-title{font-family:'Press Start 2P',monospace;font-size:clamp(24px,5vw,42px);
     letter-spacing:4px;color:#ffd699;text-shadow:3px 3px #8a2c38;margin:0 0 20px;}
-  .flight-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+  .flight-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px;}
   .flight-options fieldset{min-width:0;border:1px solid #674863;padding:7px;}
   .flight-options legend{color:#ffd699;padding:0 5px;}
   .flight-options label{display:block;margin:3px 0;padding:7px;background:#271a32;cursor:pointer;}
@@ -44,7 +44,7 @@
   #missionStatus{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:12;
     pointer-events:none;text-align:center;padding:5px 8px;background:#161020da;color:#ffe1ad;
     font-size:clamp(10px,2vw,14px);border:1px solid #a97458;max-width:40vw;}
-  @media(max-width:480px){
+  @media(max-width:620px){
     .flight-options{grid-template-columns:1fr;gap:6px;}
     #statusBar .bar-right{gap:4px;}
     #missionStatus{top:60px;left:auto;right:14px;transform:none;}
@@ -117,7 +117,7 @@
   </section>
 
   <div id="loadOverlay" class="done">
-    <div class="load-label">正在生成地图</div>
+    <div class="load-label">Generating terrain</div>
     <div class="load-bar-outer"><div class="load-bar-inner" id="loadBar"></div></div>
     <div id="loadStep" style="font-size:12px;color:#c98a70;">SEEDING HEIGHTFIELD...</div>
   </div>
@@ -127,18 +127,24 @@
       <h1 id="gameTitle" class="game-title">PATROL</h1>
       <div class="flight-options">
         <fieldset>
-          <legend>飞行地图</legend>
-          <label><input type="radio" name="flightMap" value="coast" checked>铜湾海岸<small>海湾、内陆湖与高地</small></label>
-          <label><input type="radio" name="flightMap" value="islands">暮潮群岛<small>岛链、外海与狭窄水道</small></label>
+          <legend>Map</legend>
+          <label><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
+          <label><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
         </fieldset>
         <fieldset>
-          <legend>飞行模式</legend>
-          <label><input type="radio" name="flightMode" value="free" checked>自由飞行<small>探索地形，练习操控</small></label>
-          <label><input type="radio" name="flightMode" value="route">航标挑战<small>按顺序飞过 5 个航标，记录用时</small></label>
+          <legend>Mode</legend>
+          <label><input type="radio" name="flightMode" value="free" checked>Free Flight<small>Explore at your own pace</small></label>
+          <label><input type="radio" name="flightMode" value="route">Checkpoint Challenge<small>Fly through five beacons against the clock</small></label>
+        </fieldset>
+        <fieldset>
+          <legend>Aircraft</legend>
+          <label><input type="radio" name="aircraft" value="fighter" checked>Viper Jet<small>Fast boost, balanced handling</small></label>
+          <label><input type="radio" name="aircraft" value="saucer">UFO<small>Tight turns, steady pitch</small></label>
+          <label><input type="radio" name="aircraft" value="jetpack">Jetpack<small>Slow cruise, quick climbs</small></label>
         </fieldset>
       </div>
       <p id="menuError" role="alert" hidden></p>
-      <button id="startFlight" type="submit">开始飞行</button>
+      <button id="startFlight" type="submit">Start Flight</button>
     </form>
   </section>
   <output id="missionStatus" hidden></output>
@@ -146,24 +152,25 @@
   <div id="touchControls">
     <div id="joyZone"><div id="joyKnob"></div></div>
     <div class="touch-btn" id="btnCam">VIEW</div>
-    <div class="touch-btn" id="btnFire">MSL</div>
+    <div class="touch-btn fighter-control" id="btnFire">MSL</div>
     <div class="touch-btn" id="btnBoost">AB</div>
     <div class="touch-btn" id="btnRoll">ROLL</div>
   </div>
 
   <div id="statusBar">
     <div class="bar-left">
-      <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>键盘 / 鼠标操控</span>
+      <b id="aircraftName">Viper Jet</b>
+      <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>STEER / MOUSE</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
       <span class="desktop-only"><span class="key-pill">HOLD</span>AFTERBURNER</span>
-      <span class="desktop-only"><span class="key-pill">RMB/F</span>MISSILE</span>
+      <span class="desktop-only fighter-control"><span class="key-pill">RMB/F</span>MISSILE</span>
       <span class="desktop-only"><span class="key-pill">SPACE</span>VIEW (<b id="viewName">CHASE</b>)</span>
-      <span>MSL <span class="missile-pips" id="missilePips">
+      <span class="fighter-control">MSL <span class="missile-pips" id="missilePips">
         <i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i>
       </span></span>
     </div>
     <div class="bar-right">
-      <button id="flightMenuBtn" type="button">选地图</button>
+      <button id="flightMenuBtn" type="button">Flight Menu</button>
       <button id="audioBtn" type="button">SOUND: OFF</button>
     </div>
   </div>
@@ -180,6 +187,8 @@
   const loadBar = document.getElementById('loadBar');
   const loadStep = document.getElementById('loadStep');
   const titleOverlay = document.getElementById('titleOverlay');
+  const aircraftName = document.getElementById('aircraftName');
+  const fighterControls = document.querySelectorAll('.fighter-control');
   const flightSetup = document.getElementById('flightSetup');
   const startFlight = document.getElementById('startFlight');
   const flightMenuBtn = document.getElementById('flightMenuBtn');
@@ -224,14 +233,20 @@
     islands: {
       islands: true,
       landmarks: [
-        { name: '西风岛', x: -350, z: 90, width: 175, depth: 230, elevation: 0.73 },
-        { name: '北礁', x: 60, z: 372, width: 182, depth: 160, elevation: 0.69 },
-        { name: '东湾岛', x: 360, z: -180, width: 198, depth: 195, elevation: 0.77 }
+        { name: 'Westwind Isle', x: -350, z: 90, width: 175, depth: 230, elevation: 0.73 },
+        { name: 'North Reef', x: 60, z: 372, width: 182, depth: 160, elevation: 0.69 },
+        { name: 'East Bay Isle', x: 360, z: -180, width: 198, depth: 195, elevation: 0.77 }
       ],
       checkpoints: [[30,-85],[-65,24],[-153,164],[-103,308],[24,401]]
     }
   };
   let selectedMap = FLIGHT_MAPS.coast;
+  const AIRCRAFT = {
+    fighter: { name: 'Viper Jet', cruise: 23.5, boost: 42, turn: 1.45, pitchResponse: 3.4, maxPitch: 0.78 },
+    saucer: { name: 'UFO', cruise: 20, boost: 34, turn: 2.3, pitchResponse: 4.0, maxPitch: 0.55 },
+    jetpack: { name: 'Jetpack', cruise: 14, boost: 24, turn: 1.9, pitchResponse: 5.2, maxPitch: 1.02 }
+  };
+  let selectedAircraft = 'fighter';
 
   // Generate the selected height field in a worker.
   const workerSrc = `
@@ -384,7 +399,7 @@
   const gl = glCanvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
   if (!gl) {
     menuError.hidden = false;
-    menuError.textContent = '此浏览器无法启动 WebGL 2。请启用图形加速后重新加载。';
+    menuError.textContent = 'WebGL 2 could not start. Enable graphics acceleration and reload.';
     startFlight.disabled = true;
     return;
   }
@@ -851,8 +866,7 @@
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  // Build Twin-Engine Twin-Tail Low-Poly Fighter Jet Mesh
-  function buildFighterMesh() {
+  function createTriangleMesh() {
     const pos = [], norm = [], col = [];
     function addTri(a, b, c, rgb) {
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
@@ -871,6 +885,26 @@
       addTri(a, c, d, rgb);
     }
 
+    function upload() {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      function makeBuf(arr, loc) {
+        const b = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, b);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+      }
+      makeBuf(pos, 0);
+      makeBuf(norm, 1);
+      makeBuf(col, 2);
+      return { vao, count: pos.length / 3 };
+    }
+    return { addTri, addQuad, upload };
+  }
+
+  function buildFighterMesh() {
+    const { addTri, addQuad, upload } = createTriangleMesh();
     const radome = [0.14, 0.13, 0.22];
     const slate = [0.34, 0.39, 0.48];
     const grey = [0.54, 0.59, 0.67];
@@ -977,19 +1011,7 @@
       addQuad(ptsR[0], ptsR[1], ptsR[2], ptsR[3], [0.98, 0.45, 0.16]);
     }
 
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    function makeBuf(arr, loc) {
-      const b = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, b);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
-    }
-    makeBuf(pos, 0);
-    makeBuf(norm, 1);
-    makeBuf(col, 2);
-    return { vao, count: pos.length / 3 };
+    return upload();
   }
 
   // Build simple diamond/box mesh for Missiles & Afterburner plumes
@@ -1024,7 +1046,56 @@
     return { vao, count: pos.length / 3 };
   }
 
-  const fighterMesh = buildFighterMesh();
+  function buildSaucerMesh() {
+    const { addQuad, upload } = createTriangleMesh();
+    // Stacked rings form the dome, rim and underside.
+    const rings = [[0.01,0.93],[0.65,0.82],[1.02,0.30],[2.23,0.12],[2.35,-0.08],[1.36,-0.36],[0.01,-0.44]];
+    const colors = [[0.26,0.90,0.77],[0.22,0.64,0.77],[0.57,0.66,0.75],[0.83,0.90,0.33],[0.28,0.39,0.52],[0.31,0.68,0.55]];
+    const sectors = 16;
+    const point = ([radius, height], i) => {
+      const angle = i * 2 * Math.PI / sectors;
+      return [Math.sin(angle) * radius, height, Math.cos(angle) * radius];
+    };
+    for (let j = 0; j < rings.length - 1; j++) {
+      for (let i = 0; i < sectors; i++) {
+        const color = j === 3 && i % 2 ? [0.25,0.40,0.50] : colors[j];
+        addQuad(point(rings[j],i),point(rings[j+1],i),
+          point(rings[j+1],i+1),point(rings[j],i+1),color);
+      }
+    }
+    return upload();
+  }
+
+  function buildJetpackMesh() {
+    const { addQuad, upload } = createTriangleMesh();
+    function box(x,y,z,w,h,d,color) {
+      const l=x-w/2,r=x+w/2,b=y-h/2,t=y+h/2,f=z+d/2,k=z-d/2;
+      const a=[l,b,f],c=[r,b,f],e=[r,t,f],g=[l,t,f];
+      const i=[l,b,k],j=[r,b,k],m=[r,t,k],n=[l,t,k];
+      for (const face of [[a,c,e,g],[j,i,n,m],[i,a,g,n],[c,j,m,e],[g,e,m,n],[i,j,c,a]]) {
+        addQuad(...face,color);
+      }
+    }
+    const orange = [0.95,0.45,0.18], dark = [0.24,0.24,0.39], steel = [0.62,0.68,0.76];
+    box(0,0.18,0,0.69,1.08,0.52,orange);
+    box(0,0.92,0.06,0.55,0.53,0.54,steel);
+    box(0,0.95,0.36,0.45,0.21,0.1,[0.22,0.72,0.82]);
+    box(0,0.22,-0.48,0.75,0.91,0.58,dark);
+    for (const side of [-1,1]) {
+      box(side*0.53,0.07,-0.5,0.34,1.1,0.41,steel);
+      box(side*0.53,-0.55,-0.5,0.26,0.16,0.29,[0.99,0.78,0.27]);
+      box(side*0.47,0.12,0.13,0.21,0.67,0.23,orange);
+      box(side*0.19,-0.68,0.12,0.28,0.71,0.30,dark);
+    }
+    return upload();
+  }
+
+  const aircraftMeshes = {
+    fighter: buildFighterMesh(),
+    saucer: buildSaucerMesh(),
+    jetpack: buildJetpackMesh()
+  };
+
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
   const plumeCoreMesh = buildConeMesh(0.75, 0.075, [1.0, 0.96, 0.85], [1.0, 0.86, 0.55]);
@@ -1321,7 +1392,7 @@
   }
 
   function fireMissile() {
-    if (!flying) return;
+    if (!flying || selectedAircraft !== "fighter") return;
     // Pick next loaded hardpoint
     let slot = -1;
     for (let i = 0; i < 4; i++) {
@@ -2005,12 +2076,13 @@
     const settings = new FormData(flightSetup);
     selectedMap = FLIGHT_MAPS[settings.get('flightMap')];
     const challenge = settings.get('flightMode') === 'route';
+    selectedAircraft = settings.get('aircraft');
     loading = true;
     startFlight.disabled = true;
     titleOverlay.hidden = true;
     menuError.hidden = true;
     loadBar.style.width = '0%';
-    loadStep.textContent = '正在准备地形…';
+    loadStep.textContent = 'Preparing terrain…';
     loadOverlay.classList.remove('done');
 
     const workerUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
@@ -2024,7 +2096,7 @@
     }
     function showError() {
       cleanup();
-      menuError.textContent = '地图加载失败，请重新选择地图并开始飞行。';
+      menuError.textContent = 'Terrain failed to load. Choose a map and try again.';
       menuError.hidden = false;
       titleOverlay.hidden = false;
       startFlight.focus();
@@ -2060,7 +2132,7 @@
         updateMission(0);
         Object.assign(plane, {
           pos: [30, 40, -185], yaw: 0, pitch: 0, bank: 0, rollAnim: 0,
-          speed: 23.5, afterburner: false
+          speed: AIRCRAFT[selectedAircraft].cruise, afterburner: false
         });
         mouseNorm.x = mouseNorm.y = 0;
         mouseClient.x = window.innerWidth / 2;
@@ -2074,6 +2146,8 @@
         for (const impact of impacts) impact.age = -1;
         hardpointTimers.fill(0);
         updateMissilePips();
+        aircraftName.textContent = AIRCRAFT[selectedAircraft].name;
+        for (const control of fighterControls) control.hidden = selectedAircraft !== 'fighter';
         camInitialized = false;
         lastMapFrame = -Infinity;
         if (mapPanel.classList.contains('expanded')) toggleFlightMap();
@@ -2100,16 +2174,16 @@
     if (!next) return;
     flightSeconds += dt;
     if (dt === 0) {
-      missionStatus.textContent = '航标 0 / ' + route.length;
+      missionStatus.textContent = 'Checkpoint 0 / ' + route.length;
       return;
     }
     const distance = Math.hypot(next[0] - plane.pos[0], next[1] - plane.pos[1], next[2] - plane.pos[2]);
     if (distance <= 15) gateIndex++;
     const target = route[gateIndex];
     const status = target
-      ? '航标 ' + gateIndex + ' / ' + route.length + ' · ' + Math.round(Math.hypot(target[0] - plane.pos[0],
+      ? 'Checkpoint ' + gateIndex + ' / ' + route.length + ' · ' + Math.round(Math.hypot(target[0] - plane.pos[0],
         target[1] - plane.pos[1], target[2] - plane.pos[2])) + ' u'
-      : '航线完成 · ' + flightSeconds.toFixed(1) + ' 秒';
+      : 'Course complete · ' + flightSeconds.toFixed(1) + ' s';
     if (missionStatus.textContent !== status) missionStatus.textContent = status;
   }
 
@@ -2176,7 +2250,8 @@
 
     // 1. Flight Physics & Arcade Auto-Pullup
     const prevY = plane.pos[1];
-    const targetSpeed = plane.afterburner ? 42.0 : 23.5;
+    const craft = AIRCRAFT[selectedAircraft];
+    const targetSpeed = plane.afterburner ? craft.boost : craft.cruise;
     plane.speed = lerp(plane.speed, targetSpeed, dt * 2.8);
 
     if (audioEnabled && engineGain && abGain && engineFilter) {
@@ -2225,9 +2300,9 @@
 
     const prevYaw = plane.yaw;
     const prevPitch = plane.pitch;
-    plane.yaw += turnInput * 1.45 * dt;
-    const targetPitch = clamp(pitchInput * 0.78, -0.75, 0.78);
-    plane.pitch = lerp(plane.pitch, targetPitch, dt * 3.4);
+    plane.yaw += turnInput * craft.turn * dt;
+    const targetPitch = clamp(pitchInput, -0.96, 1) * craft.maxPitch;
+    plane.pitch = lerp(plane.pitch, targetPitch, dt * craft.pitchResponse);
     plane.bank = lerp(plane.bank, -turnInput * 0.92, dt * 4.5);
 
     if (plane.rollAnim > 0) {
@@ -2443,33 +2518,45 @@
     if (viewIdx !== 1) {
       const planeScale = viewIdx === 2 ? 1.45 : 1.0;
       const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
-      drawMeshWithOutline(fighterMesh, planeModel, false);
+      drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
 
-      // Wing-mounted missiles still on pylons
-      for (let i = 0; i < 4; i++) {
-        if (hardpointTimers[i] <= 0) {
-          const hp = HARDPOINTS[i];
-          const mPos = [
-            plane.pos[0] + (basis.right[0] * hp[0] + basis.up[0] * hp[1] + basis.fwd[0] * hp[2]) * planeScale,
-            plane.pos[1] + (basis.right[1] * hp[0] + basis.up[1] * hp[1] + basis.fwd[1] * hp[2]) * planeScale,
-            plane.pos[2] + (basis.right[2] * hp[0] + basis.up[2] * hp[1] + basis.fwd[2] * hp[2]) * planeScale
-          ];
-          drawMeshWithOutline(missileMesh, mat4FromBasis(mPos, basis.right, basis.up, basis.fwd, planeScale), false);
+      if (selectedAircraft === "fighter") {
+        // Wing-mounted missiles still on pylons
+        for (let i = 0; i < 4; i++) {
+          if (hardpointTimers[i] <= 0) {
+            const hp = HARDPOINTS[i];
+            const mPos = [
+              plane.pos[0] + (basis.right[0] * hp[0] + basis.up[0] * hp[1] + basis.fwd[0] * hp[2]) * planeScale,
+              plane.pos[1] + (basis.right[1] * hp[0] + basis.up[1] * hp[1] + basis.fwd[1] * hp[2]) * planeScale,
+              plane.pos[2] + (basis.right[2] * hp[0] + basis.up[2] * hp[1] + basis.fwd[2] * hp[2]) * planeScale
+            ];
+            drawMeshWithOutline(missileMesh, mat4FromBasis(mPos, basis.right, basis.up, basis.fwd, planeScale), false);
+          }
         }
-      }
 
-      // Twin afterburner plumes with white core
-      const flicker = 0.85 + 0.3 * Math.sin(time * 55.0);
-      const abLen = (plane.afterburner ? 1.45 : 0.45) * flicker * planeScale;
-      for (const side of [-1, 1]) {
-        const pPos = [
-          plane.pos[0] + (basis.right[0] * (side * 0.22) - basis.fwd[0] * 1.95) * planeScale,
-          plane.pos[1] + (basis.right[1] * (side * 0.22) - basis.fwd[1] * 1.95) * planeScale,
-          plane.pos[2] + (basis.right[2] * (side * 0.22) - basis.fwd[2] * 1.95) * planeScale
-        ];
-        const backDir = [-basis.fwd[0], -basis.fwd[1], -basis.fwd[2]];
-        drawMeshWithOutline(plumeOuterMesh, mat4FromBasis(pPos, basis.right, basis.up, backDir, abLen), true);
-        drawMeshWithOutline(plumeCoreMesh, mat4FromBasis(pPos, basis.right, basis.up, backDir, abLen * 0.85), true);
+        // Twin afterburner plumes with white core
+        const flicker = 0.85 + 0.3 * Math.sin(time * 55.0);
+        const abLen = (plane.afterburner ? 1.45 : 0.45) * flicker * planeScale;
+        for (const side of [-1, 1]) {
+          const pPos = [
+            plane.pos[0] + (basis.right[0] * (side * 0.22) - basis.fwd[0] * 1.95) * planeScale,
+            plane.pos[1] + (basis.right[1] * (side * 0.22) - basis.fwd[1] * 1.95) * planeScale,
+            plane.pos[2] + (basis.right[2] * (side * 0.22) - basis.fwd[2] * 1.95) * planeScale
+          ];
+          const backDir = [-basis.fwd[0], -basis.fwd[1], -basis.fwd[2]];
+          drawMeshWithOutline(plumeOuterMesh, mat4FromBasis(pPos, basis.right, basis.up, backDir, abLen), true);
+          drawMeshWithOutline(plumeCoreMesh, mat4FromBasis(pPos, basis.right, basis.up, backDir, abLen * 0.85), true);
+        }
+      } else if (selectedAircraft === 'jetpack') {
+        const exhaust = basis.up.map(value => -value);
+        const thrust = plane.afterburner ? 1.12 : 0.55;
+        const flicker = 0.92 + 0.14 * Math.sin(time * 64);
+        for (const side of [-1, 1]) {
+          const nozzle = plane.pos.map((value, i) => value + planeScale *
+            (basis.right[i] * side * 0.53 - basis.up[i] * 0.62 - basis.fwd[i] * 0.5));
+          const model = mat4FromBasis(nozzle, basis.right, basis.fwd, exhaust, thrust * flicker * planeScale);
+          drawMeshWithOutline(plumeOuterMesh, model, true);
+        }
       }
     }
 
