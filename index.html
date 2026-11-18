@@ -14,6 +14,15 @@
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
   #glCanvas{image-rendering:pixelated;image-rendering:crisp-edges;}
   #hudCanvas{pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;}
+  #flightMap{position:absolute;top:14px;left:14px;z-index:16;width:min(190px,37vw);
+    padding:6px;background:rgba(14,10,24,.88);border:1px solid #a97458;color:#ffd699;}
+  #flightMap.expanded{width:min(440px,70vw,68vh);}
+  #flightMapCanvas{position:static;width:100%;height:auto;aspect-ratio:1;image-rendering:pixelated;}
+  #mapToggle{width:100%;padding:4px;background:#26192e;border:1px solid #a97458;
+    color:inherit;cursor:pointer;font:inherit;}
+  #boundaryStatus{display:block;text-align:center;padding-top:4px;font-size:clamp(10px,2vw,12px);}
+  #flightMap.warning{border-color:#ffad69;color:#ffcf8c;}
+  #flightMap.guarding{border-color:#ff795e;color:#ffb2a1;}
   #titleOverlay{
     position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:radial-gradient(circle at 50% 42%, rgba(28,18,38,0.45) 0%, rgba(10,7,18,0.82) 100%);
@@ -97,16 +106,21 @@
 <div id="wrap">
   <canvas id="glCanvas"></canvas>
   <canvas id="hudCanvas"></canvas>
+  <section id="flightMap" aria-label="Flight map" hidden>
+    <button id="mapToggle" type="button" aria-expanded="false" aria-controls="flightMapCanvas">ENLARGE MAP [M]</button>
+    <canvas id="flightMapCanvas" width="448" height="448" aria-label="Map with aircraft position and flight boundary"></canvas>
+    <output id="boundaryStatus" aria-live="off"></output>
+  </section>
 
   <div id="loadOverlay">
-    <div class="load-label">GENERATING AUTUMN LAKE DISTRICT</div>
+    <div class="load-label">GENERATING COPPER COAST</div>
     <div class="load-bar-outer"><div class="load-bar-inner" id="loadBar"></div></div>
     <div id="loadStep" style="font-size:12px;color:#c98a70;">SEEDING HEIGHTFIELD...</div>
   </div>
 
   <div id="titleOverlay" class="hidden">
     <div class="title-badge">
-      <div class="title-sub-top">AUTUMN LAKE DISTRICT // 17:42 SUNSET</div>
+      <div class="title-sub-top">COPPER COAST // 17:42 SUNSET</div>
       <h1 class="game-title">PATROL</h1>
       <div class="title-desc">LOW-ALTITUDE INTERCEPTOR &amp; RECONNAISSANCE TOY</div>
       <div class="start-prompt">MOVE MOUSE OR CLICK TO FLY</div>
@@ -169,11 +183,27 @@
   }
   const PALETTE_RGB = PALETTE_HEX.map(hexToRgb);
 
-  // Seamless terrain generator via inline Web Worker
+  const MAP_SPAN = 1920;
+  const FLIGHT_RADIUS = 860;
+  const WARNING_DISTANCE = 130;
+  const CEILING = 100;
+  // X increases east and Z increases north throughout the simulation.
+  const LANDMARKS = [
+    { name: 'Copper Ridge', x: -310, z: 220, width: 320, depth: 190, elevation: 0.70 },
+    { name: 'Pine Highlands', x: 307, z: 340, width: 230, depth: 245, elevation: 0.54 },
+    { name: 'South Bluffs', x: -300, z: -320, width: 250, depth: 220, elevation: 0.42 }
+  ];
+
+  // Generate the height field and lighting once in a worker.
   const workerSrc = `
     self.onmessage = function(e) {
       const N = e.data.size || 512;
-      const mask = N - 1;
+      const { span, landmarks, scale, water } = e.data;
+      const last = N - 1;
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      function oval(x, z, cx, cz, width, depth) {
+        return Math.exp(-(((x - cx) / width) ** 2 + ((z - cz) / depth) ** 2));
+      }
       function hash(ix, iy, seed) {
         let n = (ix * 374761393 + iy * 668265263 + seed * 1442695041) | 0;
         n = (n ^ (n >>> 13)) * 1274126177;
@@ -226,18 +256,25 @@
       self.postMessage({ type: 'progress', pct: 18, label: 'CARVING GLACIAL BASINS...' });
 
       for (let y = 0; y < N; y++) {
-        const v = y / N;
+        const v = (y + 0.5) / N;
         for (let x = 0; x < N; x++) {
-          const u = x / N;
+          const u = (x + 0.5) / N;
           const idx = y * N + x;
-          const basin = fbm(u, v, 4, 4, 101);
-          const ridge = ridged(u, v, 6, 5, 202);
-          const detail = fbm(u, v, 32, 3, 303);
-          let h = basin * 0.68 + ridge * 0.44 + (detail - 0.5) * 0.08;
-          // Carve interconnected autumn lakes
-          const lakeMask = fbm(u + 0.31, v + 0.17, 4, 3, 404);
-          h -= Math.max(0, 0.54 - lakeMask) * 0.72;
-          h = Math.max(0.02, Math.min(0.98, h));
+          const east = (u - 0.5) * span;
+          const north = (v - 0.5) * span;
+          const ridge = ridged(u, v, 9, 5, 202);
+          const detail = fbm(u, v, 25, 4, 303);
+          const land = oval(east, north, -105, 15, 670, 650);
+          const headland = oval(east, north, 334, -340, 350, 200);
+          const lake = oval(east, north, -95, 25, 190, 206);
+          const bay = oval(east, north, 410, -100, 275, 142);
+          let peaks = 0;
+          for (const mark of landmarks) {
+            peaks += mark.elevation * oval(east, north, mark.x, mark.z, mark.width, mark.depth);
+          }
+          const h = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
+            + headland * 0.24 + peaks * (0.59 + 0.48 * ridge) - lake * 0.30 - bay * 0.23,
+            0.02, 0.98);
           height[idx] = h;
 
           const bPatch = fbm(u, v, 8, 3, 505);
@@ -253,10 +290,10 @@
       self.postMessage({ type: 'progress', pct: 64, label: 'BAKING SUNSET SHADOWS...' });
 
       // Long sunset shadow raycast toward sun direction (+X, -Z)
-      const waterLevel = 0.34;
+      const waterLevel = water / scale;
       const sunStepX = 1.0;
       const sunStepY = -0.36;
-      const sunSlope = 0.0115;
+      const sunSlope = (span / N) * 0.10 / scale;
 
       for (let y = 0; y < N; y++) {
         for (let x = 0; x < N; x++) {
@@ -267,8 +304,8 @@
           for (let s = 1; s <= 76; s++) {
             rx += sunStepX;
             ry += sunStepY;
-            const sx = (Math.floor(rx) & mask);
-            const sy = (Math.floor(ry) & mask);
+            const sx = (clamp(Math.floor(rx), 0, last));
+            const sy = (clamp(Math.floor(ry), 0, last));
             const sh = height[sy * N + sx];
             const rayH = h0 + s * sunSlope;
             if (sh > rayH) {
@@ -277,10 +314,10 @@
             }
           }
           // Subtle cavity ambient occlusion
-          const hl = height[y * N + ((x - 1) & mask)];
-          const hr = height[y * N + ((x + 1) & mask)];
-          const hu = height[((y - 1) & mask) * N + x];
-          const hd = height[((y + 1) & mask) * N + x];
+          const hl = height[y * N + Math.max(0, x - 1)];
+          const hr = height[y * N + Math.min(last, x + 1)];
+          const hu = height[Math.max(0, y - 1) * N + x];
+          const hd = height[Math.min(last, y + 1) * N + x];
           const avg = (hl + hr + hu + hd) * 0.25;
           const ao = Math.max(0.65, Math.min(1.08, 1.0 + (height[idx] - avg) * 6.0));
           shade[idx] = shadow * ao;
@@ -291,6 +328,7 @@
       const packed = new Uint8Array(N * N * 4);
       for (let i = 0; i < N * N; i++) {
         packed[i * 4 + 0] = Math.round(height[i] * 255);
+        height[i] = packed[i * 4 + 0] / 255;
         packed[i * 4 + 1] = Math.round(biome[i] * 255);
         packed[i * 4 + 2] = Math.round(conifer[i] * 255);
         packed[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, shade[i] * 0.85)) * 255);
@@ -299,7 +337,7 @@
     };
   `;
 
-  const MAP_SIZE = 512;
+  const MAP_SIZE = 1024;
   let heightField = null;
   let terrainTex = null;
 
@@ -363,10 +401,10 @@
 
     const vec3 SUN_DIR = normalize(vec3(0.84, 0.165, -0.30));
     const float WATER_H = 12.2;
-    const float TERRAIN_SCALE = 36.0;
-    const float WORLD_TILE = 420.0;
-    const float CLOUD_BASE = 24.5;
-    const float CLOUD_TOP = 28.2;
+    const float TERRAIN_SCALE = 54.0;
+    const float MAP_SPAN = ${MAP_SPAN.toFixed(1)};
+    const float CLOUD_BASE = 56.0;
+    const float CLOUD_TOP = 63.0;
 
     float hash12(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -392,7 +430,7 @@
     }
 
     vec4 sampleMap(vec2 xz) {
-      vec2 uv = xz / WORLD_TILE;
+      vec2 uv = xz / MAP_SPAN + 0.5;
       return texture(uTerrain, uv);
     }
 
@@ -432,7 +470,7 @@
     }
 
     vec3 applyFog(vec3 col, vec3 rd, float dist) {
-      float fogAmt = 1.0 - exp(-dist * 0.0023);
+      float fogAmt = 1.0 - exp(-dist * 0.00165);
       float towardSun = smoothstep(-0.35, 0.95, dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), normalize(vec3(SUN_DIR.x, 0.0, SUN_DIR.z))));
       vec3 fogCol = mix(vec3(0.74, 0.58, 0.75), vec3(0.98, 0.68, 0.38), towardSun);
       return mix(col, fogCol, clamp(fogAmt, 0.0, 0.96));
@@ -444,13 +482,13 @@
       vec3 ro = uCamPos;
 
       vec3 col = getSky(rd);
-      float hitDist = 520.0;
+      float hitDist = 860.0;
       bool hitSurface = false;
 
       // Raymarch terrain & water
       if (rd.y < 0.18) {
         float t = 1.0;
-        float maxT = 480.0;
+        float maxT = 820.0;
         if (ro.y > TERRAIN_SCALE + 2.0 && rd.y < -0.005) {
           t = max(1.0, (ro.y - (TERRAIN_SCALE + 1.5)) / (-rd.y));
         }
@@ -1048,21 +1086,19 @@
 
   // Terrain Height Query on CPU (matches shader exactly)
   const WATER_H = 12.2;
-  const TERRAIN_SCALE = 36.0;
-  const WORLD_TILE = 420.0;
+  const TERRAIN_SCALE = 54.0;
 
   function sampleGroundHeight(x, z) {
     if (!heightField) return WATER_H;
-    let u = ((x / WORLD_TILE) % 1 + 1) % 1;
-    let v = ((z / WORLD_TILE) % 1 + 1) % 1;
-    const fx = u * MAP_SIZE;
-    const fy = v * MAP_SIZE;
-    const ix = Math.floor(fx) & (MAP_SIZE - 1);
-    const iy = Math.floor(fy) & (MAP_SIZE - 1);
-    const tx = fx - Math.floor(fx);
-    const ty = fy - Math.floor(fy);
-    const ix1 = (ix + 1) & (MAP_SIZE - 1);
-    const iy1 = (iy + 1) & (MAP_SIZE - 1);
+    const last = MAP_SIZE - 1;
+    const fx = clamp((x / MAP_SPAN + 0.5) * MAP_SIZE - 0.5, 0, last);
+    const fy = clamp((z / MAP_SPAN + 0.5) * MAP_SIZE - 0.5, 0, last);
+    const ix = Math.floor(fx);
+    const iy = Math.floor(fy);
+    const tx = fx - ix;
+    const ty = fy - iy;
+    const ix1 = Math.min(ix + 1, last);
+    const iy1 = Math.min(iy + 1, last);
     const h00 = heightField[iy * MAP_SIZE + ix];
     const h10 = heightField[iy * MAP_SIZE + ix1];
     const h01 = heightField[iy1 * MAP_SIZE + ix];
@@ -1173,7 +1209,7 @@
   let titleDismissed = false;
 
   const plane = {
-    pos: [210, 34.0, 210],
+    pos: [30, 45.0, -185],
     yaw: 0.45,
     pitch: 0.0,
     bank: 0.0,
@@ -1273,6 +1309,7 @@
   let leftDownTime = 0;
 
   window.addEventListener('mousemove', (e) => {
+    if (mapPanel.contains(e.target)) return;
     mouseClient.x = e.clientX;
     mouseClient.y = e.clientY;
     mouseNorm.x = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
@@ -1284,7 +1321,7 @@
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.target === audioBtn) return;
+    if (e.target === audioBtn || mapPanel.contains(e.target)) return;
     dismissTitle();
     if (e.button === 0) {
       leftDown = true;
@@ -1308,7 +1345,9 @@
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space') {
+    if (e.code === 'KeyM' && !e.repeat && heightField) {
+      toggleFlightMap();
+    } else if (e.code === 'Space' && e.target !== mapToggle) {
       e.preventDefault();
       cycleView();
     } else if (e.code === 'KeyF') {
@@ -1775,6 +1814,106 @@
     hudCtx.fillRect(thrX - 3, knobY, 16, 7);
   }
 
+  const mapPanel = document.getElementById('flightMap');
+  const mapToggle = document.getElementById('mapToggle');
+  const mapCanvas = document.getElementById('flightMapCanvas');
+  const mapCtx = mapCanvas.getContext('2d');
+  const boundaryStatus = document.getElementById('boundaryStatus');
+  const mapWidth = mapCanvas.width;
+  const mapScale = mapWidth / MAP_SPAN;
+  let mapRaster;
+  let lastMapFrame = -Infinity;
+
+  function toggleFlightMap() {
+    const expanded = mapPanel.classList.toggle('expanded');
+    mapToggle.setAttribute('aria-expanded', String(expanded));
+    mapToggle.textContent = expanded ? 'SHRINK MAP [M]' : 'ENLARGE MAP [M]';
+    lastMapFrame = -Infinity;
+  }
+  mapToggle.addEventListener('click', toggleFlightMap);
+
+  function bakeFlightMap() {
+    const raster = document.createElement('canvas');
+    raster.width = raster.height = mapWidth;
+    const ctx = raster.getContext('2d');
+    const pixels = ctx.createImageData(mapWidth, mapWidth);
+    for (let y = 0; y < mapWidth; y++) {
+      for (let x = 0; x < mapWidth; x++) {
+        const east = (x + 0.5 - mapWidth / 2) / mapScale;
+        const north = (mapWidth / 2 - y - 0.5) / mapScale;
+        const h = sampleGroundHeight(east, north);
+        const offset = (y * mapWidth + x) * 4;
+        const band = Math.floor((h - WATER_H) / 4);
+        const water = h <= WATER_H;
+        pixels.data[offset] = water ? 31 : band < 1 ? 117 : 104 + band * 12;
+        pixels.data[offset + 1] = water ? 53 : band < 1 ? 106 : 72 + band * 10;
+        pixels.data[offset + 2] = water ? 80 : band < 1 ? 66 : 48 + band * 11;
+        pixels.data[offset + 3] = 255;
+      }
+    }
+    ctx.putImageData(pixels, 0, 0);
+    ctx.fillStyle = '#0b1024a6';
+    ctx.beginPath();
+    ctx.rect(0, 0, mapWidth, mapWidth);
+    ctx.arc(mapWidth / 2, mapWidth / 2, FLIGHT_RADIUS * mapScale, 0, 2 * Math.PI);
+    ctx.fill('evenodd');
+    return raster;
+  }
+
+  function drawFlightMap(now, assisted) {
+    if (now - lastMapFrame < 100) return;
+    lastMapFrame = now;
+    const center = mapWidth / 2;
+    const edge = FLIGHT_RADIUS - Math.hypot(plane.pos[0], plane.pos[2]);
+    const warning = edge < WARNING_DISTANCE;
+    const status = assisted ? 'AUTO TURN' : warning ? 'EDGE AHEAD' : 'EDGE';
+    const text = status + ' · ' + Math.max(0, Math.ceil(edge)) + ' u';
+    if (boundaryStatus.textContent !== text) boundaryStatus.textContent = text;
+    mapPanel.classList.toggle('warning', warning);
+    mapPanel.classList.toggle('guarding', assisted);
+
+    mapCtx.drawImage(mapRaster, 0, 0);
+    mapCtx.strokeStyle = assisted ? '#ff795e' : '#ffd699';
+    mapCtx.lineWidth = 4;
+    mapCtx.setLineDash([10, 7]);
+    mapCtx.beginPath();
+    mapCtx.arc(center, center, FLIGHT_RADIUS * mapScale, 0, 2 * Math.PI);
+    mapCtx.stroke();
+    mapCtx.setLineDash([]);
+
+    mapCtx.fillStyle = '#fff0d6';
+    mapCtx.font = 'bold 26px monospace';
+    mapCtx.textAlign = 'center';
+    mapCtx.fillText('N', center, 29);
+
+    if (mapPanel.classList.contains('expanded')) {
+      mapCtx.font = 'bold 16px monospace';
+      mapCtx.strokeStyle = '#211827';
+      mapCtx.lineWidth = 4;
+      for (const mark of LANDMARKS) {
+        const x = center + mark.x * mapScale;
+        const y = center - mark.z * mapScale;
+        mapCtx.strokeText(mark.name, x, y);
+        mapCtx.fillText(mark.name, x, y);
+      }
+    }
+
+    mapCtx.save();
+    mapCtx.translate(center + plane.pos[0] * mapScale, center - plane.pos[2] * mapScale);
+    mapCtx.rotate(plane.yaw);
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, -17);
+    mapCtx.lineTo(11, 12);
+    mapCtx.lineTo(0, 7);
+    mapCtx.lineTo(-11, 12);
+    mapCtx.closePath();
+    mapCtx.strokeStyle = '#171421';
+    mapCtx.lineWidth = 4;
+    mapCtx.fill();
+    mapCtx.stroke();
+    mapCtx.restore();
+  }
+
   // Spawn & Start Terrain Worker
   const workerBlob = new Blob([workerSrc], { type: 'application/javascript' });
   const workerUrl = URL.createObjectURL(workerBlob);
@@ -1787,13 +1926,15 @@
       loadStep.textContent = msg.label;
     } else if (msg.type === 'done') {
       heightField = msg.height;
+      mapRaster = bakeFlightMap();
+      mapPanel.hidden = false;
       terrainTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, terrainTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAP_SIZE, MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, msg.packed);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
       loadBar.style.width = '100%';
       setTimeout(() => {
@@ -1805,7 +1946,7 @@
       requestAnimationFrame(loop);
     }
   };
-  worker.postMessage({ size: MAP_SIZE });
+  worker.postMessage({ size: MAP_SIZE, span: MAP_SPAN, landmarks: LANDMARKS, scale: TERRAIN_SCALE, water: WATER_H });
 
   // Uniform Locations
   const uWorld = {
@@ -1903,6 +2044,18 @@
       pitchInput = -mouseNorm.y;
     }
 
+    const edgeDistance = FLIGHT_RADIUS - Math.hypot(plane.pos[0], plane.pos[2]);
+    let boundaryAssist = false;
+    if (edgeDistance < WARNING_DISTANCE) {
+      const inwardYaw = Math.atan2(-plane.pos[0], -plane.pos[2]);
+      const headingError = Math.atan2(Math.sin(inwardYaw - plane.yaw), Math.cos(inwardYaw - plane.yaw));
+      const assist = clamp(1 - edgeDistance / WARNING_DISTANCE, 0, 1);
+      boundaryAssist = Math.abs(headingError) > Math.PI * 0.40;
+      if (boundaryAssist) {
+        turnInput = lerp(turnInput, Math.sign(headingError), assist);
+      }
+    }
+
     const prevYaw = plane.yaw;
     const prevPitch = plane.pitch;
     plane.yaw += turnInput * 1.45 * dt;
@@ -1920,6 +2073,13 @@
     plane.pos[1] += basis.fwd[1] * plane.speed * dt;
     plane.pos[2] += basis.fwd[2] * plane.speed * dt;
 
+    const radius = Math.hypot(plane.pos[0], plane.pos[2]);
+    if (radius > FLIGHT_RADIUS) {
+      const limit = FLIGHT_RADIUS / radius;
+      plane.pos[0] *= limit;
+      plane.pos[2] *= limit;
+    }
+
     // Terrain avoidance auto-pullup
     const gAhead1 = sampleGroundHeight(plane.pos[0], plane.pos[2]);
     const gAhead2 = sampleGroundHeight(plane.pos[0] + basis.fwd[0] * 14, plane.pos[2] + basis.fwd[2] * 14);
@@ -1928,7 +2088,7 @@
       plane.pos[1] = lerp(plane.pos[1], minSafeY + 1.2, dt * 7.5);
       plane.pitch = Math.max(plane.pitch, 0.22);
     }
-    plane.pos[1] = Math.min(plane.pos[1], 76.0);
+    plane.pos[1] = clamp(plane.pos[1], gAhead1 + 0.6, CEILING);
 
     plane.radarAlt = Math.max(0.2, plane.pos[1] - gAhead1);
     plane.vsi = (plane.pos[1] - prevY) / Math.max(dt, 1e-4);
@@ -2170,6 +2330,7 @@
 
     // 6. Canvas 2D Cockpit & HUD
     drawHudAndCockpit(time, basis, viewProj);
+    drawFlightMap(now, boundaryAssist);
 
     requestAnimationFrame(loop);
   }
