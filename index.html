@@ -25,6 +25,16 @@
   #flightMap.guarding{border-color:#ff795e;color:#ffb2a1;}
   [hidden]{display:none !important;}
   #wrap.smooth-city canvas{image-rendering:auto;}
+  .smooth-city #statusBar,.smooth-city #flightMap,.smooth-city .touch-btn{
+    font-family:system-ui,sans-serif;border-color:#b9d7e479;background:#172b38d6;color:#eef7fa;
+    border-radius:7px;box-shadow:0 2px 12px #0a223343;
+  }
+  .smooth-city #mapToggle,.smooth-city #flightMenuBtn,.smooth-city #audioBtn{
+    font-family:inherit;border-color:#96bac988;background:#234151;color:#eff7fb;border-radius:4px;
+  }
+  .smooth-city .key-pill{border-color:#aac6d377;background:#142530;color:#ebf7fc;}
+  .smooth-city #missionStatus{border-color:#a4c3d27d;background:#162936d9;color:#eff7fb;}
+  .smooth-city #boundaryStatus{color:inherit;}
   #titleOverlay{position:absolute;inset:0;display:grid;justify-items:center;align-items:safe center;overflow:auto;padding:16px;
     background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
   .title-badge{width:min(820px,100%);border:1px solid #e88d4f;background:#181123;
@@ -37,8 +47,8 @@
   .map-options .map-card{border:1px solid #674863;margin:0;}
   .map-options .map-card:has(input:checked){border-color:#ffb677;}
   .map-options .map-card:has(input:focus-visible){outline:2px solid #ffd699;outline-offset:2px;}
-  .map-card canvas{position:static;width:100%;height:auto;aspect-ratio:1.75;object-fit:cover;
-    background:#203552;margin-bottom:5px;image-rendering:auto;}
+  .map-card :is(canvas,img){position:static;width:100%;height:auto;aspect-ratio:1.75;object-fit:cover;
+    display:block;background:#203552;margin-bottom:5px;image-rendering:auto;}
   .map-card small{margin-left:0;}
   #crashOverlay{position:absolute;inset:0;display:grid;place-items:center;z-index:21;
     background:#120b19aa;padding:15px;}
@@ -49,7 +59,7 @@
     color:#fff2d5;background:#7a2830;padding:5px 10px;pointer-events:none;white-space:nowrap;}
   @media(max-width:620px){
     .flight-options .map-options{grid-template-columns:repeat(2,minmax(0,1fr));}
-    .map-card canvas{aspect-ratio:2.3;}
+    .map-card :is(canvas,img){aspect-ratio:2.3;}
     #groundWarning{top:110px;left:auto;right:14px;transform:none;}
   }
   .flight-options legend{color:#ffd699;padding:0 5px;}
@@ -151,8 +161,8 @@
           <label class="map-card"><canvas data-map="coast" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
           <label class="map-card"><canvas data-map="islands" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
           <label class="map-card"><canvas data-map="valley" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
-          <label class="map-card"><canvas data-map="alaska" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="alaska">Alaska Fjords<small>Snowy peaks, coastal traffic and moose</small></label>
-          <label class="map-card"><canvas data-map="manhattan" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
+          <label class="map-card"><img class="scenery-preview" src="data:image/webp;base64,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" width="432" height="243" alt=""><input type="radio" name="flightMap" value="alaska">Alaska Fjords<small>Snowy peaks, coastal traffic and moose</small></label>
+          <label class="map-card"><img class="scenery-preview" src="data:image/webp;base64,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" width="432" height="243" alt=""><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
         </fieldset>
         <fieldset>
           <legend>Mode</legend>
@@ -268,9 +278,10 @@
     { kind: 'empire', name: 'Empire State Building', x: -7, z: -117, w: 9, d: 10, top: 79 },
     { kind: 'chrysler', name: 'Chrysler Building', x: 65, z: -46, w: 7.5, d: 7.5, top: 68 }
   ];
+  const EAST_RIVER_BRIDGE = { x: 82, z: -342, halfLength: 109, deck: 24, halfWidth: 4.2 };
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
-    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS
+    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, bridge: EAST_RIVER_BRIDGE
   };
   const FLIGHT_MAPS = {
     coast: {
@@ -302,7 +313,7 @@
       shipAnchor: [-142,-611],
       city: MANHATTAN_GRID,
       spawn: [-153, 44, -698],
-      landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }],
+      landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }, { name: 'Brooklyn Bridge', x: 88, z: -342 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     },
     alaska: {
@@ -380,7 +391,7 @@
         return sum / norm;
       }
 
-      function cityHeight(east, north) {
+      function cityHeight(east, north, includeBuildings = false) {
         const localX = east - (city.tilt * north + city.offset);
         const islandWidth = 118 - 77 * clamp((-north - 295) / 235, 0, 1)
           - 68 * clamp((north - 400) / 260, 0, 1);
@@ -400,6 +411,7 @@
             Math.abs(north - city.parkCenter) < city.parkHalfLength) {
           return (elevation + 1.0 + 0.6 * Math.sin(north / 22) * Math.cos(localX / 14)) / scale;
         }
+        if (!includeBuildings) return elevation / scale;
         const gx = localX / city.blockWidth;
         const gz = north / city.blockLength;
         const ix = Math.floor(gx), iz = Math.floor(gz);
@@ -415,6 +427,28 @@
         return Math.min(0.99, (elevation + building) / scale);
       }
 
+      const cityParcels = new Map();
+      if (city) {
+        const gridX = Math.ceil(span / city.blockWidth * 0.65);
+        const gridZ = Math.ceil(span / city.blockLength * 0.5);
+        for (let iz=-gridZ;iz<gridZ;iz++) for (let ix=-gridX;ix<gridX;ix++) {
+          const z=(iz+0.5)*city.blockLength;
+          const x=(ix+0.5)*city.blockWidth+city.tilt*z+city.offset;
+          if (Math.abs(x)>span/2 || Math.abs(z)>span/2) continue;
+          const base = cityHeight(x,z)*scale;
+          const top = cityHeight(x,z,true)*scale;
+          if (top-base<2.9) continue;
+          const tone = hash(ix,iz,312);
+          const width=city.blockWidth*(0.36+tone*0.28);
+          const length=city.blockLength*(0.41+hash(ix,iz,531)*0.26);
+          const corners = [[-1,-1],[-1,1],[1,-1],[1,1]];
+          if (!corners.every(([i,j])=>Math.abs(cityHeight(x+i*width/2,z+j*length/2)*scale-base)<0.4)) continue;
+          if (Math.abs(z-city.bridge.z)<12 && Math.abs(x-city.bridge.x)<city.bridge.halfLength+15) continue;
+          cityParcels.set(iz*256+ix,[x,z,width,length,top-base,tone]);
+        }
+      }
+
+      const ground = city ? new Float32Array(N * N) : null;
       const height = new Float32Array(N * N);
       const biome = new Float32Array(N * N);
       const conifer = new Float32Array(N * N);
@@ -430,7 +464,13 @@
           const east = (u - 0.5) * span;
           const north = (v - 0.5) * span;
           if (city) {
-            height[idx] = cityHeight(east, north);
+            const base = cityHeight(east,north);
+            const ix = Math.floor((east-city.tilt*north-city.offset)/city.blockWidth);
+            const iz = Math.floor(north/city.blockLength);
+            const parcel = cityParcels.get(iz*256+ix);
+            ground[idx] = base;
+            height[idx] = parcel && Math.abs(east-parcel[0])<parcel[2]/2 &&
+              Math.abs(north-parcel[1])<parcel[3]/2 ? base+parcel[4]/scale : base;
             biome[idx] = hash(Math.floor(east / 8), Math.floor(north / 8), 842);
             continue;
           }
@@ -492,7 +532,7 @@
       const waterLevel = water / scale;
       const sunStepX = 1.0;
       const sunStepY = -0.36;
-      const sunSlope = (span / N) * 0.10 / scale;
+      const sunSlope = (span / N) * (city || alaska ? 0.65 : 0.10) / scale;
 
       for (let y = 0; y < N; y++) {
         for (let x = 0; x < N; x++) {
@@ -526,13 +566,13 @@
       self.postMessage({ type: 'progress', pct: 95, label: 'PACKING TEXTURE ATLAS...' });
       const packed = new Uint8Array(N * N * 4);
       for (let i = 0; i < N * N; i++) {
-        packed[i * 4 + 0] = Math.round(height[i] * 255);
-        height[i] = packed[i * 4 + 0] / 255;
+        packed[i * 4 + 0] = Math.round((ground ? ground[i] : height[i]) * 255);
+        height[i] = Math.round(height[i] * 255) / 255;
         packed[i * 4 + 1] = Math.round(biome[i] * 255);
         packed[i * 4 + 2] = Math.round(conifer[i] * 255);
         packed[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, shade[i] * 0.85)) * 255);
       }
-      self.postMessage({ type: 'done', packed, height }, [packed.buffer, height.buffer]);
+      self.postMessage({ type: 'done', packed, height, parcels: [...cityParcels.values()] }, [packed.buffer, height.buffer]);
     };
   `;
 
@@ -604,12 +644,15 @@
     uniform vec4 uImpacts[8]; // xyz = world pos, w = age (or -1)
     uniform vec4 uImpactType[8]; // x = 1 water / 0 land
 
-    const vec3 SUN_DIR = normalize(vec3(0.84, 0.165, -0.30));
+    bool naturalLight() { return uManhattan || uAlaska; }
+    vec3 sunDirection() {
+      return naturalLight() ? normalize(vec3(0.56, 0.64, -0.43)) : normalize(vec3(0.84, 0.165, -0.30));
+    }
     const float WATER_H = 12.2;
-    const float TERRAIN_SCALE = 54.0;
+    uniform float uTerrainScale;
     const float MAP_SPAN = ${MAP_SPAN.toFixed(1)};
-    const float CLOUD_BASE = 56.0;
-    const float CLOUD_TOP = 63.0;
+    float cloudBase() { return naturalLight() ? 145.0 : 56.0; }
+    float cloudTop() { return naturalLight() ? 172.0 : 63.0; }
 
     float hash12(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -640,18 +683,27 @@
     }
 
     float terrainHeight(vec2 xz) {
-      return sampleMap(xz).r * TERRAIN_SCALE;
+      return sampleMap(xz).r * uTerrainScale;
     }
 
     vec3 getSky(vec3 rd) {
       float up = clamp(rd.y, 0.0, 1.0);
-      float sunAmt = max(dot(rd, SUN_DIR), 0.0);
+      float sunAmt = max(dot(rd, sunDirection()), 0.0);
+      if (naturalLight()) {
+        vec3 horizon = uAlaska ? vec3(0.69,0.78,0.84) : vec3(0.76,0.85,0.91);
+        vec3 blue = uAlaska ? vec3(0.25,0.43,0.60) : vec3(0.20,0.45,0.70);
+        vec3 sky = mix(horizon,blue,pow(up,0.54));
+        float veil = vnoise(rd.xz/(up+0.24)*3.2+vec2(uTime*0.003,0.0));
+        veil = smoothstep(0.52,0.80,veil) * smoothstep(0.04,0.23,up);
+        sky = mix(sky,vec3(0.94,0.96,0.98),veil*0.30);
+        return sky + vec3(0.46,0.37,0.25)*pow(sunAmt,24.0) + vec3(0.95)*smoothstep(0.9992,0.99975,sunAmt);
+      }
       vec3 zenith = vec3(0.15, 0.13, 0.28);
       vec3 midSky = vec3(0.46, 0.25, 0.42);
       vec3 horCool = vec3(0.75, 0.56, 0.72);
       vec3 horWarm = vec3(0.98, 0.62, 0.32);
 
-      float towardSun = smoothstep(-0.3, 0.95, dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), normalize(vec3(SUN_DIR.x, 0.0, SUN_DIR.z))));
+      float towardSun = smoothstep(-0.3, 0.95, dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), normalize(vec3(sunDirection().x, 0.0, sunDirection().z))));
       vec3 horizon = mix(horCool, horWarm, towardSun);
       vec3 sky = mix(horizon, midSky, pow(up, 0.48));
       sky = mix(sky, zenith, pow(up, 1.15));
@@ -675,8 +727,12 @@
     }
 
     vec3 applyFog(vec3 col, vec3 rd, float dist) {
+      if (naturalLight()) {
+        vec3 haze = uAlaska ? vec3(0.66,0.75,0.80) : vec3(0.72,0.80,0.85);
+        return mix(col,haze,1.0-exp(-dist*(uAlaska ? 0.0010 : 0.0013)));
+      }
       float fogAmt = 1.0 - exp(-dist * 0.00165);
-      float towardSun = smoothstep(-0.35, 0.95, dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), normalize(vec3(SUN_DIR.x, 0.0, SUN_DIR.z))));
+      float towardSun = smoothstep(-0.35, 0.95, dot(normalize(vec3(rd.x, 0.0, rd.z) + 1e-5), normalize(vec3(sunDirection().x, 0.0, sunDirection().z))));
       vec3 fogCol = mix(vec3(0.74, 0.58, 0.75), vec3(0.98, 0.68, 0.38), towardSun);
       return mix(col, fogCol, clamp(fogAmt, 0.0, 0.96));
     }
@@ -694,8 +750,8 @@
       if (rd.y < 0.18) {
         float t = 1.0;
         float maxT = 820.0;
-        if (ro.y > TERRAIN_SCALE + 2.0 && rd.y < -0.005) {
-          t = max(1.0, (ro.y - (TERRAIN_SCALE + 1.5)) / (-rd.y));
+        if (ro.y > uTerrainScale + 2.0 && rd.y < -0.005) {
+          t = max(1.0, (ro.y - (uTerrainScale + 1.5)) / (-rd.y));
         }
         float prevT = t;
         for (int i = 0; i < 118; i++) {
@@ -718,7 +774,7 @@
           prevT = t;
           float hDiff = p.y - surfH;
           float stride = max(0.65, hDiff * 0.42 + t * 0.011);
-          if (uManhattan && p.y < TERRAIN_SCALE + 1.0) stride = min(stride, 9.0);
+          if (naturalLight() && p.y < uTerrainScale + 1.0) stride = min(stride, 10.0);
           t += stride;
           if (t > maxT) break;
         }
@@ -727,17 +783,17 @@
       if (hitSurface) {
         vec3 p = ro + rd * hitDist;
         vec4 mData = sampleMap(p.xz);
-        float th = mData.r * TERRAIN_SCALE;
+        float th = mData.r * uTerrainScale;
         float biome = mData.g;
         float conifer = mData.b;
         float bakedShade = mData.a / 0.85;
 
         // Cloud shadow on ground/water
-        vec2 cloudProj = p.xz + SUN_DIR.xz * ((CLOUD_BASE - p.y) / max(SUN_DIR.y, 0.1));
+        vec2 cloudProj = p.xz + sunDirection().xz * ((cloudBase() - p.y) / max(sunDirection().y, 0.1));
         float cShad = 1.0 - cloudDensity(cloudProj) * 0.52;
 
         // Plane shadow on ground/water
-        vec2 planeProj = uPlanePos.xz - SUN_DIR.xz * ((uPlanePos.y - p.y) / max(SUN_DIR.y, 0.1));
+        vec2 planeProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - p.y) / max(sunDirection().y, 0.1));
         float pDist = length(p.xz - planeProj);
         float pShad = smoothstep(1.3, 3.0, pDist);
 
@@ -756,6 +812,14 @@
           // Low-angle sky reflection
           vec3 reflDir = reflect(rd, vec3(0.0, 1.0, 0.0));
           vec3 skyRefl = getSky(reflDir);
+          if (naturalLight()) {
+            vec2 wav = vec2(vnoise(p.xz*0.22+uTime*0.13),vnoise(p.zx*0.27-uTime*0.11))-0.5;
+            vec3 waterNormal = normalize(vec3(wav.x*0.12,1.0,wav.y*0.12));
+            skyRefl = getSky(reflect(rd,waterNormal));
+            vec3 deep = uAlaska ? vec3(0.08,0.22,0.28) : vec3(0.12,0.24,0.26);
+            waterCol = mix(vec3(0.25,0.42,0.39),deep,depth*0.67+0.31);
+            waterCol *= 0.95 - wav.x*0.14;
+          }
           float fresnel = pow(1.0 - max(dot(-rd, vec3(0.0, 1.0, 0.0)), 0.0), 3.2);
           waterCol = mix(waterCol, skyRefl, clamp(0.18 + fresnel * 0.62, 0.0, 0.82));
 
@@ -763,10 +827,11 @@
           float w1 = vnoise(p.xz * 1.9 + vec2(uTime * 1.3, -uTime * 0.8));
           float w2 = vnoise(p.xz * 4.3 - vec2(uTime * 1.7, uTime * 1.1));
           vec3 wn = normalize(vec3((w1 - 0.5) * 0.16, 1.0, (w2 - 0.5) * 0.16));
-          vec3 hVec = normalize(SUN_DIR - rd);
+          vec3 hVec = normalize(sunDirection() - rd);
           float spec = pow(max(dot(wn, hVec), 0.0), 95.0);
           float glint = step(0.84, fract(sin(dot(floor(p.xz * 2.5), vec2(12.9898, 78.233)) + floor(uTime * 5.0)) * 43758.5453));
-          waterCol += vec3(1.0, 0.86, 0.56) * (spec * 1.35 + glint * spec * 0.9) * litFactor;
+          waterCol += naturalLight() ? vec3(0.91,0.94,0.95)*spec*0.56
+            : vec3(1.0, 0.86, 0.56) * (spec * 1.35 + glint * spec * 0.9) * litFactor;
 
           // Animated shoreline foam
           float shoreDist = WATER_H - th;
@@ -800,9 +865,8 @@
 
           // Apply shadow tint (violet shadows)
           vec3 shadowTint = mix(vec3(0.28, 0.22, 0.42), vec3(1.04, 0.96, 0.88), clamp(litFactor, 0.0, 1.0));
-          if (uAlaska) waterCol = mix(waterCol, vec3(0.10,0.34,0.43),0.50);
-          if (uAlderValley || uManhattan) waterCol = mix(waterCol, vec3(0.12, 0.29, 0.29), 0.35);
-          col = waterCol * shadowTint;
+          if (uAlderValley) waterCol = mix(waterCol, vec3(0.12, 0.29, 0.29), 0.35);
+          col = waterCol * (naturalLight() ? mix(vec3(0.71,0.80,0.89),vec3(1.0),litFactor) : shadowTint);
         } else {
           // LAND RENDERING
           float eps = 0.85;
@@ -874,7 +938,7 @@
             vec3 spruce = mix(vec3(0.12,0.24,0.20),vec3(0.33,0.46,0.32),grain);
             vec3 rock = mix(vec3(0.32,0.38,0.43),vec3(0.53,0.58,0.61),grain);
             vec3 snow = mix(vec3(0.64,0.78,0.84),vec3(0.94,0.96,0.98),grain);
-            float frost = smoothstep(16.0,26.0,alt + 5.0*(grain - 0.5));
+            float frost = smoothstep(24.0,39.0,alt + 5.0*(grain - 0.5));
             albedo = mix(spruce,rock,max(smoothstep(9.0,17.0,alt),smoothstep(0.18,0.4,slope)));
             albedo = mix(albedo,snow,frost * (1.0-smoothstep(0.46,0.79,slope)));
           }
@@ -911,7 +975,7 @@
           }
 
           // Stepped sunset lighting + violet shadows
-          float ndotl = max(dot(n, SUN_DIR), 0.0);
+          float ndotl = max(dot(n, sunDirection()), 0.0);
           float steppedLight = floor(ndotl * 3.2 + 0.35) / 3.0;
           float direct = ((uManhattan || uAlaska) ? ndotl : steppedLight) * litFactor;
 
@@ -929,8 +993,8 @@
 
       // Cumulus cloud layer below cruise altitude
       if (abs(rd.y) > 0.002) {
-        float t0 = (CLOUD_BASE - ro.y) / rd.y;
-        float t1 = (CLOUD_TOP - ro.y) / rd.y;
+        float t0 = (cloudBase() - ro.y) / rd.y;
+        float t1 = (cloudTop() - ro.y) / rd.y;
         float tEnter = min(t0, t1);
         float tExit = max(t0, t1);
         if (tExit > 0.0 && tEnter < hitDist) {
@@ -946,7 +1010,7 @@
               vec3 cp = ro + rd * tc;
               float d = cloudDensity(cp.xz);
               if (d > 0.01) {
-                float hFrac = clamp((cp.y - CLOUD_BASE) / (CLOUD_TOP - CLOUD_BASE), 0.0, 1.0);
+                float hFrac = clamp((cp.y - cloudBase()) / (cloudTop() - cloudBase()), 0.0, 1.0);
                 // Stepped peach/violet cloud shading
                 float shadeBand = floor((hFrac * 0.75 + (1.0 - d) * 0.35) * 3.0) / 2.0;
                 vec3 cShadow = vec3(0.52, 0.36, 0.56);
@@ -954,8 +1018,10 @@
                 vec3 cLight = vec3(1.0, 0.82, 0.66);
                 vec3 cCol = shadeBand < 0.5 ? mix(cShadow, cMid, shadeBand * 2.0) : mix(cMid, cLight, (shadeBand - 0.5) * 2.0);
 
+                if (naturalLight()) cCol = mix(vec3(0.64,0.71,0.77),vec3(0.96,0.98,0.99),hFrac*0.7+(1.0-d)*0.3);
+
                 // Plane shadow cast onto clouds
-                vec2 pCloudProj = uPlanePos.xz - SUN_DIR.xz * ((uPlanePos.y - cp.y) / max(SUN_DIR.y, 0.1));
+                vec2 pCloudProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - cp.y) / max(sunDirection().y, 0.1));
                 float pCloudDist = length(cp.xz - pCloudProj);
                 if (uPlanePos.y > cp.y && pCloudDist < 2.2) {
                   cCol *= 0.62;
@@ -1007,13 +1073,14 @@
   `;
 
   const MESH_FS = `#version 300 es
-    precision mediump float;
+    precision highp float;
     in vec3 vNorm;
     in vec3 vColor;
     in vec3 vWorld;
     out vec4 fragColor;
     uniform bool uSmooth;
     uniform vec3 uEye;
+    uniform bool uCityFacade;
 
     uniform float uIsOutline;
     uniform float uEmissive;
@@ -1032,9 +1099,24 @@
       vec3 n = normalize(vNorm);
       float ndotl = dot(n, SUN_DIR);
       if (uSmooth) {
-        float light = 0.48 + 0.58 * max(ndotl, 0.0) + 0.18 * max(n.y, 0.0);
-        float haze = 1.0 - exp(-length(vWorld - uEye) * 0.00105);
-        fragColor = vec4(mix(vColor * light, vec3(0.64,0.57,0.64), haze), 1.0);
+        vec3 sunlight = normalize(vec3(0.56,0.64,-0.43));
+        float direct = max(dot(n,sunlight),0.0);
+        float light = 0.61 + 0.40*direct + 0.13*max(n.y,0.0);
+        vec3 material = vColor;
+        vec3 toEye = uEye - vWorld;
+        float distanceToEye = length(toEye);
+        if (uCityFacade && abs(n.y)<0.15) {
+          vec2 tile = vec2((abs(n.x)>0.5 ? vWorld.z : vWorld.x)/2.45,vWorld.y/2.70);
+          vec2 panel = abs(fract(tile)-0.5);
+          vec2 softness = max(fwidth(tile),vec2(0.003));
+          vec2 bands = 1.0 - smoothstep(vec2(0.32,0.27)-softness,vec2(0.32,0.27)+softness,panel);
+          float glazing = bands.x * bands.y * (1.0-smoothstep(185.0,460.0,distanceToEye));
+          float skyFacing = clamp(reflect(-normalize(toEye),n).y*0.8+0.45,0.0,1.0);
+          vec3 reflected = mix(vec3(0.20,0.28,0.32),vec3(0.55,0.71,0.82),skyFacing);
+          material = mix(material,reflected,glazing*0.88);
+        }
+        float haze = 1.0 - exp(-distanceToEye * 0.00119);
+        fragColor = vec4(mix(material * light, vec3(0.70,0.78,0.83), haze), 1.0);
         return;
       }
       // 3-tone flat shading
@@ -1122,8 +1204,10 @@
     function upload() {
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
+      const buffers = [];
       function makeBuf(arr, loc) {
         const b = gl.createBuffer();
+        buffers.push(b);
         gl.bindBuffer(gl.ARRAY_BUFFER, b);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(loc);
@@ -1132,7 +1216,7 @@
       makeBuf(pos, 0);
       makeBuf(norm, 1);
       makeBuf(col, 2);
-      return { vao, count: pos.length / 3 };
+      return { vao, buffers, count: pos.length / 3 };
     }
     return { addTri, addQuad, upload };
   }
@@ -1528,6 +1612,137 @@
     return upload();
   }
 
+  let backgroundBuildings = null;
+  let landscapeDetails = null;
+
+  function buildCityBuildings(parcels) {
+    const { addQuad, upload } = createTriangleMesh();
+    for (const [x,z,width,length,height,tone] of parcels) {
+      const material = tone < 0.38 ? [0.46,0.52,0.55]
+        : tone < 0.70 ? [0.62,0.64,0.62] : [0.66,0.58,0.48];
+      const y = WATER_H + 2.38;
+      addModelBox(addQuad,x,y+height/2,z,width,height,length,material);
+      if (height > 13 && tone > 0.3) {
+        addModelBox(addQuad,x,y+height+0.58,z,width*0.36,1.15,length*0.42,[0.38,0.43,0.44]);
+      }
+    }
+    return upload();
+  }
+
+  function createLandscapeDetails() {
+    const { addTri, addQuad, upload } = createTriangleMesh();
+    const box = (...args) => addModelBox(addQuad,...args);
+    function tapered(x,y,z,sections,color,phase=0) {
+      const ring = (section,i) => {
+        const [height,radiusX,radiusZ] = section;
+        const angle = phase + i * Math.PI / 5;
+        const irregular = 1 + 0.10*Math.sin(i*3.6+phase);
+        return [x+Math.sin(angle)*radiusX*irregular,y+height,z+Math.cos(angle)*radiusZ*irregular];
+      };
+      for (let j=0;j<sections.length-1;j++) for (let i=0;i<10;i++) {
+        addQuad(ring(sections[j],i),ring(sections[j],i+1),ring(sections[j+1],i+1),ring(sections[j+1],i),color);
+      }
+      for (let i=0;i<10;i++) {
+        const top = sections.at(-1);
+        addTri([x,y+top[0],z],ring(top,i),ring(top,i+1),color);
+      }
+    }
+
+    if (selectedMap.city) {
+      const {x,z,halfLength,deck,halfWidth} = EAST_RIVER_BRIDGE;
+      const stone = [0.65,0.61,0.54], metal = [0.28,0.33,0.36];
+      const suspender = [0.41,0.46,0.48];
+      box(x,deck,z,halfLength*2,1.2,halfWidth*2,[0.31,0.34,0.35]);
+      for (const side of [-1,1]) {
+        box(x,deck+0.84,z+side*(halfWidth-0.14),halfLength*2,0.24,0.18,metal);
+      }
+      const towerSpacing = 52;
+      for (const center of [x-towerSpacing,x+towerSpacing]) {
+        for (const side of [-1,1]) {
+          box(center,28,z+side*3.0,5.3,34,2.6,stone);
+          box(center,45.6,z+side*3.0,5.95,1.2,3.2,stone);
+        }
+        box(center,42.8,z,5.5,3.5,8.5,stone);
+      }
+      function cableHeight(dx) {
+        const d = Math.abs(dx);
+        return d < towerSpacing ? 29+16*(d/towerSpacing)**2
+          : 28+17*((halfLength-d)/(halfLength-towerSpacing));
+      }
+      for (const side of [-1,1]) {
+        const rail = z + side*3.85;
+        for (let i=-halfLength;i<halfLength;i+=4) {
+          const j = Math.min(i+4,halfLength);
+          const left = cableHeight(i), right = cableHeight(j);
+          addQuad([x+i,left,rail],[x+j,right,rail],[x+j,right+0.28,rail],[x+i,left+0.28,rail],metal);
+          if (i>-halfLength) box(x+i,(left+deck)/2,rail,0.13,left-deck,0.13,suspender);
+        }
+      }
+    }
+
+    // Trees are batched into one mesh, with clearance around the moose meadows.
+    const alaska = selectedMap.alaska;
+    const patches = alaska ? [[-176,-430],[160,-330],[-185,-160],[166,12],[-142,205],[169,255]]
+      : [[79,160],[90,255]];
+    for (const [cx,cz] of patches) for (let i=0;i<28;i++) {
+      const x = cx+Math.sin(i*4.32+cz)*30;
+      const z = cz+Math.cos(i*3.82+cx)*(alaska?53:48);
+      const y = sampleGroundHeight(x,z);
+      if (y<WATER_H+1.8 || y>34) continue;
+      const h = 3.3+(i%7)*0.62;
+      box(x,y+h*0.31,z,0.25,h*0.62,0.25,[0.31,0.23,0.17]);
+      for (let tier=0;tier<3;tier++) {
+        const base = h*(0.21+tier*0.21), radius = h*(0.24-tier*0.048);
+        const foliage = tier === 0 ? [0.16,0.27,0.20] : [0.24,0.38,0.27];
+        tapered(x,y,z,[[base,radius,radius],[base+h*0.44,0.06,0.06]],foliage,i);
+      }
+    }
+
+    if (alaska) {
+      // Continuous glacial tongue with a blue calving face and dark crevasses.
+      const columns = 20, rows = 17;
+      function glacierPoint(col,row) {
+        const across = 2*col/columns - 1;
+        const t = row/rows;
+        const x = -34 + across*(78-28*t) + Math.sin(t*3.9)*21;
+        const z = 449 + t*148 - (1-across*across)*17 + Math.sin(col*1.8)*2.3;
+        const edge = 1 - Math.abs(across)**8;
+        const ice = (4.6 + 5.8*edge)*Math.min(1,(1-t)*5.8);
+        const roughness = Math.sin(col*2.8+row*1.6)*0.56 + Math.sin(row*3.7+col)*0.45;
+        return [x,sampleGroundHeight(x,z)+ice+roughness,z];
+      }
+      for (let col=0;col<columns;col++) {
+        const a=glacierPoint(col,0), b=glacierPoint(col+1,0);
+        addQuad([a[0],sampleGroundHeight(a[0],a[2])-0.18,a[2]],
+          [b[0],sampleGroundHeight(b[0],b[2])-0.18,b[2]],b,a,
+          col%3===0 ? [0.34,0.65,0.76] : [0.61,0.80,0.85]);
+        for (let row=0;row<rows;row++) {
+          const streak = 0.5 + 0.5*Math.sin(row*0.86+Math.sin(col*0.62)*1.5);
+          const ice = [0.69+0.15*streak,0.83+0.08*streak,0.88+0.05*streak];
+          addQuad(glacierPoint(col,row),glacierPoint(col,row+1),
+            glacierPoint(col+1,row+1),glacierPoint(col+1,row),ice);
+        }
+      }
+      for (let i=0;i<25;i++) {
+        const x = -66 + (i*37)%102;
+        const z = 332 + (i*29)%113;
+        if (sampleGroundHeight(x,z)>WATER_H) continue;
+        const size = 1.8+(i%5)*0.86;
+        const tint = i%2 ? [0.70,0.86,0.92] : [0.85,0.93,0.94];
+        tapered(x,WATER_H-0.22,z,[[0,size,size*0.8],[0.52,size*0.96,size*0.74],[0.74,size*0.71,size*0.61]],tint,i);
+      }
+    }
+    return upload();
+  }
+
+  function isBridgeCollision(x,y,z) {
+    const bridge = EAST_RIVER_BRIDGE;
+    const dx = Math.abs(x-bridge.x);
+    const dz = Math.abs(z-bridge.z);
+    return (dx <= bridge.halfLength && dz <= bridge.halfWidth && Math.abs(y-bridge.deck)<1.3) ||
+      (Math.abs(dx-52)<3.2 && Math.abs(dz-3)<1.6 && y>=WATER_H && y<46.2);
+  }
+
   const shipMeshes = Object.fromEntries(Object.keys(SHIP_TYPES).map(kind => [kind, buildShipMesh(kind)]));
   const mooseMesh = buildMooseMesh();
 
@@ -1643,6 +1858,7 @@
   // Terrain Height Query on CPU (matches shader exactly)
   const WATER_H = 12.2;
   const TERRAIN_SCALE = 54.0;
+  const terrainScaleFor = map => map.alaska ? 75 : TERRAIN_SCALE;
 
   function sampleGroundHeight(x, z) {
     if (!heightField) return WATER_H;
@@ -1659,7 +1875,7 @@
     const h10 = heightField[iy * MAP_SIZE + ix1];
     const h01 = heightField[iy1 * MAP_SIZE + ix];
     const h11 = heightField[iy1 * MAP_SIZE + ix1];
-    const h = lerp(lerp(h00, h10, tx), lerp(h01, h11, tx), ty) * TERRAIN_SCALE;
+    const h = lerp(lerp(h00, h10, tx), lerp(h01, h11, tx), ty) * terrainScaleFor(selectedMap);
     return Math.max(h, WATER_H);
   }
 
@@ -2525,13 +2741,13 @@
       const card = cards.find(item => item.dataset.map === data.key);
       const toIndex = value => clamp(Math.floor((value / MAP_SPAN + 0.5) * size), 0, size-1);
       paintTerrainMap(card, FLIGHT_MAPS[data.key], (x,z) =>
-        Math.max(WATER_H, data.height[toIndex(z)*size+toIndex(x)] * TERRAIN_SCALE), true);
+        Math.max(WATER_H, data.height[toIndex(z)*size+toIndex(x)] * terrainScaleFor(FLIGHT_MAPS[data.key])), true);
       card.dataset.ready = 'true';
       if (cards.every(item => item.dataset.ready)) stop();
     };
     for (const { dataset: { map: key } } of cards) {
       worker.postMessage({ ...FLIGHT_MAPS[key], key, size, preview: true,
-        span: MAP_SPAN, scale: TERRAIN_SCALE, water: WATER_H });
+        span: MAP_SPAN, scale: terrainScaleFor(FLIGHT_MAPS[key]), water: WATER_H });
     }
   }
 
@@ -2659,6 +2875,13 @@
         }
         if (data.type !== 'done') return;
         heightField = data.height;
+        for (const mesh of [backgroundBuildings,landscapeDetails]) {
+          if (!mesh) continue;
+          gl.deleteVertexArray(mesh.vao);
+          for (const buffer of mesh.buffers) gl.deleteBuffer(buffer);
+        }
+        backgroundBuildings = selectedMap.city ? buildCityBuildings(data.parcels) : null;
+        landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
         prepareCoastalTraffic();
         mapRaster = document.createElement('canvas');
         mapRaster.width = mapRaster.height = mapWidth;
@@ -2708,7 +2931,7 @@
       };
       worker.postMessage({
         size: MAP_SIZE, span: MAP_SPAN, landmarks: selectedMap.landmarks,
-        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city, alaska: selectedMap.alaska
+        scale: terrainScaleFor(selectedMap), water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city, alaska: selectedMap.alaska
       });
     } catch (error) {
       console.error(error);
@@ -2738,6 +2961,7 @@
   // Uniform Locations
   const uWorld = {
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
+    terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alderValley: gl.getUniformLocation(worldProg, 'uAlderValley'),
     alaska: gl.getUniformLocation(worldProg, 'uAlaska'),
     manhattan: gl.getUniformLocation(worldProg, 'uManhattan'),
@@ -2762,7 +2986,8 @@
     isOutline: gl.getUniformLocation(meshProg, 'uIsOutline'),
     emissive: gl.getUniformLocation(meshProg, 'uEmissive'),
     smooth: gl.getUniformLocation(meshProg, 'uSmooth'),
-    eye: gl.getUniformLocation(meshProg, 'uEye')
+    eye: gl.getUniformLocation(meshProg, 'uEye'),
+    cityFacade: gl.getUniformLocation(meshProg, 'uCityFacade')
   };
 
   const uDither = {
@@ -2981,6 +3206,10 @@
         }
       }
       if (!selectedMap.city) continue;
+      if (isBridgeCollision(x,y,z)) {
+        finishFlight(pos,'Collision with Brooklyn Bridge',false);
+        return;
+      }
       for (const mark of NEW_YORK_LANDMARKS) {
         const level = y - sampleGroundHeight(mark.x, mark.z);
         if (level < 0 || level > mark.top + 0.58) continue;
@@ -2995,7 +3224,7 @@
   }
 
   function finishFlight(position, reason, isWater) {
-    crash = { age: 0, reason };
+    crash = { startedAt: null, age: 0, reason };
     plane.pos = position;
     plane.speed = 0;
     plane.afterburner = false;
@@ -3056,6 +3285,10 @@
     const { basis, boundaryAssist } = crash
       ? { basis: getPlaneBasis(), boundaryAssist: false }
       : advanceFlight(dt);
+    if (crash) {
+      crash.startedAt ??= now;
+      crash.age = (now-crash.startedAt)*0.001;
+    }
 
     // 2. Missiles, Reloading & Trails
     for (let i = 0; i < 4; i++) {
@@ -3115,7 +3348,7 @@
     }
 
     for (let i = explosions.length - 1; i >= 0; i--) {
-      explosions[i].age += dt;
+      explosions[i].age = explosions[i].crash ? crash.age : explosions[i].age + dt;
       if (explosions[i].age >= explosions[i].maxAge) explosions.splice(i, 1);
     }
 
@@ -3188,6 +3421,7 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
     gl.uniform1i(uWorld.terrain, 0);
+    gl.uniform1f(uWorld.terrainScale,terrainScaleFor(selectedMap));
     gl.uniform1i(uWorld.alderValley, Boolean(selectedMap.airfield));
     gl.uniform1i(uWorld.manhattan, Boolean(selectedMap.city));
     gl.uniform1i(uWorld.alaska, Boolean(selectedMap.alaska));
@@ -3224,7 +3458,8 @@
     gl.uniform1i(uMesh.smooth, smoothScenery());
     gl.uniform3fv(uMesh.eye, camPos);
 
-    function drawMeshWithOutline(mesh, modelMat, emissive = false) {
+    function drawMeshWithOutline(mesh, modelMat, emissive = false, cityFacade = false) {
+      gl.uniform1i(uMesh.cityFacade, cityFacade);
       gl.bindVertexArray(mesh.vao);
       gl.uniformMatrix4fv(uMesh.model, false, modelMat);
       if (!emissive && !smoothScenery()) {
@@ -3242,6 +3477,12 @@
       gl.uniform1f(uMesh.isOutline, 0.0);
       gl.uniform1f(uMesh.emissive, emissive ? 1.0 : 0.0);
       gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+    }
+
+    if (backgroundBuildings || landscapeDetails) {
+      const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
+      if (backgroundBuildings) drawMeshWithOutline(backgroundBuildings,identity,false,true);
+      if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
     }
 
     if (selectedMap.city) {
@@ -3327,15 +3568,12 @@
     drawHudAndCockpit(time, basis, viewProj);
     drawFlightMap(now, boundaryAssist);
 
-    if (crash) {
-      crash.age += dt;
-      if (crash.age >= 1.15) {
-        flying = false;
-        crashDetail.textContent = crash.reason;
-        crashOverlay.hidden = false;
-        retryFlight.focus();
-        return;
-      }
+    if (crash && crash.age >= 1.15) {
+      flying = false;
+      crashDetail.textContent = crash.reason;
+      crashOverlay.hidden = false;
+      retryFlight.focus();
+      return;
     }
     flightFrame = requestAnimationFrame(loop);
   }
