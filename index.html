@@ -34,6 +34,7 @@
   }
   .smooth-city .key-pill{border-color:#aac6d377;background:#142530;color:#ebf7fc;}
   .smooth-city #missionStatus{border-color:#a4c3d27d;background:#162936d9;color:#eff7fb;}
+  #missionStatus.tour{white-space:pre-line;line-height:1.45;font-variant-numeric:tabular-nums;}
   .smooth-city #boundaryStatus{color:inherit;}
   #titleOverlay{position:absolute;inset:0;display:grid;justify-items:center;align-items:safe center;overflow:auto;padding:16px;
     background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
@@ -173,6 +174,7 @@
           <legend>Mode</legend>
           <label><input type="radio" name="flightMode" value="free" checked>Free Flight<small>Explore at your own pace</small></label>
           <label><input type="radio" name="flightMode" value="route">Checkpoint Challenge<small>Fly through five beacons against the clock</small></label>
+          <label id="scenicTourChoice" hidden><input id="scenicTour" name="flightMode" value="tour" type="radio" disabled>Scenic Tour<small>Follow five named landmarks at your own pace</small></label>
         </fieldset>
         <fieldset>
           <legend>Aircraft</legend>
@@ -250,6 +252,8 @@
   const startFlight = document.getElementById('startFlight');
   const flightMenuBtn = document.getElementById('flightMenuBtn');
   const missionStatus = document.getElementById('missionStatus');
+  const scenicTourChoice = document.getElementById('scenicTourChoice');
+  const scenicTour = document.getElementById('scenicTour');
   const menuError = document.getElementById('menuError');
   const crashOverlay = document.getElementById('crashOverlay');
   const crashDetail = document.getElementById('crashDetail');
@@ -354,6 +358,13 @@
       alaska: true,
       shipAnchor: [-24,-555],
       places:Object.values(ALASKA_PLACES),
+      tour:[
+        {name:'Cape Beacon',pos:[-105,43,-622]},
+        {name:'Kittiwake Harbor',pos:[34,35,-525]},
+        {name:'Twin Falls',pos:[-109,41,-398]},
+        {name:'Fjord Narrows',pos:[-3,43,-139]},
+        {name:'Glacier Head',pos:[10,51,396]}
+      ],
       spawn: [-19,33,-667],
       landmarks: [
         { name: 'Glacier Head', x: -40, z: 558, width: 195, depth: 220, elevation: 0.61 },
@@ -2813,6 +2824,7 @@
   let crash = null;
   let loading = false;
   let route = [];
+  let tourStops = [];
   let gateIndex = 0;
   let flightSeconds = 0;
   const steeringKeys = new Set();
@@ -3174,6 +3186,17 @@
       hudCtx.beginPath();
       hudCtx.arc(x, y, radius, 0, 2 * Math.PI);
       hudCtx.stroke();
+      if(tourStops.length && x>=35 && x<=w-35 && y>=24 && y<=h-25){
+        hudCtx.setLineDash([]);
+        hudCtx.textAlign='center';
+        hudCtx.font='bold 12px system-ui,sans-serif';
+        hudCtx.strokeStyle='#172b38';
+        hudCtx.lineWidth=3;
+        hudCtx.fillStyle='#fff0ce';
+        const label=tourStops[gateIndex].name;
+        hudCtx.strokeText(label,x,y-radius-6);
+        hudCtx.fillText(label,x,y-radius-6);
+      }
       hudCtx.restore();
     }
 
@@ -3661,12 +3684,33 @@
       }
     }
 
+    const showTourRoute=tourStops.length && mapPanel.classList.contains('expanded');
+    if (showTourRoute && gateIndex<route.length){
+      mapCtx.strokeStyle='#f1ca83';
+      mapCtx.lineWidth=2;
+      mapCtx.setLineDash([5,5]);
+      mapCtx.beginPath();
+      mapCtx.moveTo(center+plane.pos[0]*mapScale,center-plane.pos[2]*mapScale);
+      for(let i=gateIndex;i<route.length;i++){
+        const [x,,z]=route[i];
+        mapCtx.lineTo(center+x*mapScale,center-z*mapScale);
+      }
+      mapCtx.stroke();
+      mapCtx.setLineDash([]);
+    }
+
     for (let i = gateIndex; i < route.length; i++) {
       const [x, , z] = route[i];
       mapCtx.fillStyle = i === gateIndex ? '#fff0ae' : '#cfad79';
       mapCtx.beginPath();
-      mapCtx.arc(center + x * mapScale, center - z * mapScale, i === gateIndex ? 9 : 5, 0, 2 * Math.PI);
+      const dotX=center+x*mapScale,dotY=center-z*mapScale;
+      mapCtx.arc(dotX,dotY,i===gateIndex?9:showTourRoute?7:5,0,2*Math.PI);
       mapCtx.fill();
+      if(showTourRoute) {
+        mapCtx.fillStyle='#211827';
+        mapCtx.font='bold 10px system-ui,sans-serif';
+        mapCtx.fillText(String(i+1),dotX,dotY+3.4);
+      }
     }
     if (mapPanel.classList.contains('expanded')) {
       for (const boat of boats) {
@@ -3698,14 +3742,20 @@
     mapCtx.restore();
   }
 
-  function updateRunwayChoice() {
+  function updateFlightOptions() {
     const settings=new FormData(flightSetup);
-    const available=settings.get('aircraft')==='fighter' && FLIGHT_MAPS[settings.get('flightMap')].runwayStart;
+    const map=FLIGHT_MAPS[settings.get('flightMap')];
+    const available=settings.get('aircraft')==='fighter' && map.runwayStart;
     runwayChoice.hidden=!available;
     runwayStart.disabled=!available;
+    scenicTourChoice.hidden=!map.tour;
+    scenicTour.disabled=!map.tour;
+    if(scenicTour.disabled && scenicTour.checked){
+      flightSetup.querySelector('input[name="flightMode"][value="free"]').checked=true;
+    }
   }
-  flightSetup.addEventListener('change',updateRunwayChoice);
-  updateRunwayChoice();
+  flightSetup.addEventListener('change',updateFlightOptions);
+  updateFlightOptions();
 
   function launchFlight(event) {
     event.preventDefault();
@@ -3718,7 +3768,7 @@
     document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
     resScale = 1.0;
     resizeTargets();
-    const challenge = settings.get('flightMode') === 'route';
+    const mode=settings.get('flightMode');
     selectedAircraft = settings.get('aircraft');
     const runway = selectedAircraft==='fighter' && settings.has('runwayStart') ? selectedMap.runwayStart : null;
     loading = true;
@@ -3780,12 +3830,14 @@
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-        route = challenge ? selectedMap.checkpoints.map(([x,z]) =>
-          [x, Math.max(40, sampleGroundHeight(x,z) + 12), z]) : [];
+        tourStops=mode==='tour' && selectedMap.tour ? selectedMap.tour : [];
+        route=tourStops.length ? tourStops.map(stop=>stop.pos) : mode==='route'
+          ? selectedMap.checkpoints.map(([x,z])=>[x,Math.max(40,sampleGroundHeight(x,z)+12),z])
+          : [];
         gateIndex = 0;
         flightSeconds = 0;
-        missionStatus.hidden = !challenge;
-        updateMission(0);
+        missionStatus.hidden = !route.length;
+        missionStatus.classList.toggle('tour',Boolean(tourStops.length));
         grounded=Boolean(runway);
         gearDown=grounded;
         brakes=false;
@@ -3796,6 +3848,7 @@
           speed: grounded ? 0 : AIRCRAFT[selectedAircraft].cruise, afterburner: false
         });
         renderGearStatus();
+        updateMission(0);
         mouseNorm.x = mouseNorm.y = 0;
         mouseClient.x = window.innerWidth / 2;
         mouseClient.y = window.innerHeight / 2;
@@ -3832,22 +3885,37 @@
   }
   flightSetup.addEventListener('submit', launchFlight);
 
+  function tourGuidance(target) {
+    const dx=target[0]-plane.pos[0],dy=target[1]-plane.pos[1],dz=target[2]-plane.pos[2];
+    const heading=Math.atan2(dx,dz);
+    const difference=Math.atan2(Math.sin(heading-plane.yaw),Math.cos(heading-plane.yaw));
+    const turn=Math.round(Math.abs(difference)*180/Math.PI);
+    const turnText=turn<=8?'STRAIGHT':(difference<0?'TURN LEFT ':'TURN RIGHT ')+turn+'°';
+    const altitude=Math.round(Math.abs(dy));
+    const altitudeText=altitude<=5?'HOLD ALT':(dy>0?'CLIMB ':'DESCEND ')+altitude+' u';
+    return turnText+' · '+altitudeText;
+  }
+
   function updateMission(dt) {
-    const next = route[gateIndex];
+    const next=route[gateIndex];
     if (!next) return;
-    flightSeconds += dt;
-    if (dt === 0) {
-      missionStatus.textContent = 'Checkpoint 0 / ' + route.length;
-      return;
+    flightSeconds+=dt;
+    const distance=Math.hypot(next[0]-plane.pos[0],next[1]-plane.pos[1],next[2]-plane.pos[2]);
+    if (dt>0 && distance<=(tourStops.length?24:15)) gateIndex++;
+    const target=route[gateIndex];
+    let status;
+    if(tourStops.length){
+      status=target
+        ? (gateIndex+1)+' / '+route.length+' · '+tourStops[gateIndex].name+'\n'+
+          Math.round(Math.hypot(target[0]-plane.pos[0],target[2]-plane.pos[2]))+' u · '+tourGuidance(target)
+        : 'Scenic Tour complete · '+route.length+' / '+route.length;
+    }else{
+      status=target
+        ? 'Checkpoint '+gateIndex+' / '+route.length+(dt>0?' · '+Math.round(Math.hypot(
+          target[0]-plane.pos[0],target[1]-plane.pos[1],target[2]-plane.pos[2]))+' u':'')
+        : 'Course complete · '+flightSeconds.toFixed(1)+' s';
     }
-    const distance = Math.hypot(next[0] - plane.pos[0], next[1] - plane.pos[1], next[2] - plane.pos[2]);
-    if (distance <= 15) gateIndex++;
-    const target = route[gateIndex];
-    const status = target
-      ? 'Checkpoint ' + gateIndex + ' / ' + route.length + ' · ' + Math.round(Math.hypot(target[0] - plane.pos[0],
-        target[1] - plane.pos[1], target[2] - plane.pos[2])) + ' u'
-      : 'Course complete · ' + flightSeconds.toFixed(1) + ' s';
-    if (missionStatus.textContent !== status) missionStatus.textContent = status;
+    if (missionStatus.textContent!==status) missionStatus.textContent=status;
   }
 
   // Uniform Locations
