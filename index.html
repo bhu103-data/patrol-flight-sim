@@ -127,6 +127,10 @@
   #btnBoost{bottom:54px;right:92px;width:74px;height:44px;}
   #btnFire{bottom:106px;right:16px;width:74px;height:44px;}
   #btnCannon{bottom:106px;right:98px;width:72px;height:44px;}
+  #btnGear{bottom:158px;right:16px;width:74px;height:44px;}
+  #btnBrake{bottom:158px;right:98px;width:72px;height:44px;}
+  .runway-choice{display:block;margin-bottom:10px;font-size:13px;color:#f5d5b8;}
+  .runway-choice input{margin-right:6px;accent-color:#f4a259;}
   #joyZone{
     position:absolute;left:16px;bottom:54px;width:112px;height:112px;border-radius:50%;
     border:2px dashed rgba(244,162,89,0.45);background:rgba(20,14,34,0.35);pointer-events:auto;touch-action:none;
@@ -177,6 +181,7 @@
           <label><input type="radio" name="aircraft" value="jetpack">Jetpack<small>Slow cruise, quick climbs</small></label>
         </fieldset>
       </div>
+      <label class="runway-choice" id="runwayChoice" hidden><input id="runwayStart" type="checkbox" name="runwayStart">Start on the runway</label>
       <p id="menuError" role="alert" hidden></p>
       <button id="startFlight" type="submit">Start Flight</button>
     </form>
@@ -197,6 +202,8 @@
     <div class="touch-btn" id="btnCam">VIEW</div>
     <div class="touch-btn fighter-control" id="btnFire">MSL</div>
     <div class="touch-btn fighter-control" id="btnCannon">GUN</div>
+    <button class="touch-btn fighter-control" id="btnGear" type="button">GEAR</button>
+    <button class="touch-btn fighter-control" id="btnBrake" type="button">BRAKE</button>
     <div class="touch-btn" id="btnBoost">AB</div>
     <div class="touch-btn" id="btnRoll">ROLL</div>
   </div>
@@ -204,9 +211,11 @@
   <div id="statusBar">
     <div class="bar-left">
       <b id="aircraftName">Viper Jet</b>
+      <b id="gearStatus">GEAR UP</b>
+      <span class="desktop-only fighter-control"><span class="key-pill">G</span>GEAR <span class="key-pill">B</span>BRAKE</span>
       <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>STEER / MOUSE</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
-      <span class="desktop-only"><span class="key-pill">HOLD</span>AFTERBURNER</span>
+      <span class="desktop-only"><span class="key-pill">SHIFT / HOLD</span>BOOST</span>
       <span class="desktop-only fighter-control"><span class="key-pill">RMB/F</span>MISSILE</span>
       <span class="desktop-only fighter-control"><span class="key-pill">C</span>CANNON</span>
       <span class="desktop-only"><span class="key-pill">SPACE</span>VIEW (<b id="viewName">CHASE</b>)</span>
@@ -234,6 +243,9 @@
   const titleOverlay = document.getElementById('titleOverlay');
   const aircraftName = document.getElementById('aircraftName');
   const fighterControls = document.querySelectorAll('.fighter-control');
+  const gearStatus = document.getElementById('gearStatus');
+  const runwayChoice = document.getElementById('runwayChoice');
+  const runwayStart = document.getElementById('runwayStart');
   const flightSetup = document.getElementById('flightSetup');
   const startFlight = document.getElementById('startFlight');
   const flightMenuBtn = document.getElementById('flightMenuBtn');
@@ -283,6 +295,7 @@
   ];
   const EAST_RIVER_BRIDGE = { x: 82, z: -342, halfLength: 109, deck: 24, halfWidth: 4.2, ramp: 62 };
   const STREET_Y = 14.86;
+  const HARBOR_RUNWAY = { x: 354, z: -389, halfLength: 82, halfWidth: 8 };
   const CITY_STREETS = [
     [[-89,-342],[253,-342]],
     [[-91,-449],[-95,-377],[-89,-342],[-82,-307],[-59,-266],[-54,-206],[-34,-157],[-22,-103],[0,-38],[37,51]],
@@ -294,7 +307,7 @@
   ];
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
-    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, streets: CITY_STREETS
+    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, streets: CITY_STREETS, runway:HARBOR_RUNWAY
   };
   const FLIGHT_MAPS = {
     coast: {
@@ -314,6 +327,7 @@
     },
     valley: {
       airfield: ALDER_AIRFIELD,
+      runwayStart: {x:144,z:-280,yaw:0},
       spawn: [144, 32, -350],
       landmarks: [
         { name: 'Granite Ridge', x: -480, z: 270, width: 250, depth: 410, elevation: 0.58 },
@@ -324,9 +338,10 @@
     },
     manhattan: {
       shipAnchor: [-142,-611],
+      runwayStart: {x:287,z:-389,yaw:Math.PI/2},
       city: MANHATTAN_GRID,
       spawn: [-153, 44, -698],
-      landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }, { name: 'Brooklyn Bridge', x: 88, z: -342 }],
+      landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }, { name: 'Brooklyn Bridge', x: 88, z: -342 }, { name:'Harbor Runway',x:354,z:-389 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     },
     alaska: {
@@ -464,7 +479,9 @@
             const t=clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz),0,1);
             return Math.hypot(x-(ax+t*dx),z-(az+t*dz))<streetClearance;
           }));
-          if(inStreet)continue;
+          const runway=city.runway;
+          if(inStreet || (Math.abs(x-runway.x)<runway.halfLength+width/2+5 &&
+            Math.abs(z-runway.z)<runway.halfWidth+length/2+5)) continue;
           cityParcels.set(iz*256+ix,[x,z,width,length,top-base,tone]);
         }
       }
@@ -593,7 +610,9 @@
         packed[i * 4 + 2] = Math.round(conifer[i] * 255);
         packed[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, shade[i] * 0.85)) * 255);
       }
-      self.postMessage({ type: 'done', packed, height, parcels: [...cityParcels.values()] }, [packed.buffer, height.buffer]);
+      const transfer = [packed.buffer,height.buffer];
+      if (ground) transfer.push(ground.buffer);
+      self.postMessage({ type: 'done', packed, height, ground, parcels: [...cityParcels.values()] }, transfer);
     };
   `;
 
@@ -1881,12 +1900,81 @@
   let backgroundBuildings = null;
   let landscapeDetails = null;
 
+  let cityGroundField = null;
+  let cityLots = [];
+  const lotIndex=new Map();
+  let rebuildCity = false;
+  let fallingBuildings=[];
+
+  function lotKey(x,z) {
+    return Math.floor(z/MANHATTAN_GRID.blockLength)*256 +
+      Math.floor((x-MANHATTAN_GRID.tilt*z-MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
+  }
+
+  function cityLotAt(x,z) {
+    if (!selectedMap.city) return null;
+    const key=lotKey(x,z);
+    for (let row=-1;row<=1;row++) for (let column=-1;column<=1;column++) {
+      const lot=lotIndex.get(key+row*256+column);
+      if (lot && Math.abs(x-lot[0])<=lot[2]/2 && Math.abs(z-lot[1])<=lot[3]/2) return lot;
+    }
+    return null;
+  }
+
+  function setupCityLots(parcels,ground) {
+    cityGroundField=ground;
+    cityLots=parcels;
+    lotIndex.clear();
+    for (const lot of parcels) lotIndex.set(lotKey(lot[0],lot[1]),lot);
+    for (const entry of fallingBuildings) disposeSceneMesh(entry.mesh);
+    fallingBuildings=[];
+    rebuildCity=false;
+  }
+
+  function disposeSceneMesh(mesh) {
+    if (!mesh) return;
+    gl.deleteVertexArray(mesh.vao);
+    for (const buffer of mesh.buffers) gl.deleteBuffer(buffer);
+  }
+
+  function collapseBuilding(lot,impact) {
+    if (lot[6]) return;
+    const falling=buildCityBuildings([lot]);
+    lot[6]=true;
+    rebuildCity=true;
+    fallingBuildings.push({mesh:falling, started:sceneryTime, height:lot[4]});
+    for(let i=0;i<28;i++){
+      const angle=i*2.39996;
+      const speed=2.2+(i%7)*1.15;
+      trails.push({pos:[...impact],type:'smoke',dust:i%6!==0,ember:i%6===0,alpha:0.83,
+        vx:Math.sin(angle)*speed,vz:Math.cos(angle)*speed,vy:1.1+(i%5)*0.82});
+    }
+  }
+
+  function refreshDestroyedCity() {
+    if (rebuildCity) {
+      disposeSceneMesh(backgroundBuildings);
+      backgroundBuildings=buildCityBuildings(cityLots);
+      rebuildCity=false;
+    }
+    for (let i=fallingBuildings.length-1;i>=0;i--) {
+      if (sceneryTime-fallingBuildings[i].started<1.22) continue;
+      disposeSceneMesh(fallingBuildings[i].mesh);
+      fallingBuildings.splice(i,1);
+    }
+  }
+
   function buildCityBuildings(parcels) {
     const { addQuad, upload } = createTriangleMesh();
-    for (const [x,z,width,length,height,tone] of parcels) {
+    for (const [x,z,width,length,height,tone,destroyed] of parcels) {
       const material = tone < 0.38 ? [0.46,0.52,0.55]
         : tone < 0.70 ? [0.62,0.64,0.62] : [0.66,0.58,0.48];
       const y = WATER_H + 2.38;
+      if (destroyed) {
+        addModelBox(addQuad,x,y+0.48,z,width*0.86,0.96,length*0.81,[0.35,0.33,0.29]);
+        addModelBox(addQuad,x+width*0.11,y+1.08,z-length*0.09,width*0.37,1.35,length*0.26,material);
+        continue;
+      }
       addModelBox(addQuad,x,y+height/2,z,width,height,length,material);
       if (height > 13 && tone > 0.3) {
         addModelBox(addQuad,x,y+height+0.58,z,width*0.36,1.15,length*0.42,[0.38,0.43,0.44]);
@@ -1920,6 +2008,16 @@
       const suspender = [0.41,0.46,0.48];
       box(x,deck,z,halfLength*2,1.2,halfWidth*2,[0.31,0.34,0.35]);
       buildStreetScene(addQuad,box);
+      const strip=HARBOR_RUNWAY;
+      const left=strip.x-strip.halfLength, right=strip.x+strip.halfLength;
+      const surface=sampleTerrainHeight(strip.x,strip.z)+0.05;
+      pushRoadStrip(addQuad,[left,surface,strip.z],[right,surface,strip.z],strip.halfWidth*2,[0.23,0.27,0.29]);
+      for(let x=left+6;x<right-6;x+=11) {
+        pushRoadStrip(addQuad,[x,surface,strip.z],[x+4,surface,strip.z],0.26,[0.94,0.94,0.89],0.032);
+      }
+      for(const x of [left+2,right-4]) for(let stripe=-3;stripe<=3;stripe++) {
+        box(x,surface+0.038,strip.z+stripe*1.7,2.7,0.012,0.46,[0.94,0.94,0.89]);
+      }
       const towerSpacing = 52;
       for (const center of [x-towerSpacing,x+towerSpacing]) {
         for (const side of [-1,1]) {
@@ -2175,8 +2273,9 @@
   const TERRAIN_SCALE = 54.0;
   const terrainScaleFor = map => map.alaska ? 75 : TERRAIN_SCALE;
 
-  function sampleGroundHeight(x, z) {
-    if (!heightField) return WATER_H;
+  function sampleTerrainHeight(x,z) {
+    const field=cityGroundField || heightField;
+    if (!field) return WATER_H;
     const last = MAP_SIZE - 1;
     const fx = clamp((x / MAP_SPAN + 0.5) * MAP_SIZE - 0.5, 0, last);
     const fy = clamp((z / MAP_SPAN + 0.5) * MAP_SIZE - 0.5, 0, last);
@@ -2186,12 +2285,18 @@
     const ty = fy - iy;
     const ix1 = Math.min(ix + 1, last);
     const iy1 = Math.min(iy + 1, last);
-    const h00 = heightField[iy * MAP_SIZE + ix];
-    const h10 = heightField[iy * MAP_SIZE + ix1];
-    const h01 = heightField[iy1 * MAP_SIZE + ix];
-    const h11 = heightField[iy1 * MAP_SIZE + ix1];
+    const h00 = field[iy * MAP_SIZE + ix];
+    const h10 = field[iy * MAP_SIZE + ix1];
+    const h01 = field[iy1 * MAP_SIZE + ix];
+    const h11 = field[iy1 * MAP_SIZE + ix1];
     const h = lerp(lerp(h00, h10, tx), lerp(h01, h11, tx), ty) * terrainScaleFor(selectedMap);
     return Math.max(h, WATER_H);
+  }
+
+  function sampleGroundHeight(x,z) {
+    const terrain=sampleTerrainHeight(x,z);
+    const lot=cityLotAt(x,z);
+    return lot ? Math.max(terrain,WATER_H+2.38+(lot[6]?1.75:lot[4])) : terrain;
   }
 
   function navigationSurface(x, z) {
@@ -2376,7 +2481,7 @@
   }
 
   function triggerRoll() {
-    if (!flying || crash) return;
+    if (!flying || crash || grounded) return;
     if (plane.rollAnim <= 0.001) {
       plane.rollAnim = 0.002;
       plane.rollDir = mouseNorm.x >= 0 ? 1 : -1;
@@ -2438,7 +2543,7 @@
   let leftDownTime = 0;
 
   window.addEventListener('mousemove', (e) => {
-    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
+    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar, #touchControls")) return;
     mouseClient.x = e.clientX;
     mouseClient.y = e.clientY;
     mouseNorm.x = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
@@ -2446,7 +2551,7 @@
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
+    if (!flying || crash || mapPanel.contains(e.target) || e.target.closest("#statusBar, #touchControls")) return;
     if (e.button === 0) {
       leftDown = true;
       leftDownTime = performance.now();
@@ -2482,6 +2587,10 @@
     } else if (e.code === 'Space' && e.target !== mapToggle) {
       e.preventDefault();
       cycleView();
+    } else if (e.code === 'KeyG' && !e.repeat) {
+      toggleGear();
+    } else if (e.code === 'KeyB' && selectedAircraft==='fighter') {
+      brakes=true;
     } else if (e.code === 'KeyC') {
       fireCannon();
     } else if (e.code === 'KeyF') {
@@ -2494,6 +2603,10 @@
   });
 
   window.addEventListener('keyup', (e) => {
+    if(e.code==='KeyB') {
+      brakes=false;
+      if (flying) renderGearStatus();
+    }
     steeringKeys.delete(e.code);
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
       if (!leftDown) plane.afterburner = false;
@@ -2501,6 +2614,7 @@
   });
 
   window.addEventListener('blur', () => {
+    brakes=false;
     steeringKeys.clear();
     leftDown = false;
     plane.afterburner = false;
@@ -2550,6 +2664,16 @@
   }
 
   document.getElementById('btnCam').addEventListener('touchstart', (e) => { e.preventDefault(); cycleView(); }, { passive: false });
+  document.getElementById('btnGear').addEventListener('click',toggleGear);
+  const btnBrake=document.getElementById('btnBrake');
+  btnBrake.addEventListener('pointerdown',event=>{
+    if(!flying || crash || selectedAircraft!=='fighter')return;
+    btnBrake.setPointerCapture(event.pointerId);
+    brakes=true;
+  });
+  for(const event of ['pointerup','pointercancel','lostpointercapture']){
+    btnBrake.addEventListener(event,()=>{brakes=false;});
+  }
   document.getElementById('btnCannon').addEventListener('touchstart', (e)=>{e.preventDefault();fireCannon();},{passive:false});
   document.getElementById('btnFire').addEventListener('touchstart', (e) => { e.preventDefault(); fireMissile(); }, { passive: false });
   document.getElementById('btnRoll').addEventListener('touchstart', (e) => { e.preventDefault(); triggerRoll(); }, { passive: false });
@@ -2661,6 +2785,13 @@
       if (tr.type === 'vapor') {
         hudCtx.fillStyle = `rgba(247, 239, 242, ${tr.alpha.toFixed(2)})`;
         hudCtx.fillRect(Math.round(s[0]), Math.round(s[1]), 2, 2);
+      } else if (tr.dust) {
+        const size = 2.5 + (1-tr.alpha)*10;
+        const cloud = hudCtx.createRadialGradient(s[0],s[1],0,s[0],s[1],size);
+        cloud.addColorStop(0,'rgba(132,116,96,'+(tr.alpha*0.57)+')');
+        cloud.addColorStop(1,'rgba(132,116,96,0)');
+        hudCtx.fillStyle=cloud;
+        hudCtx.fillRect(s[0]-size,s[1]-size,size*2,size*2);
       } else if (tr.type === 'smoke') {
         const sz = Math.max(2, Math.round((1.0 - tr.alpha) * 5 + 2));
         hudCtx.fillStyle = tr.ember
@@ -2678,7 +2809,7 @@
       const sx = Math.round(s[0]);
       const sy = Math.round(s[1]);
 
-      if (ex.crash) {
+      if (ex.crash || ex.structure) {
         drawCrashBurst(sx, sy, t, ex.isWater);
         continue;
       }
@@ -3040,6 +3171,13 @@
         center - (airfield.z + airfield.halfLength) * mapScale,
         airfield.halfWidth * 2 * mapScale, airfield.halfLength * 2 * mapScale);
     }
+    if (city) {
+      const strip=city.runway;
+      ctx.fillStyle='#e4ddcb';
+      ctx.fillRect(mapWidth/2+(strip.x-strip.halfLength)*mapScale,
+        mapWidth/2-(strip.z+strip.halfWidth)*mapScale,
+        strip.halfLength*2*mapScale,strip.halfWidth*2*mapScale);
+    }
     if (preview) return;
     ctx.fillStyle = '#0b1024a6';
     ctx.beginPath();
@@ -3154,6 +3292,15 @@
     mapCtx.restore();
   }
 
+  function updateRunwayChoice() {
+    const settings=new FormData(flightSetup);
+    const available=settings.get('aircraft')==='fighter' && FLIGHT_MAPS[settings.get('flightMap')].runwayStart;
+    runwayChoice.hidden=!available;
+    runwayStart.disabled=!available;
+  }
+  flightSetup.addEventListener('change',updateRunwayChoice);
+  updateRunwayChoice();
+
   function launchFlight(event) {
     event.preventDefault();
     if (loading) return;
@@ -3167,6 +3314,7 @@
     resizeTargets();
     const challenge = settings.get('flightMode') === 'route';
     selectedAircraft = settings.get('aircraft');
+    const runway = selectedAircraft==='fighter' && settings.has('runwayStart') ? selectedMap.runwayStart : null;
     loading = true;
     startFlight.disabled = true;
     titleOverlay.hidden = true;
@@ -3204,12 +3352,10 @@
         }
         if (data.type !== 'done') return;
         heightField = data.height;
-        for (const mesh of [backgroundBuildings,landscapeDetails]) {
-          if (!mesh) continue;
-          gl.deleteVertexArray(mesh.vao);
-          for (const buffer of mesh.buffers) gl.deleteBuffer(buffer);
-        }
-        backgroundBuildings = selectedMap.city ? buildCityBuildings(data.parcels) : null;
+        setupCityLots(data.parcels,data.ground);
+        disposeSceneMesh(backgroundBuildings);
+        disposeSceneMesh(landscapeDetails);
+        backgroundBuildings = selectedMap.city ? buildCityBuildings(cityLots) : null;
         landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
         prepareCoastalTraffic();
         prepareCityTraffic();
@@ -3231,10 +3377,16 @@
         flightSeconds = 0;
         missionStatus.hidden = !challenge;
         updateMission(0);
+        grounded=Boolean(runway);
+        gearDown=grounded;
+        brakes=false;
         Object.assign(plane, {
-          pos: [...(selectedMap.spawn || [30, 40, -185])], yaw: 0, pitch: 0, bank: 0, rollAnim: 0,
-          speed: AIRCRAFT[selectedAircraft].cruise, afterburner: false
+          pos: runway ? [runway.x,sampleTerrainHeight(runway.x,runway.z)+GEAR_CLEARANCE,runway.z]
+            : [...(selectedMap.spawn || [30,40,-185])],
+          yaw: runway ? runway.yaw : 0, pitch: 0, bank: 0, rollAnim: 0,
+          speed: grounded ? 0 : AIRCRAFT[selectedAircraft].cruise, afterburner: false
         });
+        renderGearStatus();
         mouseNorm.x = mouseNorm.y = 0;
         mouseClient.x = window.innerWidth / 2;
         mouseClient.y = window.innerHeight / 2;
@@ -3518,11 +3670,69 @@
     }
   }
 
+  const GEAR_CLEARANCE = 0.96;
+  const ROTATE_SPEED = 23;
+  let gearDown = false;
+  let grounded = false;
+  let brakes = false;
+
+  function toggleGear() {
+    if (!flying || crash || selectedAircraft !== 'fighter' || grounded) return;
+    gearDown = !gearDown;
+    renderGearStatus();
+  }
+
+  function renderGearStatus() {
+    gearStatus.hidden = selectedAircraft !== 'fighter';
+    let text = gearDown ? 'GEAR DOWN' : 'GEAR UP';
+    if (grounded) {
+      const speed = Math.round(plane.speed);
+      const action = speed >= ROTATE_SPEED ? 'PULL UP' : plane.afterburner ? 'ACCELERATING' : 'HOLD BOOST';
+      text = (speed ? action + ' · ' + speed + ' / ' + ROTATE_SPEED : 'STOPPED · HOLD BOOST');
+      if (brakes) text = 'BRAKES · ' + speed;
+    }
+    if (gearStatus.textContent !== text) gearStatus.textContent = text;
+  }
+
+  function usableLandingSurface(x,z) {
+    const level = sampleTerrainHeight(x,z);
+    if (level <= WATER_H+0.10 || cityLotAt(x,z)) return null;
+    for (const [dx,dz] of [[3,0],[-3,0],[0,3],[0,-3]]) {
+      const nearby = sampleTerrainHeight(x+dx,z+dz);
+      if (nearby <= WATER_H+0.10 || Math.abs(nearby-level)>0.70 || cityLotAt(x+dx,z+dz)) return null;
+    }
+    return level;
+  }
+
+  function buildLandingGear() {
+    const {addQuad,upload}=createTriangleMesh();
+    for (const [x,z] of [[0,1.15],[-0.52,-0.64],[0.52,-0.64]]) {
+      addModelBox(addQuad,x,-0.46,z,0.11,0.57,0.13,[0.65,0.70,0.72]);
+      const tire=[0.13,0.15,0.15], hub=[0.52,0.56,0.57];
+      for(let i=0;i<12;i++){
+        const edge=(side,j)=>[x+side*0.085,-0.74+Math.cos(j*Math.PI/6)*0.21,z+Math.sin(j*Math.PI/6)*0.21];
+        addQuad(edge(-1,i),edge(1,i),edge(1,i+1),edge(-1,i+1),tire);
+        for (const side of [-1,1]) {
+          const a=[x+side*0.085,-0.74,z];
+          addQuad(a,edge(side,i),edge(side,i+1),a,hub);
+        }
+      }
+    }
+    return upload();
+  }
+
+  const gearMesh=buildLandingGear();
+
   function advanceFlight(dt) {
     const prevPos = [...plane.pos];
     const craft = AIRCRAFT[selectedAircraft];
-    const targetSpeed = plane.afterburner ? craft.boost : craft.cruise;
-    plane.speed = lerp(plane.speed, targetSpeed, dt * 2.8);
+    const targetSpeed = plane.afterburner ? craft.boost : brakes ? 16 : craft.cruise;
+    if (grounded) {
+      const accel = brakes ? -19 : plane.afterburner ? 6.5 : -2.4;
+      plane.speed = clamp(plane.speed+accel*dt,0,craft.boost);
+    } else {
+      plane.speed = lerp(plane.speed,targetSpeed,dt*2.8);
+    }
 
     if (audioEnabled && engineGain && abGain && engineFilter) {
       engineGain.gain.setTargetAtTime(plane.afterburner ? 0.14 : 0.075, audioCtx.currentTime, 0.08);
@@ -3570,10 +3780,17 @@
 
     const prevYaw = plane.yaw;
     const prevPitch = plane.pitch;
-    plane.yaw += turnInput * craft.turn * dt;
-    const targetPitch = clamp(pitchInput, -0.96, 1) * craft.maxPitch;
-    plane.pitch = lerp(plane.pitch, targetPitch, dt * craft.pitchResponse);
-    plane.bank = lerp(plane.bank, -turnInput * 0.92, dt * 4.5);
+    const taxiTurn=grounded ? clamp(plane.speed/7,0,0.62) : 1;
+    plane.yaw += turnInput * craft.turn * dt * taxiTurn;
+    const rotate=grounded && plane.afterburner && !brakes && plane.speed>=ROTATE_SPEED && pitchInput>0.20;
+    if (rotate) {
+      grounded=false;
+      plane.pitch=0.20;
+      plane.pos[1]+=0.04;
+    }
+    const targetPitch = grounded ? 0 : clamp(pitchInput,-0.96,1)*craft.maxPitch;
+    plane.pitch = lerp(plane.pitch,targetPitch,dt*craft.pitchResponse);
+    plane.bank = lerp(plane.bank,grounded?0:-turnInput*0.92,dt*4.5);
 
     if (plane.rollAnim > 0) {
       plane.rollAnim += dt * 1.45;
@@ -3592,14 +3809,27 @@
       plane.pos[2] *= limit;
     }
 
-    const floor = sampleGroundHeight(plane.pos[0], plane.pos[2]);
+    const [x,y,z]=plane.pos;
+    const floor=sampleGroundHeight(x,z);
+    if (grounded || (gearDown && !rotate && y<=floor+GEAR_CLEARANCE &&
+        plane.pitch>=-0.21 && plane.pitch<0.20 && Math.abs(plane.bank)<0.22 && plane.speed<=29)) {
+      const surface=usableLandingSurface(x,z);
+      if (surface!==null && (!grounded || Math.abs(surface+GEAR_CLEARANCE-prevPos[1])<1.4)) {
+        grounded=true;
+        plane.pos[1]=surface+GEAR_CLEARANCE;
+        plane.pitch=plane.bank=plane.rollAnim=0;
+      } else if (grounded) {
+        finishFlight([x,y,z],'Runway overrun',floor<=WATER_H+0.04);
+      }
+    }
     plane.pos[1] = Math.min(plane.pos[1], CEILING);
-    checkFlightCollision(prevPos, plane.pos);
+    if (!crash) checkFlightCollision(grounded ? plane.pos : prevPos,plane.pos);
+    renderGearStatus();
     if (!crash) updateMission(dt);
 
     const look = 14;
     const ahead = navigationSurface(plane.pos[0] + basis.fwd[0] * look, plane.pos[2] + basis.fwd[2] * look);
-    groundWarning.hidden = Boolean(crash) || Math.min(plane.pos[1] - floor, plane.pos[1] + basis.fwd[1]*look - ahead) > 5;
+    groundWarning.hidden = Boolean(crash) || grounded || Math.min(plane.pos[1] - floor, plane.pos[1] + basis.fwd[1]*look - ahead) > 5;
     plane.radarAlt = Math.max(0.2, plane.pos[1] - floor);
     plane.vsi = (plane.pos[1] - prevPos[1]) / Math.max(dt, 1e-4);
     const yawRate = (plane.yaw - prevYaw) / Math.max(dt, 1e-4);
@@ -3656,6 +3886,8 @@
     plane.pos = position;
     plane.speed = 0;
     plane.afterburner = false;
+    grounded=false;
+    brakes=false;
     steeringKeys.clear();
     groundWarning.hidden = true;
     camInitialized = false;
@@ -3734,14 +3966,20 @@
         continue;
       }
       const distance=m.speed*dt;
-      const steps=m.cannon?Math.max(1,Math.ceil(distance/0.38)):1;
+      const steps=Math.max(1,Math.ceil(distance/(m.cannon?0.38:0.7)));
       let bridgeHit=false;
+      let structureHit=false;
       for(let step=0;step<steps;step++){
         for(let axis=0;axis<3;axis++)m.pos[axis]+=m.dir[axis]*distance/steps;
-        if(!m.cannon)break;
         const [x,y,z]=m.pos;
         if(selectedMap.city && (breakBridgeRail(x,y,z,0.34)||isBridgeCollision(x,y,z,0.30))){
           bridgeHit=true;
+          break;
+        }
+        const lot=cityLotAt(x,z);
+        if (lot && !lot[6] && y<=WATER_H+2.38+lot[4] && y>=WATER_H+2.38) {
+          structureHit=true;
+          if (!m.cannon) collapseBuilding(lot,m.pos);
           break;
         }
         if(y<=sampleGroundHeight(x,z))break;
@@ -3757,10 +3995,10 @@
 
       const [x,y,z]=m.pos;
       const gh = sampleGroundHeight(x,z);
-      if (bridgeHit || y <= gh || m.life <= 0) {
-        const isWater = !bridgeHit && gh <= WATER_H + 0.05 ? 1 : 0;
-        const hitPos = [x,bridgeHit?y:gh,z];
-        explosions.push({ pos: hitPos, age: 0, maxAge: 1.5, isWater: isWater > 0 });
+      if (bridgeHit || structureHit || y <= gh || m.life <= 0) {
+        const isWater = !bridgeHit && !structureHit && gh <= WATER_H + 0.05 ? 1 : 0;
+        const hitPos = [x,bridgeHit||structureHit?y:gh,z];
+        explosions.push({ pos: hitPos, age: 0, maxAge: 1.5, isWater: isWater > 0, structure: structureHit });
         playExplosionSound(isWater > 0);
 
         impacts[impactCursor] = { x: hitPos[0], y: hitPos[1], z: hitPos[2], age: 0, isWater };
@@ -3817,7 +4055,9 @@
     for (let i = trails.length - 1; i >= 0; i--) {
       const tr = trails[i];
       tr.alpha -= dt * (tr.type === 'vapor' ? 0.85 : 0.42);
+      tr.pos[0] += (tr.vx || 0)*dt;
       tr.pos[1] += tr.vy * dt;
+      tr.pos[2] += (tr.vz || 0)*dt;
       if (tr.alpha <= 0) trails.splice(i, 1);
     }
 
@@ -3926,10 +4166,17 @@
       gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     }
 
+    refreshDestroyedCity();
     if (backgroundBuildings || landscapeDetails) {
       const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
       if (backgroundBuildings) drawMeshWithOutline(backgroundBuildings,identity,false,true);
       if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
+      for(const falling of fallingBuildings) {
+        const t=clamp((sceneryTime-falling.started)/1.22,0,1);
+        const transform=mat4FromBasis([0,-falling.height*t*t,0],[1,0,0],[0,1,0],[0,0,1],1);
+        // Move the damaged structure downward into its rubble footprint.
+        drawMeshWithOutline(falling.mesh,transform,false,true);
+      }
     }
 
     if (selectedMap.city) {
@@ -3950,6 +4197,7 @@
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
 
       if (selectedAircraft === "fighter") {
+        if(gearDown) drawMeshWithOutline(gearMesh,planeModel);
         // Wing-mounted missiles still on pylons
         for (let i = 0; i < 4; i++) {
           if (hardpointTimers[i] <= 0) {
