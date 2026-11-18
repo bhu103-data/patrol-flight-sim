@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
@@ -23,28 +23,32 @@
   #boundaryStatus{display:block;text-align:center;padding-top:4px;font-size:clamp(10px,2vw,12px);}
   #flightMap.warning{border-color:#ffad69;color:#ffcf8c;}
   #flightMap.guarding{border-color:#ff795e;color:#ffb2a1;}
-  #titleOverlay{
-    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 50% 42%, rgba(28,18,38,0.45) 0%, rgba(10,7,18,0.82) 100%);
-    z-index:20;transition:opacity 0.55s ease;pointer-events:auto;cursor:pointer;
+  [hidden]{display:none !important;}
+  #titleOverlay{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;padding:16px;
+    background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
+  .title-badge{width:min(650px,100%);border:1px solid #e88d4f;background:#181123;
+    padding:clamp(15px,4vw,30px);box-shadow:0 14px 44px #0009;}
+  h1.game-title{font-family:'Press Start 2P',monospace;font-size:clamp(24px,5vw,42px);
+    letter-spacing:4px;color:#ffd699;text-shadow:3px 3px #8a2c38;margin:0 0 20px;}
+  .flight-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+  .flight-options fieldset{min-width:0;border:1px solid #674863;padding:7px;}
+  .flight-options legend{color:#ffd699;padding:0 5px;}
+  .flight-options label{display:block;margin:3px 0;padding:7px;background:#271a32;cursor:pointer;}
+  .flight-options label:has(input:checked){background:#573346;color:#fff1db;}
+  .flight-options input{accent-color:#f4a259;margin-right:4px;}
+  .flight-options small{display:block;color:#e9bea5;margin:3px 0 0 20px;}
+  #startFlight,#flightMenuBtn{cursor:pointer;border:1px solid #e88d4f;color:#1a1325;
+    background:#f4a259;font:inherit;padding:6px 10px;}
+  #startFlight{width:100%;padding:10px;font-weight:bold;}
+  #menuError{color:#ffb2a1;margin-bottom:8px;}
+  #missionStatus{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:12;
+    pointer-events:none;text-align:center;padding:5px 8px;background:#161020da;color:#ffe1ad;
+    font-size:clamp(10px,2vw,14px);border:1px solid #a97458;max-width:40vw;}
+  @media(max-width:480px){
+    .flight-options{grid-template-columns:1fr;gap:6px;}
+    #statusBar .bar-right{gap:4px;}
+    #missionStatus{top:60px;left:auto;right:14px;transform:none;}
   }
-  #titleOverlay.hidden{opacity:0;pointer-events:none;}
-  .title-badge{
-    border:2px solid #e88d4f;background:rgba(16,11,26,0.86);padding:26px 38px;
-    box-shadow:0 0 0 2px #140e22, 0 14px 40px rgba(0,0,0,0.75);text-align:center;max-width:92vw;
-  }
-  .title-sub-top{font-size:11px;letter-spacing:4px;color:#d6896b;margin-bottom:12px;text-transform:uppercase;}
-  h1.game-title{
-    font-family:'Press Start 2P',monospace;font-size:clamp(28px,6vw,54px);letter-spacing:6px;
-    color:#ffd699;text-shadow:3px 3px 0 #8a2c38, -1px -1px 0 #fff1d6;margin-bottom:14px;
-  }
-  .title-desc{font-size:13px;color:#e6bca0;letter-spacing:1.5px;margin-bottom:20px;}
-  .start-prompt{
-    display:inline-block;font-family:'Press Start 2P',monospace;font-size:12px;
-    color:#140e22;background:#f4a259;padding:10px 18px;letter-spacing:2px;
-    animation:blink 1.1s steps(2,end) infinite;
-  }
-  @keyframes blink{0%,49%{opacity:1;}50%,100%{opacity:0.45;}}
   #statusBar{
     position:absolute;left:12px;right:12px;bottom:10px;z-index:15;
     display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -104,7 +108,7 @@
 </head>
 <body>
 <div id="wrap">
-  <canvas id="glCanvas"></canvas>
+  <canvas id="glCanvas" tabindex="-1"></canvas>
   <canvas id="hudCanvas"></canvas>
   <section id="flightMap" aria-label="Flight map" hidden>
     <button id="mapToggle" type="button" aria-expanded="false" aria-controls="flightMapCanvas">ENLARGE MAP [M]</button>
@@ -112,20 +116,32 @@
     <output id="boundaryStatus" aria-live="off"></output>
   </section>
 
-  <div id="loadOverlay">
-    <div class="load-label">GENERATING COPPER COAST</div>
+  <div id="loadOverlay" class="done">
+    <div class="load-label">正在生成地图</div>
     <div class="load-bar-outer"><div class="load-bar-inner" id="loadBar"></div></div>
     <div id="loadStep" style="font-size:12px;color:#c98a70;">SEEDING HEIGHTFIELD...</div>
   </div>
 
-  <div id="titleOverlay" class="hidden">
-    <div class="title-badge">
-      <div class="title-sub-top">COPPER COAST // 17:42 SUNSET</div>
-      <h1 class="game-title">PATROL</h1>
-      <div class="title-desc">LOW-ALTITUDE INTERCEPTOR &amp; RECONNAISSANCE TOY</div>
-      <div class="start-prompt">MOVE MOUSE OR CLICK TO FLY</div>
-    </div>
-  </div>
+  <section id="titleOverlay" aria-labelledby="gameTitle">
+    <form id="flightSetup" class="title-badge">
+      <h1 id="gameTitle" class="game-title">PATROL</h1>
+      <div class="flight-options">
+        <fieldset>
+          <legend>飞行地图</legend>
+          <label><input type="radio" name="flightMap" value="coast" checked>铜湾海岸<small>海湾、内陆湖与高地</small></label>
+          <label><input type="radio" name="flightMap" value="islands">暮潮群岛<small>岛链、外海与狭窄水道</small></label>
+        </fieldset>
+        <fieldset>
+          <legend>飞行模式</legend>
+          <label><input type="radio" name="flightMode" value="free" checked>自由飞行<small>探索地形，练习操控</small></label>
+          <label><input type="radio" name="flightMode" value="route">航标挑战<small>按顺序飞过 5 个航标，记录用时</small></label>
+        </fieldset>
+      </div>
+      <p id="menuError" role="alert" hidden></p>
+      <button id="startFlight" type="submit">开始飞行</button>
+    </form>
+  </section>
+  <output id="missionStatus" hidden></output>
 
   <div id="touchControls">
     <div id="joyZone"><div id="joyKnob"></div></div>
@@ -137,7 +153,7 @@
 
   <div id="statusBar">
     <div class="bar-left">
-      <span><span class="key-pill">MOUSE</span>STEER</span>
+      <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>键盘 / 鼠标操控</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
       <span class="desktop-only"><span class="key-pill">HOLD</span>AFTERBURNER</span>
       <span class="desktop-only"><span class="key-pill">RMB/F</span>MISSILE</span>
@@ -147,6 +163,7 @@
       </span></span>
     </div>
     <div class="bar-right">
+      <button id="flightMenuBtn" type="button">选地图</button>
       <button id="audioBtn" type="button">SOUND: OFF</button>
     </div>
   </div>
@@ -163,6 +180,11 @@
   const loadBar = document.getElementById('loadBar');
   const loadStep = document.getElementById('loadStep');
   const titleOverlay = document.getElementById('titleOverlay');
+  const flightSetup = document.getElementById('flightSetup');
+  const startFlight = document.getElementById('startFlight');
+  const flightMenuBtn = document.getElementById('flightMenuBtn');
+  const missionStatus = document.getElementById('missionStatus');
+  const menuError = document.getElementById('menuError');
   const audioBtn = document.getElementById('audioBtn');
   const viewNameEl = document.getElementById('viewName');
   const pipEls = Array.from(document.querySelectorAll('#missilePips .pip'));
@@ -188,17 +210,34 @@
   const WARNING_DISTANCE = 130;
   const CEILING = 100;
   // X increases east and Z increases north throughout the simulation.
-  const LANDMARKS = [
+  const COAST_LANDMARKS = [
     { name: 'Copper Ridge', x: -310, z: 220, width: 320, depth: 190, elevation: 0.70 },
     { name: 'Pine Highlands', x: 307, z: 340, width: 230, depth: 245, elevation: 0.54 },
     { name: 'South Bluffs', x: -300, z: -320, width: 250, depth: 220, elevation: 0.42 }
   ];
 
-  // Generate the height field and lighting once in a worker.
+  const FLIGHT_MAPS = {
+    coast: {
+      landmarks: COAST_LANDMARKS,
+      checkpoints: [[30,-85],[72,55],[139,165],[224,238],[310,316]]
+    },
+    islands: {
+      islands: true,
+      landmarks: [
+        { name: '西风岛', x: -350, z: 90, width: 175, depth: 230, elevation: 0.73 },
+        { name: '北礁', x: 60, z: 372, width: 182, depth: 160, elevation: 0.69 },
+        { name: '东湾岛', x: 360, z: -180, width: 198, depth: 195, elevation: 0.77 }
+      ],
+      checkpoints: [[30,-85],[-65,24],[-153,164],[-103,308],[24,401]]
+    }
+  };
+  let selectedMap = FLIGHT_MAPS.coast;
+
+  // Generate the selected height field in a worker.
   const workerSrc = `
     self.onmessage = function(e) {
       const N = e.data.size || 512;
-      const { span, landmarks, scale, water } = e.data;
+      const { span, landmarks, scale, water, islands } = e.data;
       const last = N - 1;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       function oval(x, z, cx, cz, width, depth) {
@@ -272,10 +311,10 @@
           for (const mark of landmarks) {
             peaks += mark.elevation * oval(east, north, mark.x, mark.z, mark.width, mark.depth);
           }
-          const h = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
+          const coast = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
             + headland * 0.24 + peaks * (0.59 + 0.48 * ridge) - lake * 0.30 - bay * 0.23,
             0.02, 0.98);
-          height[idx] = h;
+          height[idx] = islands ? clamp(0.04 + peaks * (0.69 + detail * 0.38), 0.02, 0.98) : coast;
 
           const bPatch = fbm(u, v, 8, 3, 505);
           const bFine = valueNoise(u * 64, v * 64, 64, 606);
@@ -344,7 +383,9 @@
   // WebGL2 Setup
   const gl = glCanvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
   if (!gl) {
-    loadStep.textContent = 'WEBGL2 NOT SUPPORTED';
+    menuError.hidden = false;
+    menuError.textContent = '此浏览器无法启动 WebGL 2。请启用图形加速后重新加载。';
+    startFlight.disabled = true;
     return;
   }
 
@@ -1205,8 +1246,14 @@
   const VIEWS = ['CHASE', 'COCKPIT', 'TOP-DOWN'];
   let viewIdx = 0;
   let camBlend = 0; // 0 = CHASE, 1 = COCKPIT, 2 = TOP-DOWN
-  let hasMouseMoved = false;
-  let titleDismissed = false;
+  let flying = false;
+  let flightFrame = 0;
+  let loading = false;
+  let route = [];
+  let gateIndex = 0;
+  let flightSeconds = 0;
+  const steeringKeys = new Set();
+  const steeringCodes = new Set(['KeyA','KeyD','KeyW','KeyS','ArrowLeft','ArrowRight','ArrowUp','ArrowDown']);
 
   const plane = {
     pos: [30, 45.0, -185],
@@ -1243,22 +1290,30 @@
     }
   }
 
-  function dismissTitle() {
-    if (!titleDismissed) {
-      titleDismissed = true;
-      titleOverlay.classList.add('hidden');
+  function openFlightMenu() {
+    if (loading || !flying) return;
+    flying = false;
+    cancelAnimationFrame(flightFrame);
+    steeringKeys.clear();
+    leftDown = false;
+    plane.afterburner = false;
+    if (audioCtx && engineGain && abGain) {
+      engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+      abGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
     }
+    titleOverlay.hidden = false;
+    startFlight.focus();
   }
-  titleOverlay.addEventListener('click', dismissTitle);
+  flightMenuBtn.addEventListener('click', openFlightMenu);
 
   function cycleView() {
-    dismissTitle();
+    if (!flying) return;
     viewIdx = (viewIdx + 1) % VIEWS.length;
     viewNameEl.textContent = VIEWS[viewIdx];
   }
 
   function triggerRoll() {
-    dismissTitle();
+    if (!flying) return;
     if (plane.rollAnim <= 0.001) {
       plane.rollAnim = 0.002;
       plane.rollDir = mouseNorm.x >= 0 ? 1 : -1;
@@ -1266,7 +1321,7 @@
   }
 
   function fireMissile() {
-    dismissTitle();
+    if (!flying) return;
     // Pick next loaded hardpoint
     let slot = -1;
     for (let i = 0; i < 4; i++) {
@@ -1309,20 +1364,15 @@
   let leftDownTime = 0;
 
   window.addEventListener('mousemove', (e) => {
-    if (mapPanel.contains(e.target)) return;
+    if (!flying || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
     mouseClient.x = e.clientX;
     mouseClient.y = e.clientY;
     mouseNorm.x = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
     mouseNorm.y = clamp((e.clientY / window.innerHeight) * 2 - 1, -1, 1);
-    if (!hasMouseMoved) {
-      hasMouseMoved = true;
-      dismissTitle();
-    }
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.target === audioBtn || mapPanel.contains(e.target)) return;
-    dismissTitle();
+    if (!flying || mapPanel.contains(e.target) || e.target.closest("#statusBar")) return;
     if (e.button === 0) {
       leftDown = true;
       leftDownTime = performance.now();
@@ -1345,7 +1395,13 @@
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyM' && !e.repeat && heightField) {
+    if (!flying) return;
+    if (e.code === 'Escape') {
+      openFlightMenu();
+    } else if (steeringCodes.has(e.code)) {
+      e.preventDefault();
+      steeringKeys.add(e.code);
+    } else if (e.code === 'KeyM' && !e.repeat) {
       toggleFlightMap();
     } else if (e.code === 'Space' && e.target !== mapToggle) {
       e.preventDefault();
@@ -1360,9 +1416,16 @@
   });
 
   window.addEventListener('keyup', (e) => {
+    steeringKeys.delete(e.code);
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
       if (!leftDown) plane.afterburner = false;
     }
+  });
+
+  window.addEventListener('blur', () => {
+    steeringKeys.clear();
+    leftDown = false;
+    plane.afterburner = false;
   });
 
   // Touch Controls
@@ -1372,8 +1435,7 @@
 
   joyZone.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    dismissTitle();
-    hasMouseMoved = true;
+    if (!flying) return;
     const t = e.changedTouches[0];
     joyTouchId = t.identifier;
     updateJoy(t);
@@ -1413,7 +1475,7 @@
   document.getElementById('btnFire').addEventListener('touchstart', (e) => { e.preventDefault(); fireMissile(); }, { passive: false });
   document.getElementById('btnRoll').addEventListener('touchstart', (e) => { e.preventDefault(); triggerRoll(); }, { passive: false });
   const btnBoost = document.getElementById('btnBoost');
-  btnBoost.addEventListener('touchstart', (e) => { e.preventDefault(); dismissTitle(); plane.afterburner = true; btnBoost.classList.add('active'); }, { passive: false });
+  btnBoost.addEventListener('touchstart', (e) => { e.preventDefault(); if (!flying) return; plane.afterburner = true; btnBoost.classList.add('active'); }, { passive: false });
   btnBoost.addEventListener('touchend', (e) => { e.preventDefault(); plane.afterburner = false; btnBoost.classList.remove('active'); }, { passive: false });
 
   function getPlaneBasis() {
@@ -1497,6 +1559,21 @@
       return [(cx / cw * 0.5 + 0.5) * w, (1.0 - (cy / cw * 0.5 + 0.5)) * h];
     }
 
+    const beacon = route[gateIndex];
+    const projected = beacon && project3D(beacon);
+    if (projected) {
+      const [x, y] = projected;
+      const radius = clamp(1300 / Math.max(1, Math.hypot(...beacon.map((v, i) => v - plane.pos[i]))), 8, 53);
+      hudCtx.save();
+      hudCtx.strokeStyle = '#ffdfa3';
+      hudCtx.lineWidth = 2;
+      hudCtx.setLineDash([4, 3]);
+      hudCtx.beginPath();
+      hudCtx.arc(x, y, radius, 0, 2 * Math.PI);
+      hudCtx.stroke();
+      hudCtx.restore();
+    }
+
     // Draw Wingtip Vapor Trails
     hudCtx.fillStyle = 'rgba(247, 239, 242, 0.78)';
     for (const tr of trails) {
@@ -1558,7 +1635,7 @@
     }
 
     // Top-Down target reticle when steering
-    if (viewIdx === 2 && hasMouseMoved) {
+    if (viewIdx === 2) {
       const mx = Math.round(mouseClient.x * (w / window.innerWidth));
       const my = Math.round(mouseClient.y * (h / window.innerHeight));
       hudCtx.strokeStyle = 'rgba(255, 214, 153, 0.75)';
@@ -1890,7 +1967,7 @@
       mapCtx.font = 'bold 16px monospace';
       mapCtx.strokeStyle = '#211827';
       mapCtx.lineWidth = 4;
-      for (const mark of LANDMARKS) {
+      for (const mark of selectedMap.landmarks) {
         const x = center + mark.x * mapScale;
         const y = center - mark.z * mapScale;
         mapCtx.strokeText(mark.name, x, y);
@@ -1898,6 +1975,14 @@
       }
     }
 
+    for (let i = gateIndex; i < route.length; i++) {
+      const [x, , z] = route[i];
+      mapCtx.fillStyle = i === gateIndex ? '#fff0ae' : '#cfad79';
+      mapCtx.beginPath();
+      mapCtx.arc(center + x * mapScale, center - z * mapScale, i === gateIndex ? 9 : 5, 0, 2 * Math.PI);
+      mapCtx.fill();
+    }
+    mapCtx.fillStyle = '#fff0d6';
     mapCtx.save();
     mapCtx.translate(center + plane.pos[0] * mapScale, center - plane.pos[2] * mapScale);
     mapCtx.rotate(plane.yaw);
@@ -1914,39 +1999,119 @@
     mapCtx.restore();
   }
 
-  // Spawn & Start Terrain Worker
-  const workerBlob = new Blob([workerSrc], { type: 'application/javascript' });
-  const workerUrl = URL.createObjectURL(workerBlob);
-  const worker = new Worker(workerUrl);
+  function launchFlight(event) {
+    event.preventDefault();
+    if (loading) return;
+    const settings = new FormData(flightSetup);
+    selectedMap = FLIGHT_MAPS[settings.get('flightMap')];
+    const challenge = settings.get('flightMode') === 'route';
+    loading = true;
+    startFlight.disabled = true;
+    titleOverlay.hidden = true;
+    menuError.hidden = true;
+    loadBar.style.width = '0%';
+    loadStep.textContent = '正在准备地形…';
+    loadOverlay.classList.remove('done');
 
-  worker.onmessage = (e) => {
-    const msg = e.data;
-    if (msg.type === 'progress') {
-      loadBar.style.width = msg.pct + '%';
-      loadStep.textContent = msg.label;
-    } else if (msg.type === 'done') {
-      heightField = msg.height;
-      mapRaster = bakeFlightMap();
-      mapPanel.hidden = false;
-      terrainTex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, terrainTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAP_SIZE, MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, msg.packed);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-      loadBar.style.width = '100%';
-      setTimeout(() => {
-        loadOverlay.classList.add('done');
-        titleOverlay.classList.remove('hidden');
-      }, 150);
-      worker.terminate();
+    const workerUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
+    let worker;
+    function cleanup() {
+      worker?.terminate();
       URL.revokeObjectURL(workerUrl);
-      requestAnimationFrame(loop);
+      loading = false;
+      startFlight.disabled = false;
+      loadOverlay.classList.add('done');
     }
-  };
-  worker.postMessage({ size: MAP_SIZE, span: MAP_SPAN, landmarks: LANDMARKS, scale: TERRAIN_SCALE, water: WATER_H });
+    function showError() {
+      cleanup();
+      menuError.textContent = '地图加载失败，请重新选择地图并开始飞行。';
+      menuError.hidden = false;
+      titleOverlay.hidden = false;
+      startFlight.focus();
+    }
+
+    try {
+      worker = new Worker(workerUrl);
+      worker.onerror = showError;
+      worker.onmessageerror = showError;
+      worker.onmessage = ({ data }) => {
+        if (data.type === 'progress') {
+          loadBar.style.width = data.pct + '%';
+          loadStep.textContent = data.label;
+          return;
+        }
+        if (data.type !== 'done') return;
+        heightField = data.height;
+        mapRaster = bakeFlightMap();
+        if (terrainTex) gl.deleteTexture(terrainTex);
+        terrainTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, terrainTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAP_SIZE, MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, data.packed);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        route = challenge ? selectedMap.checkpoints.map(([x,z]) =>
+          [x, Math.max(40, sampleGroundHeight(x,z) + 12), z]) : [];
+        gateIndex = 0;
+        flightSeconds = 0;
+        missionStatus.hidden = !challenge;
+        updateMission(0);
+        Object.assign(plane, {
+          pos: [30, 40, -185], yaw: 0, pitch: 0, bank: 0, rollAnim: 0,
+          speed: 23.5, afterburner: false
+        });
+        mouseNorm.x = mouseNorm.y = 0;
+        mouseClient.x = window.innerWidth / 2;
+        mouseClient.y = window.innerHeight / 2;
+        leftDown = false;
+        joyTouchId = null;
+        joyKnob.style.transform = '';
+        btnBoost.classList.remove('active');
+        steeringKeys.clear();
+        activeMissiles.length = trails.length = explosions.length = 0;
+        for (const impact of impacts) impact.age = -1;
+        hardpointTimers.fill(0);
+        updateMissilePips();
+        camInitialized = false;
+        lastMapFrame = -Infinity;
+        if (mapPanel.classList.contains('expanded')) toggleFlightMap();
+        mapPanel.hidden = false;
+        cleanup();
+        flying = true;
+        glCanvas.focus({ preventScroll: true });
+        lastTime = performance.now();
+        flightFrame = requestAnimationFrame(loop);
+      };
+      worker.postMessage({
+        size: MAP_SIZE, span: MAP_SPAN, landmarks: selectedMap.landmarks,
+        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands
+      });
+    } catch (error) {
+      console.error(error);
+      showError();
+    }
+  }
+  flightSetup.addEventListener('submit', launchFlight);
+
+  function updateMission(dt) {
+    const next = route[gateIndex];
+    if (!next) return;
+    flightSeconds += dt;
+    if (dt === 0) {
+      missionStatus.textContent = '航标 0 / ' + route.length;
+      return;
+    }
+    const distance = Math.hypot(next[0] - plane.pos[0], next[1] - plane.pos[1], next[2] - plane.pos[2]);
+    if (distance <= 15) gateIndex++;
+    const target = route[gateIndex];
+    const status = target
+      ? '航标 ' + gateIndex + ' / ' + route.length + ' · ' + Math.round(Math.hypot(target[0] - plane.pos[0],
+        target[1] - plane.pos[1], target[2] - plane.pos[2])) + ' u'
+      : '航线完成 · ' + flightSeconds.toFixed(1) + ' 秒';
+    if (missionStatus.textContent !== status) missionStatus.textContent = status;
+  }
 
   // Uniform Locations
   const uWorld = {
@@ -1991,6 +2156,7 @@
   let trailAccum = 0;
 
   function loop(now) {
+    if (!flying) return;
     const rawDt = (now - lastTime) * 0.001;
     lastTime = now;
     const dt = Math.min(rawDt, 0.05);
@@ -2022,10 +2188,11 @@
     let turnInput = 0;
     let pitchInput = 0;
 
-    if (!hasMouseMoved) {
-      // Lazy S-turns before player moves mouse
-      turnInput = Math.sin(time * 0.55) * 0.34;
-      pitchInput = Math.cos(time * 0.42) * 0.08;
+    if (steeringKeys.size) {
+      turnInput = Number(steeringKeys.has('KeyD') || steeringKeys.has('ArrowRight'))
+        - Number(steeringKeys.has('KeyA') || steeringKeys.has('ArrowLeft'));
+      pitchInput = Number(steeringKeys.has('KeyW') || steeringKeys.has('ArrowUp'))
+        - Number(steeringKeys.has('KeyS') || steeringKeys.has('ArrowDown'));
     } else if (viewIdx === 2) {
       // Top-down: steer aircraft toward cursor
       const nx = mouseNorm.x;
@@ -2090,6 +2257,7 @@
     }
     plane.pos[1] = clamp(plane.pos[1], gAhead1 + 0.6, CEILING);
 
+    updateMission(dt);
     plane.radarAlt = Math.max(0.2, plane.pos[1] - gAhead1);
     plane.vsi = (plane.pos[1] - prevY) / Math.max(dt, 1e-4);
     const yawRate = (plane.yaw - prevYaw) / Math.max(dt, 1e-4);
@@ -2332,7 +2500,7 @@
     drawHudAndCockpit(time, basis, viewProj);
     drawFlightMap(now, boundaryAssist);
 
-    requestAnimationFrame(loop);
+    flightFrame = requestAnimationFrame(loop);
   }
 })();
 </script>
