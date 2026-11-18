@@ -44,7 +44,7 @@
     letter-spacing:4px;color:#ffd699;text-shadow:3px 3px #8a2c38;margin:0 0 20px;}
   .flight-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
   .flight-options fieldset{min-width:0;border:1px solid #674863;padding:7px;}
-  .flight-options .map-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;}
+  .flight-options .map-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;}
   .map-options .map-card{border:1px solid #674863;margin:0;}
   .map-options .map-card:has(input:checked){border-color:#ffb677;}
   .map-options .map-card:has(input:focus-visible){outline:2px solid #ffd699;outline-offset:2px;}
@@ -169,6 +169,7 @@
           <label class="map-card"><canvas data-map="valley" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
           <label class="map-card"><img class="scenery-preview" src="data:image/webp;base64,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" width="432" height="243" alt=""><input type="radio" name="flightMap" value="alaska">Alaska Fjords<small>Glaciers, fishing docks, Twin Falls and wildlife</small></label>
           <label class="map-card"><img class="scenery-preview" src="data:image/webp;base64,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" width="432" height="243" alt=""><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
+          <label class="map-card"><img class="scenery-preview" src="data:image/webp;base64,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" width="432" height="243" alt=""><input type="radio" name="flightMap" value="vegas">Las Vegas<small>Neon skyline, desert ridges and a runway</small></label>
         </fieldset>
         <fieldset>
           <legend>Mode</legend>
@@ -319,6 +320,14 @@
     beacon:{name:'Cape Beacon',x:-155,z:-610},
     falls:{name:'Twin Falls',x:-140,z:-406}
   };
+  const VEGAS_SITES = {
+    strip:{name:'Las Vegas Strip',x:-35,z:-170},
+    sphere:{name:'Sphere',x:51,z:-50},
+    tower:{name:'Observation Tower',x:-48,z:353},
+    pyramid:{name:'Pyramid Resort',x:-125,z:-322},
+    fountain:{name:'Fountain Plaza',x:40,z:-200},
+    airport:{name:'Desert Airport',x:211,z:-463,halfLength:92,halfWidth:9.4}
+  };
   const FLIGHT_MAPS = {
     coast: {
       shipAnchor: [125,-585],
@@ -373,6 +382,17 @@
         { name: 'South Meadow', x: -125, z: -450, width: 120, depth: 180, elevation: 0.13 }
       ],
       checkpoints: [[-19,-574],[-54,-410],[-45,-230],[-17,-45],[24,168]]
+    },
+    vegas: {
+      vegas:VEGAS_SITES,
+      runwayStart:{x:211,z:-538,yaw:0},
+      spawn:[-35,52,-550],
+      landmarks:[
+        {name:'Red Rock Ridge',x:-577,z:-109,width:242,depth:435,elevation:0.69},
+        {name:'Spring Mountains',x:-423,z:419,width:270,depth:265,elevation:0.74},
+        {name:'Frenchman Range',x:504,z:143,width:265,depth:375,elevation:0.64}
+      ],
+      checkpoints:[[-35,-402],[-35,-229],[-35,-53],[-13,153],[-10,392]]
     }
   };
   let selectedMap = FLIGHT_MAPS.coast;
@@ -387,7 +407,7 @@
   const workerSrc = `
     self.onmessage = function(e) {
       const N = e.data.size || 512;
-      const { span, landmarks, scale, water, islands, airfield, city, alaska } = e.data;
+      const { span, landmarks, scale, water, islands, airfield, city, alaska, vegas } = e.data;
       const last = N - 1;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       function oval(x, z, cx, cz, width, depth) {
@@ -546,7 +566,14 @@
           const coast = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
             + headland * 0.24 + peaks * (0.59 + 0.48 * ridge) - lake * 0.30 - bay * 0.23,
             0.02, 0.98);
-          if (alaska) {
+          if(vegas) {
+            const apron=vegas.airport;
+            const street=Math.max(Math.abs(east+35)-108,Math.abs(north)-410);
+            const runway=Math.max(Math.abs(east-apron.x)-58,Math.abs(north-apron.z)-apron.halfLength-24);
+            const edge=clamp(Math.min(street,runway)/97,0,1);
+            const ridges=0.283+peaks*(0.54+ridge*0.57)+(detail-0.5)*0.066;
+            height[idx]=clamp(0.283+(ridges-0.283)*edge*edge*(3-2*edge),0.257,0.98);
+          } else if (alaska) {
             const center = 38*Math.sin((north + 55)/176) + 22*Math.sin(north/380);
             const halfWidth = 74 + 22*Math.cos(north/250) + 39*clamp((-north-360)/300,0,1);
             const shore = Math.max(Math.abs(east-center)-halfWidth, north-446 + 17*Math.cos(east/90));
@@ -691,6 +718,7 @@
     uniform sampler2D uTerrain;
     uniform bool uAlderValley;
     uniform bool uAlaska;
+    uniform bool uVegas;
     uniform bool uManhattan;
     uniform mat4 uWorldViewProj;
     uniform vec3 uCamPos;
@@ -713,8 +741,8 @@
     const float WATER_H = 12.2;
     uniform float uTerrainScale;
     const float MAP_SPAN = ${MAP_SPAN.toFixed(1)};
-    float cloudBase() { return naturalLight() ? 145.0 : 56.0; }
-    float cloudTop() { return naturalLight() ? 172.0 : 63.0; }
+    float cloudBase() { return naturalLight() || uVegas ? 145.0 : 56.0; }
+    float cloudTop() { return naturalLight() || uVegas ? 172.0 : 63.0; }
 
     float hash12(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -751,6 +779,11 @@
     vec3 getSky(vec3 rd) {
       float up = clamp(rd.y, 0.0, 1.0);
       float sunAmt = max(dot(rd, sunDirection()), 0.0);
+      if(uVegas){
+        float afterglow=pow(sunAmt,7.7)*(1.0-up);
+        vec3 sky=mix(vec3(0.46,0.32,0.43),vec3(0.12,0.17,0.32),pow(up,0.50));
+        return sky+vec3(0.45,0.24,0.09)*afterglow;
+      }
       if (naturalLight()) {
         vec3 horizon = uAlaska ? vec3(0.69,0.78,0.84) : vec3(0.76,0.85,0.91);
         vec3 blue = uAlaska ? vec3(0.25,0.43,0.60) : vec3(0.20,0.45,0.70);
@@ -789,6 +822,7 @@
     }
 
     vec3 applyFog(vec3 col, vec3 rd, float dist) {
+      if(uVegas)return mix(col,vec3(0.42,0.33,0.43),1.0-exp(-dist*0.00091));
       if (naturalLight()) {
         vec3 haze = uAlaska ? vec3(0.66,0.75,0.80) : vec3(0.72,0.80,0.85);
         return mix(col,haze,1.0-exp(-dist*(uAlaska ? 0.0010 : 0.0013)));
@@ -852,7 +886,7 @@
 
         // Cloud shadow on ground/water
         vec2 cloudProj = p.xz + sunDirection().xz * ((cloudBase() - p.y) / max(sunDirection().y, 0.1));
-        float cShad = 1.0 - cloudDensity(cloudProj) * 0.52;
+        float cShad = 1.0 - cloudDensity(cloudProj) * (uVegas?0.20:0.52);
 
         // Plane shadow on ground/water
         vec2 planeProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - p.y) / max(sunDirection().y, 0.1));
@@ -1015,6 +1049,13 @@
             }
           }
 
+          if(uVegas){
+            float grain=vnoise(p.xz*0.19);
+            float layers=sin(th*0.54+vnoise(p.xz*0.023)*2.15)*0.5+0.5;
+            vec3 powder=mix(vec3(.50,.36,.27),vec3(.72,.54,.40),grain);
+            vec3 sandstone=mix(vec3(.45,.24,.18),vec3(.65,.40,.28),layers);
+            albedo=mix(powder,sandstone,max(smoothstep(13.0,30.0,alt),smoothstep(.07,.29,slope)));
+          }
           if (uAlaska) {
             float grain = vnoise(p.xz * 0.19);
             vec3 spruce = mix(vec3(0.12,0.24,0.20),vec3(0.33,0.46,0.32),grain);
@@ -1067,6 +1108,10 @@
             warmSun = vec3(0.96, 0.93, 0.82);
             violetAmbient = vec3(0.43, 0.47, 0.53);
           }
+          if(uVegas){
+            warmSun=vec3(0.93,0.64,0.46);
+            violetAmbient=vec3(0.49,0.47,0.57);
+          }
           col = albedo * (violetAmbient + warmSun * direct * 0.92);
         }
 
@@ -1101,6 +1146,7 @@
                 vec3 cCol = shadeBand < 0.5 ? mix(cShadow, cMid, shadeBand * 2.0) : mix(cMid, cLight, (shadeBand - 0.5) * 2.0);
 
                 if (naturalLight()) cCol = mix(vec3(0.64,0.71,0.77),vec3(0.96,0.98,0.99),hFrac*0.7+(1.0-d)*0.3);
+                if(uVegas) cCol = mix(vec3(0.37,0.30,0.45),vec3(0.73,0.49,0.49),hFrac*0.8+(1.0-d)*0.2);
 
                 // Plane shadow cast onto clouds
                 vec2 pCloudProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - cp.y) / max(sunDirection().y, 0.1));
@@ -1110,7 +1156,7 @@
                 }
 
                 cCol = applyFog(cCol, rd, tc);
-                float alpha = d * 0.42 * (1.0 - accum);
+                float alpha = d * (uVegas?0.22:0.42) * (1.0 - accum);
                 cloudColAccum += cCol * alpha;
                 accum += alpha;
                 if (accum > 0.94) break;
@@ -1164,6 +1210,7 @@
     uniform vec3 uEye;
     uniform bool uCityFacade;
     uniform bool uWaterfall;
+    uniform bool uTwilight;
     uniform float uSceneTime;
 
     uniform float uIsOutline;
@@ -1205,7 +1252,8 @@
           material = mix(material,reflected,glazing*0.88);
         }
         float haze = 1.0 - exp(-distanceToEye * 0.00119);
-        fragColor = vec4(mix(material * light, vec3(0.70,0.78,0.83), haze), 1.0);
+        vec3 horizon=uTwilight?vec3(0.44,0.35,0.48):vec3(0.70,0.78,0.83);
+        fragColor = vec4(mix(material * light*(uTwilight?0.74:1.0),horizon,haze),1.0);
         return;
       }
       // 3-tone flat shading
@@ -2562,6 +2610,349 @@
     }
   }
 
+  let mapScenery=null;
+  let mapLights=null;
+  let sceneryPlaces=[];
+  let sceneryObjects=[];
+  let sceneryMovers=[];
+
+  function findScenerySite(x,z,{water=false,footprint=7,range=90,avoid}={}) {
+    let nearest=null, best=Infinity;
+    for(let dx=-range;dx<=range;dx+=9) for(let dz=-range;dz<=range;dz+=9){
+      const score=dx*dx+dz*dz;
+      if(score>=best)continue;
+      const east=x+dx,north=z+dz;
+      if(Math.hypot(east,north)>FLIGHT_RADIUS-60 || avoid?.(east,north))continue;
+      const y=sampleTerrainHeight(east,north);
+      if(water?y>WATER_H:y<WATER_H+1.1)continue;
+      const corners=[[-1,-1],[-1,1],[1,-1],[1,1]];
+      if(!corners.every(([i,j])=>{
+        const sx=east+i*footprint,sz=north+j*footprint;
+        const altitude=sampleTerrainHeight(sx,sz);
+        return water?altitude<=WATER_H:!cityLotAt(sx,sz)&&Math.abs(altitude-y)<2.6&&altitude>WATER_H+0.8;
+      })||(!water&&cityLotAt(east,north)))continue;
+      nearest={x:east,z:north,y};
+      best=score;
+    }
+    return nearest;
+  }
+
+  function createMapScenery() {
+    disposeSceneMesh(mapScenery);
+    disposeSceneMesh(mapLights);
+    mapScenery=mapLights=null;
+    sceneryPlaces=[];
+    sceneryObjects=[];
+    sceneryMovers=[];
+    const solid=createTriangleMesh(), lights=createTriangleMesh();
+    const box=(...args)=>addModelBox(solid.addQuad,...args);
+    const lamp=(...args)=>addModelBox(lights.addQuad,...args);
+    const iron=[0.30,0.35,0.38], pale=[0.79,0.80,0.74], red=[0.64,0.24,0.18];
+    const timber=[0.41,0.32,0.24], amber=[0.95,0.71,0.38];
+    const place=(name,site)=>sceneryPlaces.push({name,x:site.x,z:site.z});
+    const solidAt=(name,x,z,y,top,halfX,halfZ)=>sceneryObjects.push({name,x,z,y,top,halfX,halfZ});
+
+    function cylinder(x,z,levels,color,sides=12,spiral=0,mesh=solid) {
+      const point=(level,i)=>{
+        const [y,r]=level;
+        const a=i*Math.PI*2/sides+spiral;
+        return [x+Math.sin(a)*r,y,z+Math.cos(a)*r];
+      };
+      for(let row=0;row<levels.length-1;row++)for(let i=0;i<sides;i++){
+        const a=point(levels[row],i),b=point(levels[row],i+1);
+        mesh.addQuad(a,b,point(levels[row+1],i+1),point(levels[row+1],i),color);
+      }
+      const tip=levels.at(-1);
+      for(let i=0;i<sides;i++)mesh.addTri([x,tip[0],z],point(tip,i),point(tip,i+1),color);
+    }
+
+    function shed(site,w,l,body,roofHeight,name){
+      const {x,y,z}=site;
+      box(x,y+1.8,z,w,3.7,l,body);
+      const a=x-w/2-.35,b=x+w/2+.35,f=z-l/2-.3,k=z+l/2+.3;
+      const top=y+3.6, ridge=top+roofHeight;
+      solid.addQuad([a,top,f],[a,top,k],[x,ridge,k],[x,ridge,f],iron);
+      solid.addQuad([b,top,k],[b,top,f],[x,ridge,f],[x,ridge,k],iron);
+      solid.addTri([a,top,f],[x,ridge,f],[b,top,f],body);
+      solid.addTri([b,top,k],[x,ridge,k],[a,top,k],body);
+      box(x,y+1.2,f-0.06,w*0.32,2.35,0.18,timber);
+      for(const side of [-1,1])box(x+side*w*0.31,y+2.15,k+0.03,1.3,0.92,0.11,[0.34,0.49,0.54]);
+      solidAt(name,x,z,y,ridge,w/2,l/2);
+    }
+
+    if(selectedMap.alaska) {
+      const camp=findScenerySite(150,314,{footprint:13});
+      if(camp){
+        place('Glacier Research Camp',camp);
+        shed(camp,10,13,[0.80,0.45,0.21],1.5,'research cabin');
+        shed({...camp,x:camp.x+11,y:sampleTerrainHeight(camp.x+11,camp.z)},8,9,[0.62,0.68,0.69],1.1,'research cabin');
+        cylinder(camp.x-8,camp.z+8,[[camp.y,0.27],[camp.y+9,0.14]],iron,8);
+        box(camp.x-8,camp.y+9,camp.z+8,4.0,0.19,0.18,pale);
+        lamp(camp.x-8,camp.y+9.8,camp.z+8,0.32,0.38,0.32,[0.94,0.30,0.23]);
+      }
+      const routes=[{x:-12,z:-301,rx:18,rz:56},{x:5,z:38,rx:17,rz:61}];
+      for(const [index,route] of routes.entries()){
+        if(Array.from({length:24},(_,i)=>routePose(route,i*Math.PI/12))
+          .every(([x,z])=>sampleTerrainHeight(x,z)<=WATER_H)){
+          sceneryMovers.push({kind:'whale',...route,phase:index*2.3,rate:0.115+index*0.02});
+          if(index===0)place('Whale Passage',route);
+        }
+      }
+    } else if(selectedMap===FLIGHT_MAPS.coast) {
+      const anchors=[[-98,112],[-52,150],[-8,182],[36,207]];
+      for(const [index,[x,z]] of anchors.entries()){
+        const site=findScenerySite(x,z,{footprint:3,range:135,avoid:(a,b)=>
+          sceneryMovers.some(t=>Math.hypot(a-t.x,b-t.z)<32)});
+        if(!site)continue;
+        const height=17+(index%3)*2.4;
+        cylinder(site.x,site.z,[[site.y,1.38],[site.y+1,1.19],[site.y+height,0.49]],pale,10);
+        box(site.x,site.y+height,site.z,1.9,1.45,2.8,iron);
+        sceneryMovers.push({kind:'turbine',...site,top:site.y+height,phase:index*1.15});
+        solidAt('wind turbine',site.x,site.z,site.y,site.y+height+1,1.55,1.55);
+        if(!sceneryPlaces.length)place('Copper Wind Farm',site);
+      }
+    } else if(selectedMap.islands) {
+      const wreck=findScenerySite(-130,-247,{water:true,footprint:15,range:133,avoid:(x,z)=>
+        boats.some(b=>Math.hypot(x-b.x,z-b.z)<b.rz+b.halfLength+35)});
+      if(wreck) {
+        place('Rustwater Wreck',wreck);
+        const y=WATER_H;
+        const r=[0.47,0.29,0.22];
+        box(wreck.x,y+0.25,wreck.z,7.2,1.55,24,r);
+        solid.addQuad([wreck.x-3.6,y+1.1,wreck.z+12],[wreck.x+3.6,y+1.1,wreck.z+12],
+          [wreck.x+0.24,y+0.4,wreck.z+19],[wreck.x-0.24,y+0.4,wreck.z+19],r);
+        box(wreck.x+0.46,y+1.9,wreck.z-7,3.8,2.6,6.5,iron);
+        cylinder(wreck.x+0.8,wreck.z-5,[[y+1.4,0.32],[y+6.2,0.13]],r,8);
+        solidAt('shipwreck',wreck.x,wreck.z,y,y+3.4,3.7,14);
+        for(const [dx,dz] of [[-15,1],[15,-4],[3,23]]){
+          const x=wreck.x+dx,z=wreck.z+dz;
+          if(sampleTerrainHeight(x,z)>WATER_H)continue;
+          cylinder(x,z,[[y-0.33,0.61],[y+0.39,0.61],[y+1.42,0.24]],red,8);
+          lamp(x,y+1.45,z,0.27,0.31,0.27,[1.0,0.72,0.40]);
+        }
+      }
+    } else if(selectedMap.airfield) {
+      const farm=findScenerySite(254,-116,{footprint:12,range:81});
+      if(farm){
+        place('Alder Farm',farm);
+        shed(farm,17,22,red,3,'farm barn');
+        const other={x:farm.x+20,z:farm.z+12};
+        shed({...other,y:sampleTerrainHeight(other.x,other.z)},10,12,[0.66,0.57,0.45],1.8,'farm shed');
+        for(const dx of [-13,-19]){
+          const x=farm.x+dx,z=farm.z+4,y=sampleTerrainHeight(x,z);
+          cylinder(x,z,[[y,2.15],[y+6,2.15],[y+7.42,0.23]],[0.54,0.59,0.57],14);
+          solidAt('grain silo',x,z,y,y+7.42,2.1,2.1);
+        }
+        for(let i=0;i<10;i++){
+          const z=farm.z-22+i*2.1;
+          box(farm.x+2,sampleTerrainHeight(farm.x+2,z)+0.07,z,0.17,0.2,0.85,timber);
+        }
+      }
+    } else if(selectedMap.city) {
+      const dock=findScenerySite(200,-388,{footprint:10,range:55,avoid:(x,z)=>
+        z>=-405 && z<=-359 ? ![13,22,32,46].some(offset=>sampleTerrainHeight(x-offset,z)<=WATER_H) : true});
+      if(dock){
+        place('Brooklyn Cargo Terminal',dock);
+        const banks=[dock.z-14,dock.z+9];
+        for(const z of banks) {
+          box(dock.x-8,dock.y-0.5,z,26,1.0,12,[0.49,0.50,0.46]);
+          for(const dz of [-4,4]){
+            box(dock.x+4,dock.y+7.2,z+dz,0.74,14.4,0.76,red);
+            box(dock.x-7,dock.y+13.4,z+dz,28,0.81,0.57,red);
+          }
+          box(dock.x+2,dock.y+14.2,z,4.5,2.3,9,iron);
+          box(dock.x-17,dock.y+10.8,z,0.20,4.9,0.20,iron);
+          box(dock.x-17,dock.y+8.4,z,3.4,0.22,3.0,amber);
+          lamp(dock.x-18,dock.y+13.9,z,0.36,0.28,0.39,amber);
+          solidAt('dock crane',dock.x+4,z,dock.y,dock.y+15.4,2.2,4.9);
+        }
+        for(let i=0;i<12;i++) {
+          const x=dock.x+8+(i%3)*4.1,z=dock.z-21+Math.floor(i/3)*4.1;
+          const y=sampleTerrainHeight(x,z);
+          box(x,y+0.88,z,3.6,1.76,3.9,i%3===0?red:i%3===1?iron:[0.42,0.52,0.44]);
+        }
+      }
+    } else if(selectedMap.vegas) {
+      buildVegasStrip({box,lamp,cylinder,solidAt,place});
+    }
+    if(sceneryPlaces.length || selectedMap.vegas){
+      mapScenery=solid.upload();
+      mapLights=lights.upload();
+    }
+  }
+
+  function buildVegasStrip({box,lamp,cylinder,solidAt,place}) {
+    const amber=[1.0,0.70,0.30],blue=[0.35,0.67,0.96],pink=[0.99,0.43,0.70];
+    const roadway=[0.25,0.26,0.27];
+    const roadX=-35, roadStart=-383, roadEnd=397, y=sampleTerrainHeight(roadX,0)+0.27;
+    box(roadX,y-0.08,(roadStart+roadEnd)/2,16.5,0.12,roadEnd-roadStart,roadway);
+    for(const side of [-1,1]){
+      box(roadX+side*9.05,y-0.04,(roadStart+roadEnd)/2,1.72,0.16,roadEnd-roadStart,[0.48,0.46,0.44]);
+      for(let z=roadStart+12;z<roadEnd-8;z+=31){
+        box(roadX+side*9.03,y+1.47,z,0.15,2.94,0.16,[0.31,0.33,0.36]);
+        lamp(roadX+side*8.52,y+2.98,z,0.47,0.12,0.24,[0.99,0.79,0.54]);
+      }
+    }
+    for(let z=roadStart+5;z<roadEnd-5;z+=9){
+      for(const x of [roadX-4.1,roadX+4.1]) box(x,y-0.005,z,0.11,0.013,3.2,[0.75,0.73,0.67]);
+      box(roadX,y-0.005,z,0.17,0.014,4.3,amber);
+    }
+
+    const strip=VEGAS_SITES.strip;
+    place(strip.name,strip);
+    for(let i=0;i<10;i++) {
+      for(const side of [-1,1]){
+        const x=roadX+side*(23+i%3*2.6),z=-298+i*62+side*7;
+        if(Math.abs(z)<28&&side>0)continue;
+        const ground=sampleTerrainHeight(x,z), h=8+i%4*3.2;
+        box(x,ground+h/2,z,15,h,18,[0.31+i%3*0.06,0.32,0.36+i%2*0.08]);
+        box(x+side*3,ground+h+0.6,z,8,1.3,11,[0.44,0.42,0.43]);
+        for(let floor=2.0;floor<h-1;floor+=2.1){
+          for(let column=-3;column<=3;column++){
+            const dx=column*1.55;
+            for(const end of [-1,1]){
+              box(x+dx,ground+floor,z+end*9.035,0.83,0.77,0.07,[0.28,0.39,0.52]);
+              if((column+i+Math.floor(floor)+end)%4===0)
+                lamp(x+dx,ground+floor,z+end*9.074,0.61,0.58,0.025,[0.73,0.60,0.40]);
+            }
+            box(x-side*7.53,ground+floor,z+column*1.85,0.06,0.81,0.86,[0.30,0.43,0.57]);
+          }
+        }
+        for(const dz of [-7,7])lamp(x-side*7.57,ground+h*0.52,z+dz,0.09,h*0.9,0.30,i%3===0?pink:i%3===1?blue:amber);
+        lamp(x-side*7.6,ground+h-0.8,z,0.12,0.38,13.2,i%2?blue:pink);
+        solidAt('Strip hotel',x,z,ground,ground+h+1.2,7.5,9);
+      }
+    }
+    const sphere=VEGAS_SITES.sphere;
+    const sphereY=sampleTerrainHeight(sphere.x,sphere.z);
+    const radius=14.8, sphereHeight=sphereY+radius+0.5;
+    cylinder(sphere.x,sphere.z,[[sphereY,15.4],[sphereY+0.55,15.4]],[0.26,0.29,0.34],32);
+    const rings=Array.from({length:19},(_,i)=>{
+      const angle=-Math.PI/2+Math.PI*i/18;
+      return [sphereHeight+Math.sin(angle)*radius,Math.max(0.05,Math.cos(angle)*radius)];
+    });
+    cylinder(sphere.x,sphere.z,rings,[0.31,0.52,0.82],48);
+    for(let band=2;band<17;band+=3){
+      const [height,r]=rings[band];
+      for(let i=0;i<38;i++){
+        const a=i*Math.PI*2/38;
+        lamp(sphere.x+Math.sin(a)*(r+0.03),height,sphere.z+Math.cos(a)*(r+0.03),0.21,0.19,0.22,
+          (i+band)%5===0?pink:blue);
+      }
+    }
+    place(sphere.name,sphere);
+    solidAt('Sphere',sphere.x,sphere.z,sphereY,sphereHeight+radius,14.7,14.7);
+
+    const tower=VEGAS_SITES.tower;
+    const t=sampleTerrainHeight(tower.x,tower.z);
+    cylinder(tower.x,tower.z,[[t,5.3],[t+3,4.3],[t+39.5,2.65]],[0.63,0.64,0.63],16);
+    cylinder(tower.x,tower.z,[[t+39,2.9],[t+43.5,7],[t+47,6.8],[t+48,4]],[0.38,0.40,0.45],20);
+    cylinder(tower.x,tower.z,[[t+47,0.72],[t+57,0.19]],[0.58,0.58,0.60],8);
+    for(let i=0;i<18;i++){
+      const a=i*Math.PI/9;
+      lamp(tower.x+Math.sin(a)*6.82,t+45,tower.z+Math.cos(a)*6.82,0.46,0.5,0.48,pink);
+    }
+    lamp(tower.x,t+56.9,tower.z,0.29,0.43,0.29,[1,0.24,0.21]);
+    place(tower.name,tower);
+    solidAt('observation tower',tower.x,tower.z,t,t+57,4.1,4.1);
+
+    const pyramid=VEGAS_SITES.pyramid;
+    const py=sampleTerrainHeight(pyramid.x,pyramid.z);
+    cylinder(pyramid.x,pyramid.z,[[py,16],[py+22,0.10]],[0.16,0.25,0.36],4,Math.PI/4);
+    box(pyramid.x,py+1.1,pyramid.z+12.7,6.5,2.2,5.1,[0.26,0.32,0.37]);
+    lamp(pyramid.x,py+22.1,pyramid.z,0.66,0.69,0.66,[0.83,0.91,1.0]);
+    place(pyramid.name,pyramid);
+    solidAt('pyramid resort',pyramid.x,pyramid.z,py,py+22,10,10);
+
+    const fountain=VEGAS_SITES.fountain;
+    const fy=sampleTerrainHeight(fountain.x,fountain.z)+0.18;
+    cylinder(fountain.x,fountain.z,[[fy-0.24,14],[fy,14]],[0.50,0.48,0.47],20);
+    cylinder(fountain.x,fountain.z,[[fy,12.4],[fy+0.02,12.4]],[0.15,0.35,0.53],20);
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4,x=fountain.x+Math.sin(a)*8,z=fountain.z+Math.cos(a)*8;
+      lamp(x,fy+0.04,z,0.29,0.15,0.29,blue);
+      sceneryMovers.push({kind:'fountain',x,y:fy,z,phase:i*0.73});
+    }
+    place(fountain.name,fountain);
+
+    const runway=VEGAS_SITES.airport;
+    const base=sampleTerrainHeight(runway.x,runway.z)+0.11;
+    box(runway.x,base-0.065,runway.z,runway.halfWidth*2,0.11,runway.halfLength*2,roadway);
+    for(let dz=-runway.halfLength+4;dz<runway.halfLength-4;dz+=10){
+      box(runway.x,base,runway.z+dz,0.24,0.014,4.2,[0.86,0.85,0.78]);
+      for(const side of [-1,1])lamp(runway.x+side*(runway.halfWidth-0.3),base+0.04,runway.z+dz,0.19,0.10,0.18,amber);
+    }
+    for(const side of [-1,1])for(let i=-3;i<=3;i++){
+      box(runway.x+i*1.58,base+0.01,runway.z+side*(runway.halfLength-4),0.39,0.017,3.5,[0.89,0.89,0.82]);
+    }
+    box(runway.x+30,base+3.2,runway.z-12,23,6.4,26,[0.45,0.46,0.46]);
+    lamp(runway.x+18.44,base+3.1,runway.z-12,0.05,0.32,19,blue);
+    place(runway.name,runway);
+    solidAt('airport hangar',runway.x+30,runway.z-12,base,base+6.4,11.5,13);
+  }
+
+  const turbineRotor=(()=>{
+    const {addTri,addQuad,upload}=createTriangleMesh();
+    addModelBox(addQuad,0,0,0.13,0.89,0.89,0.83,[0.75,0.78,0.76]);
+    for(let i=0;i<3;i++){
+      const angle=i*Math.PI*2/3;
+      const point=(r,w)=>[Math.sin(angle)*r+Math.cos(angle)*w,Math.cos(angle)*r-Math.sin(angle)*w,0.44];
+      addQuad(point(0.44,-0.22),point(2.5,-0.38),point(7.25,0.05),point(1.0,0.38),[0.89,0.89,0.82]);
+      addTri(point(6.7,-0.06),point(7.25,0.05),point(6.43,0.15),[0.80,0.29,0.20]);
+    }
+    return upload();
+  })();
+
+  const whaleMeshes=(()=>{
+    const whale=createTriangleMesh(),spray=createTriangleMesh();
+    const levels=[[-7.8,0.1,0],[-4.2,0.76,0.06],[-1.0,1.43,0.02],[3.5,1.17,0],[6.3,0.20,-0.02]];
+    const at=([z,r,y],i)=>[Math.sin(i*Math.PI/6)*r,y+Math.cos(i*Math.PI/6)*r*0.66,z];
+    for(let j=0;j<levels.length-1;j++)for(let i=0;i<12;i++){
+      whale.addQuad(at(levels[j],i),at(levels[j+1],i),at(levels[j+1],i+1),at(levels[j],i+1),[0.15,0.24,0.28]);
+    }
+    whale.addTri([0,0.52,-2.95],[0,1.32,-2.55],[0,0.48,-0.22],[0.19,0.27,0.31]);
+    for(const side of [-1,1]){
+      whale.addQuad([0,0.1,-7.2],[side*2.54,0.13,-8.8],[side*1.4,0.14,-6.94],[0,0.12,-6.52],[0.17,0.27,0.31]);
+    }
+    for(let i=0;i<9;i++){
+      const a=i*Math.PI*2/9;
+      const end=[Math.sin(a)*(0.44+i%3*0.15),1.55+i%3*0.44,Math.cos(a)*(0.44+i%3*0.15)];
+      spray.addTri([-.035,0,0],end,[end[0]+.13,end[1]-.075,end[2]],[0.87,0.94,0.96]);
+    }
+    return {body:whale.upload(),spray:spray.upload()};
+  })();
+
+  function sceneryObstacle(x,z) {
+    return sceneryObjects.find(item=>Math.abs(x-item.x)<=item.halfX+0.38&&Math.abs(z-item.z)<=item.halfZ+0.38);
+  }
+
+  function drawMapScenery(drawMesh) {
+    const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
+    if(mapScenery)drawMesh(mapScenery,identity);
+    if(mapLights && mapLights.count)drawMesh(mapLights,identity,true);
+    for(const actor of sceneryMovers){
+      if(actor.kind==='fountain'){
+        const jet=0.68+0.92*Math.max(0,Math.sin(sceneryTime*1.8+actor.phase));
+        drawMesh(whaleMeshes.spray,mat4FromBasis([actor.x,actor.y,actor.z],[1,0,0],worldUp,[0,0,1],jet),true);
+      } else if(actor.kind==='turbine'){
+        const spin=sceneryTime*1.73+actor.phase,c=Math.cos(spin),s=Math.sin(spin);
+        drawMesh(turbineRotor,mat4FromBasis([actor.x,actor.top,actor.z+1.1],[c,s,0],[-s,c,0],[0,0,1],1));
+      } else {
+        const [x,z,yaw]=sceneryPose(actor,sceneryTime);
+        const phase=(sceneryTime+actor.phase*3.6)%10.4;
+        const rise=Math.sin(phase/10.4*Math.PI*2);
+        const y=WATER_H-1.08+Math.max(0,rise)*1.64;
+        const front=[Math.sin(yaw),0,Math.cos(yaw)],right=[front[2],0,-front[0]];
+        drawMesh(whaleMeshes.body,mat4FromBasis([x,y,z],right,worldUp,front,1),false,false,false);
+        if(phase>1.65&&phase<2.85){
+          const life=Math.sin((phase-1.65)/1.20*Math.PI);
+          drawMesh(whaleMeshes.spray,mat4FromBasis([x+front[0]*3,y+0.63,z+front[2]*3],
+            right,worldUp,front,0.32+life*1.25),true);
+        }
+      }
+    }
+  }
+
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
   const plumeCoreMesh = buildConeMesh(0.75, 0.075, [1.0, 0.96, 0.85], [1.0, 0.86, 0.55]);
@@ -2571,7 +2962,7 @@
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
 
-  const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska);
+  const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas);
 
   function resizeTargets() {
     const viewWidth = Math.max(1, window.innerWidth);
@@ -2678,7 +3069,7 @@
   // Terrain Height Query on CPU (matches shader exactly)
   const WATER_H = 12.2;
   const TERRAIN_SCALE = 54.0;
-  const terrainScaleFor = map => map.alaska ? 75 : TERRAIN_SCALE;
+  const terrainScaleFor = map => map.alaska ? 75 : map.vegas ? 68 : TERRAIN_SCALE;
 
   function sampleTerrainHeight(x,z) {
     const field=cityGroundField || heightField;
@@ -2708,6 +3099,8 @@
 
   function navigationSurface(x, z) {
     const ground = sampleGroundHeight(x, z);
+    const scenery=sceneryObstacle(x,z);
+    if(scenery)return Math.max(ground,scenery.top);
     if (selectedMap.alaska) {
       const object=alaskaObstacles.find(o=>Math.abs(x-o.x)<o.halfX && Math.abs(z-o.z)<o.halfZ);
       return object ? Math.max(ground,object.top) : ground;
@@ -3554,7 +3947,7 @@
     const mapScale = mapWidth / MAP_SPAN;
     const ctx = raster.getContext('2d');
     const pixels = ctx.createImageData(mapWidth, mapWidth);
-    const { airfield, city, alaska } = map;
+    const { airfield, city, alaska, vegas } = map;
     for (let y = 0; y < mapWidth; y++) {
       for (let x = 0; x < mapWidth; x++) {
         const east = (x + 0.5 - mapWidth / 2) / mapScale;
@@ -3563,7 +3956,12 @@
         const offset = (y * mapWidth + x) * 4;
         const band = Math.floor((h - WATER_H) / 4);
         const water = h <= WATER_H;
-        if (alaska && !water) {
+        if (vegas) {
+          const ridge=clamp((h-19.2)/35,0,1);
+          pixels.data[offset]=158+48*ridge;
+          pixels.data[offset+1]=104+28*ridge;
+          pixels.data[offset+2]=69+22*ridge;
+        } else if (alaska && !water) {
           const snow = Math.min(1, Math.max(0,(h-WATER_H-12)/16));
           pixels.data[offset] = 66 + 154*snow;
           pixels.data[offset+1] = 101 + 128*snow;
@@ -3600,6 +3998,14 @@
       ctx.fillRect(mapWidth/2+(strip.x-strip.halfLength)*mapScale,
         mapWidth/2-(strip.z+strip.halfWidth)*mapScale,
         strip.halfLength*2*mapScale,strip.halfWidth*2*mapScale);
+    }
+    if(vegas){
+      const center=mapWidth/2;
+      ctx.fillStyle='#3c3b47';
+      ctx.fillRect(center+(-35-7)*mapScale,center-397*mapScale,14*mapScale,780*mapScale);
+      const strip=vegas.airport;
+      ctx.fillRect(center+(strip.x-strip.halfWidth)*mapScale,center-(strip.z+strip.halfLength)*mapScale,
+        strip.halfWidth*2*mapScale,strip.halfLength*2*mapScale);
     }
     if (preview) return;
     ctx.fillStyle = '#0b1024a6';
@@ -3671,10 +4077,10 @@
       mapCtx.font = 'bold 16px monospace';
       mapCtx.strokeStyle = '#211827';
       mapCtx.lineWidth = 4;
-      for (const mark of [...selectedMap.landmarks,...(selectedMap.places||[])]) {
+      for (const mark of [...selectedMap.landmarks,...(selectedMap.places||[]),...sceneryPlaces]) {
         const x = center + mark.x * mapScale;
         const y = center - mark.z * mapScale;
-        const isPlace=selectedMap.places?.includes(mark);
+        const isPlace=selectedMap.places?.includes(mark)||sceneryPlaces.includes(mark);
         const labelY=y-(isPlace?12:0);
         if(isPlace){
           mapCtx.beginPath();mapCtx.arc(x,y,3.2,0,Math.PI*2);mapCtx.fill();
@@ -3816,6 +4222,7 @@
         prepareAlaskaLandmarks();
         prepareCoastalTraffic();
         prepareCityTraffic();
+        createMapScenery();
         wreckFragments=[];
         refreshVehicleTargets();
         mapRaster = document.createElement('canvas');
@@ -3876,7 +4283,7 @@
       };
       worker.postMessage({
         size: MAP_SIZE, span: MAP_SPAN, landmarks: selectedMap.landmarks,
-        scale: terrainScaleFor(selectedMap), water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city, alaska: selectedMap.alaska
+        scale: terrainScaleFor(selectedMap), water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city, alaska: selectedMap.alaska, vegas: selectedMap.vegas
       });
     } catch (error) {
       console.error(error);
@@ -3924,6 +4331,7 @@
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alderValley: gl.getUniformLocation(worldProg, 'uAlderValley'),
     alaska: gl.getUniformLocation(worldProg, 'uAlaska'),
+    vegas: gl.getUniformLocation(worldProg, 'uVegas'),
     manhattan: gl.getUniformLocation(worldProg, 'uManhattan'),
     viewProj: gl.getUniformLocation(worldProg, 'uWorldViewProj'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
@@ -3950,6 +4358,7 @@
     eye: gl.getUniformLocation(meshProg, 'uEye'),
     cityFacade: gl.getUniformLocation(meshProg, 'uCityFacade'),
     waterfall: gl.getUniformLocation(meshProg, 'uWaterfall'),
+    twilight: gl.getUniformLocation(meshProg, 'uTwilight'),
     sceneTime: gl.getUniformLocation(meshProg, 'uSceneTime')
   };
 
@@ -4006,9 +4415,8 @@
     gulls = [];
     boatWakes.fill(0);
     sceneryTime = 0;
-    if (selectedMap.airfield) return;
-
-    const anchor = selectedMap.shipAnchor;
+    const anchor=selectedMap.shipAnchor;
+    if(!anchor)return;
     for (const [index, kind] of ['cruise','ferry','cargo','ferry'].entries()) {
       const size = SHIP_TYPES[kind];
       const preferred = { x: anchor[0] + (index%2)*185, z: anchor[1] + Math.floor(index/2)*225 };
@@ -4195,7 +4603,7 @@
 
   function usableLandingSurface(x,z) {
     const level = sampleTerrainHeight(x,z);
-    if (level <= WATER_H+0.10 || cityLotAt(x,z)) return null;
+    if (level <= WATER_H+0.10 || cityLotAt(x,z) || sceneryObstacle(x,z)) return null;
     for (const [dx,dz] of [[3,0],[-3,0],[0,3],[0,-3]]) {
       const nearby = sampleTerrainHeight(x+dx,z+dz);
       if (nearby <= WATER_H+0.10 || Math.abs(nearby-level)>0.70 || cityLotAt(x+dx,z+dz)) return null;
@@ -4354,6 +4762,11 @@
       if(vehicle){
         damageVehicle(vehicle,pos,3);
         finishFlight(pos,vehicle.kind==='ship'?'Collision with '+vehicle.actor.name:'Collision with taxi',false);
+        return;
+      }
+      const scenery=sceneryObstacle(x,z);
+      if(scenery && y>=scenery.y-0.42 && y<=scenery.top+0.42){
+        finishFlight(pos,'Collision with '+scenery.name,false);
         return;
       }
       if (selectedMap.alaska) {
@@ -4618,6 +5031,7 @@
     gl.uniform1i(uWorld.alderValley, Boolean(selectedMap.airfield));
     gl.uniform1i(uWorld.manhattan, Boolean(selectedMap.city));
     gl.uniform1i(uWorld.alaska, Boolean(selectedMap.alaska));
+    gl.uniform1i(uWorld.vegas, Boolean(selectedMap.vegas));
     gl.uniform3fv(uWorld.camPos, camPos);
     gl.uniform3fv(uWorld.camFwd, camFwd);
     gl.uniform3fv(uWorld.camRight, camRight);
@@ -4655,6 +5069,7 @@
     gl.uniform1i(uMesh.smooth, smoothScenery());
     gl.uniform3fv(uMesh.eye, camPos);
     gl.uniform1i(uMesh.waterfall,0);
+    gl.uniform1i(uMesh.twilight,Boolean(selectedMap.vegas));
     gl.uniform1f(uMesh.sceneTime,sceneryTime);
 
     function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true) {
@@ -4706,6 +5121,7 @@
       drawMeshWithOutline(alaskaFalls,identity);
       gl.uniform1i(uMesh.waterfall,0);
     }
+    drawMapScenery(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
     drawCityTraffic(drawMeshWithOutline);
