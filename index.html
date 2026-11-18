@@ -33,7 +33,7 @@
     letter-spacing:4px;color:#ffd699;text-shadow:3px 3px #8a2c38;margin:0 0 20px;}
   .flight-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
   .flight-options fieldset{min-width:0;border:1px solid #674863;padding:7px;}
-  .flight-options .map-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;}
+  .flight-options .map-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;}
   .map-options .map-card{border:1px solid #674863;margin:0;}
   .map-options .map-card:has(input:checked){border-color:#ffb677;}
   .map-options .map-card:has(input:focus-visible){outline:2px solid #ffd699;outline-offset:2px;}
@@ -151,6 +151,7 @@
           <label class="map-card"><canvas data-map="coast" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
           <label class="map-card"><canvas data-map="islands" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
           <label class="map-card"><canvas data-map="valley" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
+          <label class="map-card"><canvas data-map="alaska" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="alaska">Alaska Fjords<small>Snowy peaks, coastal traffic and moose</small></label>
           <label class="map-card"><canvas data-map="manhattan" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
         </fieldset>
         <fieldset>
@@ -273,11 +274,13 @@
   };
   const FLIGHT_MAPS = {
     coast: {
+      shipAnchor: [125,-585],
       landmarks: COAST_LANDMARKS,
       checkpoints: [[30,-85],[72,55],[139,165],[224,238],[310,316]]
     },
     islands: {
       islands: true,
+      shipAnchor: [8,-420],
       landmarks: [
         { name: 'Westwind Isle', x: -350, z: 90, width: 175, depth: 230, elevation: 0.73 },
         { name: 'North Reef', x: 60, z: 372, width: 182, depth: 160, elevation: 0.69 },
@@ -296,10 +299,23 @@
       checkpoints: [[144,-246],[124,-93],[75,62],[-16,220],[-90,385]]
     },
     manhattan: {
+      shipAnchor: [-142,-611],
       city: MANHATTAN_GRID,
       spawn: [-153, 44, -698],
       landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
+    },
+    alaska: {
+      alaska: true,
+      shipAnchor: [-24,-555],
+      spawn: [-19,33,-667],
+      landmarks: [
+        { name: 'Glacier Head', x: -40, z: 558, width: 195, depth: 220, elevation: 0.61 },
+        { name: 'West Ridge', x: -435, z: -90, width: 245, depth: 422, elevation: 0.74 },
+        { name: 'Mount Alder', x: 388, z: 144, width: 260, depth: 383, elevation: 0.76 },
+        { name: 'South Meadow', x: -125, z: -450, width: 120, depth: 180, elevation: 0.13 }
+      ],
+      checkpoints: [[-19,-574],[-54,-410],[-45,-230],[-17,-45],[24,168]]
     }
   };
   let selectedMap = FLIGHT_MAPS.coast;
@@ -314,7 +330,7 @@
   const workerSrc = `
     self.onmessage = function(e) {
       const N = e.data.size || 512;
-      const { span, landmarks, scale, water, islands, airfield, city } = e.data;
+      const { span, landmarks, scale, water, islands, airfield, city, alaska } = e.data;
       const last = N - 1;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       function oval(x, z, cx, cz, width, depth) {
@@ -431,7 +447,15 @@
           const coast = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
             + headland * 0.24 + peaks * (0.59 + 0.48 * ridge) - lake * 0.30 - bay * 0.23,
             0.02, 0.98);
-          if (airfield) {
+          if (alaska) {
+            const center = 38*Math.sin((north + 55)/176) + 22*Math.sin(north/380);
+            const halfWidth = 74 + 22*Math.cos(north/250) + 39*clamp((-north-360)/300,0,1);
+            const shore = Math.max(Math.abs(east-center)-halfWidth, north-446 + 17*Math.cos(east/90));
+            const banks = clamp(shore/69,0,1);
+            const ground = 0.29 + peaks*(0.61 + ridge*0.65) + (detail-0.5)*0.12;
+            const sea = (water-4.5)/scale;
+            height[idx] = clamp(sea + (ground-sea)*banks*banks*(3-2*banks),0.02,0.98);
+          } else if (airfield) {
             const center = 83 * Math.sin(north / 178) + 36 * Math.sin(north / 69);
             const riverDist = Math.abs(east - center);
             const channelWidth = 15 + 5 * Math.sin(north / 85);
@@ -565,6 +589,7 @@
 
     uniform sampler2D uTerrain;
     uniform bool uAlderValley;
+    uniform bool uAlaska;
     uniform bool uManhattan;
     uniform mat4 uWorldViewProj;
     uniform vec3 uCamPos;
@@ -775,6 +800,7 @@
 
           // Apply shadow tint (violet shadows)
           vec3 shadowTint = mix(vec3(0.28, 0.22, 0.42), vec3(1.04, 0.96, 0.88), clamp(litFactor, 0.0, 1.0));
+          if (uAlaska) waterCol = mix(waterCol, vec3(0.10,0.34,0.43),0.50);
           if (uAlderValley || uManhattan) waterCol = mix(waterCol, vec3(0.12, 0.29, 0.29), 0.35);
           col = waterCol * shadowTint;
         } else {
@@ -843,6 +869,15 @@
             }
           }
 
+          if (uAlaska) {
+            float grain = vnoise(p.xz * 0.19);
+            vec3 spruce = mix(vec3(0.12,0.24,0.20),vec3(0.33,0.46,0.32),grain);
+            vec3 rock = mix(vec3(0.32,0.38,0.43),vec3(0.53,0.58,0.61),grain);
+            vec3 snow = mix(vec3(0.64,0.78,0.84),vec3(0.94,0.96,0.98),grain);
+            float frost = smoothstep(16.0,26.0,alt + 5.0*(grain - 0.5));
+            albedo = mix(spruce,rock,max(smoothstep(9.0,17.0,alt),smoothstep(0.18,0.4,slope)));
+            albedo = mix(albedo,snow,frost * (1.0-smoothstep(0.46,0.79,slope)));
+          }
           if (uManhattan) {
             float crossIsland = p.x - (${MANHATTAN_GRID.tilt} * p.z + ${MANHATTAN_GRID.offset.toFixed(1)});
             vec2 blocks = vec2(crossIsland, p.z) / vec2(${MANHATTAN_GRID.blockWidth.toFixed(1)}, ${MANHATTAN_GRID.blockLength.toFixed(1)});
@@ -878,11 +913,11 @@
           // Stepped sunset lighting + violet shadows
           float ndotl = max(dot(n, SUN_DIR), 0.0);
           float steppedLight = floor(ndotl * 3.2 + 0.35) / 3.0;
-          float direct = (uManhattan ? ndotl : steppedLight) * litFactor;
+          float direct = ((uManhattan || uAlaska) ? ndotl : steppedLight) * litFactor;
 
           vec3 warmSun = vec3(1.08, 0.84, 0.62);
           vec3 violetAmbient = vec3(0.34, 0.26, 0.48);
-          if (uAlderValley || uManhattan) {
+          if (uAlderValley || uManhattan || uAlaska) {
             warmSun = vec3(0.96, 0.93, 0.82);
             violetAmbient = vec3(0.43, 0.47, 0.53);
           }
@@ -939,7 +974,7 @@
       }
 
       gl_FragDepth = 1.0;
-      if (uManhattan && hitSurface) {
+      if (hitSurface) {
         vec4 clip = uWorldViewProj * vec4(ro + rd * hitDist, 1.0);
         gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
       }
@@ -1405,6 +1440,97 @@
     NEW_YORK_LANDMARKS.map(({ kind }) => [kind, buildNewYorkLandmark(kind)])
   );
 
+  function addModelBox(addQuad, x, y, z, width, height, length, color) {
+    const l = x-width/2, r = x+width/2, b = y-height/2, t = y+height/2;
+    const f = z+length/2, k = z-length/2;
+    const a=[l,b,f],c=[r,b,f],e=[r,t,f],g=[l,t,f];
+    const i=[l,b,k],j=[r,b,k],m=[r,t,k],n=[l,t,k];
+    for (const face of [[a,c,e,g],[j,i,n,m],[i,a,g,n],[c,j,m,e],[g,e,m,n],[i,j,c,a]]) {
+      addQuad(...face,color);
+    }
+  }
+
+  const SHIP_TYPES = {
+    cruise: { halfLength: 23, halfWidth: 4.8, top: 13, name: 'cruise ship' },
+    ferry: { halfLength: 13, halfWidth: 3.3, top: 7.5, name: 'ferry' },
+    cargo: { halfLength: 18, halfWidth: 4.1, top: 9, name: 'cargo ship' }
+  };
+
+  function buildShipMesh(kind) {
+    const { addTri, addQuad, upload } = createTriangleMesh();
+    const box = (...args) => addModelBox(addQuad, ...args);
+    const { halfLength: length, halfWidth: width } = SHIP_TYPES[kind];
+    const hull = kind === 'cargo' ? [0.27,0.23,0.27] : [0.13,0.29,0.43];
+    const ivory = [0.88,0.91,0.92], windows = [0.14,0.28,0.38], red = [0.80,0.28,0.20];
+    const outline = [[0,length],[width,length*0.55],[width,-length*0.73],[width*0.67,-length],
+      [-width*0.67,-length],[-width,-length*0.73],[-width,length*0.55]];
+    const deck = outline.map(([x,z]) => [x,2.3,z]);
+    const keel = outline.map(([x,z]) => [x*0.73,-0.60,z*0.94]);
+    for (let i=0;i<outline.length;i++) {
+      const j = (i+1)%outline.length;
+      addQuad(deck[i],deck[j],keel[j],keel[i],hull);
+      addTri([0,2.3,0],deck[i],deck[j],ivory);
+    }
+    if (kind === 'cruise') {
+      for (let i=0;i<3;i++) {
+        const y = 3.6 + i*2.3;
+        const span = width*(1.64-i*0.17);
+        const deckLength = length*(1.47-i*0.21);
+        box(0,y,-2,span,2.4,deckLength,ivory);
+        for (const side of [-1,1]) {
+          box(side*span/2,y,-2,0.16,0.63,deckLength*0.88,windows);
+          if (i===0) {
+            for (const z of [-9,-3,3,9]) box(side*(span/2+0.35),3.8,z,0.95,0.7,3,red);
+          }
+        }
+      }
+      box(0,8.6,5,4.7,1.5,5,windows);
+      box(0,10.5,-7,2.4,4.5,3.3,red);
+      box(0,12.6,-7,2.5,0.65,3.4,hull);
+    } else if (kind === 'ferry') {
+      box(0,3.5,-1,width*1.8,2.5,length*1.48,ivory);
+      box(0,5.4,2,width*1.43,1.5,length*0.96,[0.82,0.60,0.23]);
+      for (const side of [-1,1]) box(side*width*0.90,4,-1,0.16,0.8,length*1.34,windows);
+      box(0,6.85,-3,1.72,1.3,1.9,hull);
+    } else {
+      box(0,4.4,-length*0.70,width*1.54,4.0,5,ivory);
+      box(0,6,-length*0.70,width*1.57,0.7,5.05,windows);
+      box(0,7.8,-length*0.78,1.8,2.1,2.2,red);
+      const containers = [red,[0.25,0.43,0.55],[0.67,0.48,0.21],[0.29,0.48,0.36]];
+      for (let i=0;i<5;i++) for (const side of [-1,1]) {
+        box(side*1.76,3.5,-6+i*4.5,3.33,2.2,4.1,containers[(i+Number(side>0))%containers.length]);
+      }
+    }
+    return upload();
+  }
+
+  function buildMooseMesh() {
+    const { addQuad, upload } = createTriangleMesh();
+    const box = (...args) => addModelBox(addQuad, ...args);
+    const hide = [0.34,0.23,0.16], coat = [0.23,0.16,0.12], legs = [0.50,0.37,0.26];
+    const antler = [0.76,0.65,0.49];
+    box(0,2.2,-0.25,1.2,1.18,2.65,hide);
+    box(0,2.6,0.53,1.27,1.35,1.05,coat);
+    box(0,2.82,1.23,0.72,1.06,0.98,hide);
+    box(0,3.02,1.95,0.72,0.68,1.16,hide);
+    box(0,2.88,2.43,0.62,0.48,0.53,coat);
+    box(0,2.47,1.63,0.25,0.58,0.45,coat);
+    for (const side of [-1,1]) {
+      for (const z of [-1.17,0.77]) {
+        box(side*0.45,0.98,z,0.25,1.9,0.29,legs);
+        box(side*0.45,0.13,z+0.05,0.29,0.22,0.38,coat);
+      }
+      box(side*0.46,3.37,1.64,0.49,0.21,0.36,hide);
+      box(side*0.78,3.59,1.57,0.96,0.16,0.18,antler);
+      box(side*1.24,3.77,1.53,0.57,0.35,0.56,antler);
+      for (const z of [1.26,1.52,1.81]) box(side*1.44,4,z,0.16,0.39,0.12,antler);
+    }
+    return upload();
+  }
+
+  const shipMeshes = Object.fromEntries(Object.keys(SHIP_TYPES).map(kind => [kind, buildShipMesh(kind)]));
+  const mooseMesh = buildMooseMesh();
+
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
   const plumeCoreMesh = buildConeMesh(0.75, 0.075, [1.0, 0.96, 0.85], [1.0, 0.86, 0.55]);
@@ -1414,9 +1540,11 @@
   let fboW = 604, fboH = 340;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
 
+  const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska);
+
   function resizeTargets() {
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-    if (selectedMap.city) {
+    if (smoothScenery()) {
       const height = Math.min(window.innerHeight, 720, 1152 / aspect) * resScale;
       fboH = Math.max(1, Math.round(height));
       fboW = Math.max(1, Math.round(height * aspect));
@@ -1437,7 +1565,7 @@
     sceneTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, fboW, fboH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    const filter = selectedMap.city ? gl.LINEAR : gl.NEAREST;
+    const filter = smoothScenery() ? gl.LINEAR : gl.NEAREST;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -2327,7 +2455,7 @@
     const mapScale = mapWidth / MAP_SPAN;
     const ctx = raster.getContext('2d');
     const pixels = ctx.createImageData(mapWidth, mapWidth);
-    const { airfield, city } = map;
+    const { airfield, city, alaska } = map;
     for (let y = 0; y < mapWidth; y++) {
       for (let x = 0; x < mapWidth; x++) {
         const east = (x + 0.5 - mapWidth / 2) / mapScale;
@@ -2336,7 +2464,12 @@
         const offset = (y * mapWidth + x) * 4;
         const band = Math.floor((h - WATER_H) / 4);
         const water = h <= WATER_H;
-        if (city && !water) {
+        if (alaska && !water) {
+          const snow = Math.min(1, Math.max(0,(h-WATER_H-12)/16));
+          pixels.data[offset] = 66 + 154*snow;
+          pixels.data[offset+1] = 101 + 128*snow;
+          pixels.data[offset+2] = 86 + 153*snow;
+        } else if (city && !water) {
           const localX = east - (city.tilt * north + city.offset);
           const park = Math.abs(localX) < city.parkHalfWidth && Math.abs(north - city.parkCenter) < city.parkHalfLength;
           pixels.data[offset] = park ? 74 : 99 + band * 12;
@@ -2447,6 +2580,18 @@
       mapCtx.arc(center + x * mapScale, center - z * mapScale, i === gateIndex ? 9 : 5, 0, 2 * Math.PI);
       mapCtx.fill();
     }
+    if (mapPanel.classList.contains('expanded')) {
+      for (const boat of boats) {
+        const [x,z] = sceneryPose(boat,sceneryTime);
+        mapCtx.fillStyle = '#8de1f5';
+        mapCtx.fillRect(center + x*mapScale-2,center - z*mapScale-3,4,6);
+      }
+      for (const animal of moose) {
+        const [x,z] = sceneryPose(animal,sceneryTime);
+        mapCtx.fillStyle = '#f4be78';
+        mapCtx.fillRect(center+x*mapScale-1,center-z*mapScale-1,3,3);
+      }
+    }
     mapCtx.fillStyle = '#fff0d6';
     mapCtx.save();
     mapCtx.translate(center + plane.pos[0] * mapScale, center - plane.pos[2] * mapScale);
@@ -2472,7 +2617,7 @@
     groundWarning.hidden = true;
     const settings = new FormData(flightSetup);
     selectedMap = FLIGHT_MAPS[settings.get('flightMap')];
-    document.getElementById('wrap').classList.toggle('smooth-city', Boolean(selectedMap.city));
+    document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
     resScale = 1.0;
     resizeTargets();
     const challenge = settings.get('flightMode') === 'route';
@@ -2514,6 +2659,7 @@
         }
         if (data.type !== 'done') return;
         heightField = data.height;
+        prepareCoastalTraffic();
         mapRaster = document.createElement('canvas');
         mapRaster.width = mapRaster.height = mapWidth;
         paintTerrainMap(mapRaster, selectedMap, sampleGroundHeight);
@@ -2562,7 +2708,7 @@
       };
       worker.postMessage({
         size: MAP_SIZE, span: MAP_SPAN, landmarks: selectedMap.landmarks,
-        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city
+        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city, alaska: selectedMap.alaska
       });
     } catch (error) {
       console.error(error);
@@ -2593,6 +2739,7 @@
   const uWorld = {
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     alderValley: gl.getUniformLocation(worldProg, 'uAlderValley'),
+    alaska: gl.getUniformLocation(worldProg, 'uAlaska'),
     manhattan: gl.getUniformLocation(worldProg, 'uManhattan'),
     viewProj: gl.getUniformLocation(worldProg, 'uWorldViewProj'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
@@ -2636,6 +2783,88 @@
   let lastTime = performance.now();
   let slowFrames = 0;
   let trailAccum = 0;
+
+  // Boats follow closed loops checked against the actual height field.
+  let boats = [];
+  let moose = [];
+  let sceneryTime = 0;
+  const worldUp = [0,1,0];
+
+  function routePose(route, phase) {
+    return [
+      route.x + Math.cos(phase)*route.rx,
+      route.z + Math.sin(phase)*route.rz,
+      Math.atan2(-Math.sin(phase)*route.rx, Math.cos(phase)*route.rz)
+    ];
+  }
+
+  function prepareCoastalTraffic() {
+    boats = [];
+    moose = [];
+    sceneryTime = 0;
+    if (selectedMap.airfield) return;
+
+    const anchor = selectedMap.shipAnchor;
+    for (const [index, kind] of ['cruise','ferry','cargo','ferry'].entries()) {
+      const size = SHIP_TYPES[kind];
+      const preferred = { x: anchor[0] + (index%2)*185, z: anchor[1] + Math.floor(index/2)*225 };
+      let best = null;
+      let distance = Infinity;
+      for (let z=-710;z<=710;z+=28) for (let x=-710;x<=710;x+=28) {
+        const score = Math.hypot(x-preferred.x,z-preferred.z);
+        if (score >= distance || boats.some(b=>Math.hypot(x-b.x,z-b.z)<135)) continue;
+        const route = { x, z, rx: kind === 'cruise' ? 19 : 23, rz: 48+index*3 };
+        const clearance = size.halfLength + 3;
+        const safe = (px,pz) => Math.hypot(px,pz) < FLIGHT_RADIUS-12 && sampleGroundHeight(px,pz) <= WATER_H;
+        let clear = true;
+        for (let step=0; step<36 && clear;step++) {
+          const [px,pz,yaw] = routePose(route, step*Math.PI/18);
+          const sx = Math.sin(yaw), sz = Math.cos(yaw);
+          for (const along of [-clearance,0,clearance]) for (const across of [-size.halfWidth,0,size.halfWidth]) {
+            if (!safe(px+sx*along+sz*across,pz+sz*along-sx*across)) clear = false;
+          }
+        }
+        if (!clear) continue;
+        distance = score;
+        best = route;
+      }
+      if (best) boats.push({ ...best, ...size, kind, phase: index*1.1, rate: 0.035+index*0.008 });
+    }
+
+    if (!selectedMap.alaska) return;
+    const meadows = [[-126,-465],[128,-370],[-155,-215],[154,-55],[125,135]];
+    for (const [index,[east,north]] of meadows.entries()) {
+      for (let i=0;i<3;i++) {
+        const x = east + (i-1)*8;
+        const z = north + (i%2)*12;
+        if (![[-7,0],[7,0],[0,-7],[0,7],[0,0]].every(([dx,dz])=>{
+          const y=sampleGroundHeight(x+dx,z+dz);
+          return y>WATER_H+1.4 && y<34;
+        })) continue;
+        moose.push({x,z,rx:6,rz:6,phase:index+i*2,rate:0.19+i*0.025});
+      }
+    }
+  }
+
+  function sceneryPose(actor, time) {
+    return routePose(actor, actor.phase+actor.rate*time);
+  }
+
+  function drawCoastalTraffic(drawMesh) {
+    for (const boat of boats) {
+      const [x,z,yaw] = sceneryPose(boat,sceneryTime);
+      const front = [Math.sin(yaw),0,Math.cos(yaw)];
+      const right = [front[2],0,-front[0]];
+      const bob = 0.16*Math.sin(1.75*sceneryTime+boat.phase);
+      drawMesh(shipMeshes[boat.kind],mat4FromBasis([x,WATER_H+bob,z],right,worldUp,front,1));
+    }
+    for (const animal of moose) {
+      const [x,z,yaw] = sceneryPose(animal,sceneryTime);
+      const y = sampleGroundHeight(x,z);
+      const front = [Math.sin(yaw),0,Math.cos(yaw)];
+      drawMesh(mooseMesh,mat4FromBasis([x,y,z],[front[2],0,-front[0]],worldUp,front,1));
+    }
+  }
 
   function advanceFlight(dt) {
     const prevPos = [...plane.pos];
@@ -2740,6 +2969,17 @@
         finishFlight([x,surface+0.1,z], water ? 'Water impact' : 'Terrain collision', water);
         return;
       }
+      for (const boat of boats) {
+        if (y > WATER_H + boat.top + 0.5) continue;
+        const [bx,bz,yaw] = sceneryPose(boat,sceneryTime);
+        const dx = x-bx, dz = z-bz;
+        const across = Math.cos(yaw)*dx - Math.sin(yaw)*dz;
+        const along = Math.sin(yaw)*dx + Math.cos(yaw)*dz;
+        if (Math.abs(across) <= boat.halfWidth+0.5 && Math.abs(along) <= boat.halfLength+0.5) {
+          finishFlight(pos, 'Collision with ' + boat.name, false);
+          return;
+        }
+      }
       if (!selectedMap.city) continue;
       for (const mark of NEW_YORK_LANDMARKS) {
         const level = y - sampleGroundHeight(mark.x, mark.z);
@@ -2812,6 +3052,7 @@
       slowFrames = Math.max(0, slowFrames - 1);
     }
 
+    sceneryTime += dt;
     const { basis, boundaryAssist } = crash
       ? { basis: getPlaneBasis(), boundaryAssist: false }
       : advanceFlight(dt);
@@ -2931,7 +3172,7 @@
     const camTrueUp = v3Cross(camRight, camFwd);
 
     const viewMat = mat4LookAt(camPos, camLook, camUp);
-    const projMat = mat4Perspective(fovRad, aspect, 0.25, selectedMap.city ? 880 : 600);
+    const projMat = mat4Perspective(fovRad, aspect, 0.25, 880);
     const viewProj = mat4Mul(projMat, viewMat);
 
     // 4. Render World + 3D Aircraft into Low-Res FBO
@@ -2940,10 +3181,8 @@
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
 
-    if (selectedMap.city) {
-      gl.enable(gl.DEPTH_TEST);
-      gl.depthFunc(gl.ALWAYS);
-    }
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.ALWAYS);
     gl.useProgram(worldProg);
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);
@@ -2951,6 +3190,7 @@
     gl.uniform1i(uWorld.terrain, 0);
     gl.uniform1i(uWorld.alderValley, Boolean(selectedMap.airfield));
     gl.uniform1i(uWorld.manhattan, Boolean(selectedMap.city));
+    gl.uniform1i(uWorld.alaska, Boolean(selectedMap.alaska));
     gl.uniform3fv(uWorld.camPos, camPos);
     gl.uniform3fv(uWorld.camFwd, camFwd);
     gl.uniform3fv(uWorld.camRight, camRight);
@@ -2979,16 +3219,15 @@
     // Render 3D Aircraft & Missiles (in Chase & Top-Down views)
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
-    if (!selectedMap.city) gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(meshProg);
     gl.uniformMatrix4fv(uMesh.viewProj, false, viewProj);
-    gl.uniform1i(uMesh.smooth, Boolean(selectedMap.city));
+    gl.uniform1i(uMesh.smooth, smoothScenery());
     gl.uniform3fv(uMesh.eye, camPos);
 
     function drawMeshWithOutline(mesh, modelMat, emissive = false) {
       gl.bindVertexArray(mesh.vao);
       gl.uniformMatrix4fv(uMesh.model, false, modelMat);
-      if (!emissive && !selectedMap.city) {
+      if (!emissive && !smoothScenery()) {
         // Inverted-hull 1px dark outline
         gl.enable(gl.CULL_FACE);
         gl.cullFace(gl.FRONT);
@@ -3012,6 +3251,8 @@
         drawMeshWithOutline(newYorkMeshes[mark.kind], model);
       }
     }
+
+    drawCoastalTraffic(drawMeshWithOutline);
 
     if (!crash && viewIdx !== 1) {
       const planeScale = viewIdx === 2 ? 1.45 : 1.0;
@@ -3075,7 +3316,7 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(uDither.scene, 0);
-    gl.uniform1i(uDither.smooth, Boolean(selectedMap.city));
+    gl.uniform1i(uDither.smooth, smoothScenery());
     gl.uniform3fv(uDither.palette, paletteFlat);
     gl.uniform2f(uDither.res, fboW, fboH);
 
