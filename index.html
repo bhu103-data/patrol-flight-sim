@@ -24,6 +24,7 @@
   #flightMap.warning{border-color:#ffad69;color:#ffcf8c;}
   #flightMap.guarding{border-color:#ff795e;color:#ffb2a1;}
   [hidden]{display:none !important;}
+  #wrap.smooth-city canvas{image-rendering:auto;}
   #titleOverlay{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;padding:16px;
     background:radial-gradient(ellipse at 50% 25%,#392140ed,#100b18f5 72%);z-index:20;}
   .title-badge{width:min(820px,100%);border:1px solid #e88d4f;background:#181123;
@@ -131,7 +132,7 @@
           <label><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
           <label><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
           <label><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
-          <label><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York waterfront, Central Park and skyline</small></label>
+          <label><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York Harbor, Central Park and landmark towers</small></label>
         </fieldset>
         <fieldset>
           <legend>Mode</legend>
@@ -228,9 +229,15 @@
   ];
 
   const ALDER_AIRFIELD = { x: 144, z: -210, halfWidth: 8, halfLength: 86, elevation: 17.5 };
+  const NEW_YORK_LANDMARKS = [
+    { kind: 'liberty', name: 'Statue of Liberty', x: -140, z: -611, w: 11, d: 11, top: 31.3 },
+    { kind: 'trade', name: 'One World Trade Center', x: -85, z: -398, w: 8.5, d: 8.5, top: 77 },
+    { kind: 'empire', name: 'Empire State Building', x: -7, z: -117, w: 9, d: 10, top: 79 },
+    { kind: 'chrysler', name: 'Chrysler Building', x: 65, z: -46, w: 7.5, d: 7.5, top: 68 }
+  ];
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
-    blockWidth: 24, blockLength: 33
+    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS
   };
   const FLIGHT_MAPS = {
     coast: {
@@ -258,12 +265,8 @@
     },
     manhattan: {
       city: MANHATTAN_GRID,
-      spawn: [-115, 57, -697],
-      landmarks: [
-        { name: 'Lower Manhattan', x: -85, z: -395 },
-        { name: 'Midtown', x: 11, z: -75 },
-        { name: 'Central Park', x: 79, z: 206 }
-      ],
+      spawn: [-153, 44, -698],
+      landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     }
   };
@@ -337,9 +340,14 @@
         const island = north > -525 && north < 665 && Math.abs(localX) < waterfront;
         const jersey = localX < -265 + 17 * Math.sin(north / 76) && north > -705;
         const outerBoroughs = localX > 187 + 26 * Math.sin(north / 93) && north > -415;
-        if (!island && !jersey && !outerBoroughs) return (water - 4.4) / scale;
-
         const elevation = water + 2.4;
+        for (const mark of city.landmarks) {
+          const dx = Math.abs(east - mark.x);
+          const dz = Math.abs(north - mark.z);
+          if (mark.kind === 'liberty' && Math.hypot(dx / 22, dz / 17) < 1) return elevation / scale;
+          if (mark.kind !== 'liberty' && dx < mark.w + 12 && dz < mark.d + 15) return elevation / scale;
+        }
+        if (!island && !jersey && !outerBoroughs) return (water - 4.4) / scale;
         if (island && Math.abs(localX) < city.parkHalfWidth &&
             Math.abs(north - city.parkCenter) < city.parkHalfLength) {
           return (elevation + 1.0 + 0.6 * Math.sin(north / 22) * Math.cos(localX / 14)) / scale;
@@ -521,6 +529,7 @@
     uniform sampler2D uTerrain;
     uniform bool uAlderValley;
     uniform bool uManhattan;
+    uniform mat4 uWorldViewProj;
     uniform vec3 uCamPos;
     uniform vec3 uCamFwd;
     uniform vec3 uCamRight;
@@ -832,7 +841,7 @@
           // Stepped sunset lighting + violet shadows
           float ndotl = max(dot(n, SUN_DIR), 0.0);
           float steppedLight = floor(ndotl * 3.2 + 0.35) / 3.0;
-          float direct = steppedLight * litFactor;
+          float direct = (uManhattan ? ndotl : steppedLight) * litFactor;
 
           vec3 warmSun = vec3(1.08, 0.84, 0.62);
           vec3 violetAmbient = vec3(0.34, 0.26, 0.48);
@@ -892,6 +901,11 @@
         }
       }
 
+      gl_FragDepth = 1.0;
+      if (uManhattan && hitSurface) {
+        vec4 clip = uWorldViewProj * vec4(ro + rd * hitDist, 1.0);
+        gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
+      }
       fragColor = vec4(col, 1.0);
     }
   `;
@@ -908,12 +922,14 @@
 
     out vec3 vNorm;
     out vec3 vColor;
+    out vec3 vWorld;
 
     void main() {
       vec3 pos = aPos + aNorm * uOutline;
       vec4 worldPos = uModel * vec4(pos, 1.0);
       vNorm = mat3(uModel) * aNorm;
       vColor = aColor;
+      vWorld = worldPos.xyz;
       gl_Position = uViewProj * worldPos;
     }
   `;
@@ -922,7 +938,10 @@
     precision mediump float;
     in vec3 vNorm;
     in vec3 vColor;
+    in vec3 vWorld;
     out vec4 fragColor;
+    uniform bool uSmooth;
+    uniform vec3 uEye;
 
     uniform float uIsOutline;
     uniform float uEmissive;
@@ -940,6 +959,12 @@
       }
       vec3 n = normalize(vNorm);
       float ndotl = dot(n, SUN_DIR);
+      if (uSmooth) {
+        float light = 0.48 + 0.58 * max(ndotl, 0.0) + 0.18 * max(n.y, 0.0);
+        float haze = 1.0 - exp(-length(vWorld - uEye) * 0.00105);
+        fragColor = vec4(mix(vColor * light, vec3(0.64,0.57,0.64), haze), 1.0);
+        return;
+      }
       // 3-tone flat shading
       float tone = ndotl > 0.25 ? 1.15 : (ndotl > -0.25 ? 0.82 : 0.54);
       vec3 tint = ndotl > -0.25 ? vec3(1.04, 0.94, 0.86) : vec3(0.76, 0.68, 0.92);
@@ -954,6 +979,7 @@
     out vec4 fragColor;
 
     uniform sampler2D uScene;
+    uniform bool uSmooth;
     uniform vec3 uPalette[36];
     uniform vec2 uRes;
 
@@ -966,6 +992,10 @@
 
     void main() {
       vec3 col = texture(uScene, vUv).rgb;
+      if (uSmooth) {
+        fragColor = vec4(col, 1.0);
+        return;
+      }
       ivec2 pix = ivec2(mod(floor(vUv * uRes), 4.0));
       float b = BAYER4[pix.y * 4 + pix.x] - 0.5;
       col = clamp(col + b * 0.095, 0.0, 1.0);
@@ -1228,6 +1258,116 @@
     jetpack: buildJetpackMesh()
   };
 
+  function buildNewYorkLandmark(kind) {
+    const { addTri, addQuad, upload } = createTriangleMesh();
+    const limestone = [0.68, 0.64, 0.56];
+    const steel = [0.70, 0.74, 0.78];
+    const glass = [0.30, 0.45, 0.55];
+
+    function stack(levels, color, sides = 4) {
+      function ring([y, radiusX, radiusZ, x = 0, z = 0], i) {
+        const angle = (i + 0.5) * 2 * Math.PI / sides;
+        const correction = sides === 4 ? Math.SQRT2 : 1;
+        return [x + Math.sin(angle) * radiusX * correction, y, z + Math.cos(angle) * radiusZ * correction];
+      }
+      for (let j = 0; j < levels.length - 1; j++) {
+        for (let i = 0; i < sides; i++) {
+          addQuad(ring(levels[j], i), ring(levels[j], i + 1),
+            ring(levels[j + 1], i + 1), ring(levels[j + 1], i), color);
+        }
+      }
+      for (const [level, top] of [[levels[0], false], [levels.at(-1), true]]) {
+        const center = [level[3] || 0, level[0], level[4] || 0];
+        for (let i = 0; i < sides; i++) {
+          const a = ring(level, i), b = ring(level, i + 1);
+          addTri(center, top ? a : b, top ? b : a, color);
+        }
+      }
+    }
+
+    function box(x, base, z, width, height, length, color) {
+      stack([[base,width/2,length/2,x,z],[base+height,width/2,length/2,x,z]],color);
+    }
+
+    function mast(base, tip, width, color) {
+      stack([[base,width,width],[tip,width*0.38,width*0.38]], color, 8);
+    }
+
+    function facade(width, length, base, top, color) {
+      for (let y = base + 1.3; y < top - 0.6; y += 2.4) {
+        for (let x = -width / 2 + 1.1; x < width / 2 - 0.7; x += 2.5) {
+          for (const side of [-1,1]) box(x,y,side*(length/2+0.04),0.90,1.02,0.13,color);
+        }
+        for (let z = -length / 2 + 1.1; z < length / 2 - 0.7; z += 2.5) {
+          for (const side of [-1,1]) box(side*(width/2+0.04),y,z,0.13,1.02,0.90,color);
+        }
+      }
+    }
+
+    if (kind === 'liberty') {
+      const patina = [0.30, 0.60, 0.49];
+      const shade = [0.23, 0.49, 0.40];
+      // Stone fort, pedestal and stepped cornice.
+      stack([[0,11,11],[1.2,11,11],[1.2,8.4,8.4],[3.0,8.4,8.4]], limestone, 12);
+      box(0,3,0,11,1.3,11,limestone);
+      box(0,4.3,0,8,7.5,8,[0.53,0.50,0.45]);
+      box(0,11.8,0,9.4,1.0,9.4,limestone);
+      // Robe and shoulders.
+      stack([[12.8,2.85,2.35],[14.6,2.65,2.20],[18.3,1.8,1.5,-0.15],
+        [21.9,1.93,1.46,-0.16],[23.25,1.40,1.25]], patina, 14);
+      // Neck, face and crown, facing south toward the harbor approach.
+      stack([[23.0,0.54,0.54],[24.0,0.58,0.58],[24.0,0.84,0.73],
+        [25.5,0.83,0.74],[26.1,0.60,0.60]], patina, 12);
+      box(0,24.55,-0.69,0.22,0.33,0.25,shade);
+      stack([[25.5,0.83,0.83],[25.9,1.05,1.05]],shade,14);
+      for (let i=0;i<7;i++) {
+        const angle = Math.PI * 0.95 * (i/6 - 0.5) * 2;
+        const x = Math.sin(angle), z = -Math.cos(angle);
+        addTri([x*0.82-z*0.15,25.85,z*0.82+x*0.15],
+          [x*1.62,27.04,z*1.62],[x*0.82+z*0.15,25.85,z*0.82-x*0.15],patina);
+      }
+      // Raised torch arm, sleeve and torch flame.
+      stack([[21.55,0.83,0.77,-1.34],[23.45,0.69,0.66,-2.65,-0.15],
+        [26.9,0.41,0.42,-3.66,-0.49],[28.1,0.40,0.39,-3.81,-0.54]],patina,12);
+      stack([[27.95,0.25,0.25,-3.81,-0.54],[29.3,0.29,0.29,-3.81,-0.54],
+        [29.3,0.68,0.68,-3.81,-0.54],[29.65,0.65,0.65,-3.81,-0.54]],shade,12);
+      stack([[29.65,0.52,0.52,-3.81,-0.54],[30.3,0.50,0.50,-3.70,-0.54],
+        [31.3,0.04,0.05,-3.45,-0.57]],[0.95,0.66,0.22],12);
+      // Bent arm supporting the tablet.
+      stack([[18.9,0.61,0.65,1.55,-0.88],[20.3,0.67,0.68,2.04,-0.66],
+        [22.31,0.86,0.78,1.47,0.04]],patina,10);
+      box(1.57,19.3,-1.43,1.32,2.42,0.32,shade);
+    } else if (kind === 'empire') {
+      box(0,0,0,18,8,20,limestone);
+      box(0,8,0,14,40,15,limestone);
+      box(0,48,0,10,6,11,limestone);
+      box(0,54,0,7,5,7,steel);
+      box(0,59,0,4.5,7,4.5,limestone);
+      facade(14,15,8,48,[0.25,0.30,0.34]);
+      mast(66,79,0.72,steel);
+    } else if (kind === 'chrysler') {
+      box(0,0,0,15,7,15,limestone);
+      box(0,7,0,11,36,11,limestone);
+      facade(11,11,7,43,[0.30,0.34,0.38]);
+      for (let tier=0; tier<5; tier++) {
+        const y=43+tier*2.4, radius=5-tier*0.92;
+        stack([[y,radius,radius],[y+2.7,radius-0.7,radius-0.7]],steel,8);
+      }
+      mast(54,68,0.56,steel);
+    } else {
+      // Square podium transitioning through eight faces to a narrower crown.
+      box(0,0,0,17,7,17,[0.48,0.55,0.60]);
+      stack([[7,7.5,7.5],[32,8.2,8.2],[60,5.4,5.4]],glass,8);
+      stack([[60,5.4,5.4],[61.4,5.4,5.4]],steel,8);
+      mast(61,77,0.65,steel);
+    }
+    return upload();
+  }
+
+  const newYorkMeshes = Object.fromEntries(
+    NEW_YORK_LANDMARKS.map(({ kind }) => [kind, buildNewYorkLandmark(kind)])
+  );
+
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
   const plumeCoreMesh = buildConeMesh(0.75, 0.075, [1.0, 0.96, 0.85], [1.0, 0.86, 0.55]);
@@ -1239,8 +1379,14 @@
 
   function resizeTargets() {
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-    fboH = Math.max(180, Math.round(340 * resScale));
-    fboW = Math.max(320, Math.round(fboH * aspect));
+    if (selectedMap.city) {
+      const height = Math.min(window.innerHeight, 720, 1152 / aspect) * resScale;
+      fboH = Math.max(1, Math.round(height));
+      fboW = Math.max(1, Math.round(height * aspect));
+    } else {
+      fboH = Math.max(180, Math.round(340 * resScale));
+      fboW = Math.max(320, Math.round(fboH * aspect));
+    }
 
     glCanvas.width = fboW;
     glCanvas.height = fboH;
@@ -1254,8 +1400,9 @@
     sceneTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, fboW, fboH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    const filter = selectedMap.city ? gl.LINEAR : gl.NEAREST;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -1349,6 +1496,17 @@
     const h11 = heightField[iy1 * MAP_SIZE + ix1];
     const h = lerp(lerp(h00, h10, tx), lerp(h01, h11, tx), ty) * TERRAIN_SCALE;
     return Math.max(h, WATER_H);
+  }
+
+  function navigationSurface(x, z) {
+    const ground = sampleGroundHeight(x, z);
+    if (!selectedMap.city) return ground;
+    for (const mark of NEW_YORK_LANDMARKS) {
+      if (Math.abs(x - mark.x) <= mark.w && Math.abs(z - mark.z) <= mark.d) {
+        return Math.max(ground, sampleGroundHeight(mark.x, mark.z) + mark.top);
+      }
+    }
+    return ground;
   }
 
   // Web Audio Synthesizer (Muted by default)
@@ -2227,6 +2385,9 @@
     if (loading) return;
     const settings = new FormData(flightSetup);
     selectedMap = FLIGHT_MAPS[settings.get('flightMap')];
+    document.getElementById('wrap').classList.toggle('smooth-city', Boolean(selectedMap.city));
+    resScale = 1.0;
+    resizeTargets();
     const challenge = settings.get('flightMode') === 'route';
     selectedAircraft = settings.get('aircraft');
     loading = true;
@@ -2344,6 +2505,7 @@
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     alderValley: gl.getUniformLocation(worldProg, 'uAlderValley'),
     manhattan: gl.getUniformLocation(worldProg, 'uManhattan'),
+    viewProj: gl.getUniformLocation(worldProg, 'uWorldViewProj'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
     camFwd: gl.getUniformLocation(worldProg, 'uCamFwd'),
     camRight: gl.getUniformLocation(worldProg, 'uCamRight'),
@@ -2362,11 +2524,14 @@
     model: gl.getUniformLocation(meshProg, 'uModel'),
     outline: gl.getUniformLocation(meshProg, 'uOutline'),
     isOutline: gl.getUniformLocation(meshProg, 'uIsOutline'),
-    emissive: gl.getUniformLocation(meshProg, 'uEmissive')
+    emissive: gl.getUniformLocation(meshProg, 'uEmissive'),
+    smooth: gl.getUniformLocation(meshProg, 'uSmooth'),
+    eye: gl.getUniformLocation(meshProg, 'uEye')
   };
 
   const uDither = {
     scene: gl.getUniformLocation(ditherProg, 'uScene'),
+    smooth: gl.getUniformLocation(ditherProg, 'uSmooth'),
     palette: gl.getUniformLocation(ditherProg, 'uPalette'),
     res: gl.getUniformLocation(ditherProg, 'uRes')
   };
@@ -2477,8 +2642,8 @@
     }
 
     // Terrain avoidance auto-pullup
-    const gAhead1 = sampleGroundHeight(plane.pos[0], plane.pos[2]);
-    const gAhead2 = sampleGroundHeight(plane.pos[0] + basis.fwd[0] * 14, plane.pos[2] + basis.fwd[2] * 14);
+    const gAhead1 = navigationSurface(plane.pos[0], plane.pos[2]);
+    const gAhead2 = navigationSurface(plane.pos[0] + basis.fwd[0] * 14, plane.pos[2] + basis.fwd[2] * 14);
     const minSafeY = Math.max(gAhead1, gAhead2) + 2.4;
     if (plane.pos[1] < minSafeY) {
       plane.pos[1] = lerp(plane.pos[1], minSafeY + 1.2, dt * 7.5);
@@ -2605,7 +2770,7 @@
     const camTrueUp = v3Cross(camRight, camFwd);
 
     const viewMat = mat4LookAt(camPos, camLook, camUp);
-    const projMat = mat4Perspective(fovRad, aspect, 0.25, 600.0);
+    const projMat = mat4Perspective(fovRad, aspect, 0.25, selectedMap.city ? 880 : 600);
     const viewProj = mat4Mul(projMat, viewMat);
 
     // 4. Render World + 3D Aircraft into Low-Res FBO
@@ -2614,7 +2779,12 @@
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
 
+    if (selectedMap.city) {
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.ALWAYS);
+    }
     gl.useProgram(worldProg);
+    gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
     gl.uniform1i(uWorld.terrain, 0);
@@ -2647,14 +2817,17 @@
 
     // Render 3D Aircraft & Missiles (in Chase & Top-Down views)
     gl.enable(gl.DEPTH_TEST);
-    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.depthFunc(gl.LESS);
+    if (!selectedMap.city) gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(meshProg);
     gl.uniformMatrix4fv(uMesh.viewProj, false, viewProj);
+    gl.uniform1i(uMesh.smooth, Boolean(selectedMap.city));
+    gl.uniform3fv(uMesh.eye, camPos);
 
     function drawMeshWithOutline(mesh, modelMat, emissive = false) {
       gl.bindVertexArray(mesh.vao);
       gl.uniformMatrix4fv(uMesh.model, false, modelMat);
-      if (!emissive) {
+      if (!emissive && !selectedMap.city) {
         // Inverted-hull 1px dark outline
         gl.enable(gl.CULL_FACE);
         gl.cullFace(gl.FRONT);
@@ -2669,6 +2842,14 @@
       gl.uniform1f(uMesh.isOutline, 0.0);
       gl.uniform1f(uMesh.emissive, emissive ? 1.0 : 0.0);
       gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+    }
+
+    if (selectedMap.city) {
+      for (const mark of NEW_YORK_LANDMARKS) {
+        const origin = [mark.x, sampleGroundHeight(mark.x, mark.z) - 0.03, mark.z];
+        const model = mat4FromBasis(origin, [1,0,0], [0,1,0], [0,0,1], 1);
+        drawMeshWithOutline(newYorkMeshes[mark.kind], model);
+      }
     }
 
     if (viewIdx !== 1) {
@@ -2733,6 +2914,7 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.uniform1i(uDither.scene, 0);
+    gl.uniform1i(uDither.smooth, Boolean(selectedMap.city));
     gl.uniform3fv(uDither.palette, paletteFlat);
     gl.uniform2f(uDither.res, fboW, fboH);
 
