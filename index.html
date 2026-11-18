@@ -295,6 +295,7 @@
   ];
   const EAST_RIVER_BRIDGE = { x: 82, z: -342, halfLength: 109, deck: 24, halfWidth: 4.2, ramp: 62 };
   const STREET_Y = 14.86;
+  const BROOKLYN_RAIL = { west:236,east:397,z:-275,radius:16,height:19.8 };
   const HARBOR_RUNWAY = { x: 354, z: -389, halfLength: 82, halfWidth: 8 };
   const CITY_STREETS = [
     [[-89,-342],[253,-342]],
@@ -307,7 +308,7 @@
   ];
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
-    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, streets: CITY_STREETS, runway:HARBOR_RUNWAY
+    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, streets: CITY_STREETS, runway:HARBOR_RUNWAY, railway:BROOKLYN_RAIL
   };
   const FLIGHT_MAPS = {
     coast: {
@@ -479,6 +480,9 @@
             const t=clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz),0,1);
             return Math.hypot(x-(ax+t*dx),z-(az+t*dz))<streetClearance;
           }));
+          const track=city.railway;
+          const trackDistance=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
+          if(Math.abs(trackDistance-track.radius)<4+Math.hypot(width,length)*0.43) continue;
           const runway=city.runway;
           if(inStreet || (Math.abs(x-runway.x)<runway.halfLength+width/2+5 &&
             Math.abs(z-runway.z)<runway.halfWidth+length/2+5)) continue;
@@ -1714,6 +1718,20 @@
       [b[0]-x,b[1]+lift,b[2]-z],[b[0]+x,b[1]+lift,b[2]+z],color);
   }
 
+  function railwayPoints(track) {
+    const points=[[track.west,track.z-track.radius],[track.east,track.z-track.radius]];
+    for(let i=1;i<=16;i++){
+      const a=i*Math.PI/16;
+      points.push([track.east+Math.sin(a)*track.radius,track.z-Math.cos(a)*track.radius]);
+    }
+    points.push([track.west,track.z+track.radius]);
+    for(let i=1;i<=16;i++){
+      const a=i*Math.PI/16;
+      points.push([track.west-Math.sin(a)*track.radius,track.z+Math.cos(a)*track.radius]);
+    }
+    return points;
+  }
+
   function buildStreetScene(addQuad, box) {
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
     for (const street of CITY_STREETS.slice(1)) {
@@ -1755,9 +1773,24 @@
     }
     // An elevated train line on the Brooklyn side.
     const metal = [0.32,0.35,0.37], rail = [0.57,0.60,0.61];
-    for (const z of [-291,-285]) box(298,19.3,z,205,0.6,2.4,metal);
-    for (let x=198;x<=396;x+=15) box(x,17,-288,1.4,5.0,6.1,metal);
-    for (const z of [-291.6,-290.4,-285.6,-284.4]) box(298,19.68,z,205,0.12,0.14,rail);
+    const track=BROOKLYN_RAIL;
+    const route=makeTrafficRoute(railwayPoints(track));
+    const n=route.points.length-1;
+    for(let i=0;i<n;i++){
+      const [ax,az]=route.points[i], [bx,bz]=route.points[i+1];
+      const a=[ax,track.height-0.24,az],b=[bx,track.height-0.24,bz];
+      pushRoadStrip(addQuad,a,b,3.18,metal);
+      const length=Math.hypot(bx-ax,bz-az), nx=(bz-az)/length,nz=(ax-bx)/length;
+      for(const offset of [-0.63,0.63]){
+        pushRoadStrip(addQuad,[ax+nx*offset,track.height-0.07,az+nz*offset],
+          [bx+nx*offset,track.height-0.07,bz+nz*offset],0.14,rail);
+      }
+    }
+    for(let at=0;at<route.total;at+=16){
+      const {x,z,yaw}=railPose({route},at);
+      box(x,17.15,z,1.65,5,1.65,metal);
+      box(x,19.31,z,2.32+Math.abs(Math.sin(yaw))*0.38,0.3,2.43,metal);
+    }
     box(336,19.7,-288,33,0.72,1.8,sidewalk);
     for(const x of [324,336,348]) box(x,21.5,-288,0.27,3.3,0.34,metal);
     box(336,23.1,-288,35,0.4,2.1,metal);
@@ -1797,6 +1830,16 @@
     return { points, lengths, total:lengths.at(-1) };
   }
 
+  function railPose(actor,distance) {
+    const {route}=actor;
+    const offset=((distance%route.total)+route.total)%route.total;
+    const i=route.lengths.findIndex((length,index)=>index>0&&length>=offset);
+    const a=route.points[i-1],b=route.points[i];
+    const t=(offset-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
+    return {x:lerp(a[0],b[0],t),z:lerp(a[1],b[1],t),y:BROOKLYN_RAIL.height,
+      yaw:Math.atan2(b[0]-a[0],b[1]-a[1])};
+  }
+
   function trafficPose(actor,time) {
     const {route,pace,offset,kind}=actor;
     const cycle=(time*pace+offset)% (2*route.total);
@@ -1809,7 +1852,7 @@
     const lateral=kind==='taxi'?(actor.bridge?1.07:1.76):kind==='walker'?4.60:0;
     const x=lerp(a[0],b[0],fraction)+Math.cos(yaw)*lateral;
     const z=lerp(a[1],b[1],fraction)-Math.sin(yaw)*lateral;
-    const y=kind==='train'?19.8:actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
+    const y=actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
     return {x,y,z,yaw};
   }
 
@@ -1831,7 +1874,7 @@
           cityTraffic.push({kind:'walker',route,offset:10+j*route.total*0.22,pace:1.0+(j%3)*0.2});
         }
       }
-      cityTraffic.push({kind:'train',route:makeTrafficRoute([[235,-291],[365,-291]]),offset:20,pace:8.2});
+      cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
     }
     updateBridgeRails();
   }
@@ -1852,14 +1895,13 @@
         box(x*0.8,0.78,-1.93,0.31,0.19,0.07,[0.71,0.18,0.13]);
       }
     } else if(kind==='train') {
-      for(const z of [-21,-7,7,21]) {
-        box(0,1.55,z,2.55,2.80,12.7,[0.67,0.72,0.74]);
-        box(0,0.35,z,2.0,0.61,11.8,rubber);
-        for(const side of [-1,1]) for(const w of [-4.4,-2.2,0,2.2,4.4]) {
-          box(1.28*side,1.84,z+w,0.065,0.66,1.04,glass);
-        }
-        box(0,2.12,z+6.38,1.9,0.65,0.065,glass);
+      const z=0;
+      box(0,1.55,z,2.55,2.80,12.7,[0.67,0.72,0.74]);
+      box(0,0.35,z,2.0,0.61,11.8,rubber);
+      for(const side of [-1,1]) for(const w of [-4.4,-2.2,0,2.2,4.4]) {
+        box(1.28*side,1.84,z+w,0.065,0.66,1.04,glass);
       }
+      box(0,2.12,z+6.38,1.9,0.65,0.065,glass);
     } else {
       const clothing=[0.27,0.37,0.52], skin=[0.69,0.51,0.39];
       box(0,1.12,0,0.48,0.65,0.29,clothing);
@@ -1881,11 +1923,20 @@
     const origin = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if (bridgeRails) drawMesh(bridgeRails,origin);
     for (const actor of cityTraffic) {
-      const {x,y,z,yaw}=trafficPose(actor,sceneryTime);
+      if(actor.kind==='train'){
+        for(let car=0;car<4;car++){
+          const {x,y,z,yaw}=railPose(actor,sceneryTime*actor.pace+actor.offset-car*13.35);
+          if(Math.hypot(x-camPos[0],z-camPos[2])>455)continue;
+          const forward=[Math.sin(yaw),0,Math.cos(yaw)];
+          drawMesh(streetMeshes.train,mat4FromBasis([x,y,z],[forward[2],0,-forward[0]],worldUp,forward,1));
+        }
+        continue;
+      }
+      const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
       if (Math.hypot(x-camPos[0],z-camPos[2])>455) continue;
       const front=[Math.sin(yaw),0,Math.cos(yaw)], right=[front[2],0,-front[0]];
       const pos=[x,y,z];
-      drawMesh(streetMeshes[actor.kind],mat4FromBasis(pos,right,worldUp,front,1));
+      drawMesh(actor.wreck?wreckedTaxiMesh:streetMeshes[actor.kind],mat4FromBasis(pos,right,worldUp,front,1));
       if(actor.kind!=='walker')continue;
       for(const side of [-1,1]) {
         const angle=side*Math.sin(sceneryTime*7.2+actor.offset)*0.45;
@@ -1943,6 +1994,7 @@
     lot[6]=true;
     rebuildCity=true;
     fallingBuildings.push({mesh:falling, started:sceneryTime, height:lot[4]});
+    spawnWreckFragments(impact,['masonry','masonry','glass','steel'],34,16,1.2);
     for(let i=0;i<28;i++){
       const angle=i*2.39996;
       const speed=2.2+(i%7)*1.15;
@@ -2154,6 +2206,192 @@
   }
 
   const gullModels = buildGullModels();
+
+  const fragmentMeshes = Object.fromEntries(Object.entries({
+    masonry:[0.51,0.45,0.38], steel:[0.29,0.35,0.40],
+    taxi:[0.91,0.60,0.12], glass:[0.34,0.60,0.68], cabin:[0.85,0.87,0.84]
+  }).map(([kind,color])=>{
+    const {addTri,upload}=createTriangleMesh();
+    const vertices=[[-0.53,-0.33,-0.27],[0.46,-0.24,-0.42],[0.43,-0.27,0.48],
+      [-0.38,-0.20,0.33],[0.08,0.43,0.12]];
+    const height=kind==='glass'?0.24:1;
+    const point=i=>[vertices[i][0],vertices[i][1]*height,vertices[i][2]];
+    for(const face of [[0,1,4],[1,2,4],[2,3,4],[3,0,4],[0,3,2],[0,2,1]]) {
+      addTri(...face.map(point),color);
+    }
+    return [kind,upload()];
+  }));
+
+  const wreckedTaxiMesh = (() => {
+    const {addQuad,upload}=createTriangleMesh();
+    const box=(...args)=>addModelBox(addQuad,...args);
+    box(0,0.39,0,1.69,0.54,3.65,[0.20,0.21,0.19]);
+    box(0,0.72,1.22,1.59,0.31,1.16,[0.80,0.52,0.10]);
+    box(-0.78,0.72,-0.43,0.12,0.46,1.41,[0.78,0.50,0.08]);
+    box(0.48,0.77,-1.31,0.52,0.51,0.56,[0.33,0.37,0.39]);
+    box(0.01,0.78,-0.34,0.64,0.24,1.03,[0.13,0.15,0.16]);
+    for(const z of [-1.22,1.25]) box(-0.72,0.27,z,0.30,0.53,0.61,[0.14,0.15,0.15]);
+    return upload();
+  })();
+
+  const splitShipMeshes = Object.fromEntries(Object.entries(SHIP_TYPES).map(([kind,size])=>{
+    const pieces=[-1,1].map(side=>{
+      const {addQuad,addTri,upload}=createTriangleMesh();
+      const hull=[0.16,0.25,0.34], deck=[0.51,0.53,0.51], torn=[0.28,0.22,0.20];
+      const L=size.halfLength, W=size.halfWidth;
+      const tip=side>0?[0,2.15,L]:[0,2.15,-L];
+      const left=[-W,2.3,side*0.34*L],right=[W,2.3,side*0.34*L];
+      const seam=[[-W,1.8,side*0.7],[-W*0.29,2.7,-side*1.2],[W*0.36,1.5,side*1.4],[W,2.58,0]];
+      const bottom=p=>[p[0]*0.79,p[1]-2.6,p[2]*0.98];
+      const rim=[tip,left,...seam,right];
+      for(let i=0;i<rim.length;i++){
+        const a=rim[i],b=rim[(i+1)%rim.length];
+        addQuad(a,b,bottom(b),bottom(a),i>=2&&i<=4?torn:hull);
+        addTri([0,2.26,side*L*0.54],a,b,deck);
+      }
+      if(kind==='cruise') {
+        const sideCabin=[0.74,0.75,0.72];
+        addModelBox(addQuad,0,3.85,side*L*0.41,W*1.60,3.15,L*0.59,sideCabin);
+        addModelBox(addQuad,0.28,6.02,side*L*0.5,W*1.20,1.4,L*0.40,sideCabin);
+        for(const x of [-1,1]) addModelBox(addQuad,x*W*0.81,4.55,side*L*0.41,0.075,0.45,L*0.51,[0.24,0.37,0.40]);
+      } else {
+        addModelBox(addQuad,side*0.32,3.6,side*L*0.42,W*1.26,2.6,L*0.45,[0.66,0.68,0.68]);
+      }
+      return upload();
+    });
+    return [kind,pieces];
+  }));
+
+  let wreckFragments=[];
+  let vehicleTargets=[];
+
+  function refreshVehicleTargets() {
+    vehicleTargets=[];
+    for(const boat of boats) {
+      if(boat.wreck)continue;
+      const [x,z,yaw]=sceneryPose(boat,sceneryTime);
+      vehicleTargets.push({actor:boat,kind:'ship',x,z,yaw,y:WATER_H,top:boat.top,
+        width:boat.halfWidth,length:boat.halfLength});
+    }
+    for(const actor of cityTraffic) {
+      if(actor.kind!=='taxi')continue;
+      const pose=actor.wreck || trafficPose(actor,sceneryTime);
+      vehicleTargets.push({actor,kind:'taxi',...pose,top:actor.wreck?0.76:1.76,width:0.86,length:1.96});
+    }
+  }
+
+  function vehicleAt(x,y,z,padding=0) {
+    for(const target of vehicleTargets) {
+      if(target.actor.wreck && target.kind==='ship')continue;
+      if(y<target.y-padding || y>target.y+target.top+padding ||
+        Math.abs(x-target.x)>target.length+target.width+padding ||
+        Math.abs(z-target.z)>target.length+target.width+padding)continue;
+      const sin=Math.sin(target.yaw),cos=Math.cos(target.yaw);
+      const dx=x-target.x,dz=z-target.z;
+      if(Math.abs(cos*dx-sin*dz)<=target.width+padding &&
+        Math.abs(sin*dx+cos*dz)<=target.length+padding)return target;
+    }
+    return null;
+  }
+
+  function spawnWreckFragments(impact,materials,count,spread,scale,floats=false) {
+    for(let i=0;i<count;i++){
+      const angle=i*2.39996+sceneryTime;
+      const speed=spread*(0.42+(i%8)*0.11);
+      const size=scale*(0.45+(i%9)*0.09);
+      wreckFragments.push({pos:[...impact],vx:Math.cos(angle)*speed,vz:Math.sin(angle)*speed,
+        vy:spread*(0.45+(i%5)*0.18),angle,spin:(i%2?1:-1)*(2.1+i%6),
+        age:0,life:8+(i%7)*1.15,size,kind:materials[i%materials.length],floats,settled:false});
+    }
+    if(wreckFragments.length>120)wreckFragments.splice(0,wreckFragments.length-120);
+  }
+
+  function damageVehicle(target,impact,power) {
+    const {actor,kind}=target;
+    if(actor.wreck)return;
+    actor.hull=(actor.hull || 0)+power;
+    const destroyed=actor.hull>=(kind==='taxi'?2:3);
+    if(!destroyed){
+      spawnWreckFragments(impact,['glass','steel'],4,4,0.29);
+      return;
+    }
+    actor.wreck={x:target.x,y:target.y,z:target.z,yaw:target.yaw,started:sceneryTime};
+    if(kind==='ship'){
+      spawnWreckFragments(impact,['steel','cabin','glass'],26,12,1.05,true);
+      impacts[impactCursor]={x:target.x,y:WATER_H,z:target.z,age:0,isWater:1};
+      impactCursor=(impactCursor+1)%impacts.length;
+    } else {
+      spawnWreckFragments(impact,['taxi','glass','steel'],15,8,0.54);
+    }
+  }
+
+  function advanceWreckFragments(dt) {
+    for(let i=wreckFragments.length-1;i>=0;i--){
+      const part=wreckFragments[i];
+      part.age+=dt;
+      if(part.age>=part.life){wreckFragments.splice(i,1);continue;}
+      if(part.settled){
+        if(part.floats){
+          part.pos[0]+=part.vx*dt;
+          part.pos[2]+=part.vz*dt;
+          part.pos[1]=sampleTerrainHeight(part.pos[0],part.pos[2])+part.size*0.24+
+            0.075*Math.sin(part.age*2.4+part.angle);
+          part.angle+=part.spin*dt;
+        }
+        continue;
+      }
+      const previousY=part.pos[1];
+      part.pos[0]+=part.vx*dt;
+      part.pos[2]+=part.vz*dt;
+      part.angle+=part.spin*dt;
+      if(!part.settled)part.vy-=19*dt;
+      part.pos[1]+=part.vy*dt;
+      const [x,,z]=part.pos;
+      let floor=sampleTerrainHeight(x,z)+part.size*0.24;
+      const bridge=EAST_RIVER_BRIDGE;
+      if(selectedMap.city && Math.abs(z-bridge.z)<bridge.halfWidth &&
+           Math.abs(x-bridge.x)<bridge.halfLength+bridge.ramp) {
+        const deck=bridgeRoadHeight(x)+part.size*0.24;
+        if(previousY>=deck-0.02)floor=Math.max(floor,deck);
+      }
+      if(part.pos[1]>floor)continue;
+      part.pos[1]=floor;
+      if(Math.abs(part.vy)>2.6 && floor-part.size*0.24>WATER_H+0.06){
+        part.vy*=-0.32;part.vx*=0.52;part.vz*=0.52;part.spin*=0.62;
+      }else{
+        part.settled=true;part.vy=0;
+        part.vx=part.floats?part.vx*0.13:0;part.vz=part.floats?part.vz*0.13:0;
+        part.spin=part.floats?part.spin*0.10:0;
+      }
+    }
+  }
+
+  function drawSplitShip(boat,drawMesh) {
+    const wreck=boat.wreck;
+    const t=sceneryTime-wreck.started;
+    if(t>8.0)return;
+    const front=[Math.sin(wreck.yaw),0,Math.cos(wreck.yaw)],right=[front[2],0,-front[0]];
+    for(const [index,mesh] of splitShipMeshes[boat.kind].entries()){
+      const side=index?1:-1;
+      const tilt=side*Math.min(0.48,t*0.34);
+      const up=[-front[0]*Math.sin(tilt),Math.cos(tilt),-front[2]*Math.sin(tilt)];
+      const forward=[front[0]*Math.cos(tilt),Math.sin(tilt),front[2]*Math.cos(tilt)];
+      const split=side*Math.min(7.5,t*2.4);
+      const pos=[wreck.x+front[0]*split,WATER_H-Math.max(0,t-0.7)**1.65,
+        wreck.z+front[2]*split];
+      drawMesh(mesh,mat4FromBasis(pos,right,up,forward,1),false,false,false);
+    }
+  }
+
+  function drawWreckFragments(drawMesh) {
+    for(const part of wreckFragments){
+      if(Math.hypot(part.pos[0]-camPos[0],part.pos[2]-camPos[2])>220)continue;
+      const sin=Math.sin(part.angle),cos=Math.cos(part.angle),roll=part.angle*1.35;
+      const fwd=[sin,0,cos],right=[cos*Math.cos(roll),Math.sin(roll),-sin*Math.cos(roll)];
+      const up=v3Cross(fwd,right);
+      drawMesh(fragmentMeshes[part.kind],mat4FromBasis(part.pos,right,up,fwd,part.size),false,false,false);
+    }
+  }
 
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
@@ -3265,6 +3503,7 @@
     }
     if (mapPanel.classList.contains('expanded')) {
       for (const boat of boats) {
+        if (boat.wreck) continue;
         const [x,z] = sceneryPose(boat,sceneryTime);
         mapCtx.fillStyle = '#8de1f5';
         mapCtx.fillRect(center + x*mapScale-2,center - z*mapScale-3,4,6);
@@ -3359,6 +3598,8 @@
         landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
         prepareCoastalTraffic();
         prepareCityTraffic();
+        wreckFragments=[];
+        refreshVehicleTargets();
         mapRaster = document.createElement('canvas');
         mapRaster.width = mapRaster.height = mapWidth;
         paintTerrainMap(mapRaster, selectedMap, sampleGroundHeight);
@@ -3622,7 +3863,9 @@
   }
 
   function updateBoatWakes() {
+    boatWakes.fill(0);
     for (const [i,boat] of boats.entries()) {
+      if(boat.wreck)continue;
       const [x,z,yaw] = sceneryPose(boat,sceneryTime);
       const length = boat.halfLength*0.96;
       boatWakes.set([x-Math.sin(yaw)*length,z-Math.cos(yaw)*length,yaw,boat.halfWidth],i*4);
@@ -3656,6 +3899,10 @@
 
   function drawCoastalTraffic(drawMesh) {
     for (const boat of boats) {
+      if (boat.wreck) {
+        drawSplitShip(boat,drawMesh);
+        continue;
+      }
       const [x,z,yaw] = sceneryPose(boat,sceneryTime);
       const front = [Math.sin(yaw),0,Math.cos(yaw)];
       const right = [front[2],0,-front[0]];
@@ -3851,16 +4098,11 @@
         finishFlight([x,surface+0.1,z], water ? 'Water impact' : 'Terrain collision', water);
         return;
       }
-      for (const boat of boats) {
-        if (y > WATER_H + boat.top + 0.5) continue;
-        const [bx,bz,yaw] = sceneryPose(boat,sceneryTime);
-        const dx = x-bx, dz = z-bz;
-        const across = Math.cos(yaw)*dx - Math.sin(yaw)*dz;
-        const along = Math.sin(yaw)*dx + Math.cos(yaw)*dz;
-        if (Math.abs(across) <= boat.halfWidth+0.5 && Math.abs(along) <= boat.halfLength+0.5) {
-          finishFlight(pos, 'Collision with ' + boat.name, false);
-          return;
-        }
+      const vehicle=vehicleAt(x,y,z,0.48);
+      if(vehicle){
+        damageVehicle(vehicle,pos,3);
+        finishFlight(pos,vehicle.kind==='ship'?'Collision with '+vehicle.actor.name:'Collision with taxi',false);
+        return;
       }
       if (!selectedMap.city) continue;
       const halfSpan=selectedAircraft==='saucer'?2.35:selectedAircraft==='fighter'?2.15:0.65;
@@ -3942,6 +4184,8 @@
     }
 
     sceneryTime += Math.min(rawDt, 0.12);
+    refreshVehicleTargets();
+    advanceWreckFragments(dt);
     const { basis, boundaryAssist } = crash
       ? { basis: getPlaneBasis(), boundaryAssist: false }
       : advanceFlight(dt);
@@ -3974,6 +4218,12 @@
         const [x,y,z]=m.pos;
         if(selectedMap.city && (breakBridgeRail(x,y,z,0.34)||isBridgeCollision(x,y,z,0.30))){
           bridgeHit=true;
+          break;
+        }
+        const vehicle=vehicleAt(x,y,z,0.18);
+        if(vehicle && !vehicle.actor.wreck){
+          damageVehicle(vehicle,m.pos,m.cannon?1:3);
+          structureHit=true;
           break;
         }
         const lot=cityLotAt(x,z);
@@ -4145,11 +4395,11 @@
     gl.uniform1i(uMesh.smooth, smoothScenery());
     gl.uniform3fv(uMesh.eye, camPos);
 
-    function drawMeshWithOutline(mesh, modelMat, emissive = false, cityFacade = false) {
+    function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true) {
       gl.uniform1i(uMesh.cityFacade, cityFacade);
       gl.bindVertexArray(mesh.vao);
       gl.uniformMatrix4fv(uMesh.model, false, modelMat);
-      if (!emissive && !smoothScenery()) {
+      if (outlined && !emissive && !smoothScenery()) {
         // Inverted-hull 1px dark outline
         gl.enable(gl.CULL_FACE);
         gl.cullFace(gl.FRONT);
@@ -4190,6 +4440,7 @@
     drawCoastalTraffic(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
     drawCityTraffic(drawMeshWithOutline);
+    drawWreckFragments(drawMeshWithOutline);
 
     if (!crash && viewIdx !== 1) {
       const planeScale = viewIdx === 2 ? 1.45 : 1.0;
