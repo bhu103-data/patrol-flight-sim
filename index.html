@@ -130,6 +130,8 @@
           <legend>Map</legend>
           <label><input type="radio" name="flightMap" value="coast" checked>Copper Coast<small>Bays, lakes and highlands</small></label>
           <label><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
+          <label><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
+          <label><input type="radio" name="flightMap" value="manhattan">Manhattan<small>New York waterfront, Central Park and skyline</small></label>
         </fieldset>
         <fieldset>
           <legend>Mode</legend>
@@ -225,6 +227,11 @@
     { name: 'South Bluffs', x: -300, z: -320, width: 250, depth: 220, elevation: 0.42 }
   ];
 
+  const ALDER_AIRFIELD = { x: 144, z: -210, halfWidth: 8, halfLength: 86, elevation: 17.5 };
+  const MANHATTAN_GRID = {
+    tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
+    blockWidth: 24, blockLength: 33
+  };
   const FLIGHT_MAPS = {
     coast: {
       landmarks: COAST_LANDMARKS,
@@ -238,6 +245,26 @@
         { name: 'East Bay Isle', x: 360, z: -180, width: 198, depth: 195, elevation: 0.77 }
       ],
       checkpoints: [[30,-85],[-65,24],[-153,164],[-103,308],[24,401]]
+    },
+    valley: {
+      airfield: ALDER_AIRFIELD,
+      spawn: [144, 32, -350],
+      landmarks: [
+        { name: 'Granite Ridge', x: -480, z: 270, width: 250, depth: 410, elevation: 0.58 },
+        { name: 'East Fork Range', x: 520, z: 165, width: 230, depth: 455, elevation: 0.54 },
+        { name: 'South Rim', x: -395, z: -370, width: 242, depth: 290, elevation: 0.47 }
+      ],
+      checkpoints: [[144,-246],[124,-93],[75,62],[-16,220],[-90,385]]
+    },
+    manhattan: {
+      city: MANHATTAN_GRID,
+      spawn: [-115, 57, -697],
+      landmarks: [
+        { name: 'Lower Manhattan', x: -85, z: -395 },
+        { name: 'Midtown', x: 11, z: -75 },
+        { name: 'Central Park', x: 79, z: 206 }
+      ],
+      checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     }
   };
   let selectedMap = FLIGHT_MAPS.coast;
@@ -252,7 +279,7 @@
   const workerSrc = `
     self.onmessage = function(e) {
       const N = e.data.size || 512;
-      const { span, landmarks, scale, water, islands } = e.data;
+      const { span, landmarks, scale, water, islands, airfield, city } = e.data;
       const last = N - 1;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       function oval(x, z, cx, cz, width, depth) {
@@ -302,6 +329,36 @@
         return sum / norm;
       }
 
+      function cityHeight(east, north) {
+        const localX = east - (city.tilt * north + city.offset);
+        const islandWidth = 118 - 77 * clamp((-north - 295) / 235, 0, 1)
+          - 68 * clamp((north - 400) / 260, 0, 1);
+        const waterfront = islandWidth + 8 * Math.sin(north / 42) + 4 * Math.cos(north / 19);
+        const island = north > -525 && north < 665 && Math.abs(localX) < waterfront;
+        const jersey = localX < -265 + 17 * Math.sin(north / 76) && north > -705;
+        const outerBoroughs = localX > 187 + 26 * Math.sin(north / 93) && north > -415;
+        if (!island && !jersey && !outerBoroughs) return (water - 4.4) / scale;
+
+        const elevation = water + 2.4;
+        if (island && Math.abs(localX) < city.parkHalfWidth &&
+            Math.abs(north - city.parkCenter) < city.parkHalfLength) {
+          return (elevation + 1.0 + 0.6 * Math.sin(north / 22) * Math.cos(localX / 14)) / scale;
+        }
+        const gx = localX / city.blockWidth;
+        const gz = north / city.blockLength;
+        const ix = Math.floor(gx), iz = Math.floor(gz);
+        if (Math.abs(gx - ix - 0.5) > 0.35 || Math.abs(gz - iz - 0.5) > 0.37) return elevation / scale;
+        if (island && Math.abs(localX) >= waterfront - 11) return elevation / scale;
+        const signature = hash(ix, iz, 946);
+        if (signature < 0.14) return elevation / scale;
+
+        const midtown = Math.exp(-(((north + 80) / 125) ** 2));
+        const downtown = Math.exp(-(((north + 399) / 69) ** 2));
+        const towers = Math.max(midtown, downtown * 0.88);
+        const building = island ? 4.5 + signature * 7 + towers * signature ** 2 * 28 : 3.5 + signature * 9;
+        return Math.min(0.99, (elevation + building) / scale);
+      }
+
       const height = new Float32Array(N * N);
       const biome = new Float32Array(N * N);
       const conifer = new Float32Array(N * N);
@@ -316,6 +373,11 @@
           const idx = y * N + x;
           const east = (u - 0.5) * span;
           const north = (v - 0.5) * span;
+          if (city) {
+            height[idx] = cityHeight(east, north);
+            biome[idx] = hash(Math.floor(east / 8), Math.floor(north / 8), 842);
+            continue;
+          }
           const ridge = ridged(u, v, 9, 5, 202);
           const detail = fbm(u, v, 25, 4, 303);
           const land = oval(east, north, -105, 15, 670, 650);
@@ -329,7 +391,21 @@
           const coast = clamp(0.045 + land * (0.25 + (detail - 0.5) * 0.29)
             + headland * 0.24 + peaks * (0.59 + 0.48 * ridge) - lake * 0.30 - bay * 0.23,
             0.02, 0.98);
-          height[idx] = islands ? clamp(0.04 + peaks * (0.69 + detail * 0.38), 0.02, 0.98) : coast;
+          if (airfield) {
+            const center = 83 * Math.sin(north / 178) + 36 * Math.sin(north / 69);
+            const riverDist = Math.abs(east - center);
+            const channelWidth = 15 + 5 * Math.sin(north / 85);
+            const banks = clamp((riverDist - channelWidth) / 35, 0, 1);
+            const ground = 0.305 + peaks * (0.68 + ridge * 0.51) + (detail - 0.5) * 0.065;
+            const channel = (water - 2.5) / scale;
+            const valley = channel + (ground - channel) * banks * banks * (3 - 2 * banks);
+            const runwayDist = Math.max(Math.abs(east - airfield.x) - airfield.halfWidth,
+              Math.abs(north - airfield.z) - airfield.halfLength);
+            const blend = clamp(runwayDist / 28, 0, 1);
+            height[idx] = clamp(airfield.elevation / scale * (1 - blend) + valley * blend, 0.02, 0.98);
+          } else {
+            height[idx] = islands ? clamp(0.04 + peaks * (0.69 + detail * 0.38), 0.02, 0.98) : coast;
+          }
 
           const bPatch = fbm(u, v, 8, 3, 505);
           const bFine = valueNoise(u * 64, v * 64, 64, 606);
@@ -443,6 +519,8 @@
     out vec4 fragColor;
 
     uniform sampler2D uTerrain;
+    uniform bool uAlderValley;
+    uniform bool uManhattan;
     uniform vec3 uCamPos;
     uniform vec3 uCamFwd;
     uniform vec3 uCamRight;
@@ -568,7 +646,9 @@
           }
           prevT = t;
           float hDiff = p.y - surfH;
-          t += max(0.65, hDiff * 0.42 + t * 0.011);
+          float stride = max(0.65, hDiff * 0.42 + t * 0.011);
+          if (uManhattan && p.y < TERRAIN_SCALE + 1.0) stride = min(stride, 9.0);
+          t += stride;
           if (t > maxT) break;
         }
       }
@@ -649,6 +729,7 @@
 
           // Apply shadow tint (violet shadows)
           vec3 shadowTint = mix(vec3(0.28, 0.22, 0.42), vec3(1.04, 0.96, 0.88), clamp(litFactor, 0.0, 1.0));
+          if (uAlderValley || uManhattan) waterCol = mix(waterCol, vec3(0.12, 0.29, 0.29), 0.35);
           col = waterCol * shadowTint;
         } else {
           // LAND RENDERING
@@ -689,6 +770,53 @@
           float snowMask = smoothstep(16.8, 19.2, alt) * (1.0 - smoothstep(0.36, 0.55, slope));
           albedo = mix(albedo, snowCol, snowMask);
 
+          if (uAlderValley) {
+            float grain = vnoise(p.xz * 0.34);
+            vec3 woodland = mix(vec3(0.16, 0.29, 0.16), vec3(0.32, 0.47, 0.25), grain * 0.6 + biome * 0.4);
+            vec2 fieldUV = vec2(p.x + p.z * 0.23, p.z - p.x * 0.13) / vec2(37.0, 57.0);
+            float crop = hash12(floor(fieldUV));
+            vec2 cell = abs(fract(fieldUV) - 0.5);
+            float hedges = smoothstep(0.455, 0.49, max(cell.x, cell.y));
+            vec3 field = mix(vec3(0.46, 0.58, 0.25), vec3(0.67, 0.54, 0.30), crop);
+            field *= 0.94 + 0.06 * sin(fieldUV.x * 52.0);
+            field = mix(field, woodland, hedges);
+            float farmland = (1.0 - smoothstep(7.0, 12.0, alt)) * smoothstep(0.15, 1.5, alt);
+            albedo = mix(woodland, field, farmland);
+            albedo = mix(albedo, vec3(0.44, 0.45, 0.47),
+              max(smoothstep(17.0, 27.0, alt), smoothstep(0.17, 0.39, slope)));
+            albedo = mix(albedo, snowCol, smoothstep(29.0, 36.0, alt) * (1.0 - smoothstep(0.3, 0.58, slope)));
+
+            vec2 runway = p.xz - vec2(${ALDER_AIRFIELD.x.toFixed(1)}, ${ALDER_AIRFIELD.z.toFixed(1)});
+            vec2 runwaySize = vec2(${ALDER_AIRFIELD.halfWidth.toFixed(1)}, ${ALDER_AIRFIELD.halfLength.toFixed(1)});
+            if (all(lessThan(abs(runway), runwaySize))) {
+              float stripe = (1.0 - smoothstep(0.26, 0.58, abs(runway.x))) * step(0.55, fract(runway.y / 13.0));
+              float edge = smoothstep(runwaySize.x - 0.8, runwaySize.x - 0.45, abs(runway.x));
+              float threshold = step(runwaySize.y - 13.0, abs(runway.y)) *
+                step(0.55, fract((runway.x + runwaySize.x) / 2.0));
+              albedo = mix(vec3(0.24, 0.25, 0.28), vec3(0.91, 0.92, 0.86), max(stripe, max(edge, threshold)));
+            }
+          }
+
+          if (uManhattan) {
+            float crossIsland = p.x - (${MANHATTAN_GRID.tilt} * p.z + ${MANHATTAN_GRID.offset.toFixed(1)});
+            vec2 blocks = vec2(crossIsland, p.z) / vec2(${MANHATTAN_GRID.blockWidth.toFixed(1)}, ${MANHATTAN_GRID.blockLength.toFixed(1)});
+            float block = hash12(floor(blocks));
+            bool park = abs(crossIsland) < ${MANHATTAN_GRID.parkHalfWidth.toFixed(1)}
+              && abs(p.z - ${MANHATTAN_GRID.parkCenter.toFixed(1)}) < ${MANHATTAN_GRID.parkHalfLength.toFixed(1)};
+            vec3 pavement = mix(vec3(0.25,0.26,0.29), vec3(0.41,0.42,0.43), smoothstep(2.1, 3.4, alt));
+            vec3 masonry = mix(vec3(0.42,0.46,0.52), vec3(0.73,0.68,0.61), block);
+            albedo = mix(pavement, masonry, smoothstep(4.0, 8.0, alt));
+            if (slope > 0.32 && alt > 4.0) {
+              float rows = step(0.40, fract(p.y * 0.68));
+              float panes = step(0.38, fract((p.x + p.z) * 0.46));
+              vec3 glass = mix(vec3(0.20,0.29,0.42), vec3(0.85,0.73,0.48), biome * biome);
+              albedo = mix(albedo, glass, rows * panes * 0.65);
+            }
+            if (park) {
+              albedo = mix(vec3(0.16,0.30,0.18), vec3(0.36,0.49,0.27), vnoise(p.xz * 0.22));
+            }
+          }
+
           // Scorch marks & glowing embers from land missile impacts
           for (int k = 0; k < 8; k++) {
             float age = uImpacts[k].w;
@@ -708,6 +836,10 @@
 
           vec3 warmSun = vec3(1.08, 0.84, 0.62);
           vec3 violetAmbient = vec3(0.34, 0.26, 0.48);
+          if (uAlderValley || uManhattan) {
+            warmSun = vec3(0.96, 0.93, 0.82);
+            violetAmbient = vec3(0.43, 0.47, 0.53);
+          }
           col = albedo * (violetAmbient + warmSun * direct * 0.92);
         }
 
@@ -1985,6 +2117,7 @@
     raster.width = raster.height = mapWidth;
     const ctx = raster.getContext('2d');
     const pixels = ctx.createImageData(mapWidth, mapWidth);
+    const { airfield, city } = selectedMap;
     for (let y = 0; y < mapWidth; y++) {
       for (let x = 0; x < mapWidth; x++) {
         const east = (x + 0.5 - mapWidth / 2) / mapScale;
@@ -1993,13 +2126,32 @@
         const offset = (y * mapWidth + x) * 4;
         const band = Math.floor((h - WATER_H) / 4);
         const water = h <= WATER_H;
-        pixels.data[offset] = water ? 31 : band < 1 ? 117 : 104 + band * 12;
-        pixels.data[offset + 1] = water ? 53 : band < 1 ? 106 : 72 + band * 10;
-        pixels.data[offset + 2] = water ? 80 : band < 1 ? 66 : 48 + band * 11;
+        if (city && !water) {
+          const localX = east - (city.tilt * north + city.offset);
+          const park = Math.abs(localX) < city.parkHalfWidth && Math.abs(north - city.parkCenter) < city.parkHalfLength;
+          pixels.data[offset] = park ? 74 : 99 + band * 12;
+          pixels.data[offset + 1] = park ? 121 : 106 + band * 12;
+          pixels.data[offset + 2] = park ? 69 : 116 + band * 11;
+        } else if (airfield && !water) {
+          pixels.data[offset] = 70 + band * 13;
+          pixels.data[offset + 1] = 104 + band * 8;
+          pixels.data[offset + 2] = 64 + band * 12;
+        } else {
+          pixels.data[offset] = water ? 31 : band < 1 ? 117 : 104 + band * 12;
+          pixels.data[offset + 1] = water ? 53 : band < 1 ? 106 : 72 + band * 10;
+          pixels.data[offset + 2] = water ? 80 : band < 1 ? 66 : 48 + band * 11;
+        }
         pixels.data[offset + 3] = 255;
       }
     }
     ctx.putImageData(pixels, 0, 0);
+    if (airfield) {
+      const center = mapWidth / 2;
+      ctx.fillStyle = '#e4ddcb';
+      ctx.fillRect(center + (airfield.x - airfield.halfWidth) * mapScale,
+        center - (airfield.z + airfield.halfLength) * mapScale,
+        airfield.halfWidth * 2 * mapScale, airfield.halfLength * 2 * mapScale);
+    }
     ctx.fillStyle = '#0b1024a6';
     ctx.beginPath();
     ctx.rect(0, 0, mapWidth, mapWidth);
@@ -2131,7 +2283,7 @@
         missionStatus.hidden = !challenge;
         updateMission(0);
         Object.assign(plane, {
-          pos: [30, 40, -185], yaw: 0, pitch: 0, bank: 0, rollAnim: 0,
+          pos: [...(selectedMap.spawn || [30, 40, -185])], yaw: 0, pitch: 0, bank: 0, rollAnim: 0,
           speed: AIRCRAFT[selectedAircraft].cruise, afterburner: false
         });
         mouseNorm.x = mouseNorm.y = 0;
@@ -2160,7 +2312,7 @@
       };
       worker.postMessage({
         size: MAP_SIZE, span: MAP_SPAN, landmarks: selectedMap.landmarks,
-        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands
+        scale: TERRAIN_SCALE, water: WATER_H, islands: selectedMap.islands, airfield: selectedMap.airfield, city: selectedMap.city
       });
     } catch (error) {
       console.error(error);
@@ -2190,6 +2342,8 @@
   // Uniform Locations
   const uWorld = {
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
+    alderValley: gl.getUniformLocation(worldProg, 'uAlderValley'),
+    manhattan: gl.getUniformLocation(worldProg, 'uManhattan'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
     camFwd: gl.getUniformLocation(worldProg, 'uCamFwd'),
     camRight: gl.getUniformLocation(worldProg, 'uCamRight'),
@@ -2464,6 +2618,8 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
     gl.uniform1i(uWorld.terrain, 0);
+    gl.uniform1i(uWorld.alderValley, Boolean(selectedMap.airfield));
+    gl.uniform1i(uWorld.manhattan, Boolean(selectedMap.city));
     gl.uniform3fv(uWorld.camPos, camPos);
     gl.uniform3fv(uWorld.camFwd, camFwd);
     gl.uniform3fv(uWorld.camRight, camRight);
