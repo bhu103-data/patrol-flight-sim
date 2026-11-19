@@ -4239,6 +4239,11 @@
         const b=[points[i][0],ground+0.24,points[i][1]];
         pushRoadStrip(addQuad,a,b,width+1.2,paving);
         pushRoadStrip(addQuad,a,b,width,asphalt,0.028);
+        const distance=Math.hypot(b[0]-a[0],b[2]-a[2]);
+        for(let along=2;along+1.55<distance-1;along+=4.6){
+          const point=t=>[lerp(a[0],b[0],t/distance),a[1],lerp(a[2],b[2],t/distance)];
+          pushRoadStrip(addQuad,point(along),point(along+1.55),0.085,[0.83,0.78,0.67],0.037);
+        }
       }
     }
 
@@ -4366,6 +4371,22 @@
     hotelTower('Bellagio',{x:-107,z:-151,width:48,depth:11,floors:20,pitch:1.66,curve:26});
     hotelTower('Bellagio Spa Tower',{x:-125,z:-185,width:19,depth:10,floors:16,pitch:1.54});
     entrance('BELLAGIO',-101.5,-151,1,10.6);
+    for(const direction of [-1,1])for(let bay=0;bay<5;bay++){
+      const z=-151+direction*(8.2+bay*2.4);
+      const x=-101.5+26*((z+151)/48)**2;
+      box(x+0.36,ground+1.72,z,0.72,3.44,2.38,limestone);
+      box(x+0.746,ground+1.24,z,0.064,2.45,1.63,glass);
+      lamp(x+0.781,ground+1.11,z,0.034,1.94,1.40,[0.83,0.59,0.36]);
+      box(x+0.813,ground+1.29,z,0.067,2.42,0.061,copper);
+      box(x+0.813,ground+1.64,z,0.067,0.059,1.59,copper);
+      box(x+0.78,ground+0.34,z,0.24,0.18,1.83,cream);
+      box(x+0.79,ground+3.09,z,0.23,0.18,2.39,cream);
+      const arch=(angle,radius)=>[x+0.83,ground+2.02+Math.sin(angle)*radius,z+Math.cos(angle)*radius];
+      for(let stone=0;stone<10;stone++){
+        const a=stone*Math.PI/10,b=(stone+1)*Math.PI/10;
+        addQuad(arch(a,0.74),arch(b,0.74),arch(b,0.90),arch(a,0.90),stone===4?cream:limestone);
+      }
+    }
     mass('Bellagio roof pavilion',-107,-151,8.8,14,31.7,limestone);
     box(-107,ground+31.80,-151,9.25,0.28,14.4,cream);
     box(-107,ground+32.03,-151,7.1,0.45,11.8,copper);
@@ -4528,6 +4549,8 @@
       for(const z of [29.8,32.2]){
         addQuad([a,ya,z],[a,ya+0.45,z],[b,yb+0.45,z],[b,yb,z],limestone);
         box(a,ya+0.49,z,0.12,0.23,0.16,cream);
+        addRideBeam(addQuad,[a,ya+0.63,z],[b,yb+0.63,z],0.12,cream);
+        if(i%4===0)lamp(a,ya+0.71,z,0.19,0.15,0.18,warm);
       }
     }
     solidAt('Venetian canal footbridge',canalX,31,canalY+0.31,canalY+2.4,5.6,1.2);
@@ -4679,6 +4702,23 @@
       lamp(x,ground+0.34,z,0.16,0.039,0.16,[0.71,0.75,0.57]);
       sceneryMovers.push({kind:'fountain',x,y:ground+0.33,z,phase:i*0.57,heightScale:0.27});
     }
+    // Terraced rock and moving sheets of water mark the Wynn forecourt.
+    const fallsX=3.1,fallsZ=185.2;
+    for(let tier=0;tier<4;tier++){
+      const x=fallsX+tier*0.62,y=0.73+tier*0.67;
+      for(let stone=0;stone<7-tier;stone++){
+        const z=fallsZ+(stone-(6-tier)/2)*0.97+Math.sin(stone+tier)*0.21;
+        box(x,ground+y/2,z,1.44,y,1.32,
+          [0.36+0.028*(stone%3),0.32+0.021*(stone%3),0.28+0.014*(stone%3)]);
+      }
+    }
+    solidAt('Wynn waterfall rockwork',fallsX+0.8,fallsZ,ground,ground+2.8,1.52,3.15);
+    for(const [index,dz] of [-1.64,-0.57,0.42,1.3].entries()){
+      const z=fallsZ+dz,x=fallsX-0.7+(index%2)*0.13;
+      sceneryMovers.push({kind:'resortFalls',x,z,y:ground+0.36,height:1.9+index*0.16,phase:index*1.7});
+      lamp(x-0.63,ground+0.38,z,0.21,0.046,0.24,[0.55,0.75,0.79]);
+    }
+    for(const [x,z,h] of [[5.6,182.8,3.8],[5.1,187.8,4.3],[6.6,185.1,4.7]])palm(x,z,h);
 
     const luxor=VEGAS_SITES.pyramid;
     place(luxor.name,luxor);
@@ -5382,6 +5422,13 @@
         const jet=(1.05+wave*(1.75+8.1*crest))*(actor.heightScale??1);
         const model=mat4FromBasis([actor.x,actor.y,actor.z],[1,0,0],[0,jet,0],[0,0,1],1);
         drawMesh(hotelAnimations.jet,model,true);
+      } else if(actor.kind==='resortFalls'){
+        for(let stream=0;stream<3;stream++){
+          const shift=Math.sin(sceneryTime*9+actor.phase+stream*2.4);
+          const model=mat4FromBasis([actor.x-0.07*shift,actor.y,actor.z+(stream-1)*0.18],
+            [0.58,0,0],[-0.21,actor.height+0.15*shift,0],[0,0,0.72],1);
+          drawMesh(hotelAnimations.jet,model,true);
+        }
       } else if(actor.kind==='gondola'){
         const angle=sceneryTime*0.13+(actor.reverse?Math.PI:0);
         const z=actor.z+11.2*Math.sin(angle), sign=Math.cos(angle)>0?1:-1;
