@@ -535,28 +535,88 @@
     wheel:{name:'Skywheel',x:83,z:43},
     airport:{name:'Desert Airport',x:211,z:-463,halfLength:92,halfWidth:9.4}
   };
-  // A compact, flight-friendly interpretation of central Washington. Positions
-  // preserve the major National Mall relationships but are not survey-grade.
+  // A flight-scale interpretation of the L'Enfant core. The Mall axes, named
+  // avenues and landmark ordering are preserved while footprints are enlarged
+  // enough to read from the air; this is not survey-grade GIS geometry.
   const DC_SITES = {
-    lincoln:{name:'Lincoln Memorial',x:-360,z:0},
-    wwii:{name:'World War II Memorial',x:-210,z:0},
-    monument:{name:'Washington Monument',x:-55,z:0},
-    whiteHouse:{name:'White House',x:-115,z:166},
-    jefferson:{name:'Jefferson Memorial',x:-62,z:-230},
-    capitol:{name:'U.S. Capitol',x:355,z:0}
+    lincoln:{name:'Lincoln Memorial',x:-590,z:0},
+    wwii:{name:'World War II Memorial',x:-410,z:0},
+    monument:{name:'Washington Monument',x:-210,z:0},
+    whiteHouse:{name:'White House',x:-300,z:260},
+    jefferson:{name:'Jefferson Memorial',x:-220,z:-380},
+    capitol:{name:'U.S. Capitol',x:470,z:0},
+    mlk:{name:'Martin Luther King Jr. Memorial',x:-385,z:-270},
+    fdr:{name:'Franklin D. Roosevelt Memorial',x:-485,z:-330},
+    vietnam:{name:'Vietnam Veterans Memorial',x:-525,z:88},
+    korean:{name:'Korean War Veterans Memorial',x:-545,z:-82},
+    supreme:{name:'U.S. Supreme Court',x:535,z:42},
+    library:{name:'Library of Congress',x:570,z:-52},
+    union:{name:'Union Station',x:535,z:285},
+    pentagon:{name:'The Pentagon',x:-625,z:-585},
+    kennedy:{name:'Kennedy Center',x:-685,z:255}
   };
-  const DC_STREETS = [
-    [[-475,55],[-360,55],[-210,55],[-55,55],[120,55],[355,55],[510,55]],
-    [[-475,-55],[-360,-55],[-210,-55],[-55,-55],[120,-55],[355,-55],[510,-55]],
-    [[-420,166],[-250,166],[-115,166],[35,166],[200,166],[410,166]],
-    [[-420,-166],[-250,-166],[-62,-166],[100,-166],[280,-166],[430,-166]],
-    [[-360,-250],[-360,-55],[-360,55],[-360,245]],
-    [[-210,-250],[-210,-55],[-210,55],[-210,250]],
-    [[-55,-320],[-55,-55],[-55,55],[-55,310]],
-    [[120,-270],[120,-55],[120,55],[120,270]],
-    [[355,-245],[355,-55],[355,55],[355,245]],
-    [[-420,-205],[-250,-105],[-55,0],[120,90],[315,205]],
-    [[-410,215],[-245,105],[-55,0],[120,-90],[330,-220]]
+  const DC_ROADS = [
+    {name:'CONSTITUTION AVE NW',width:11.4,points:[[-760,78],[-590,78],[-410,78],[-210,78],[20,78],[250,78],[470,78],[720,78]]},
+    {name:'INDEPENDENCE AVE SW',width:11.4,points:[[-720,-78],[-590,-78],[-410,-78],[-210,-78],[20,-78],[250,-78],[470,-78],[710,-78]]},
+    {name:'PENNSYLVANIA AVE NW',width:12.2,points:[[-650,365],[-500,325],[-300,260],[-120,190],[80,135],[270,82],[470,0],[650,-65]]},
+    {name:'MASSACHUSETTS AVE NW',width:10.6,points:[[-720,500],[-520,440],[-300,370],[-80,310],[150,260],[350,225],[535,285],[720,340]]},
+    {name:'K ST NW',width:9.4,points:[[-760,455],[-550,455],[-300,455],[-50,455],[210,455],[470,455],[720,455]]},
+    {name:'H ST NW',width:8.8,points:[[-740,350],[-520,350],[-300,350],[-80,350],[150,350],[350,350],[600,350]]},
+    {name:'E ST NW',width:8.4,points:[[-690,185],[-500,185],[-300,185],[-100,185],[120,185],[330,185],[620,185]]},
+    {name:'MAINE AVE SW',width:9.4,points:[[-650,-300],[-520,-355],[-370,-410],[-220,-430],[-70,-410],[80,-345],[210,-250]]},
+    {name:'23RD ST NW',width:8.5,points:[[-590,-520],[-590,-330],[-590,-78],[-590,78],[-590,300],[-590,520]]},
+    {name:'17TH ST NW',width:8.5,points:[[-410,-520],[-410,-270],[-410,-78],[-410,78],[-410,260],[-410,520]]},
+    {name:'15TH ST NW',width:8.5,points:[[-300,-500],[-300,-260],[-300,-78],[-300,78],[-300,260],[-300,520]]},
+    {name:'14TH ST NW',width:10.4,points:[[-210,-650],[-210,-380],[-210,-78],[-210,78],[-210,300],[-210,560]]},
+    {name:'12TH ST NW',width:8.2,points:[[-100,-520],[-100,-260],[-100,-78],[-100,78],[-100,280],[-100,520]]},
+    {name:'7TH ST NW',width:9.2,points:[[80,-520],[80,-250],[80,-78],[80,78],[80,260],[80,520]]},
+    {name:'3RD ST NW',width:8.4,points:[[250,-470],[250,-250],[250,-78],[250,78],[250,260],[250,500]]},
+    {name:'N CAPITOL ST',width:10.2,points:[[470,-40],[470,78],[470,250],[470,500],[470,700]]},
+    {name:'S CAPITOL ST',width:10.2,points:[[470,-650],[470,-420],[470,-220],[470,-78],[470,0]]},
+    {name:'VIRGINIA AVE NW',width:8.8,points:[[-720,390],[-570,300],[-410,210],[-210,95],[-20,-10],[170,-115]]},
+    {name:'MARYLAND AVE SW',width:8.8,points:[[-120,-370],[80,-270],[250,-180],[470,0],[650,120]]},
+    {name:'OHIO DR SW',width:7.8,points:[[-610,-180],[-560,-330],[-450,-450],[-290,-510],[-130,-485],[-35,-390]]}
+  ];
+  const DC_STREETS=DC_ROADS.map(road=>road.points);
+  const DC_BUILDINGS = [
+    {name:'National Museum of American History',x:-300,z:112,w:86,d:42,h:18,type:'museum'},
+    {name:'National Museum of African American History',x:-390,z:112,w:60,d:44,h:22,type:'bronze'},
+    {name:'National Museum of Natural History',x:-100,z:112,w:91,d:45,h:21,type:'museum'},
+    {name:'National Gallery of Art',x:235,z:112,w:108,d:44,h:19,type:'museum'},
+    {name:'National Air and Space Museum',x:105,z:-115,w:105,d:42,h:17,type:'museum'},
+    {name:'Hirshhorn Museum',x:-5,z:-115,w:58,d:58,h:19,type:'round'},
+    {name:'Smithsonian Castle',x:-105,z:-116,w:78,d:38,h:25,type:'castle'},
+    {name:'Freer Gallery',x:-205,z:-116,w:55,d:38,h:17,type:'museum'},
+    {name:'National Museum of the American Indian',x:250,z:-118,w:72,d:47,h:18,type:'curved'},
+    {name:'National Archives',x:75,z:205,w:70,d:41,h:20,type:'museum'},
+    {name:'Old Post Office',x:-90,z:255,w:72,d:48,h:33,type:'tower'},
+    {name:'Treasury Building',x:-215,z:260,w:68,d:44,h:19,type:'office'},
+    {name:'Eisenhower Executive Office Building',x:-385,z:260,w:80,d:52,h:23,type:'office'},
+    {name:'FBI Headquarters',x:-5,z:260,w:94,d:52,h:25,type:'brutalist'},
+    {name:'Department of Justice',x:110,z:255,w:70,d:48,h:21,type:'office'},
+    {name:'National Portrait Gallery',x:65,z:350,w:82,d:48,h:20,type:'museum'},
+    {name:'Ford’s Theatre',x:-40,z:350,w:44,d:32,h:17,type:'brick'},
+    {name:'Federal Reserve',x:-500,z:180,w:66,d:42,h:16,type:'office'},
+    {name:'State Department',x:-650,z:145,w:94,d:52,h:22,type:'office'},
+    {name:'Watergate Complex',x:-655,z:330,w:96,d:60,h:24,type:'curved'},
+    {name:'Ronald Reagan Building',x:-105,z:185,w:100,d:48,h:22,type:'office'},
+    {name:'Rayburn House Office Building',x:520,z:-145,w:98,d:56,h:21,type:'office'},
+    {name:'Cannon House Office Building',x:610,z:-60,w:78,d:48,h:19,type:'office'},
+    {name:'Russell Senate Office Building',x:560,z:125,w:86,d:54,h:22,type:'office'},
+    {name:'Dirksen Senate Office Building',x:650,z:155,w:78,d:50,h:22,type:'office'},
+    {name:"L'Enfant Plaza",x:65,z:-265,w:110,d:66,h:26,type:'office'},
+    {name:'Bureau of Engraving and Printing',x:-305,z:-160,w:88,d:46,h:18,type:'brick'},
+    {name:'Kennedy Center',x:-685,z:255,w:115,d:58,h:28,type:'modern'},
+    {name:'Union Station',x:535,z:285,w:110,d:58,h:29,type:'station'},
+    {name:'The Pentagon',x:-625,z:-585,w:142,d:130,h:19,type:'pentagon'}
+  ];
+  const DC_SIGNS = [
+    ['CONSTITUTION AVE NW',-410,82],['17TH ST NW',-406,78],['15TH ST NW',-296,78],
+    ['14TH ST NW',-206,78],['7TH ST NW',84,78],['3RD ST NW',254,78],
+    ['INDEPENDENCE AVE SW',-210,-82],['PENNSYLVANIA AVE NW',-298,266],
+    ['K ST NW',-100,459],['H ST NW',80,354],['E ST NW',250,189],
+    ['MASSACHUSETTS AVE NW',470,270],['N CAPITOL ST',474,350],
+    ['S CAPITOL ST',474,-250],['MAINE AVE SW',-365,-414],['OHIO DR SW',-500,-394]
   ];
   const FLIGHT_MAPS = {
     coast: {
@@ -645,17 +705,20 @@
     dc: {
       name:'Washington, DC',
       dc:DC_SITES,
-      spawn:[-500,48,-330],
+      spawn:[-760,58,-590],
       tour:[
-        {name:DC_SITES.lincoln.name,pos:[-360,45,-80]},
-        {name:DC_SITES.wwii.name,pos:[-210,40,-72]},
-        {name:DC_SITES.monument.name,pos:[-55,70,-92]},
-        {name:DC_SITES.whiteHouse.name,pos:[-115,43,96]},
-        {name:DC_SITES.jefferson.name,pos:[-62,43,-305]},
-        {name:DC_SITES.capitol.name,pos:[355,56,-96]}
+        {name:DC_SITES.pentagon.name,pos:[-625,58,-690]},
+        {name:DC_SITES.lincoln.name,pos:[-590,48,-105]},
+        {name:DC_SITES.wwii.name,pos:[-410,45,-96]},
+        {name:DC_SITES.monument.name,pos:[-210,82,-128]},
+        {name:DC_SITES.whiteHouse.name,pos:[-300,48,165]},
+        {name:DC_SITES.jefferson.name,pos:[-220,48,-490]},
+        {name:'Smithsonian Museums',pos:[20,52,-170]},
+        {name:DC_SITES.capitol.name,pos:[470,68,-132]},
+        {name:DC_SITES.union.name,pos:[535,58,190]}
       ],
-      landmarks:Object.values(DC_SITES).map(site=>({ ...site, width:55, depth:55, elevation:0.08 })),
-      checkpoints:[[-360,0],[-210,0],[-55,0],[-115,166],[355,0]]
+      landmarks:Object.values(DC_SITES).map(site=>({ ...site, width:64, depth:64, elevation:0.08 })),
+      checkpoints:[[-625,-585],[-590,0],[-210,0],[-300,260],[470,0]]
     }
   };
   let selectedMap = FLIGHT_MAPS.manhattan;
@@ -2073,30 +2136,67 @@
     const gold=[0.88,0.61,0.16], paleGold=[0.95,0.77,0.31];
     const joint=[0.22,0.24,0.25], glow=[0.32,0.88,1.0];
 
+    // Faceted tapered shells read as curved armor at normal flight distance,
+    // while remaining a single lightweight static mesh.
+    const shell=(mesh,x,z,y0,y1,rx0,rz0,rx1,rz1,color,sides=8)=>{
+      const point=(y,rx,rz,i)=>{
+        const a=(i+0.5)*Math.PI*2/sides;
+        return [x+Math.sin(a)*rx,y,z+Math.cos(a)*rz];
+      };
+      for(let i=0;i<sides;i++)mesh.addQuad(
+        point(y0,rx0,rz0,i),point(y0,rx0,rz0,i+1),
+        point(y1,rx1,rz1,i+1),point(y1,rx1,rz1,i),color);
+      for(let i=0;i<sides;i++){
+        mesh.addTri([x,y0,z],point(y0,rx0,rz0,i+1),point(y0,rx0,rz0,i),color);
+        mesh.addTri([x,y1,z],point(y1,rx1,rz1,i),point(y1,rx1,rz1,i+1),color);
+      }
+    };
+
     // Mark 42-inspired modular armor: gold-dominant plates with deep red
     // shoulders, boots and torso sections over a dark articulated undersuit.
-    box(body,0,0.30,0,0.78,1.10,0.46,gold);
-    box(body,0,0.37,0.25,0.61,0.72,0.13,paleGold);
-    box(body,0,0.92,0.02,0.57,0.38,0.49,red);
-    box(body,0,1.21,0.02,0.48,0.36,0.47,gold);
-    box(body,0,1.23,0.255,0.40,0.23,0.045,paleGold);
-    box(body,0,1.15,0.278,0.23,0.075,0.035,deepRed);
+    shell(body,0,0,-0.16,0.82,0.32,0.22,0.43,0.25,gold,10);
+    shell(body,0,0,0.72,1.03,0.43,0.25,0.30,0.22,red,10);
+    // Chest plate, abdominal ribs and raised collar.
+    box(body,0,0.47,0.245,0.63,0.58,0.105,paleGold);
+    for(const side of [-1,1])for(let row=0;row<3;row++)
+      box(body,side*(0.15+row*0.018),0.12+row*0.15,0.255,0.25,0.095,0.055,row===1?red:gold);
+    box(body,0,0.88,0.02,0.66,0.23,0.49,deepRed);
+    box(body,0,1.00,0.02,0.48,0.12,0.43,gold);
+
+    // Multi-plane helmet: red crown, gold faceplate, jaw and cheek panels.
+    shell(body,0,0.005,1.00,1.43,0.27,0.235,0.235,0.215,red,10);
+    box(body,0,1.235,0.232,0.39,0.27,0.055,gold);
+    body.addTri([-0.195,1.37,0.264],[0.195,1.37,0.264],[0,1.49,0.16],red);
+    body.addTri([-0.195,1.10,0.265],[0.195,1.10,0.265],[0,0.99,0.19],deepRed);
+    box(body,-0.225,1.13,0.11,0.085,0.22,0.22,gold);
+    box(body,0.225,1.13,0.11,0.085,0.22,0.22,gold);
     for(const side of [-1,1]){
-      box(body,side*0.49,0.76,0,0.31,0.35,0.40,red);
-      box(body,side*0.56,0.34,0.03,0.25,0.63,0.30,gold);
-      box(body,side*0.57,-0.03,0.05,0.25,0.22,0.31,red);
-      box(body,side*0.24,-0.42,0.01,0.31,0.72,0.36,gold);
-      box(body,side*0.24,-0.90,0.03,0.34,0.31,0.43,red);
-      box(body,side*0.24,-1.12,0.12,0.35,0.17,0.52,paleGold);
+      // Shoulder bell, articulated arm, gauntlet and palm emitter.
+      shell(body,side*0.48,0,0.58,0.94,0.19,0.22,0.26,0.24,red,8);
+      shell(body,side*0.54,0.02,0.05,0.64,0.135,0.16,0.16,0.18,gold,8);
+      shell(body,side*0.55,0.05,-0.23,0.10,0.16,0.18,0.13,0.15,red,8);
+      box(body,side*0.57,-0.09,0.18,0.20,0.20,0.08,paleGold);
       box(body,side*0.41,0.58,-0.20,0.18,0.25,0.22,joint);
-      box(body,side*0.24,-0.20,-0.12,0.21,0.22,0.25,joint);
+
+      // Hip plates, tapered thigh, knee cap, shin and armored boot.
+      box(body,side*0.25,-0.15,0.02,0.30,0.20,0.34,deepRed);
+      shell(body,side*0.25,0.01,-0.73,-0.19,0.17,0.19,0.155,0.18,gold,8);
+      box(body,side*0.25,-0.72,0.18,0.25,0.20,0.11,red);
+      shell(body,side*0.25,0.025,-1.11,-0.76,0.16,0.19,0.145,0.16,red,8);
+      box(body,side*0.25,-1.16,0.15,0.34,0.17,0.48,paleGold);
+      box(body,side*0.24,-0.20,-0.12,0.21,0.18,0.25,joint);
+
+      // Compact back thrusters and segmented spinal armor.
+      box(body,side*0.23,0.48,-0.29,0.25,0.64,0.15,deepRed);
+      box(body,side*0.23,0.22,-0.385,0.13,0.26,0.08,gold);
       box(lights,side*0.57,-0.045,0.225,0.13,0.13,0.045,glow);
       box(lights,side*0.24,-1.21,0.23,0.17,0.07,0.20,glow);
+      box(lights,side*0.23,0.17,-0.432,0.10,0.18,0.035,glow);
     }
     // Triangular arc reactor and eye slits remain emissive in low light.
     lights.addTri([-0.13,0.50,0.322],[0.13,0.50,0.322],[0,0.25,0.322],glow);
-    box(lights,-0.12,1.29,0.278,0.13,0.035,0.035,glow);
-    box(lights,0.12,1.29,0.278,0.13,0.035,0.035,glow);
+    box(lights,-0.115,1.29,0.267,0.14,0.032,0.025,glow);
+    box(lights,0.115,1.29,0.267,0.14,0.032,0.025,glow);
     return {body:body.upload(),lights:lights.upload()};
   }
 
@@ -3688,15 +3788,69 @@
       };
       // The Mall is deliberately spacious; roads are layered above the lawn so
       // the landmark layout remains legible from both cockpit and map views.
-      box(-18,base-0.015,0,790,0.09,108,lawn);
-      box(-282,base+0.035,0,142,0.07,24,water);
-      for(const street of DC_STREETS)road(street,street.length>6?10.2:8.4);
+      box(-45,base-0.015,0,1060,0.09,108,lawn);
+      box(-500,base+0.035,0,145,0.07,25,water);
+      // Potomac River, Washington Channel and Tidal Basin establish the
+      // southern shoreline and make the expanded district readable in flight.
+      box(-315,base-0.20,-690,1010,0.16,125,water);
+      box(-55,base-0.15,-510,170,0.12,310,water);
+      cylinder(DC_SITES.jefferson.x,DC_SITES.jefferson.z,
+        [[base-0.08,121],[base+0.015,121]],water,32);
+      cylinder(DC_SITES.jefferson.x,DC_SITES.jefferson.z,
+        [[base+0.018,31],[base+0.026,31]],lawn,24);
+      for(const route of DC_ROADS)road(route.points,route.width);
       const column=(x,z,y,height,radius=0.32,color=limestone)=>
         cylinder(x,z,[[y,radius],[y+height,radius],[y+height+0.18,radius*1.18]],color,10);
       const register=(site,top,halfX,halfZ)=>{
         place(site.name,site);
         solidAt(site.name,site.x,site.z,base,top,halfX,halfZ);
       };
+
+      // Dense federal core. Each building gets a distinct material profile,
+      // roofline and facade rhythm without adding runtime draw calls.
+      for(const building of DC_BUILDINGS){
+        const {x,z,w,d,h,type}=building;
+        const y=base+h/2;
+        const color=type==='bronze'?[0.42,0.30,0.20]:type==='brick'||type==='castle'?[0.48,0.25,0.20]:
+          type==='brutalist'?[0.46,0.45,0.42]:type==='modern'||type==='curved'?[0.67,0.70,0.70]:white;
+        if(type==='round'){
+          cylinder(x,z,[[base,w*0.42],[base+h,w*0.42]],color,24);
+        }else if(type==='pentagon'){
+          cylinder(x,z,[[base,w*0.48],[base+h,w*0.48]],color,5);
+          cylinder(x,z,[[base+h+0.02,w*0.25],[base+h+0.08,w*0.25]],roof,5);
+        }else{
+          box(x,y,z,w,h,d,color);
+          if(type==='tower'){
+            box(x,base+h+10,z,13,20,13,[0.69,0.66,0.59]);
+            cylinder(x,z,[[base+h+20,2.2],[base+h+27,0.25]],bronze,8);
+          }else if(type==='castle'){
+            for(const side of [-1,1])box(x+side*(w/2-7),base+h+5,z,10,10,10,color);
+          }else if(type==='station'){
+            cylinder(x,z-d*0.18,[[base+h,13],[base+h+7,8],[base+h+10,1]],white,18);
+          }
+        }
+        // Cornice, rooftop plant and horizontal window bands.
+        box(x,base+h+0.32,z,w+1.2,0.64,d+1.2,type==='bronze'?bronze:limestone);
+        if(type!=='pentagon'&&type!=='round')box(x,base+h+1.35,z,Math.min(18,w*0.32),2.1,Math.min(12,d*0.38),roof);
+        for(let floor=4;floor<h-2;floor+=4){
+          box(x,base+floor,z+d/2+0.04,w*0.72,0.34,0.05,[0.19,0.32,0.39]);
+          box(x,base+floor,z-d/2-0.04,w*0.72,0.34,0.05,[0.19,0.32,0.39]);
+        }
+        place(building.name,building);
+        solidAt(building.name,x,z,base,base+h+(type==='tower'?27:2),w/2,d/2);
+      }
+
+      // Street-name blades and crosswalk markings make the map useful at
+      // ground level as well as from the air.
+      for(const [label,x,z] of DC_SIGNS){
+        box(x,base+2.05,z,0.12,4.1,0.12,[0.26,0.30,0.29]);
+        box(x,base+3.72,z,0.18,0.76,5.8,[0.15,0.34,0.22]);
+        addVegasLettering(lights.addQuad,label,(u,v)=>[x-0.095,base+3.72+v,z-u],5.4,0.36,[0.91,0.96,0.86]);
+      }
+      for(const x of [-590,-410,-300,-210,-100,80,250,470])for(const z of [-78,78]){
+        for(let stripe=-3;stripe<=3;stripe++)
+          box(x+stripe*1.15,base+0.066,z,0.62,0.035,6.6,[0.88,0.88,0.82]);
+      }
 
       // Lincoln Memorial: stepped marble temple and open colonnade.
       {
@@ -3772,15 +3926,16 @@
 
       // Shared tree and lamp meshes keep the city alive without per-frame
       // geometry allocation. Dynamic walkers are distance-culled elsewhere.
-      for(let i=0;i<72;i++){
-        const row=i%4,along=-390+(i*47)%820;
-        const z=(row<2?-1:1)*(69+(row%2)*19);
+      for(let i=0;i<176;i++){
+        const row=i%8,along=-735+(i*47)%1470;
+        const z=(row<4?-1:1)*(69+(row%4)*92);
         const x=along;
-        if(Object.values(DC_SITES).some(site=>Math.hypot(x-site.x,z-site.z)<35))continue;
+        if(Object.values(DC_SITES).some(site=>Math.hypot(x-site.x,z-site.z)<38))continue;
+        if(DC_BUILDINGS.some(building=>Math.abs(x-building.x)<building.w/2+5&&Math.abs(z-building.z)<building.d/2+5))continue;
         box(x,base+1.4,z,0.38,2.8,0.38,[0.32,0.24,0.17]);
         cylinder(x,z,[[base+2.1,2.2],[base+5.7,0.35]],[0.25,0.43,0.27],10,i);
       }
-      for(let x=-420;x<=430;x+=34)for(const z of [-61,61]){
+      for(let x=-740;x<=710;x+=34)for(const z of [-61,61]){
         box(x,base+1.65,z,0.13,3.3,0.13,[0.30,0.33,0.32]);
         lamp(x,base+3.35,z,0.24,0.18,0.24,[0.98,0.83,0.58]);
       }
