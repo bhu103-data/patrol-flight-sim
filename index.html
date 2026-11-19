@@ -34,7 +34,11 @@
   }
   .smooth-city .key-pill{border-color:#aac6d377;background:#142530;color:#ebf7fc;}
   .smooth-city #missionStatus{border-color:#a4c3d27d;background:#162936d9;color:#eff7fb;}
-  #sphereStatus{color:#daeeff;font-size:11px;white-space:normal;max-width:31ch;}
+  #sphereShowControl{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 6px;font-size:11px;}
+  #sphereShowControl select{font:inherit;border:1px solid #96bac988;border-radius:4px;
+    background:#234151;color:#eff7fb;padding:3px 5px;}
+  #sphereStatus{color:#daeeff;white-space:normal;max-width:31ch;}
+  @media(max-width:620px){#sphereShowControl .desktop-only{display:none;}#sphereStatus{font-size:10px;}}
   #missionStatus.tour{white-space:pre-line;line-height:1.45;font-variant-numeric:tabular-nums;}
   .smooth-city #boundaryStatus{color:inherit;}
   #titleOverlay{position:absolute;inset:0;display:grid;justify-items:center;align-items:safe center;overflow:auto;padding:16px;
@@ -216,7 +220,15 @@
     <div class="bar-left">
       <b id="aircraftName">Viper Jet</b>
       <b id="gearStatus">GEAR UP</b>
-      <output id="sphereStatus" hidden></output>
+      <div id="sphereShowControl" hidden>
+        <label for="spherePattern">Sphere Show <span class="desktop-only">[L]</span></label>
+        <select id="spherePattern">
+          <option value="-1">Auto Cycle</option><option value="0">Earth</option>
+          <option value="1">Prismatic Waves</option><option value="2">Aurora</option>
+          <option value="3">Desert Sun</option>
+        </select>
+        <output id="sphereStatus"></output>
+      </div>
       <span class="desktop-only fighter-control"><span class="key-pill">G</span>GEAR <span class="key-pill">B</span>BRAKE</span>
       <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>STEER / MOUSE</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
@@ -250,6 +262,8 @@
   const fighterControls = document.querySelectorAll('.fighter-control');
   const gearStatus = document.getElementById('gearStatus');
   const sphereStatus = document.getElementById('sphereStatus');
+  const sphereShowControl = document.getElementById('sphereShowControl');
+  const spherePattern = document.getElementById('spherePattern');
   const runwayChoice = document.getElementById('runwayChoice');
   const runwayStart = document.getElementById('runwayStart');
   const flightSetup = document.getElementById('flightSetup');
@@ -388,6 +402,13 @@
     },
     vegas: {
       vegas:VEGAS_SITES,
+      tour:[
+        {name:'Desert Airport',pos:[183,43,-433]},
+        {name:'Pyramid Resort',pos:[-121,52,-322]},
+        {name:'Fountain Plaza',pos:[37,51,-210]},
+        {name:'Sphere',pos:[51,65,-65]},
+        {name:'Observation Tower',pos:[-48,88,327]}
+      ],
       runwayStart:{x:211,z:-538,yaw:0},
       spawn:[-35,52,-550],
       landmarks:[
@@ -1215,6 +1236,7 @@
     uniform bool uWaterfall;
     uniform bool uTwilight;
     uniform bool uSphereShow;
+    uniform float uSpherePattern;
     uniform vec3 uSphereCenter;
     uniform vec4 uSphereImpact;
     uniform sampler2D uEarthPhoto;
@@ -1254,8 +1276,9 @@
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
-        float index=floor(uSceneTime/11.0);
-        float blend=smoothstep(0.88,1.0,fract(uSceneTime/11.0));
+        bool automatic=uSpherePattern<0.0;
+        float index=automatic?floor(uSceneTime/11.0):uSpherePattern;
+        float blend=automatic?smoothstep(0.88,1.0,fract(uSceneTime/11.0)):0.0;
         vec3 image=mix(showPattern(mod(index,4.0),radial,uSceneTime),
           showPattern(mod(index+1.0,4.0),radial,uSceneTime),blend);
         float age=uSphereImpact.w;
@@ -3089,6 +3112,11 @@
   let sphereCenter=null;
   const sphereRadius=14.8;
   let sphereImpact=null;
+  let chosenSpherePattern=-1;
+  spherePattern.addEventListener('change',()=>{
+    chosenSpherePattern=Number(spherePattern.value);
+    updateSphereStatus();
+  });
   let earthPhoto=null;
   let earthPhotoState='fallback';
   let nextEarthRefresh=0;
@@ -3100,7 +3128,7 @@
     sphereMesh=null;
     sphereCenter=null;
     sphereImpact=null;
-    sphereStatus.hidden=!selectedMap.vegas;
+    sphereShowControl.hidden=!selectedMap.vegas;
     if(!selectedMap.vegas)return;
     const {x,z}=VEGAS_SITES.sphere;
     const y=sampleTerrainHeight(x,z)+sphereRadius+0.5;
@@ -3190,11 +3218,19 @@
 
   function updateSphereStatus() {
     if(!selectedMap.vegas)return;
-    const show=sphereShowNames[Math.floor(sceneryTime/11)%sphereShowNames.length];
+    const slot=chosenSpherePattern<0?Math.floor(sceneryTime/11)%sphereShowNames.length:chosenSpherePattern;
+    const show=sphereShowNames[slot];
     const source=show==='Earth'?(earthPhotoState==='live'?' · NASA EPIC latest image':' · NASA EPIC offline image'):'';
-    const text='Sphere · '+show+source;
+    const text=chosenSpherePattern<0?'Now showing '+show+source:source.replace(/^ · /,'');
     if(sphereStatus.textContent!==text)sphereStatus.textContent=text;
     refreshSpherePhoto();
+  }
+
+  function cycleSpherePattern() {
+    if(!flying || crash || !selectedMap.vegas)return;
+    chosenSpherePattern=chosenSpherePattern===sphereShowNames.length-1?-1:chosenSpherePattern+1;
+    spherePattern.value=String(chosenSpherePattern);
+    updateSphereStatus();
   }
 
   function sphereTakesHit(x,y,z) {
@@ -3211,6 +3247,7 @@
     gl.bindTexture(gl.TEXTURE_2D,earthPhoto);
     gl.uniform1i(uMesh.earthPhoto,1);
     gl.uniform1i(uMesh.sphereShow,1);
+    gl.uniform1f(uMesh.spherePattern,chosenSpherePattern);
     gl.uniform3fv(uMesh.sphereCenter,sphereCenter);
     gl.uniform4fv(uMesh.sphereImpact,sphereImpact?
       [...sphereImpact.direction,sceneryTime-sphereImpact.started]:[0,0,0,-1]);
@@ -3648,12 +3685,14 @@
       openFlightMenu();
       return;
     }
-    if (!flying || crash) return;
+    if (!flying || crash || e.target===spherePattern) return;
     if (steeringCodes.has(e.code)) {
       e.preventDefault();
       steeringKeys.add(e.code);
     } else if (e.code === 'KeyN' && !e.repeat) {
       toggleFlightMap();
+    } else if (e.code === 'KeyL' && !e.repeat) {
+      cycleSpherePattern();
     } else if (e.code === 'Space' && e.target !== mapToggle) {
       e.preventDefault();
       cycleView();
@@ -4630,6 +4669,7 @@
     waterfall: gl.getUniformLocation(meshProg, 'uWaterfall'),
     twilight: gl.getUniformLocation(meshProg, 'uTwilight'),
     sphereShow: gl.getUniformLocation(meshProg, 'uSphereShow'),
+    spherePattern: gl.getUniformLocation(meshProg, 'uSpherePattern'),
     sphereCenter: gl.getUniformLocation(meshProg, 'uSphereCenter'),
     sphereImpact: gl.getUniformLocation(meshProg, 'uSphereImpact'),
     earthPhoto: gl.getUniformLocation(meshProg, 'uEarthPhoto'),
