@@ -3722,7 +3722,7 @@
   let dcTexturesLoading=false;
 
   function loadDcTextures(){
-    if(dcTextureArray||dcTexturesLoading)return;
+    if(dcTextureArray||dcTexturesLoading||directRendering)return;
     dcTexturesLoading=true;
     const files=['dc-albedo','dc-normal-roughness'];
     Promise.all(files.map(name=>new Promise((resolve,reject)=>{
@@ -3731,6 +3731,7 @@
       img.onerror=reject;
       img.src='./assets/'+name+'.webp';
     }))).then(images=>{
+      if(gl.isContextLost()||directRendering)return;
       const size=512,layers=5,tile=document.createElement('canvas');
       tile.width=tile.height=size;
       const ctx=tile.getContext('2d',{willReadFrequently:true});
@@ -3751,6 +3752,7 @@
         Math.min(8,gl.getParameter(extension.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
       gl.activeTexture(gl.TEXTURE0);
       dcTextureArray=texture;
+      frameCheckPending=true;
     }).catch(()=>{
       // Keep the authored base colors when the texture pack is unavailable.
     }).finally(()=>{dcTexturesLoading=false;});
@@ -6079,13 +6081,14 @@
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
     if(dcSurfaceMeshes.length){
-      if(dcTextureArray){
+      const textured=dcTextureArray&&!directRendering;
+      if(textured){
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D_ARRAY,dcTextureArray);
         gl.activeTexture(gl.TEXTURE0);
       }
       for(const [i,mesh] of dcSurfaceMeshes.entries()){
-        gl.uniform1i(uMesh.dcSurface,dcTextureArray||i===5?i:-1);
+        gl.uniform1i(uMesh.dcSurface,textured||i===5?i:-1);
         drawMesh(mesh,identity);
       }
       gl.uniform1i(uMesh.dcSurface,-1);
@@ -6419,10 +6422,13 @@
   let resScale = 1.0;
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
+  let directRendering = false, frameCheckPending = true;
+  const frameSample = new Uint8Array(4);
 
   const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc);
 
   function resizeTargets() {
+    if(gl.isContextLost())return;
     const viewWidth = Math.max(1, window.innerWidth);
     const viewHeight = Math.max(1, window.innerHeight);
     const aspect = viewWidth / viewHeight;
@@ -6430,8 +6436,10 @@
     const targetHeight = smoothScenery()
       ? Math.min(viewHeight * density, 1080, 1920 / aspect)
       : Math.min(Math.max(viewHeight, 320), 540, 1200 / aspect);
-    fboH = Math.max(1, Math.round(targetHeight * resScale));
-    fboW = Math.max(1, Math.round(targetHeight * resScale * aspect));
+    const targetLimit=directRendering?0.60:1;
+    const scale=Math.min(resScale,targetLimit);
+    fboH = Math.max(1, Math.round(targetHeight * scale));
+    fboW = Math.max(1, Math.round(targetHeight * scale * aspect));
 
     glCanvas.width = fboW;
     glCanvas.height = fboH;
@@ -6444,7 +6452,11 @@
     if (sceneTex) gl.deleteTexture(sceneTex);
     if (sceneDepth) gl.deleteRenderbuffer(sceneDepth);
     if (sceneFbo) gl.deleteFramebuffer(sceneFbo);
+    sceneTex=sceneDepth=sceneFbo=null;
+    frameCheckPending=true;
+    if(directRendering)return;
 
+    gl.activeTexture(gl.TEXTURE0);
     sceneTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, sceneTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, fboW, fboH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -6462,7 +6474,12 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, sceneDepth);
+    const complete=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if(!complete){
+      directRendering=true;
+      resizeTargets();
+    }
   }
   resizeTargets();
   window.addEventListener('resize', resizeTargets);
@@ -6969,6 +6986,7 @@
   }
 
   function openFlightMenu() {
+    loadOverlay.classList.add('done');
     if (loading || (!flying && !crash)) return;
     setScenicView(false);
     skySettings.hidden=true;
@@ -7878,7 +7896,7 @@
     mapPanel.classList.toggle('warning', warning);
     mapPanel.classList.toggle('guarding', assisted);
 
-    mapCtx.drawImage(mapRaster, 0, 0);
+    mapCtx.putImageData(mapRaster,0,0);
     mapCtx.strokeStyle = assisted ? '#ff795e' : '#ffd699';
     mapCtx.lineWidth = 4;
     mapCtx.setLineDash([10, 7]);
@@ -7993,6 +8011,11 @@
   function launchFlight(event) {
     event.preventDefault();
     if (loading) return;
+    if(gl.isContextLost()){
+      menuError.textContent='Graphics are temporarily unavailable. Reload the page to retry.';
+      menuError.hidden=false;
+      return;
+    }
     crash = null;
     crashOverlay.hidden = true;
     groundWarning.hidden = true;
@@ -8028,11 +8051,11 @@
       if(workerUrl)URL.revokeObjectURL(workerUrl);
       workerUrl=null;
     }
-    function cleanup() {
+    function cleanup(hideLoading=true) {
       disposeWorker();
       loading = false;
       startFlight.disabled = false;
-      loadOverlay.classList.add('done');
+      if(hideLoading)loadOverlay.classList.add('done');
     }
     function showError() {
       cleanup();
@@ -8063,9 +8086,10 @@
       prepareScenicViews();
       wreckFragments=[];
       refreshVehicleTargets();
-      mapRaster = document.createElement('canvas');
-      mapRaster.width = mapRaster.height = mapWidth;
-      paintTerrainMap(mapRaster, selectedMap, sampleGroundHeight);
+      const mapImage=document.createElement('canvas');
+      mapImage.width=mapImage.height=mapWidth;
+      paintTerrainMap(mapImage,selectedMap,sampleGroundHeight);
+      mapRaster=mapImage.getContext('2d').getImageData(0,0,mapWidth,mapWidth);
       if (terrainTex) gl.deleteTexture(terrainTex);
       terrainTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, terrainTex);
@@ -8117,7 +8141,8 @@
       lastMapFrame = -Infinity;
       if (mapPanel.classList.contains('expanded')) toggleFlightMap();
       mapPanel.hidden = false;
-      cleanup();
+      cleanup(false);
+      loadStep.textContent='Checking graphics…';
       flying = true;
       glCanvas.focus({ preventScroll: true });
       resetFlightEnvironment();
@@ -8132,6 +8157,11 @@
       vegas:selectedMap.vegas,dc:selectedMap.dc
     };
     function acceptTerrain(data) {
+      if(gl.isContextLost()){
+        cleanup();
+        startFlight.disabled=true;
+        return;
+      }
       try {
         receiveTerrain(data);
       } catch(error) {
@@ -8951,8 +8981,20 @@
     hudCtx.restore();
   }
 
+  function checkRenderedFrame(){
+    let dark=true,white=true;
+    for(const [x,y] of [[.20,.24],[.78,.24],[.50,.49],[.21,.76],[.80,.76]]){
+      gl.readPixels(Math.floor(x*fboW),Math.floor(y*fboH),1,1,gl.RGBA,gl.UNSIGNED_BYTE,frameSample);
+      const [red,green,blue]=frameSample;
+      dark &&= Math.max(red,green,blue)<=4;
+      white &&= Math.min(red,green,blue)>=249;
+    }
+    return !gl.isContextLost()&&gl.getError()===gl.NO_ERROR&&!dark&&!white;
+  }
+
   function loop(now) {
     if (!flying) return;
+    if (gl.isContextLost())return;
     // Start the clock on the first animation frame. Its timestamp may predate terrain setup.
     const rawDt = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001);
     lastTime = now;
@@ -9146,6 +9188,8 @@
     // 4. Render World + 3D Aircraft into Low-Res FBO
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
     gl.viewport(0, 0, fboW, fboH);
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
 
@@ -9336,23 +9380,45 @@
     }
 
     // 5. Post-Process 4x4 Bayer Ordered Dither Pass to Screen
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, fboW, fboH);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
+    if(sceneFbo){
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, fboW, fboH);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.CULL_FACE);
 
-    gl.useProgram(ditherProg);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-    gl.uniform3f(uDither.weather,...environment.precipitation,skyElapsed);
-    gl.uniform1i(uDither.scene, 0);
-    gl.uniform1i(uDither.smooth, smoothScenery());
-    gl.uniform1i(uDither.neonGlow,Boolean(selectedMap.vegas||selectedMap.city));
-    gl.uniform3fv(uDither.palette, paletteFlat);
-    gl.uniform2f(uDither.res, fboW, fboH);
+      gl.useProgram(ditherProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+      gl.uniform3f(uDither.weather,...environment.precipitation,skyElapsed);
+      gl.uniform1i(uDither.scene, 0);
+      gl.uniform1i(uDither.smooth, smoothScenery());
+      gl.uniform1i(uDither.neonGlow,Boolean(selectedMap.vegas||selectedMap.city));
+      gl.uniform3fv(uDither.palette, paletteFlat);
+      gl.uniform2f(uDither.res, fboW, fboH);
 
-    gl.bindVertexArray(quadVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(quadVao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    if(frameCheckPending){
+      if(checkRenderedFrame()){
+        frameCheckPending=false;
+        loadOverlay.classList.add('done');
+      }else if(!gl.isContextLost()){
+        if(!directRendering){
+          // Skip the compositor pass and use a smaller drawing buffer.
+          directRendering=true;
+          resizeTargets();
+          lastTime=null;
+          flightFrame=requestAnimationFrame(loop);
+        }else{
+          openFlightMenu();
+          menuError.textContent='Graphics could not draw the scene. Reload the page to retry.';
+          menuError.hidden=false;
+        }
+        return;
+      }else return;
+    }
 
     // 6. Canvas 2D Cockpit & HUD
     if(!scenicViewActive){
@@ -9370,6 +9436,60 @@
     }
     flightFrame = requestAnimationFrame(loop);
   }
+
+  const graphicsResumeKey='patrol.graphicsResume';
+  let resumedGraphics=false, interruptedFlight=null;
+  glCanvas.addEventListener('webglcontextlost',event=>{
+    event.preventDefault();
+    if(flying||loading){
+      const settings=new FormData(flightSetup);
+      interruptedFlight={
+        map:Object.keys(FLIGHT_MAPS).find(key=>FLIGHT_MAPS[key]===selectedMap),
+        aircraft:settings.get('aircraft'),
+        mode:settings.get('flightMode'),
+        runway:settings.has('runwayStart')
+      };
+    }
+    openFlightMenu();
+    startFlight.disabled=true;
+    menuError.textContent='The graphics connection was interrupted. Waiting for it to recover…';
+    menuError.hidden=false;
+  });
+  glCanvas.addEventListener('webglcontextrestored',()=>{
+    if(resumedGraphics){
+      menuError.textContent='Graphics were interrupted again. Reload the page to retry.';
+      return;
+    }
+    if(interruptedFlight){
+      try{
+        sessionStorage.setItem(graphicsResumeKey,JSON.stringify(interruptedFlight));
+      }catch{
+        // A reload still restores graphics when storage is blocked.
+      }
+    }
+    location.reload();
+  });
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&flying)frameCheckPending=true;
+  });
+  window.addEventListener('DOMContentLoaded',()=>{
+    let restart;
+    try{
+      restart=JSON.parse(sessionStorage.getItem(graphicsResumeKey));
+      sessionStorage.removeItem(graphicsResumeKey);
+    }catch{
+      return;
+    }
+    if(!restart||!Object.hasOwn(FLIGHT_MAPS,restart.map)||!Object.hasOwn(AIRCRAFT,restart.aircraft))return;
+    resumedGraphics=true;
+    directRendering=true;
+    flightSetup.elements.flightMap.value=restart.map;
+    flightSetup.elements.aircraft.value=restart.aircraft;
+    if(['free','route','tour'].includes(restart.mode))flightSetup.elements.flightMode.value=restart.mode;
+    runwayStart.checked=Boolean(restart.runway);
+    updateFlightOptions();
+    flightSetup.requestSubmit();
+  },{once:true});
   loadMapPreviews();
 })();
 </script>
