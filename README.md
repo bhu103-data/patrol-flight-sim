@@ -1,10 +1,12 @@
 # PATROL Flight Simulator
 
-PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Las Vegas, the Alaska Fjords, Dusk Tide Islands, Alder River Valley, or Copper Coast in a Viper jet, a UFO, or a jetpack. Select **? Random Map** for a surprise destination.
+PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washington, DC, Las Vegas, the Alaska Fjords, Dusk Tide Islands, Alder River Valley, or Copper Coast in a Viper jet, a UFO, or a jetpack. Select **? Random Map** for a surprise destination.
 
 The Manhattan map includes a compressed Times Square district shaped by the diagonal of Broadway and the through lanes of Seventh Avenue. Walk signals, traffic lights, trees, street lamps, and numbered crossings line pedestrian plazas with illuminated storefronts, the TKTS red steps, and the ball atop One Times Square.
 
 In Las Vegas, see the Bellagio’s curved tower, fountains and lakeside promenade, the Venetian’s canal and campanile, Caesars Palace’s stone arcades, Wynn’s illuminated entrance, and the Luxor pyramid. Explore the Sphere and ride along with the roller coaster or Ferris wheel using **Scenic Views**.
+
+The Washington, DC map follows the main spatial relationships of the National Mall and includes low-poly interpretations of the White House, U.S. Capitol, Washington Monument, Lincoln Memorial, World War II Memorial, and Jefferson Memorial. Shared pedestrian and vehicle meshes, distance culling, and batched static geometry keep the map practical on mobile hardware. It is a flight-friendly approximation, not a survey-grade reconstruction.
 
 [Play PATROL on GitHub Pages](https://bhu103-data.github.io/patrol-flight-sim/)
 
