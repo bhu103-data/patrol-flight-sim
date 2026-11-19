@@ -27,5 +27,15 @@ The Viper now has a clear framed canopy with a visible helmeted pilot, harness, 
 
 Serve the repository root with a static HTTP server, such as `python3 -m http.server 8000`. Open `http://localhost:8000` in a browser with WebGL 2 enabled. No build step is required.
 
+## Washington, DC materials
+
+The DC map loads its material atlases in the background when a flight starts. They include photographic base color, tangent-space normal detail and roughness for five surfaces. Roads and paths use separate materials so the same photo does not cover the entire scene. [Poly Haven CC0 license](https://polyhaven.com/license)
+
+- [White Sandstone Blocks 02](https://polyhaven.com/a/white_sandstone_blocks_02) for stone masonry
+- [Asphalt 02](https://polyhaven.com/a/asphalt_02) for streets
+- [Concrete Pavement](https://polyhaven.com/a/concrete_pavement) for sidewalks and paths
+- [Leafy Grass](https://polyhaven.com/a/leafy_grass) for the National Mall lawns
+- [Marble 01](https://polyhaven.com/a/marble_01) for the domes and columns
+
 The world is built to fit the game's flight area. The Times Square layout references the Broadway pedestrian plazas and Father Duffy Square. [Times Square Alliance](https://www.timessquarenyc.org/business-community/planning-an-event)
 
