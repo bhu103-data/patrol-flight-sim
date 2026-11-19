@@ -186,7 +186,7 @@
   </section>
 
   <div id="loadOverlay" class="done">
-    <div class="load-label">Generating terrain</div>
+    <div class="load-label" id="loadDestination">Generating terrain</div>
     <div class="load-bar-outer"><div class="load-bar-inner" id="loadBar"></div></div>
     <div id="loadStep" style="font-size:12px;color:#c98a70;">SEEDING HEIGHTFIELD...</div>
   </div>
@@ -535,11 +535,13 @@
   };
   const FLIGHT_MAPS = {
     coast: {
+      name: 'Copper Coast',
       shipAnchor: [125,-585],
       landmarks: COAST_LANDMARKS,
       checkpoints: [[30,-85],[72,55],[139,165],[224,238],[310,316]]
     },
     islands: {
+      name: 'Dusk Tide Islands',
       islands: true,
       shipAnchor: [8,-420],
       landmarks: [
@@ -550,6 +552,7 @@
       checkpoints: [[30,-85],[-65,24],[-153,164],[-103,308],[24,401]]
     },
     valley: {
+      name: 'Alder River Valley',
       airfield: ALDER_AIRFIELD,
       runwayStart: {x:144,z:-280,yaw:0},
       spawn: [144, 32, -350],
@@ -561,6 +564,7 @@
       checkpoints: [[144,-246],[124,-93],[75,62],[-16,220],[-90,385]]
     },
     manhattan: {
+      name: 'Manhattan',
       shipAnchor: [-142,-611],
       runwayStart: {x:287,z:-389,yaw:Math.PI/2},
       city: MANHATTAN_GRID,
@@ -569,6 +573,7 @@
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     },
     alaska: {
+      name: 'Alaska Fjords',
       alaska: true,
       shipAnchor: [-24,-555],
       places:Object.values(ALASKA_PLACES),
@@ -589,6 +594,7 @@
       checkpoints: [[-19,-574],[-54,-410],[-45,-230],[-17,-45],[24,168]]
     },
     vegas: {
+      name: 'Las Vegas',
       vegas:VEGAS_SITES,
       tour:[
         {name:'Desert Airport',pos:[183,43,-433]},
@@ -971,7 +977,10 @@
       light+=amber*hotelCourts*courtHeight;
       float lake=lightFalloff((p.xz-vec2(-69.0,-154.0))*vec2(1.0,0.71),32.0);
       float ridePlazas=lightFalloff(p.xz-vec2(49.0,-304.0),26.0)+lightFalloff(p.xz-vec2(78.0,43.0),23.0);
-      return light+blue*(ridePlazas+lake*0.77)*courtHeight;
+      float canal=lightFalloff((p.xz-vec2(-12.0,31.0))*vec2(1.0,0.45),13.0);
+      float falls=lightFalloff(p.xz-vec2(2.5,185.2),11.0);
+      vec3 waterLight=blue*(ridePlazas+lake*0.77)+vec3(0.12,0.28,0.26)*canal+vec3(0.16,0.36,0.43)*falls;
+      return light+waterLight*courtHeight;
     }
   `;
 
@@ -1593,7 +1602,8 @@
         float light = 0.61 + 0.40*direct + 0.13*max(n.y,0.0);
         vec3 material = vColor;
         if(uWaterfall){
-          float ripples = smoothstep(0.50,0.92,0.5+0.5*sin(vWorld.x*0.91-vWorld.y*0.29-uSceneTime*10.8+sin(vWorld.z*0.83)*0.72));
+          float flow=vWorld.x*0.91+vWorld.y*3.6+uSceneTime*10.8+sin(vWorld.z*6.3)*1.1;
+          float ripples=smoothstep(0.50,0.92,0.5+0.32*sin(flow)+0.18*sin(flow*1.71+vWorld.z*8.3));
           material=mix(vColor,vec3(0.92,0.97,0.98),0.18+0.66*ripples);
           light=0.86+0.21*direct;
         }
@@ -1604,6 +1614,25 @@
           float reflection=fresnel*(0.42+0.33*max(n.y,0.0)*ripple);
           vec3 reflected=mix(vec3(0.22,0.24,0.32),vec3(0.55,0.69,0.79),uAtmosphere.x);
           material=mix(material,reflected,reflection);
+        }
+        if(uTwilight && n.y>0.80 && vWorld.y>19.32 && vWorld.y<19.94 &&
+            vWorld.x>-135.0 && vWorld.x<70.0 && abs(vWorld.z)<407.0){
+          vec2 groundTile=vWorld.xz*vec2(2.3,2.0);
+          vec2 cell=floor(groundTile);
+          float fineDetail=1.0-smoothstep(0.20,0.75,max(fwidth(groundTile.x),fwidth(groundTile.y)));
+          float grain=fract(sin(dot(cell,vec2(71.6,23.7)))*17751.25)-0.5;
+          bool pool=material.b>material.r*1.18 && material.g>material.r*1.14;
+          if(pool){
+            vec2 p=vWorld.xz;
+            float ripple=sin(p.x*2.3+p.y*1.4+uSceneTime*1.9+sin(p.y*1.3-uSceneTime));
+            float crossWave=sin(p.x*1.14-p.y*2.9+uSceneTime*2.7);
+            material+=vec3(0.11,0.14,0.16)*smoothstep(0.50,0.94,0.5+0.28*ripple+0.22*crossWave)
+              *(0.48+fresnel*0.5)*fineDetail;
+          }else{
+            float joints=1.0-smoothstep(0.012,0.045,min(fract(groundTile.x),fract(groundTile.y)));
+            float tile=smoothstep(0.018,0.12,material.r-material.b);
+            material*=1.0+fineDetail*(grain*0.14-joints*tile*0.15);
+          }
         }
         if(uManhattanView && n.y>0.72 && vWorld.y<15.25 && vWorld.x>-38.0 && vWorld.x<59.0 &&
             vWorld.z>-68.0 && vWorld.z<70.0){
@@ -3727,9 +3756,15 @@
       const corridorSide=x<avenue?1:-1, edge=x+corridorSide*(w/2+0.075);
       for(let col=-3;col<=3;col++){
         const pz=z+col*d/8;
-        box(edge,ground+1.52,pz,0.089,2.04,1.15,[0.27,0.35,0.41]);
+        box(edge,ground+1.52,pz,0.089,2.04,1.15,[0.19,0.24,0.29]);
+        const face=edge+corridorSide*0.055;
+        box(face,ground+1.52,pz,0.024,1.86,0.94,col%3===0?[0.35,0.41,0.45]:[0.24,0.32,0.38]);
+        box(face+corridorSide*0.016,ground+1.51,pz,0.028,1.87,0.045,steel);
+        box(face+corridorSide*0.021,ground+1.03,pz,0.031,0.046,0.94,steel);
+        if((i+col+6)%3===0)lamp(face+corridorSide*0.018,ground+1.46,pz+0.25,0.021,0.53,0.25,[0.81,0.62,0.43]);
         lamp(edge+corridorSide*0.065,ground+2.49,pz,0.057,0.088,0.94,warm);
       }
+      box(edge+corridorSide*0.28,ground+2.83,z,0.58,0.14,d*0.85,[0.28,0.31,0.35]);
       const [height,panelHeight,tint,caption]=panels[0],span=d*0.78;
       box(edge,ground+height,z,0.31,panelHeight+0.29,span+0.33,steel);
       const screen=(u,v,over=0)=>[edge+corridorSide*(0.174+over),ground+height+v,z+u];
@@ -4854,7 +4889,7 @@
     }
   }
 
-  function buildVegasPromenades({box,lamp,addQuad}) {
+  function buildVegasPromenades({box,lamp,addQuad,lightQuad}) {
     const sidewalks=[
       [[-47,-208],[-47,-185],[-46.2,-167],[-46.2,-127]],
       [[-22.1,-208],[-22.1,-186],[-21,-167],[-22,-126]],
@@ -4867,7 +4902,15 @@
       const points=path.map(([x,z])=>[x,z,sampleTerrainHeight(x,z)+0.27]);
       for(let i=1;i<points.length;i++){
         const [x1,z1,y1]=points[i-1],[x2,z2,y2]=points[i];
-        pushRoadStrip(addQuad,[x1,y1,z1],[x2,y2,z2],2.06,concrete);
+        const a=[x1,y1,z1],b=[x2,y2,z2],side=x1>VEGAS_BOULEVARD?1:-1;
+        pushRoadStrip(addQuad,a,b,2.06,concrete);
+        pushRoadStrip(addQuad,[x1-0.89*side,y1,z1],[x2-0.89*side,y2,z2],0.19,[0.62,0.58,0.52],0.025);
+        const length=Math.hypot(x2-x1,z2-z1);
+        for(let distance=4;distance<length-3;distance+=5){
+          const t=distance/length,x=lerp(x1,x2,t)-0.78*side,y=lerp(y1,y2,t),z=lerp(z1,z2,t);
+          box(x,y+0.26,z,0.12,0.53,0.12,iron);
+          lamp(x,y+0.42,z,0.135,0.044,0.135,[0.73,0.69,0.55]);
+        }
       }
       const route=makeTrafficRoute(points);
       for(let i=0;i<6;i++){
@@ -4878,6 +4921,16 @@
         const post=x+(x>VEGAS_BOULEVARD?0.87:-0.87);
         box(post,y+1.03,z,0.093,2.06,0.093,iron);
         lamp(post,y+2.12,z,0.22,0.23,0.22,[1.0,0.77,0.48]);
+      }
+    }
+    for(const [text,edge,z] of [['BELLAGIO',-47,-123],['PARIS',-22.1,-126],
+        ['CAESARS PALACE',-47.7,-104],['THE VENETIAN',-22,15],['WYNN',-22.8,160]]){
+      const x=edge+(edge>VEGAS_BOULEVARD?1.3:-1.3);
+      const y=sampleTerrainHeight(x,z)+0.27;
+      for(const side of [-1,1])box(x+side*0.53,y+0.86,z,0.080,1.72,0.080,iron);
+      box(x,y+1.46,z,1.36,0.48,0.11,[0.20,0.35,0.35]);
+      for(const side of [-1,1]){
+        addVegasLettering(lightQuad,text,(u,v)=>[x+side*u,y+1.47+v,z+side*0.057],1.22,0.20,[0.80,0.88,0.82]);
       }
     }
   }
@@ -4915,6 +4968,7 @@
 
   const hotelAnimations=(()=>{
     const gondola=createTriangleMesh(), beam=createTriangleMesh(), fountain=createTriangleMesh();
+    const cascade=createTriangleMesh();
     const hull=[0.105,0.103,0.115];
     const sections=[[-1.68,0.015,0.36],[-1.18,0.23,0.15],[0.75,0.29,0.13],[1.6,0.09,0.29],[1.82,0.012,0.51]];
     for(let i=1;i<sections.length;i++){
@@ -4939,7 +4993,12 @@
         [dx*0.022,1,dz*0.022],[0.81,0.88,0.95]);
       fountain.addTri([0,0.50,0],[dx*0.36,0.89,dz*0.36],[dx*0.38,0.87,dz*0.38],[0.65,0.78,0.89]);
     }
-    return {boat:gondola.upload(),beam:beam.upload(),jet:fountain.upload()};
+    for(let row=0;row<7;row++){
+      const y=row/7,next=(row+1)/7;
+      const point=(height,side)=>[height*height*0.50,height,side*(0.24+0.075*(1.0-height))];
+      cascade.addQuad(point(y,-1),point(y,1),point(next,1),point(next,-1),[0.42,0.66,0.72]);
+    }
+    return {boat:gondola.upload(),beam:beam.upload(),jet:fountain.upload(),cascade:cascade.upload()};
   })();
 
   function addRideBeam(addQuad,a,b,width,color) {
@@ -5423,12 +5482,12 @@
         const model=mat4FromBasis([actor.x,actor.y,actor.z],[1,0,0],[0,jet,0],[0,0,1],1);
         drawMesh(hotelAnimations.jet,model,true);
       } else if(actor.kind==='resortFalls'){
-        for(let stream=0;stream<3;stream++){
-          const shift=Math.sin(sceneryTime*9+actor.phase+stream*2.4);
-          const model=mat4FromBasis([actor.x-0.07*shift,actor.y,actor.z+(stream-1)*0.18],
-            [0.58,0,0],[-0.21,actor.height+0.15*shift,0],[0,0,0.72],1);
-          drawMesh(hotelAnimations.jet,model,true);
-        }
+        const surge=0.035*Math.sin(sceneryTime*3.7+actor.phase);
+        const model=mat4FromBasis([actor.x-0.47,actor.y,actor.z],
+          [1,0,0],[0,actor.height+surge,0],[0,0,1],1);
+        gl.uniform1i(uMesh.waterfall,1);
+        drawMesh(hotelAnimations.cascade,model);
+        gl.uniform1i(uMesh.waterfall,0);
       } else if(actor.kind==='gondola'){
         const angle=sceneryTime*0.13+(actor.reverse?Math.PI:0);
         const z=actor.z+11.2*Math.sin(angle), sign=Math.cos(angle)>0?1:-1;
@@ -6009,6 +6068,12 @@
       detail:'Curved bronze glazing and gold facade bands'},
     {site:VEGAS_SITES.paris,x:10,z:-165,height:21,bearing:-46,radius:75,rise:26,
       detail:'Illuminated Eiffel Tower, victory arch and street promenade'},
+    {site:{name:'Bellagio Lakeside'},x:-72,z:-154,height:2.6,bearing:92,radius:24,rise:2.8,
+      detail:'Fountain jets, stone railings and the illuminated hotel arcade'},
+    {site:{name:'Venetian Canal Walk'},x:-11,z:31,height:1.5,bearing:-154,radius:15,rise:1.9,
+      detail:'Gondolas, stone bridge, striped mooring poles and canal arcades'},
+    {site:{name:'Wynn Waterfall'},x:2.5,z:185.2,height:1.2,bearing:-105,radius:9.0,rise:1.6,
+      detail:'Animated water cascading through the landscaped entrance court'},
     {site:VEGAS_SITES.coaster,ride:'coaster',x:57,z:-269,height:13,bearing:-42,radius:72,rise:24,
       detail:'Four-car train, boarding platforms and a pedestrian plaza'},
     {site:{name:'Neon Run Station'},x:51,z:-298.2,height:2.1,bearing:-150,radius:24,rise:3.2,
@@ -7181,6 +7246,7 @@
     titleOverlay.hidden = true;
     menuError.hidden = true;
     loadBar.style.width = '0%';
+    document.getElementById('loadDestination').textContent = 'Loading ' + selectedMap.name;
     loadStep.textContent = 'Preparing terrain…';
     loadOverlay.classList.remove('done');
 

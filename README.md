@@ -14,7 +14,7 @@ In Las Vegas, see the Bellagio’s curved tower, fountains and lakeside promenad
 - **Space** changes the flight camera.
 - **N** opens the map and landmark labels.
 - **T** opens the time, season, and weather controls.
-- **H** opens Scenic Views in Manhattan and Las Vegas. In Manhattan, choose **Times Square**, **Duffy Square Street View**, or **One Times Square**.
+- **H** opens Scenic Views in Manhattan and Las Vegas. Choose **Duffy Square Street View**, **Bellagio Lakeside**, **Venetian Canal Walk**, or **Wynn Waterfall** for a closer look.
 - **Esc** closes the active panel or returns to the flight menu.
 
 ## Run locally
