@@ -8,6 +8,8 @@ In Las Vegas, see the Bellagio’s curved tower, fountains and lakeside promenad
 
 The Washington, DC map follows the main spatial relationships of the National Mall and includes low-poly interpretations of the White House, U.S. Capitol, Washington Monument, Lincoln Memorial, World War II Memorial, and Jefferson Memorial. Shared pedestrian and vehicle meshes, distance culling, and batched static geometry keep the map practical on mobile hardware. It is a flight-friendly approximation, not a survey-grade reconstruction.
 
+The Viper now has a clear framed canopy with a visible helmeted pilot, harness, visor, and oxygen mask. The former jetpack option is a gold-and-red Mark 42-inspired armored flyer with four repulsor exhausts, emissive eyes and arc reactor, twin palm lasers, assisted landing, collision recovery instead of destruction, and a dedicated JARVIS-style first-person HUD.
+
 [Play PATROL on GitHub Pages](https://bhu103-data.github.io/patrol-flight-sim/)
 
 ## Controls
@@ -15,6 +17,8 @@ The Washington, DC map follows the main spatial relationships of the National Ma
 - **Mouse**, **WASD**, or the **arrow keys** steer.
 - **Space** changes the flight camera.
 - **N** opens the map and landmark labels.
+- **C** fires the fighter cannon or the armor's twin palm lasers.
+- **G** toggles fighter landing gear or the armor's assisted landing mode; hold boost after landing to launch again.
 - **T** opens the time, season, and weather controls.
 - **H** opens Scenic Views in Manhattan and Las Vegas. Choose **Duffy Square Street View**, **Bellagio Lakeside**, **Venetian Canal Walk**, or **Wynn Waterfall** for a closer look.
 - **Esc** closes the active panel or returns to the flight menu.
