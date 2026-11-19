@@ -7505,6 +7505,9 @@
   let gulls = [];
   const boatWakes = new Float32Array(16);
   const boatLengths = new Float32Array(4);
+  // Reuse GPU upload buffers across frames to avoid allocation churn.
+  const impactUniforms = new Float32Array(32);
+  const impactTypeUniforms = new Float32Array(32);
   let sceneryTime = 0;
   const worldUp = [0,1,0];
 
@@ -8348,20 +8351,18 @@
     gl.uniform3fv(uWorld.planePos, plane.pos);
     gl.uniform1f(uWorld.planeAlt, plane.radarAlt);
 
-    const impArr = new Float32Array(32);
-    const impTypeArr = new Float32Array(32);
     for (let i = 0; i < 8; i++) {
-      impArr[i * 4 + 0] = impacts[i].x;
-      impArr[i * 4 + 1] = impacts[i].y;
-      impArr[i * 4 + 2] = impacts[i].z;
-      impArr[i * 4 + 3] = impacts[i].age;
-      impTypeArr[i * 4 + 0] = impacts[i].isWater;
+      impactUniforms[i * 4 + 0] = impacts[i].x;
+      impactUniforms[i * 4 + 1] = impacts[i].y;
+      impactUniforms[i * 4 + 2] = impacts[i].z;
+      impactUniforms[i * 4 + 3] = impacts[i].age;
+      impactTypeUniforms[i * 4 + 0] = impacts[i].isWater;
     }
     updateBoatWakes();
     gl.uniform4fv(uWorld.boatWakes, boatWakes);
     gl.uniform4fv(uWorld.boatLength,boatLengths);
-    gl.uniform4fv(uWorld.impacts, impArr);
-    gl.uniform4fv(uWorld.impactType, impTypeArr);
+    gl.uniform4fv(uWorld.impacts, impactUniforms);
+    gl.uniform4fv(uWorld.impactType, impactTypeUniforms);
 
     gl.bindVertexArray(quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
