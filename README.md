@@ -4,11 +4,11 @@ PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washin
 
 The Manhattan map includes a compressed Times Square district shaped by the diagonal of Broadway and the through lanes of Seventh Avenue. Walk signals, traffic lights, trees, street lamps, and numbered crossings line pedestrian plazas with illuminated storefronts, the TKTS red steps, and the ball atop One Times Square.
 
-In Las Vegas, see the Bellagio’s curved tower, fountains and lakeside promenade, the Venetian’s canal and campanile, Caesars Palace’s stone arcades, Wynn’s illuminated entrance, and the Luxor pyramid. Explore the Sphere and ride along with the roller coaster or Ferris wheel using **Scenic Views**.
+In Las Vegas, see the Bellagio's curved tower, fountains and lakeside promenade, the Venetian's canal and campanile, Caesars Palace's stone arcades, Wynn's illuminated entrance, and the Luxor pyramid. Explore the Sphere and ride along with the roller coaster or Ferris wheel using **Scenic Views**.
 
-The Washington, DC map follows the main spatial relationships of the National Mall and includes low-poly interpretations of the White House, U.S. Capitol, Washington Monument, Lincoln Memorial, World War II Memorial, and Jefferson Memorial. Shared pedestrian and vehicle meshes, distance culling, and batched static geometry keep the map practical on mobile hardware. It is a flight-friendly approximation, not a survey-grade reconstruction.
+The expanded Washington, DC map now spans the federal core from the Pentagon and Tidal Basin through the National Mall to Capitol Hill and Union Station. It includes low-poly interpretations of the White House, U.S. Capitol, Washington Monument, Lincoln Memorial, World War II Memorial, Jefferson Memorial, Smithsonian museums, federal office buildings, Kennedy Center, Union Station, the Pentagon, Potomac shoreline, 20 named roads, street signs, crosswalks, parks, lamps, trees, pedestrians, and traffic. Shared pedestrian and vehicle meshes, distance culling, and batched static geometry keep the larger district practical on mobile hardware. It is a flight-scale approximation rather than a survey-grade reconstruction.
 
-The Viper now has a clear framed canopy with a visible helmeted pilot, harness, visor, and oxygen mask. The former jetpack option is a gold-and-red Mark 42-inspired armored flyer with four repulsor exhausts, emissive eyes and arc reactor, twin palm lasers, assisted landing, collision recovery instead of destruction, and a dedicated JARVIS-style first-person HUD.
+The Viper now has a clear framed canopy with a visible helmeted pilot, harness, visor, and oxygen mask. The former jetpack option is a gold-and-red Mark 42-inspired armored flyer rebuilt with tapered anatomical proportions, a faceted helmet and faceplate, layered chest and abdominal armor, shoulder bells, articulated gauntlets, knee and shin plates, armored boots, compact back thrusters, four repulsor exhausts, emissive eyes and arc reactor, twin palm lasers, assisted landing, collision recovery instead of destruction, and a dedicated JARVIS-style first-person HUD.
 
 [Play PATROL on GitHub Pages](https://bhu103-data.github.io/patrol-flight-sim/)
 
@@ -27,4 +27,5 @@ The Viper now has a clear framed canopy with a visible helmeted pilot, harness, 
 
 Serve the repository root with a static HTTP server, such as `python3 -m http.server 8000`. Open `http://localhost:8000` in a browser with WebGL 2 enabled. No build step is required.
 
-The world is built to fit the game’s flight area. The Times Square layout references the Broadway pedestrian plazas and Father Duffy Square. [Times Square Alliance](https://www.timessquarenyc.org/business-community/planning-an-event)
+The world is built to fit the game's flight area. The Times Square layout references the Broadway pedestrian plazas and Father Duffy Square. [Times Square Alliance](https://www.timessquarenyc.org/business-community/planning-an-event)
+
