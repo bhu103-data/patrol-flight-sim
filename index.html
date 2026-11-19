@@ -203,6 +203,7 @@
           <label class="map-card"><canvas data-map="islands" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="islands">Dusk Tide Islands<small>Islands and narrow channels</small></label>
           <label class="map-card"><canvas data-map="valley" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="valley">Alder River Valley<small>Mountain slopes, farmland and a marked runway</small></label>
           <label class="map-card"><canvas data-map="coast" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="coast">Copper Coast<small>Bays, lakes and highlands</small></label>
+          <label class="map-card"><canvas data-map="dc" width="160" height="160" aria-hidden="true"></canvas><input type="radio" name="flightMap" value="dc">Washington, DC<small>National Mall landmarks, avenues and pedestrian life</small></label>
           <label class="map-card random-map"><span class="random-map-icon" aria-hidden="true">?</span><span><input type="radio" name="flightMap" value="random">Random Map<small>Choose a map when you start</small></span></label>
         </fieldset>
         <fieldset>
@@ -533,6 +534,29 @@
     wheel:{name:'Skywheel',x:83,z:43},
     airport:{name:'Desert Airport',x:211,z:-463,halfLength:92,halfWidth:9.4}
   };
+  // A compact, flight-friendly interpretation of central Washington. Positions
+  // preserve the major National Mall relationships but are not survey-grade.
+  const DC_SITES = {
+    lincoln:{name:'Lincoln Memorial',x:-360,z:0},
+    wwii:{name:'World War II Memorial',x:-210,z:0},
+    monument:{name:'Washington Monument',x:-55,z:0},
+    whiteHouse:{name:'White House',x:-115,z:166},
+    jefferson:{name:'Jefferson Memorial',x:-62,z:-230},
+    capitol:{name:'U.S. Capitol',x:355,z:0}
+  };
+  const DC_STREETS = [
+    [[-475,55],[-360,55],[-210,55],[-55,55],[120,55],[355,55],[510,55]],
+    [[-475,-55],[-360,-55],[-210,-55],[-55,-55],[120,-55],[355,-55],[510,-55]],
+    [[-420,166],[-250,166],[-115,166],[35,166],[200,166],[410,166]],
+    [[-420,-166],[-250,-166],[-62,-166],[100,-166],[280,-166],[430,-166]],
+    [[-360,-250],[-360,-55],[-360,55],[-360,245]],
+    [[-210,-250],[-210,-55],[-210,55],[-210,250]],
+    [[-55,-320],[-55,-55],[-55,55],[-55,310]],
+    [[120,-270],[120,-55],[120,55],[120,270]],
+    [[355,-245],[355,-55],[355,55],[355,245]],
+    [[-420,-205],[-250,-105],[-55,0],[120,90],[315,205]],
+    [[-410,215],[-245,105],[-55,0],[120,-90],[330,-220]]
+  ];
   const FLIGHT_MAPS = {
     coast: {
       name: 'Copper Coast',
@@ -616,6 +640,21 @@
         {name:'Frenchman Range',x:504,z:143,width:265,depth:375,elevation:0.64}
       ],
       checkpoints:[[-35,-402],[-35,-229],[-35,-53],[-13,153],[-10,392]]
+    },
+    dc: {
+      name:'Washington, DC',
+      dc:DC_SITES,
+      spawn:[-500,48,-330],
+      tour:[
+        {name:DC_SITES.lincoln.name,pos:[-360,45,-80]},
+        {name:DC_SITES.wwii.name,pos:[-210,40,-72]},
+        {name:DC_SITES.monument.name,pos:[-55,70,-92]},
+        {name:DC_SITES.whiteHouse.name,pos:[-115,43,96]},
+        {name:DC_SITES.jefferson.name,pos:[-62,43,-305]},
+        {name:DC_SITES.capitol.name,pos:[355,56,-96]}
+      ],
+      landmarks:Object.values(DC_SITES).map(site=>({ ...site, width:55, depth:55, elevation:0.08 })),
+      checkpoints:[[-360,0],[-210,0],[-55,0],[-115,166],[355,0]]
     }
   };
   let selectedMap = FLIGHT_MAPS.manhattan;
@@ -629,7 +668,7 @@
   // Use the same terrain steps in the worker and in previews that restrict workers.
   function* generateTerrain(options) {
     const N = options.size || 512;
-    const { span, landmarks, scale, water, islands, airfield, city, alaska, vegas } = options;
+    const { span, landmarks, scale, water, islands, airfield, city, alaska, vegas, dc } = options;
     const last = N - 1;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     function oval(x, z, cx, cz, width, depth) {
@@ -778,6 +817,15 @@
           biome[idx] = hash(Math.floor(east / 8), Math.floor(north / 8), 842);
           continue;
         }
+        if (dc) {
+          const urbanBase=(water+2.45)/scale;
+          const edge=Math.max(Math.abs(east)-720,Math.abs(north)-610);
+          const fringe=clamp(edge/170,0,1);
+          height[idx]=urbanBase+fringe*fringe*0.035+
+            0.0025*Math.sin(east/61)*Math.cos(north/73);
+          biome[idx]=0.48+0.12*Math.sin(east/87)*Math.cos(north/69);
+          continue;
+        }
         const ridge = ridged(u, v, 9, 5, 202);
         const detail = fbm(u, v, 25, 4, 303);
         const land = oval(east, north, -105, 15, 670, 650);
@@ -843,7 +891,7 @@
     const waterLevel = water / scale;
     const sunStepX = 1.0;
     const sunStepY = -0.36;
-    const sunSlope = (span / N) * (city || alaska ? 0.65 : 0.10) / scale;
+    const sunSlope = (span / N) * (city || alaska || dc ? 0.65 : 0.10) / scale;
 
     for (let y = 0; y < N; y++) {
       if (y > 0 && y % 24 === 0) yield;
@@ -2599,14 +2647,25 @@
     const x=lerp(a[0],b[0],fraction)+Math.cos(yaw)*lateral;
     const z=lerp(a[1],b[1],fraction)-Math.sin(yaw)*lateral;
     const y=actor.expressway?lerp(a[2],b[2],fraction)+0.055:
-      actor.vegas?sampleTerrainHeight(x,z)+0.30:actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
+      actor.vegas?sampleTerrainHeight(x,z)+0.30:
+      actor.dc?sampleTerrainHeight(x,z)+0.07:
+      actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
     return {x,y,z,yaw};
   }
 
   function prepareCityTraffic() {
     railSections=[];
     cityTraffic=[];
-    if (selectedMap.city) {
+    if (selectedMap.dc) {
+      for (const [i,street] of DC_STREETS.entries()) {
+        const route=makeTrafficRoute(street);
+        const walkers=i<4?6:3;
+        for(let j=0;j<walkers;j++)cityTraffic.push({kind:'walker',dc:true,route,
+          offset:(j+0.35)*route.total/walkers+i*7,pace:0.82+(j%4)*0.16});
+        if(i<9)for(let j=0;j<2;j++)cityTraffic.push({kind:'taxi',dc:true,route,
+          offset:(j+0.2)*route.total/2+i*11,pace:5.1+(i+j)%3});
+      }
+    } else if (selectedMap.city) {
       const bridge=EAST_RIVER_BRIDGE;
       const reach=bridge.halfLength+bridge.ramp;
       for(const side of [-1,1]) for(let x=bridge.x-reach;x<bridge.x+reach;x+=12) {
@@ -2706,7 +2765,7 @@
   }
 
   function drawCityTraffic(drawMesh) {
-    if (!selectedMap.city && !selectedMap.vegas) return;
+    if (!selectedMap.city && !selectedMap.vegas && !selectedMap.dc) return;
     const origin = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if (bridgeRails) drawMesh(bridgeRails,origin);
     for (const actor of cityTraffic) {
@@ -3582,6 +3641,123 @@
           const z=farm.z-22+i*2.1;
           box(farm.x+2,sampleTerrainHeight(farm.x+2,z)+0.07,z,0.17,0.2,0.85,timber);
         }
+      }
+    } else if(selectedMap.dc) {
+      const base=sampleTerrainHeight(DC_SITES.monument.x,DC_SITES.monument.z)+0.08;
+      const asphalt=[0.25,0.27,0.29], sidewalk=[0.57,0.57,0.54];
+      const lawn=[0.25,0.42,0.27], limestone=[0.78,0.77,0.70];
+      const white=[0.86,0.85,0.78], roof=[0.27,0.31,0.32];
+      const water=[0.20,0.43,0.53], bronze=[0.39,0.37,0.31];
+      const road=(route,width=9.4)=>{
+        for(let i=1;i<route.length;i++){
+          const a=route[i-1],b=route[i];
+          pushRoadStrip(solid.addQuad,[a[0],base,a[1]],[b[0],base,b[1]],width+3.2,sidewalk);
+          pushRoadStrip(solid.addQuad,[a[0],base+0.025,a[1]],[b[0],base+0.025,b[1]],width,asphalt);
+          const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+          for(let at=5;at<length-3;at+=12){
+            const t=at/length,u=Math.min(1,(at+3)/length);
+            pushRoadStrip(solid.addQuad,[lerp(a[0],b[0],t),base+0.055,lerp(a[1],b[1],t)],
+              [lerp(a[0],b[0],u),base+0.055,lerp(a[1],b[1],u)],0.16,[0.88,0.82,0.56]);
+          }
+        }
+      };
+      // The Mall is deliberately spacious; roads are layered above the lawn so
+      // the landmark layout remains legible from both cockpit and map views.
+      box(-18,base-0.015,0,790,0.09,108,lawn);
+      box(-282,base+0.035,0,142,0.07,24,water);
+      for(const street of DC_STREETS)road(street,street.length>6?10.2:8.4);
+      const column=(x,z,y,height,radius=0.32,color=limestone)=>
+        cylinder(x,z,[[y,radius],[y+height,radius],[y+height+0.18,radius*1.18]],color,10);
+      const register=(site,top,halfX,halfZ)=>{
+        place(site.name,site);
+        solidAt(site.name,site.x,site.z,base,top,halfX,halfZ);
+      };
+
+      // Lincoln Memorial: stepped marble temple and open colonnade.
+      {
+        const {x,z}=DC_SITES.lincoln;
+        box(x,base+0.35,z,41,0.7,25,limestone);
+        box(x,base+1.05,z,35,0.7,21,white);
+        box(x,base+6.2,z,29,9.6,16,[0.72,0.71,0.66]);
+        for(const side of [-1,1])for(let i=-5;i<=5;i++)column(x+i*2.55,z+side*9.2,base+1.45,8.6,0.36);
+        for(const side of [-1,1])for(let i=-2;i<=2;i++)column(x+side*16.1,z+i*3.3,base+1.45,8.6,0.36);
+        box(x,base+11.0,z,35.8,1.0,20.3,limestone);
+        register(DC_SITES.lincoln,base+11.5,21,13);
+      }
+      // World War II Memorial: paired arches and a ring of state pillars.
+      {
+        const {x,z}=DC_SITES.wwii;
+        for(let i=0;i<28;i++){
+          const a=i*Math.PI*2/28,px=x+Math.sin(a)*24,pz=z+Math.cos(a)*15;
+          box(px,base+2.0,pz,1.15,4.0,1.15,limestone);
+        }
+        for(const side of [-1,1]){
+          const px=x+side*27;
+          box(px,base+3.6,z,7.2,7.2,4.2,white);
+          box(px,base+7.45,z,8.0,0.5,4.8,limestone);
+        }
+        register(DC_SITES.wwii,base+7.8,32,19);
+      }
+      // Washington Monument: tapered obelisk with a shallow pyramidion.
+      {
+        const {x,z}=DC_SITES.monument,shaft=58,w=8.2,y=base+0.35;
+        box(x,y+shaft/2,z,w,shaft,w,[0.83,0.82,0.75]);
+        const top=y+shaft,tip=[x,top+5.2,z],r=w/2;
+        solid.addTri([x-r,top,z-r],[x+r,top,z-r],tip,white);
+        solid.addTri([x+r,top,z-r],[x+r,top,z+r],tip,[0.75,0.75,0.69]);
+        solid.addTri([x+r,top,z+r],[x-r,top,z+r],tip,[0.70,0.70,0.66]);
+        solid.addTri([x-r,top,z+r],[x-r,top,z-r],tip,limestone);
+        lamp(x,top+5.05,z,0.22,0.24,0.22,[0.96,0.78,0.48]);
+        register(DC_SITES.monument,top+5.2,6,6);
+      }
+      // White House: Executive Residence, wings and north portico.
+      {
+        const {x,z}=DC_SITES.whiteHouse;
+        box(x,base+5.4,z,35,10.8,15.5,white);
+        box(x-29,base+3.7,z,23,7.4,12.5,[0.82,0.81,0.75]);
+        box(x+29,base+3.7,z,23,7.4,12.5,[0.82,0.81,0.75]);
+        for(let i=-3;i<=3;i++)column(x+i*2.15,z-9.0,base,8.2,0.30,white);
+        box(x,base+9.1,z-8.8,17,0.75,3.2,limestone);
+        box(x,base+11.05,z,36.2,0.9,16.3,limestone);
+        box(x,base+12.0,z,8.5,1.2,5.8,roof);
+        register(DC_SITES.whiteHouse,base+12.6,42,12);
+      }
+      // Jefferson Memorial: open circular colonnade and low dome.
+      {
+        const {x,z}=DC_SITES.jefferson;
+        cylinder(x,z,[[base,15],[base+1.2,15],[base+1.55,13.8]],limestone,24);
+        for(let i=0;i<20;i++){
+          const a=i*Math.PI*2/20;
+          column(x+Math.sin(a)*11.7,z+Math.cos(a)*11.7,base+1.5,7.6,0.32,white);
+        }
+        cylinder(x,z,[[base+9.1,12.6],[base+11.8,10.8],[base+14.1,7.0],[base+15.4,1.0]],white,24);
+        register(DC_SITES.jefferson,base+15.5,16,16);
+      }
+      // U.S. Capitol: wings, central rotunda, dome and lantern.
+      {
+        const {x,z}=DC_SITES.capitol;
+        box(x-23,base+6.3,z,38,12.6,23,white);
+        box(x+23,base+6.3,z,38,12.6,23,white);
+        box(x,base+8.1,z,25,16.2,25,[0.81,0.80,0.74]);
+        for(const side of [-1,1])for(let i=-5;i<=5;i++)column(x+i*3.1,z+side*13.1,base,10.1,0.34,white);
+        cylinder(x,z,[[base+16,12],[base+19,12],[base+25,9.3],[base+30,5.4],[base+32,1.8]],white,24);
+        cylinder(x,z,[[base+32,2.3],[base+35.2,1.8],[base+36.4,0.35]],bronze,16);
+        register(DC_SITES.capitol,base+36.5,44,18);
+      }
+
+      // Shared tree and lamp meshes keep the city alive without per-frame
+      // geometry allocation. Dynamic walkers are distance-culled elsewhere.
+      for(let i=0;i<72;i++){
+        const row=i%4,along=-390+(i*47)%820;
+        const z=(row<2?-1:1)*(69+(row%2)*19);
+        const x=along;
+        if(Object.values(DC_SITES).some(site=>Math.hypot(x-site.x,z-site.z)<35))continue;
+        box(x,base+1.4,z,0.38,2.8,0.38,[0.32,0.24,0.17]);
+        cylinder(x,z,[[base+2.1,2.2],[base+5.7,0.35]],[0.25,0.43,0.27],10,i);
+      }
+      for(let x=-420;x<=430;x+=34)for(const z of [-61,61]){
+        box(x,base+1.65,z,0.13,3.3,0.13,[0.30,0.33,0.32]);
+        lamp(x,base+3.35,z,0.24,0.18,0.24,[0.98,0.83,0.58]);
       }
     } else if(selectedMap.city) {
       renderExpressway(CITY_EXPRESSWAY,{box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place});
@@ -5759,7 +5935,7 @@
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
 
-  const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas);
+  const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc);
 
   function resizeTargets() {
     const viewWidth = Math.max(1, window.innerWidth);
@@ -7353,7 +7529,8 @@
     const terrainOptions={
       size:MAP_SIZE,span:MAP_SPAN,landmarks:selectedMap.landmarks,
       scale:terrainScaleFor(selectedMap),water:WATER_H,islands:selectedMap.islands,
-      airfield:selectedMap.airfield,city:selectedMap.city,alaska:selectedMap.alaska,vegas:selectedMap.vegas
+      airfield:selectedMap.airfield,city:selectedMap.city,alaska:selectedMap.alaska,
+      vegas:selectedMap.vegas,dc:selectedMap.dc
     };
     function acceptTerrain(data) {
       try {
@@ -7505,7 +7682,8 @@
   let gulls = [];
   const boatWakes = new Float32Array(16);
   const boatLengths = new Float32Array(4);
-  // Reuse GPU upload buffers across frames to avoid allocation churn.
+  // Reused every frame; allocating these inside loop() created avoidable
+  // garbage during flight and caused periodic GC hitches.
   const impactUniforms = new Float32Array(32);
   const impactTypeUniforms = new Float32Array(32);
   let sceneryTime = 0;
