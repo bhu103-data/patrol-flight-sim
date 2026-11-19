@@ -216,7 +216,7 @@
           <legend>Aircraft</legend>
           <label><input type="radio" name="aircraft" value="fighter" checked>Viper Jet<small>Fast boost, balanced handling</small></label>
           <label><input type="radio" name="aircraft" value="saucer">UFO<small>Tight turns, steady pitch</small></label>
-          <label><input type="radio" name="aircraft" value="jetpack">Jetpack<small>Slow cruise, quick climbs</small></label>
+          <label><input type="radio" name="aircraft" value="jetpack">Mark 42 Armor<small>Repulsor flight, landing mode and twin lasers</small></label>
         </fieldset>
       </div>
       <label class="runway-choice" id="runwayChoice" hidden><input id="runwayStart" type="checkbox" name="runwayStart">Start on the runway</label>
@@ -239,8 +239,8 @@
     <div id="joyZone"><div id="joyKnob"></div></div>
     <div class="touch-btn" id="btnCam">VIEW</div>
     <div class="touch-btn fighter-control" id="btnFire">MSL</div>
-    <div class="touch-btn fighter-control" id="btnCannon">GUN</div>
-    <button class="touch-btn fighter-control" id="btnGear" type="button">GEAR</button>
+    <div class="touch-btn fighter-control armor-compatible" id="btnCannon">LASER</div>
+    <button class="touch-btn fighter-control armor-compatible" id="btnGear" type="button">LAND</button>
     <button class="touch-btn fighter-control" id="btnBrake" type="button">BRAKE</button>
     <div class="touch-btn" id="btnBoost">AB</div>
     <div class="touch-btn" id="btnRoll">ROLL</div>
@@ -287,12 +287,12 @@
         </select>
         <output id="sphereStatus"></output>
       </div>
-      <span class="desktop-only fighter-control"><span class="key-pill">G</span>GEAR <span class="key-pill">B</span>BRAKE</span>
+      <span class="desktop-only fighter-control armor-compatible"><span class="key-pill">G</span>GEAR / LAND <span class="key-pill">B</span>BRAKE</span>
       <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>STEER / MOUSE</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
       <span class="desktop-only"><span class="key-pill">SHIFT / HOLD</span>BOOST</span>
       <span class="desktop-only fighter-control"><span class="key-pill">M / F / RMB</span>MISSILE</span>
-      <span class="desktop-only fighter-control"><span class="key-pill">C</span>CANNON</span>
+      <span class="desktop-only fighter-control armor-compatible"><span class="key-pill">C</span>GUN / LASER</span>
       <span class="desktop-only"><span class="key-pill">SPACE</span>VIEW (<b id="viewName">CHASE</b>)</span>
       <span class="fighter-control">MSL <span class="missile-pips" id="missilePips">
         <i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i>
@@ -319,6 +319,7 @@
   const titleOverlay = document.getElementById('titleOverlay');
   const aircraftName = document.getElementById('aircraftName');
   const fighterControls = document.querySelectorAll('.fighter-control');
+  const armorCompatibleControls = document.querySelectorAll('.armor-compatible');
   const gearStatus = document.getElementById('gearStatus');
   const sphereStatus = document.getElementById('sphereStatus');
   const sphereShowControl = document.getElementById('sphereShowControl');
@@ -661,7 +662,7 @@
   const AIRCRAFT = {
     fighter: { name: 'Viper Jet', cruise: 23.5, boost: 42, turn: 1.45, pitchResponse: 3.4, maxPitch: 0.78 },
     saucer: { name: 'UFO', cruise: 20, boost: 34, turn: 2.3, pitchResponse: 4.0, maxPitch: 0.55 },
-    jetpack: { name: 'Jetpack', cruise: 14, boost: 24, turn: 1.9, pitchResponse: 5.2, maxPitch: 1.02 }
+    jetpack: { name: 'Mark 42 Armor', cruise: 14, boost: 24, turn: 1.9, pitchResponse: 5.2, maxPitch: 1.02 }
   };
   let selectedAircraft = 'fighter';
 
@@ -1891,11 +1892,12 @@
 
   function buildFighterMesh() {
     const { addTri, addQuad, upload } = createTriangleMesh();
+    const box = (...args) => addModelBox(addQuad, ...args);
     const radome = [0.14, 0.13, 0.22];
     const slate = [0.34, 0.39, 0.48];
     const grey = [0.54, 0.59, 0.67];
     const lightGrey = [0.70, 0.74, 0.80];
-    const canopyGold = [0.96, 0.72, 0.26];
+    const canopyFrame = [0.34, 0.48, 0.57];
     const redCap = [0.85, 0.22, 0.22];
     const nozzleDark = [0.16, 0.14, 0.20];
 
@@ -1926,16 +1928,28 @@
     addQuad(fBotF, fLF, fLR, fBotR, slate);
     addQuad(fRF, fBotF, fBotR, fRR, grey);
 
-    // Gold-tinted bubble canopy
-    const cFront = [0, 0.27, 1.15];
-    const cPeak = [0, 0.56, 0.55];
-    const cRear = [0, 0.30, -0.15];
-    const cL = [-0.20, 0.28, 0.52];
-    const cR = [0.20, 0.28, 0.52];
-    addTri(cFront, cR, cPeak, canopyGold);
-    addTri(cFront, cPeak, cL, canopyGold);
-    addTri(cPeak, cR, cRear, canopyGold);
-    addTri(cPeak, cRear, cL, canopyGold);
+    // Clear bubble canopy: only the structural frame is opaque, leaving the
+    // pilot visible from chase and top-down views.
+    box(0,0.31,1.02,0.055,0.08,0.32,canopyFrame);
+    box(0,0.54,0.53,0.055,0.08,0.72,canopyFrame);
+    box(-0.215,0.32,0.52,0.045,0.07,1.18,canopyFrame);
+    box(0.215,0.32,0.52,0.045,0.07,1.18,canopyFrame);
+    box(0,0.31,-0.10,0.46,0.07,0.06,canopyFrame);
+
+    // Visible modern fighter pilot: dark flight suit, harness, helmet, oxygen
+    // mask and visor. The compact proportions fit beneath the clear canopy.
+    const flightSuit=[0.18,0.24,0.25], harness=[0.72,0.67,0.48];
+    const helmet=[0.78,0.79,0.75], visor=[0.12,0.22,0.27], mask=[0.25,0.29,0.29];
+    box(0,0.31,0.36,0.30,0.34,0.29,flightSuit);
+    box(0,0.48,0.49,0.26,0.10,0.08,harness);
+    for(const side of [-1,1]){
+      box(side*0.13,0.34,0.37,0.045,0.36,0.31,harness);
+      box(side*0.22,0.31,0.50,0.10,0.26,0.10,flightSuit);
+    }
+    box(0,0.59,0.43,0.25,0.25,0.25,helmet);
+    box(0,0.62,0.555,0.21,0.10,0.035,visor);
+    box(0,0.54,0.565,0.13,0.08,0.04,mask);
+    box(0,0.18,0.24,0.38,0.18,0.42,[0.15,0.17,0.18]);
 
     // Cropped delta wings (left & right)
     for (const s of [-1, 1]) {
@@ -2053,33 +2067,44 @@
   }
 
   function buildJetpackMesh() {
-    const { addQuad, upload } = createTriangleMesh();
-    function box(x,y,z,w,h,d,color) {
-      const l=x-w/2,r=x+w/2,b=y-h/2,t=y+h/2,f=z+d/2,k=z-d/2;
-      const a=[l,b,f],c=[r,b,f],e=[r,t,f],g=[l,t,f];
-      const i=[l,b,k],j=[r,b,k],m=[r,t,k],n=[l,t,k];
-      for (const face of [[a,c,e,g],[j,i,n,m],[i,a,g,n],[c,j,m,e],[g,e,m,n],[i,j,c,a]]) {
-        addQuad(...face,color);
-      }
+    const body=createTriangleMesh(), lights=createTriangleMesh();
+    const box=(mesh,x,y,z,w,h,d,color)=>addModelBox(mesh.addQuad,x,y,z,w,h,d,color);
+    const red=[0.63,0.12,0.09], deepRed=[0.34,0.07,0.07];
+    const gold=[0.88,0.61,0.16], paleGold=[0.95,0.77,0.31];
+    const joint=[0.22,0.24,0.25], glow=[0.32,0.88,1.0];
+
+    // Mark 42-inspired modular armor: gold-dominant plates with deep red
+    // shoulders, boots and torso sections over a dark articulated undersuit.
+    box(body,0,0.30,0,0.78,1.10,0.46,gold);
+    box(body,0,0.37,0.25,0.61,0.72,0.13,paleGold);
+    box(body,0,0.92,0.02,0.57,0.38,0.49,red);
+    box(body,0,1.21,0.02,0.48,0.36,0.47,gold);
+    box(body,0,1.23,0.255,0.40,0.23,0.045,paleGold);
+    box(body,0,1.15,0.278,0.23,0.075,0.035,deepRed);
+    for(const side of [-1,1]){
+      box(body,side*0.49,0.76,0,0.31,0.35,0.40,red);
+      box(body,side*0.56,0.34,0.03,0.25,0.63,0.30,gold);
+      box(body,side*0.57,-0.03,0.05,0.25,0.22,0.31,red);
+      box(body,side*0.24,-0.42,0.01,0.31,0.72,0.36,gold);
+      box(body,side*0.24,-0.90,0.03,0.34,0.31,0.43,red);
+      box(body,side*0.24,-1.12,0.12,0.35,0.17,0.52,paleGold);
+      box(body,side*0.41,0.58,-0.20,0.18,0.25,0.22,joint);
+      box(body,side*0.24,-0.20,-0.12,0.21,0.22,0.25,joint);
+      box(lights,side*0.57,-0.045,0.225,0.13,0.13,0.045,glow);
+      box(lights,side*0.24,-1.21,0.23,0.17,0.07,0.20,glow);
     }
-    const orange = [0.95,0.45,0.18], dark = [0.24,0.24,0.39], steel = [0.62,0.68,0.76];
-    box(0,0.18,0,0.69,1.08,0.52,orange);
-    box(0,0.92,0.06,0.55,0.53,0.54,steel);
-    box(0,0.95,0.36,0.45,0.21,0.1,[0.22,0.72,0.82]);
-    box(0,0.22,-0.48,0.75,0.91,0.58,dark);
-    for (const side of [-1,1]) {
-      box(side*0.53,0.07,-0.5,0.34,1.1,0.41,steel);
-      box(side*0.53,-0.55,-0.5,0.26,0.16,0.29,[0.99,0.78,0.27]);
-      box(side*0.47,0.12,0.13,0.21,0.67,0.23,orange);
-      box(side*0.19,-0.68,0.12,0.28,0.71,0.30,dark);
-    }
-    return upload();
+    // Triangular arc reactor and eye slits remain emissive in low light.
+    lights.addTri([-0.13,0.50,0.322],[0.13,0.50,0.322],[0,0.25,0.322],glow);
+    box(lights,-0.12,1.29,0.278,0.13,0.035,0.035,glow);
+    box(lights,0.12,1.29,0.278,0.13,0.035,0.035,glow);
+    return {body:body.upload(),lights:lights.upload()};
   }
 
+  const ironManMeshes=buildJetpackMesh();
   const aircraftMeshes = {
     fighter: buildFighterMesh(),
     saucer: buildSaucerMesh(),
-    jetpack: buildJetpackMesh()
+    jetpack: ironManMeshes.body
   };
 
   function buildNewYorkLandmark(kind) {
@@ -5929,6 +5954,7 @@
   const missileMesh = buildConeMesh(0.65, 0.065, [0.88, 0.24, 0.24], [0.85, 0.85, 0.88]);
   const plumeOuterMesh = buildConeMesh(1.3, 0.14, [0.98, 0.58, 0.18], [0.95, 0.35, 0.15]);
   const plumeCoreMesh = buildConeMesh(0.75, 0.075, [1.0, 0.96, 0.85], [1.0, 0.86, 0.55]);
+  const laserMesh = buildConeMesh(4.4, 0.045, [0.64, 0.98, 1.0], [0.15, 0.78, 1.0]);
 
   // Dynamically scaled scene framebuffer. The HUD has a separate logical size.
   let resScale = 1.0;
@@ -6484,15 +6510,28 @@
   let cannonReadyAt = 0;
 
   function fireCannon() {
-    if (!flying || crash || selectedAircraft !== 'fighter' || sceneryTime<cannonReadyAt) return;
-    cannonReadyAt=sceneryTime+0.20;
-    const {fwd}=getPlaneBasis();
-    const pos=plane.pos.map((value,i)=>value+2.65*fwd[i]);
-    activeMissiles.push({pos,dir:fwd,speed:plane.speed+118,life:2.0,cannon:true});
+    if (!flying || crash || !['fighter','jetpack'].includes(selectedAircraft) || sceneryTime<cannonReadyAt) return;
+    const basis=getPlaneBasis();
+    if(selectedAircraft==='jetpack'){
+      cannonReadyAt=sceneryTime+0.12;
+      for(const side of [-1,1]){
+        const pos=plane.pos.map((value,i)=>value+basis.right[i]*side*0.57+
+          basis.up[i]*-0.03+basis.fwd[i]*0.44);
+        activeMissiles.push({pos,dir:[...basis.fwd],speed:plane.speed+165,life:1.35,cannon:true,laser:true});
+      }
+    }else{
+      cannonReadyAt=sceneryTime+0.20;
+      const pos=plane.pos.map((value,i)=>value+2.65*basis.fwd[i]);
+      activeMissiles.push({pos,dir:basis.fwd,speed:plane.speed+118,life:2.0,cannon:true});
+    }
     playMissileSound();
   }
 
   function fireMissile() {
+    if(selectedAircraft==='jetpack'){
+      fireCannon();
+      return;
+    }
     if (!flying || crash || selectedAircraft !== "fighter") return;
     // Pick next loaded hardpoint
     let slot = -1;
@@ -6883,6 +6922,62 @@
 
     // COCKPIT & HUD OVERLAY (Fades in cleanly in Cockpit view)
     if (viewIdx !== 1) return;
+
+    if(selectedAircraft==='jetpack'){
+      // Helmet-mounted JARVIS-style tactical interface for the Mark 42 suit.
+      const cx=w*0.5,cy=h*0.48,cyan='#75efff',dim='rgba(117,239,255,0.42)';
+      const scan=(time*34)%h;
+      hudCtx.save();
+      const wash=hudCtx.createRadialGradient(cx,cy,8,cx,cy,Math.max(w,h)*0.62);
+      wash.addColorStop(0,'rgba(10,58,68,0.02)');
+      wash.addColorStop(0.72,'rgba(5,35,44,0.09)');
+      wash.addColorStop(1,'rgba(2,17,24,0.34)');
+      hudCtx.fillStyle=wash;
+      hudCtx.fillRect(0,0,w,h);
+      hudCtx.strokeStyle=cyan;
+      hudCtx.fillStyle=cyan;
+      hudCtx.lineWidth=1;
+      hudCtx.font='9px "Share Tech Mono", monospace';
+      hudCtx.fillText('JARVIS // MARK 42',16,18);
+      hudCtx.fillText('ARMOR INTEGRITY 100%',16,32);
+      hudCtx.textAlign='right';
+      hudCtx.fillText(armorLandingMode?'LANDING ASSIST ACTIVE':'REPULSOR FLIGHT STABLE',w-16,18);
+      hudCtx.fillText('TWIN LASERS '+(sceneryTime>=cannonReadyAt?'READY':'CYCLING'),w-16,32);
+      hudCtx.textAlign='left';
+      for(const radius of [28,47,73]){
+        hudCtx.globalAlpha=radius===47?0.72:0.34;
+        hudCtx.beginPath();
+        hudCtx.arc(cx,cy,radius,time*(radius===47?-0.18:0.12),time*0.12+Math.PI*1.45);
+        hudCtx.stroke();
+      }
+      hudCtx.globalAlpha=1;
+      const reticle=18+Math.sin(time*3)*2;
+      hudCtx.strokeRect(cx-reticle,cy-reticle,reticle*2,reticle*2);
+      hudCtx.beginPath();
+      hudCtx.moveTo(cx-34,cy);hudCtx.lineTo(cx-10,cy);
+      hudCtx.moveTo(cx+10,cy);hudCtx.lineTo(cx+34,cy);
+      hudCtx.moveTo(cx,cy-34);hudCtx.lineTo(cx,cy-10);
+      hudCtx.moveTo(cx,cy+10);hudCtx.lineTo(cx,cy+34);
+      hudCtx.stroke();
+      const altitude=Math.round(plane.pos[1]*85),speed=Math.round(plane.speed*18.5);
+      hudCtx.fillText('SPD '+String(speed).padStart(3,'0')+' KTS',18,h-36);
+      hudCtx.fillText('ALT '+String(altitude).padStart(5,'0')+' FT',18,h-22);
+      hudCtx.textAlign='right';
+      hudCtx.fillText('HDG '+String(Math.round(((plane.yaw*180/Math.PI)%360+360)%360)).padStart(3,'0'),w-18,h-36);
+      hudCtx.fillText('RADAR '+Math.round(plane.radarAlt*85)+' FT',w-18,h-22);
+      hudCtx.textAlign='left';
+      hudCtx.strokeStyle=dim;
+      hudCtx.beginPath();hudCtx.moveTo(0,scan);hudCtx.lineTo(w,scan);hudCtx.stroke();
+      // Helmet edge brackets give the first-person view a physical visor frame.
+      for(const side of [-1,1]){
+        const x=side<0?9:w-9,inner=side<0?55:w-55;
+        hudCtx.beginPath();
+        hudCtx.moveTo(x,58);hudCtx.lineTo(inner,96);hudCtx.lineTo(inner,h-72);hudCtx.lineTo(x,h-42);
+        hudCtx.stroke();
+      }
+      hudCtx.restore();
+      return;
+    }
 
     const cx = Math.floor(w * 0.5);
     const cy = Math.floor(h * 0.44);
@@ -7490,6 +7585,7 @@
       missionStatus.classList.toggle('tour',Boolean(tourStops.length));
       grounded=Boolean(runway);
       gearDown=grounded;
+      armorLandingMode=false;
       brakes=false;
       Object.assign(plane, {
         pos: runway ? [runway.x,sampleTerrainHeight(runway.x,runway.z)+GEAR_CLEARANCE,runway.z]
@@ -7513,7 +7609,10 @@
       hardpointTimers.fill(0);
       updateMissilePips();
       aircraftName.textContent = AIRCRAFT[selectedAircraft].name;
+      document.getElementById('btnCannon').textContent=selectedAircraft==='jetpack'?'LASER':'GUN';
+      document.getElementById('btnGear').textContent=selectedAircraft==='jetpack'?'LAND':'GEAR';
       for (const control of fighterControls) control.hidden = selectedAircraft !== 'fighter';
+      if(selectedAircraft==='jetpack')for(const control of armorCompatibleControls)control.hidden=false;
       camInitialized = false;
       lastMapFrame = -Infinity;
       if (mapPanel.classList.contains('expanded')) toggleFlightMap();
@@ -8045,17 +8144,30 @@
   const GEAR_CLEARANCE = 0.96;
   const ROTATE_SPEED = 23;
   let gearDown = false;
+  let armorLandingMode = false;
   let grounded = false;
   let brakes = false;
 
   function toggleGear() {
-    if (!flying || crash || selectedAircraft !== 'fighter' || grounded) return;
+    if (!flying || crash || grounded || !['fighter','jetpack'].includes(selectedAircraft)) return;
+    if(selectedAircraft==='jetpack'){
+      armorLandingMode=!armorLandingMode;
+      renderGearStatus();
+      return;
+    }
     gearDown = !gearDown;
     renderGearStatus();
   }
 
   function renderGearStatus() {
-    gearStatus.hidden = selectedAircraft !== 'fighter';
+    gearStatus.hidden = !['fighter','jetpack'].includes(selectedAircraft);
+    if(selectedAircraft==='jetpack'){
+      let text=grounded?'ARMOR GROUNDED � HOLD BOOST TO LAUNCH':
+        armorLandingMode?'LANDING ASSIST � DESCENDING':'REPULSOR FLIGHT � G TO LAND';
+      if(grounded && brakes)text='ARMOR HOLD � '+Math.round(plane.speed);
+      if(gearStatus.textContent!==text)gearStatus.textContent=text;
+      return;
+    }
     let text = gearDown ? 'GEAR DOWN' : 'GEAR UP';
     if (grounded) {
       const speed = Math.round(plane.speed);
@@ -8098,9 +8210,10 @@
   function advanceFlight(dt) {
     const prevPos = [...plane.pos];
     const craft = AIRCRAFT[selectedAircraft];
-    const targetSpeed = plane.afterburner ? craft.boost : brakes ? 16 : craft.cruise;
+    const armor=selectedAircraft==='jetpack';
+    const targetSpeed = armorLandingMode ? 5 : plane.afterburner ? craft.boost : brakes ? 16 : craft.cruise;
     if (grounded) {
-      const accel = brakes ? -19 : plane.afterburner ? 6.5 : -2.4;
+      const accel = brakes ? -19 : plane.afterburner ? (armor?15:6.5) : armor?-10:-2.4;
       plane.speed = clamp(plane.speed+accel*dt,0,craft.boost);
     } else {
       plane.speed = lerp(plane.speed,targetSpeed,dt*2.8);
@@ -8154,13 +8267,15 @@
     const prevPitch = plane.pitch;
     const taxiTurn=grounded ? clamp(plane.speed/7,0,0.62) : 1;
     plane.yaw += turnInput * craft.turn * dt * taxiTurn;
-    const rotate=grounded && plane.afterburner && !brakes && plane.speed>=ROTATE_SPEED && pitchInput>0.20;
+    const rotate=grounded && plane.afterburner && !brakes &&
+      (armor || (plane.speed>=ROTATE_SPEED && pitchInput>0.20));
     if (rotate) {
       grounded=false;
-      plane.pitch=0.20;
-      plane.pos[1]+=0.04;
+      armorLandingMode=false;
+      plane.pitch=armor?0.48:0.20;
+      plane.pos[1]+=armor?0.16:0.04;
     }
-    const targetPitch = grounded ? 0 : clamp(pitchInput,-0.96,1)*craft.maxPitch;
+    const targetPitch = grounded ? 0 : armorLandingMode ? -0.34 : clamp(pitchInput,-0.96,1)*craft.maxPitch;
     plane.pitch = lerp(plane.pitch,targetPitch,dt*craft.pitchResponse);
     plane.bank = lerp(plane.bank,grounded?0:-turnInput*0.92,dt*4.5);
 
@@ -8183,12 +8298,16 @@
 
     const [x,y,z]=plane.pos;
     const floor=sampleGroundHeight(x,z);
-    if (grounded || (gearDown && !rotate && y<=floor+GEAR_CLEARANCE &&
+    const armorCanLand=armor && armorLandingMode && !rotate && y<=floor+1.15 &&
+      plane.pitch>=-0.48 && plane.pitch<0.15 && Math.abs(plane.bank)<0.30 && plane.speed<=10;
+    if (grounded || armorCanLand || (gearDown && !rotate && y<=floor+GEAR_CLEARANCE &&
         plane.pitch>=-0.21 && plane.pitch<0.20 && Math.abs(plane.bank)<0.22 && plane.speed<=29)) {
       const surface=usableLandingSurface(x,z);
-      if (surface!==null && (!grounded || Math.abs(surface+GEAR_CLEARANCE-prevPos[1])<1.4)) {
+      const clearance=armor?1.18:GEAR_CLEARANCE;
+      if (surface!==null && (!grounded || Math.abs(surface+clearance-prevPos[1])<1.4)) {
         grounded=true;
-        plane.pos[1]=surface+GEAR_CLEARANCE;
+        armorLandingMode=false;
+        plane.pos[1]=surface+clearance;
         plane.pitch=plane.bank=plane.rollAnim=0;
       } else if (grounded) {
         finishFlight([x,y,z],'Runway overrun',floor<=WATER_H+0.04);
@@ -8271,6 +8390,24 @@
   }
 
   function finishFlight(position, reason, isWater) {
+    if(selectedAircraft==='jetpack'){
+      // The armor is a playable hero suit rather than a destructible vehicle.
+      // Collisions trigger a short repulsor recovery instead of a crash state.
+      const [x,,z]=position;
+      const safeY=Math.min(CEILING,Math.max(sampleGroundHeight(x,z),navigationSurface(x,z))+2.6);
+      plane.pos=[x,safeY,z];
+      plane.speed=0;
+      plane.pitch=plane.bank=plane.rollAnim=0;
+      plane.afterburner=false;
+      armorLandingMode=false;
+      grounded=false;
+      brakes=false;
+      steeringKeys.clear();
+      groundWarning.hidden=true;
+      camInitialized=false;
+      explosions.push({pos:[x,safeY-1.2,z],age:0,maxAge:0.48,isWater:false});
+      return;
+    }
     crash = { startedAt: null, age: 0, reason };
     plane.pos = position;
     plane.speed = 0;
@@ -8663,13 +8800,16 @@
           drawMeshWithOutline(plumeCoreMesh, mat4FromBasis(pPos, basis.right, basis.up, backDir, abLen * 0.85), true);
         }
       } else if (selectedAircraft === 'jetpack') {
+        drawMeshWithOutline(ironManMeshes.lights,planeModel,true);
         const exhaust = basis.up.map(value => -value);
         const thrust = plane.afterburner ? 1.12 : 0.55;
         const flicker = 0.92 + 0.14 * Math.sin(time * 64);
-        for (const side of [-1, 1]) {
+        const emitters=[[-0.24,-1.16,0.08],[0.24,-1.16,0.08],[-0.57,-0.05,0.18],[0.57,-0.05,0.18]];
+        for (const [side,up,forward] of emitters) {
           const nozzle = plane.pos.map((value, i) => value + planeScale *
-            (basis.right[i] * side * 0.53 - basis.up[i] * 0.62 - basis.fwd[i] * 0.5));
-          const model = mat4FromBasis(nozzle, basis.right, basis.fwd, exhaust, thrust * flicker * planeScale);
+            (basis.right[i] * side + basis.up[i] * up + basis.fwd[i] * forward));
+          const scale=(Math.abs(side)>0.5?0.58:1)*thrust*flicker*planeScale;
+          const model = mat4FromBasis(nozzle, basis.right, basis.fwd, exhaust, scale);
           drawMeshWithOutline(plumeOuterMesh, model, true);
         }
       }
@@ -8679,7 +8819,7 @@
     for (const m of activeMissiles) {
       const mRight = v3Norm(v3Cross([0, 1, 0], m.dir));
       const mUp = v3Cross(m.dir, mRight);
-      drawMeshWithOutline(m.cannon?plumeCoreMesh:missileMesh,
+      drawMeshWithOutline(m.laser?laserMesh:m.cannon?plumeCoreMesh:missileMesh,
         mat4FromBasis(m.pos,mRight,mUp,m.dir,m.cannon?0.74:1.15),Boolean(m.cannon));
     }
 
