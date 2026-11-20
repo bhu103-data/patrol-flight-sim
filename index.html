@@ -1011,7 +1011,10 @@
   let heightField = null;
   let terrainTex = null;
 
-  // WebGL2 Setup
+  // WebGL2 Setup. If Chrome loses its GPU context, retry once in a
+  // compatibility profile that keeps the same scene but avoids the large
+  // intermediate framebuffer that can trigger another context loss.
+  const graphicsCompat = new URLSearchParams(location.search).get('graphics') === 'compat';
   const gl = glCanvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) {
     menuError.hidden = false;
@@ -6739,10 +6742,10 @@
   const laserMesh = buildConeMesh(4.4, 0.045, [0.64, 0.98, 1.0], [0.15, 0.78, 1.0]);
 
   // Dynamically scaled scene framebuffer. The HUD has a separate logical size.
-  let resScale = 1.0;
+  let resScale = graphicsCompat ? 0.78 : 1.0;
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
-  let directRendering = false, frameCheckPending = true;
+  let directRendering = graphicsCompat, frameCheckPending = true;
   const frameSample = new Uint8Array(4);
 
   const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc);
@@ -9763,7 +9766,7 @@
   let resumedGraphics=false, interruptedFlight=null;
   function showGraphicsRecovery(message){
     const retryUrl = new URL(location.href);
-    retryUrl.searchParams.delete('graphics');
+    retryUrl.searchParams.set('graphics', 'compat');
     const link = document.createElement('a');
     link.href = retryUrl.href;
     link.textContent = 'Reload full graphics';
@@ -9789,6 +9792,19 @@
         if(!resumedGraphics)sessionStorage.setItem(graphicsResumeKey,JSON.stringify(interruptedFlight));
       }catch{
         // The recovery link is still usable when storage is blocked.
+      }
+    }
+    if(!graphicsCompat){
+      try{
+        if(!sessionStorage.getItem('patrol.graphicsCompatTried')){
+          sessionStorage.setItem('patrol.graphicsCompatTried','1');
+          const retryUrl = new URL(location.href);
+          retryUrl.searchParams.set('graphics','compat');
+          location.replace(retryUrl.href);
+          return;
+        }
+      }catch{
+        // Fall through to the manual recovery link below.
       }
     }
     showGraphicsRecovery('The WebGL graphics connection was interrupted.');
