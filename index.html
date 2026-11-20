@@ -1173,6 +1173,50 @@
       return a * vec3(sin(phase), k * cos(phase) * dir);
     }
 
+    // Compact directional spectrum. It follows the same deep-water dispersion
+    // idea as Tidewater's FFT ocean, but stays analytic for this single-file
+    // renderer and therefore does not replace any map or scene geometry.
+    vec3 oceanSpectrum(vec2 xz, float pixel, float exposure) {
+      vec3 sum = vec3(0.0);
+      for (int i=0; i<12; i++) {
+        float fi=float(i), band=fi/11.0;
+        float k=exp(mix(log(0.105),log(5.4),pow(band,1.34)));
+        float rnd=fract(sin((fi+2.0)*127.1)*43758.5453);
+        float spread=(rnd-0.5)*mix(1.42,2.18,band);
+        float angle=0.64+spread;
+        vec2 dir=vec2(cos(angle),sin(angle));
+        float phase=k*dot(xz,dir)-sqrt(9.81*k)*uTime+rnd*6.2831853;
+        float amp=0.052/pow(k,0.82)*mix(0.72,1.0,exposure);
+        amp*=1.0-smoothstep(0.48,2.35,k*pixel);
+        float h=sin(phase)+0.11*sin(phase*2.0+rnd*2.7);
+        float dh=cos(phase)+0.22*cos(phase*2.0+rnd*2.7);
+        sum+=amp*vec3(h,k*dh*dir);
+      }
+      return sum;
+    }
+
+    // Tidewater-inspired physical water terms: exact air/water Fresnel,
+    // Cox-Munk unresolved slope roughness and a GGX sun highlight.
+    float waterFresnel(float cosI) {
+      const float eta = 1.333;
+      float c = clamp(cosI, 0.0, 1.0);
+      float g = sqrt(max(eta * eta - 1.0 + c * c, 0.0));
+      float a = (g - c) / max(g + c, 0.0001);
+      float b = (c * (g + c) - 1.0) / max(c * (g - c) + 1.0, 0.0001);
+      return 0.5 * a * a * (1.0 + b * b);
+    }
+
+    float waterDGGX(float ndh, float alpha2) {
+      float d = ndh * ndh * (alpha2 - 1.0) + 1.0;
+      return alpha2 / max(3.14159265 * d * d, 0.00001);
+    }
+
+    float waterVSmith(float ndl, float ndv, float alpha2) {
+      float gv = ndl * sqrt(max(ndv * ndv * (1.0 - alpha2) + alpha2, 0.00001));
+      float gl = ndv * sqrt(max(ndl * ndl * (1.0 - alpha2) + alpha2, 0.00001));
+      return 0.5 / max(gv + gl, 0.0001);
+    }
+
     vec3 getSky(vec3 rd) {
       float up=clamp(rd.y,0.0,1.0);
       float sunAmt=max(dot(rd,sunDirection()),0.0);
@@ -1302,33 +1346,56 @@
           float openWater = (uVegas || uAlderValley) ? 0.28 : mix(0.46, 1.0, harborExposure);
           float wind = mix(0.65, 1.25, uAtmosphere.z) * openWater;
           vec2 xz = p.xz;
-          vec3 swell = oceanWave(xz, vec2(0.80, 0.60), 0.18, 1.15, 0.70, pixel)
-                     + oceanWave(xz, vec2(-0.28, 0.96), 0.31, 1.61, 0.33, pixel);
-          vec3 chop = oceanWave(xz, vec2(0.60, 0.80), 0.91, 2.44, 0.125, pixel)
-                    + oceanWave(xz, vec2(0.96, -0.28), 1.74, 3.20, 0.046, pixel);
+          vec3 swell = oceanSpectrum(xz,pixel,openWater);
+          vec3 chop = oceanWave(xz, vec2(0.44, 0.898), 2.4, 4.85, 0.026, pixel)
+                    + oceanWave(xz, vec2(0.992, -0.126), 3.7, 6.02, 0.014, pixel);
           vec3 ripple = oceanWave(xz, vec2(0.87, 0.493), 4.9, 5.1, 0.019, pixel)
-                      + oceanWave(xz, vec2(-0.48, 0.877), 7.3, 6.3, 0.010, pixel);
-          vec2 slope = wind * (swell.yz + chop.yz) + ripple.yz * mix(0.45, 0.9, openWater);
+                      + oceanWave(xz, vec2(-0.48, 0.877), 7.3, 6.3, 0.010, pixel)
+                      + oceanWave(xz, vec2(0.22, -0.975), 11.2, 7.7, 0.005, pixel);
+          float gust = mix(0.82, 1.18, vnoise(xz * 0.018 - vec2(0.07,0.04) * uTime));
+          float noiseH=vnoise(xz*0.085+vec2(-uTime*0.035,uTime*0.018));
+          vec2 noiseSlope=vec2(
+            vnoise((xz+vec2(0.72,0.0))*0.085+vec2(-uTime*0.035,uTime*0.018))-noiseH,
+            vnoise((xz+vec2(0.0,0.72))*0.085+vec2(-uTime*0.035,uTime*0.018))-noiseH
+          )*0.38;
+          vec2 slope = wind * gust * (swell.yz + chop.yz + noiseSlope) + ripple.yz * mix(0.35, 0.72, openWater);
           vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
-          vec3 shallow = uAlaska ? vec3(0.16,0.43,0.42) : vec3(0.21,0.60,0.51);
-          vec3 deep = uAlaska ? vec3(0.046,0.18,0.24) : vec3(0.038,0.19,0.27);
+          vec3 shallow = uAlaska ? vec3(0.13,0.36,0.38) : vec3(0.10,0.45,0.42);
+          vec3 deep = uAlaska ? vec3(0.022,0.105,0.16) : vec3(0.018,0.115,0.17);
           if (uManhattan) {
-            shallow = vec3(0.17,0.43,0.41);
-            deep = mix(vec3(0.068,0.23,0.26), vec3(0.042,0.17,0.24), harborExposure);
+            shallow = vec3(0.075,0.31,0.30);
+            deep = mix(vec3(0.040,0.15,0.17), vec3(0.020,0.095,0.145), harborExposure);
           }
-          vec3 waterCol = mix(deep, shallow, exp(-depth * 0.47));
-          waterCol *= 1.0 + wind * (swell.x * 0.075 + chop.x * 0.30);
+          // Beer-Lambert attenuation through the available terrain depth,
+          // with a small single-scattering term instead of a flat color mix.
+          vec3 sigmaA = uManhattan ? vec3(0.28,0.095,0.060) : vec3(0.22,0.075,0.045);
+          vec3 sigmaS = uManhattan ? vec3(0.018,0.055,0.060) : vec3(0.014,0.070,0.074);
+          float opticalPath = min(depth / max(abs(rd.y), 0.22), 34.0);
+          vec3 transmittance = exp(-(sigmaA + sigmaS) * opticalPath);
+          vec3 waterCol = deep * (1.0 - transmittance) + shallow * transmittance;
+          waterCol += sigmaS / (sigmaA + sigmaS) * (1.0 - transmittance) * 0.075;
+          waterCol *= 1.0 + wind * (swell.x * 0.045 + chop.x * 0.19);
+          vec3 V = -rd;
           vec3 reflDir = reflect(rd, wn);
           reflDir.y = abs(reflDir.y);
-          float grazing = 1.0 - clamp(dot(-rd, wn), 0.0, 1.0);
-          float fresnel = 0.02 + 0.98 * pow(grazing, 5.0);
-          waterCol = mix(waterCol, getSky(normalize(reflDir)), min(0.94, 0.11 + fresnel * 0.88));
+          float ndv = max(dot(wn, V), 0.0001);
+          float fresnel = waterFresnel(ndv);
+          float meanSquareSlope = (0.003 + 0.00512 * (4.0 + wind * 6.0)) * mix(0.5,1.0,openWater);
+          float unresolved = smoothstep(0.05, 1.3, pixel);
+          float roughness = 0.028 + sqrt(meanSquareSlope) * unresolved;
+          vec3 roughRefl = normalize(mix(reflDir, vec3(reflDir.x, max(reflDir.y,0.19), reflDir.z), roughness * 1.7));
+          vec3 reflectedSky = getSky(roughRefl);
+          waterCol = mix(waterCol, reflectedSky, min(0.965, 0.045 + fresnel * 0.955));
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
           vec3 sunTint = mix(vec3(1.0,0.56,0.27), vec3(1.0,0.95,0.82), smoothstep(0.02,0.3,uSun.y));
-          float glint = max(dot(wn, normalize(uSun - rd + vec3(0.0,0.00001,0.0))), 0.0);
-          float glitter = 0.34 * pow(glint, 26.0) + 0.61 * pow(glint, mix(55.0, 145.0, localDetail));
-          if (uManhattan) glitter *= mix(0.72, 1.0, harborExposure);
+          vec3 H = normalize(uSun + V + vec3(0.0,0.00001,0.0));
+          float ndl = max(dot(wn,uSun),0.0), ndh=max(dot(wn,H),0.0), vdh=max(dot(V,H),0.0);
+          float alpha2 = max(roughness*roughness,0.0012);
+          float ggx = waterDGGX(ndh,alpha2) * waterVSmith(ndl,ndv,alpha2) * waterFresnel(vdh) * ndl;
+          float facetSparkle = mix(0.78,1.24,vnoise(xz*1.8+vec2(uTime*0.13,-uTime*0.09)));
+          float glitter = min(ggx * facetSparkle, 18.0) * mix(0.075,0.12,localDetail);
+          if (uManhattan) glitter *= mix(0.76, 1.0, harborExposure);
           float moonGlint = pow(max(dot(wn, normalize(uMoon - rd + vec3(0.0,0.00001,0.0))), 0.0), 80.0);
           waterCol += sunTint * glitter * clearSky * sunAbove * litFactor;
           waterCol += vec3(0.37,0.53,0.75) * moonGlint * clearSky
@@ -1338,14 +1405,18 @@
           // shallow water. The depth mask comes from the existing terrain.
           vec2 advect = xz - vec2(0.8, 0.6) * uTime * 1.25;
           float breakup = vnoise(advect * 0.23);
+          float foamCells = vnoise(advect * 0.71 + vec2(7.1,-3.4));
           float crest = swell.x + chop.x * 1.7;
-          float caps = smoothstep(0.66, 1.03, crest + (breakup - 0.5) * 0.32)
-                     * smoothstep(1.1, 2.7, depth) * wind * 0.39;
+          float compression = length(slope) + max(crest,0.0) * 0.42;
+          float caps = smoothstep(0.62, 1.12, compression + (breakup - 0.5) * 0.24)
+                     * smoothstep(0.45,0.72,foamCells) * smoothstep(1.1, 2.7, depth) * wind * 0.32;
           float shore = 0.0;
           if (depth < 1.9) {
-            float pulse = sin(depth * 7.8 - uTime * 2.0 + breakup * 3.4 + swell.x * 1.4);
-            shore = smoothstep(0.45, 0.95, pulse) * (1.0 - smoothstep(0.08, 1.9, depth))
-                  * mix(0.35, 0.78, breakup) * mix(0.45, 1.0, openWater);
+            float shoalPhase = depth * 6.4 - uTime * 1.65 + breakup * 4.2 + swell.x * 1.7;
+            float pulse = sin(shoalPhase) * 0.72 + sin(shoalPhase*0.47+1.9)*0.28;
+            float lace = smoothstep(0.55,0.78,vnoise(xz*0.58+vec2(uTime*0.08,0.0)));
+            shore = smoothstep(0.36, 0.88, pulse) * (1.0 - smoothstep(0.04, 1.9, depth))
+                  * mix(0.22, 0.72, breakup) * mix(0.45, 1.0, openWater) * mix(0.45,1.0,lace);
             if (uManhattan) shore *= 0.62 + 0.25 * localDetail;
             float caustic = pow(0.5 + 0.5 * sin(3.4*xz.x + 2.1*xz.y + uTime*1.2 + ripple.x*50.0)
                                             * sin(2.2*xz.x - 3.9*xz.y - uTime*0.8), 5.0);
