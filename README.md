@@ -1,8 +1,10 @@
 # PATROL Flight Simulator
 
-PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washington, DC, Las Vegas, the Alaska Fjords, Dusk Tide Islands, Alder River Valley, or Copper Coast in a Viper jet, a UFO, or a jetpack. Select **? Random Map** for a surprise destination.
+PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washington, DC, Las Vegas, the Alaska Fjords, Alder River Valley, or Copper Coast in a Viper jet, a UFO, or a jetpack. Select **? Random Map** for a surprise destination.
 
 The Manhattan map includes a compressed Times Square district shaped by the diagonal of Broadway and the through lanes of Seventh Avenue. Walk signals, traffic lights, trees, street lamps, and numbered crossings line pedestrian plazas with illuminated storefronts, the TKTS red steps, and the ball atop One Times Square.
+
+Manhattan is the default map. New York Harbor has rolling swell, sun glitter and moonlight, with calmer water in the sheltered channels and intermittent foam near shore. Open **Scenic Views → New York Harbor** for a low vantage point, and use **T** to switch between daylight, dusk, and night.
 
 In Las Vegas, see the Bellagio's curved tower, fountains and lakeside promenade, the Venetian's canal and campanile, Caesars Palace's stone arcades, Wynn's illuminated entrance, and the Luxor pyramid. Las Vegas and Manhattan both have walking crowds, police patrols, and a curbside police stop. Explore the Sphere and ride along with the roller coaster or Ferris wheel using **Scenic Views**.
 
@@ -26,6 +28,8 @@ The Viper now has a clear framed canopy with a visible helmeted pilot, harness, 
 ## Run locally
 
 Serve the repository root with a static HTTP server, such as `python3 -m http.server 8000`. Open `http://localhost:8000` in a browser with WebGL 2 enabled. No build step is required.
+
+The game opens with the full ocean, atmosphere, and post-processing effects. If WebGL is interrupted, use **Reload full graphics** to retry. If WebGL 2 cannot initialize, turn on graphics acceleration in a supported browser and restart it.
 
 ## Washington, DC materials
 
