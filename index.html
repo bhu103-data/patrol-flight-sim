@@ -1217,6 +1217,88 @@
       return 0.5 / max(gv + gl, 0.0001);
     }
 
+    // Abyssal-inspired spectral cascades. PATROL is a raymarched WebGL2
+    // renderer rather than a Three.js scene, so this keeps the existing map
+    // and flight camera while porting the open-source ocean's useful core:
+    // wind-shaped spectrum, deep-water dispersion, three world scales and
+    // analytic displacement derivatives.
+    bool hasOceanCascades() { return !uVegas && !uDc && !uAlderValley; }
+    const float OCEAN_WIND_MPS = 9.0;
+    const float OCEAN_WIND_ENERGY = OCEAN_WIND_MPS*OCEAN_WIND_MPS;
+    const vec2 OCEAN_WIND_DIR = normalize(vec2(0.73, 0.68));
+    float oceanJonswap(float k, float peakK, float gamma) {
+      float sigma = k < peakK ? 0.07 : 0.09;
+      float r = exp(-0.5 * pow((k - peakK) / max(sigma * peakK, 0.0001), 2.0));
+      float pm = exp(-1.25 * pow(peakK / max(k, 0.0001), 4.0)) / pow(max(k, 0.0001), 4.0);
+      return pm * pow(gamma, r);
+    }
+    vec3 oceanCascade(vec2 xz, float t, float pixel, float scale, float amp, float angle) {
+      vec3 wave=vec3(0.0);
+      float peakK=6.2831853/(scale*1.18);
+      float total=0.0;
+      for(int i=0;i<6;i++){
+        float j=float(i);
+        float band=j/5.0;
+        float k=6.2831853/(scale*mix(1.72,0.58,pow(band,1.18)));
+        float spectral=oceanJonswap(k,peakK,3.3);
+        float weight=exp(-0.5*pow((log(k)-log(peakK))/(1.10+band*0.45),2.0));
+        float directional=0.38+0.62*pow(max(dot(OCEAN_WIND_DIR,vec2(cos(angle),sin(angle))),0.0),1.6);
+        float a=angle+(j-2.5)*0.37+sin(j*31.7+scale)*0.055;
+        vec2 dir=vec2(cos(a),sin(a));
+        float phase=k*dot(xz,dir)-sqrt(9.81*k*(1.0+0.02*OCEAN_WIND_MPS))*t+j*2.37+scale*0.17;
+        float h=amp*(0.62+0.38*sqrt(max(spectral*weight*0.0028,0.0))) * directional;
+        h*=1.0-smoothstep(0.52,2.20,k*pixel);
+        wave+=h*vec3(sin(phase),k*cos(phase)*dir);
+        total+=0.92+0.08*directional;
+      }
+      return wave/max(total/6.0,0.0001);
+    }
+    float oceanExposure(vec2 xz) {
+      return uManhattan?mix(0.38,1.0,1.0-smoothstep(-560.0,-300.0,xz.y)):1.0;
+    }
+    float oceanShoaling(float depth) { return smoothstep(0.0,3.2,depth); }
+    float oceanHeight(vec2 xz, float depth, float pixel) {
+      float shore=oceanShoaling(depth), edge=smoothstep(0.06,0.72,depth);
+      return oceanExposure(xz)*(oceanCascade(xz,uTime,pixel,35.0,0.00284*OCEAN_WIND_ENERGY,0.73).x*shore+
+             oceanCascade(xz,uTime,pixel,8.0,0.00079*OCEAN_WIND_ENERGY,0.45).x*edge+
+             oceanCascade(xz,uTime,pixel,1.65,0.000136*OCEAN_WIND_ENERGY,1.02).x*edge);
+    }
+    // Determinant of the horizontal wave displacement Jacobian. Sum recent
+    // upwind samples to approximate foam persistence without a feedback buffer.
+    float crestArea(vec2 xz, float t, float strength) {
+      mat2 j=mat2(1.0);
+      for(int i=0;i<3;i++){
+        float a=0.73+(float(i)-1.0)*0.63;
+        vec2 d=vec2(cos(a),sin(a));
+        float k=6.2831853/35.0*(1.0+float(i)*0.62);
+        float phase=k*dot(xz,d)-sqrt(9.81*k)*t+float(i)*2.37;
+        j-=outerProduct(d,d)*(sin(phase)*strength*(0.21-float(i)*0.032));
+      }
+      return determinant(j);
+    }
+    float oldCrestFoam(vec2 xz, float strength, float fade) {
+      float sum=0.0;
+      for(int i=0;i<4;i++){
+        float age=float(i)*0.23;
+        float area=crestArea(xz-vec2(0.86,0.54)*age,uTime-age,strength);
+        sum+=(1.0-smoothstep(0.68,0.85,area))*exp(-age*2.3);
+      }
+      return clamp(sum*0.31,0.0,0.64)*fade;
+    }
+    vec2 bentSun(vec2 q, float depth) {
+      vec2 slope=oceanCascade(q,uTime,0.0,1.65,0.021,1.02).yz;
+      vec3 dir=refract(-uSun,normalize(vec3(-slope.x,1.0,-slope.y)),1.0/1.333);
+      return q+dir.xz*(depth/max(0.28,-dir.y));
+    }
+    float oceanCaustic(vec2 q, float depth) {
+      const float e=0.16;
+      vec2 c=bentSun(q,depth);
+      vec2 dx=(bentSun(q+vec2(e,0.0),depth)-c)/e;
+      vec2 dz=(bentSun(q+vec2(0.0,e),depth)-c)/e;
+      float area=abs(determinant(mat2(dx,dz)));
+      return 1.0-smoothstep(0.30,0.95,area);
+    }
+
     // Northern curtains: slow waves plus local brightening that travels
     // along individual folds instead of flashing the entire sky.
     vec3 alaskaAurora(vec3 rd) {
@@ -1351,6 +1433,23 @@
         }
       }
 
+      if(hitSurface && hasOceanCascades() && rd.y < -0.08){
+        vec2 flatXZ=(ro+rd*hitDist).xz;
+        float depth=WATER_H-terrainHeight(flatXZ);
+        if(depth>0.12){
+          float pSize=pixelAngle*hitDist/max(abs(rd.y),0.10);
+          float flatT=(WATER_H-ro.y)/rd.y;
+          float waveT=flatT;
+          for(int i=0;i<2;i++){
+            vec2 q=(ro+rd*waveT).xz;
+            float h=oceanHeight(q,max(WATER_H-terrainHeight(q),0.0),pSize);
+            waveT=flatT+clamp(h/rd.y,-3.2,3.2);
+          }
+          if(terrainHeight((ro+rd*waveT).xz)<WATER_H-0.12){
+            hitDist=mix(hitDist,waveT,smoothstep(0.08,0.19,-rd.y));
+          }
+        }
+      }
       if (hitSurface) {
         vec3 p = ro + rd * hitDist;
         vec4 mData = sampleMap(p.xz);
@@ -1394,6 +1493,12 @@
             vnoise((xz+vec2(0.0,0.72))*0.085+vec2(-uTime*0.035,uTime*0.018))-noiseH
           )*0.38;
           vec2 slope = wind * gust * (swell.yz + chop.yz + noiseSlope) + ripple.yz * mix(0.35, 0.72, openWater);
+          if(hasOceanCascades()){
+            swell=oceanCascade(xz,uTime,pixel,35.0,0.00284*OCEAN_WIND_ENERGY,0.73)*oceanShoaling(depth);
+            chop=oceanCascade(xz,uTime,pixel,8.0,0.00079*OCEAN_WIND_ENERGY,0.45)*smoothstep(0.06,0.72,depth);
+            ripple=oceanCascade(xz,uTime,pixel,1.65,0.000136*OCEAN_WIND_ENERGY,1.02)*smoothstep(0.06,0.72,depth);
+            slope=oceanExposure(xz)*gust*(swell.yz+chop.yz+ripple.yz*0.75);
+          }
           vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
           vec3 shallow = uAlaska ? vec3(0.13,0.36,0.38) : vec3(0.10,0.45,0.42);
           vec3 deep = uAlaska ? vec3(0.022,0.105,0.16) : vec3(0.018,0.115,0.17);
@@ -1423,6 +1528,24 @@
           waterCol = mix(waterCol, reflectedSky, min(0.965, 0.045 + fresnel * 0.955));
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
+          if(hasOceanCascades()){
+            vec3 transmitted=refract(rd,wn,1.0/1.333);
+            float path=min(depth/max(0.24,-transmitted.y),16.0);
+            vec2 floorXZ=xz+transmitted.xz*path;
+            vec3 bottom=mix(vec3(0.23,0.27,0.23),vec3(0.48,0.48,0.34),
+                           vnoise(floorXZ*0.54)*0.72+vnoise(floorXZ*2.1)*0.28);
+            vec3 waterTransmission=exp(-vec3(0.94,0.48,0.30)*path);
+            float floorMask=1.0-smoothstep(0.04,0.27,terrainHeight(floorXZ)-WATER_H);
+            float shallowFloor=(1.0-fresnel)*exp(-depth*0.42)*floorMask;
+            float focus=0.0;
+            if(depth<3.2 && localDetail>0.03 && uSun.y>0.08){
+              focus=oceanCaustic(floorXZ,depth)*localDetail*sunAbove*clearSky*litFactor;
+            }
+            waterCol=mix(waterCol,bottom*waterTransmission*(0.72+focus*0.62),shallowFloor*0.76);
+            float back=pow(max(dot(normalize(uSun.xz+vec2(0.0001)),normalize(rd.xz+vec2(0.0001))),0.0),4.0);
+            float crest=smoothstep(0.11,0.43,swell.x+chop.x);
+            waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;
+          }
           vec3 sunTint = mix(vec3(1.0,0.56,0.27), vec3(1.0,0.95,0.82), smoothstep(0.02,0.3,uSun.y));
           vec3 H = normalize(uSun + V + vec3(0.0,0.00001,0.0));
           float ndl = max(dot(wn,uSun),0.0), ndh=max(dot(wn,H),0.0), vdh=max(dot(V,H),0.0);
@@ -1445,6 +1568,10 @@
           float compression = length(slope) + max(crest,0.0) * 0.42;
           float caps = smoothstep(0.62, 1.12, compression + (breakup - 0.5) * 0.24)
                      * smoothstep(0.45,0.72,foamCells) * smoothstep(1.1, 2.7, depth) * wind * 0.32;
+          if(hasOceanCascades()){
+            caps=oldCrestFoam(xz,oceanExposure(xz)*oceanShoaling(depth),
+                             (1.0-smoothstep(1.6,5.6,pixel))*mix(0.10,0.57,foamCells));
+          }
           float shore = 0.0;
           if (depth < 1.9) {
             float shoalPhase = depth * 6.4 - uTime * 1.65 + breakup * 4.2 + swell.x * 1.7;
@@ -1455,7 +1582,7 @@
             if (uManhattan) shore *= 0.62 + 0.25 * localDetail;
             float caustic = pow(0.5 + 0.5 * sin(3.4*xz.x + 2.1*xz.y + uTime*1.2 + ripple.x*50.0)
                                             * sin(2.2*xz.x - 3.9*xz.y - uTime*0.8), 5.0);
-            waterCol += vec3(0.08,0.12,0.085) * caustic * localDetail * exp(-depth * 1.6)
+            if(!hasOceanCascades()) waterCol += vec3(0.08,0.12,0.085) * caustic * localDetail * exp(-depth * 1.6)
                       * (1.0 - fresnel) * sunAbove * clearSky * litFactor;
           }
           waterCol = mix(waterCol, vec3(0.78,0.88,0.89), clamp(caps + shore, 0.0, 0.85));
@@ -2811,6 +2938,7 @@
   let railSections = [];
   let bridgeRails = null;
   let cityTraffic = [];
+  let civilAirTraffic = [];
 
   function bridgeRoadHeight(x) {
     const bridge = EAST_RIVER_BRIDGE;
@@ -3028,6 +3156,7 @@
   function prepareCityTraffic() {
     railSections=[];
     cityTraffic=[];
+    civilAirTraffic=[];
     if (selectedMap.dc) {
       for (const [i,street] of DC_STREETS.entries()) {
         const route=makeTrafficRoute(street);
@@ -3058,6 +3187,14 @@
         offset:seventh.total*i/8,pace:5.7});
       cityTraffic.push({kind:'police',oneWay:true,route:seventh,offset:seventh.total/16,pace:5.7});
       cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
+      civilAirTraffic.push(
+        {center:[18,-282],rx:250,rz:138,altitude:62,phase:0.2,pace:0.075,scale:2.15,livery:0},
+        {center:[-112,-210],rx:185,rz:96,altitude:78,phase:2.5,pace:-0.057,scale:1.82,livery:1},
+        {center:[112,-412],rx:220,rz:72,altitude:54,phase:4.1,pace:0.048,scale:1.62,livery:2},
+        {center:[320,-388],rx:84,rz:22,altitude:35,phase:Math.PI*0.92,pace:0.022,scale:1.30,livery:0,approach:true},
+        {center:[74,-105],rx:295,rz:160,altitude:96,phase:1.0,pace:-0.043,scale:2.40,livery:2},
+        {center:[350,-388],rx:120,rz:30,altitude:46,phase:5.5,pace:-0.018,scale:1.50,livery:1,approach:true}
+      );
     } else if(selectedMap.vegas){
       makeVegasTraffic();
     }
@@ -3120,6 +3257,61 @@
   }
 
   const streetMeshes=Object.fromEntries(['taxi','police','train','walker'].map(kind=>[kind,buildStreetVehicle(kind)]));
+  // Procedural, logo-free civilian airliners based on the proportions of the
+  // open CC-BY airliner reference set. This fits PATROL's raw WebGL2 pipeline.
+  function buildCivilAirlinerMesh(livery=0) {
+    const body=createTriangleMesh(), trim=createTriangleMesh(), lights=createTriangleMesh();
+    const fuselage=livery===1?[0.82,0.84,0.86]:livery===2?[0.92,0.92,0.88]:[0.90,0.91,0.89];
+    const stripe=livery===1?[0.12,0.31,0.62]:livery===2?[0.06,0.45,0.54]:[0.18,0.25,0.36];
+    const window=[0.035,0.095,0.13], dark=[0.025,0.045,0.068], glow=[1.0,0.83,0.46];
+    const rings=[[3.45,0.02,0.02],[2.85,0.58,0.56],[1.55,0.70,0.68],[-1.80,0.62,0.60],[-3.05,0.31,0.30],[-3.38,0.08,0.08]];
+    const ringPoint=([z,rx,ry],i)=>{const a=i*Math.PI*2/8;return [Math.cos(a)*rx,0.14+Math.sin(a)*ry,z];};
+    for(let r=0;r<rings.length-1;r++)for(let i=0;i<8;i++)body.addQuad(
+      ringPoint(rings[r],i),ringPoint(rings[r],i+1),ringPoint(rings[r+1],i+1),ringPoint(rings[r+1],i),fuselage);
+    for(const side of [-1,1]){
+      body.addQuad([side*0.38,0.08,0.92],[side*4.10,0.03,-0.05],[side*3.45,0.01,-0.46],[side*0.40,0.10,-0.25],fuselage);
+      body.addQuad([side*0.42,0.10,-0.25],[side*3.45,0.01,-0.46],[side*2.78,-0.01,-0.85],[side*0.36,0.06,-0.54],stripe);
+      addModelBox(body.addQuad,side*1.62,-0.23,0.23,0.34,0.44,0.78,dark);
+      addModelBox(body.addQuad,side*1.62,-0.28,0.23,0.16,0.10,0.58,window);
+    }
+    body.addQuad([-0.24,0.20,-2.42],[0.24,0.20,-2.42],[0.92,0.18,-3.08],[-0.92,0.18,-3.08],fuselage);
+    body.addQuad([-0.18,0.17,-2.46],[0.18,0.17,-2.46],[0.48,1.22,-3.02],[-0.48,1.22,-3.02],stripe);
+    body.addQuad([-0.48,0.20,-2.70],[0.48,0.20,-2.70],[0.28,0.76,-3.24],[-0.28,0.76,-3.24],fuselage);
+    for(const side of [-1,1])for(let i=0;i<10;i++){
+      const z=1.98-i*0.43, x=side*(0.63+0.04*Math.min(i,5));
+      addModelBox(trim.addQuad,x,0.42,z,0.045,0.13,0.20,window);
+    }
+    addModelBox(trim.addQuad,0,0.53,0.30,0.06,0.08,4.6,stripe);
+    addModelBox(trim.addQuad,0,0.31,-2.98,0.32,0.08,0.42,stripe);
+    addModelBox(lights.addQuad,-0.06,0.20,3.39,0.12,0.08,0.10,glow);
+    addModelBox(lights.addQuad,0.06,0.20,3.39,0.12,0.08,0.10,glow);
+    for(const side of [-1,1])addModelBox(lights.addQuad,side*3.42,0.05,-0.20,0.07,0.06,0.18,glow);
+    return {body:body.upload(),trim:trim.upload(),lights:lights.upload()};
+  }
+
+  const civilAirlinerMeshes=[0,1,2].map(buildCivilAirlinerMesh);
+
+  function civilAirlinerPose(actor,time) {
+    const a=actor.phase+time*actor.pace;
+    const x=actor.center[0]+Math.cos(a)*actor.rx,z=actor.center[1]+Math.sin(a)*actor.rz;
+    if(actor.approach)return {x,z,y:actor.altitude+10.0*(0.5+0.5*Math.sin(a)),yaw:Math.atan2(-Math.sin(a)*actor.rz,Math.cos(a)*actor.rx)};
+    return {x,z,y:actor.altitude+Math.sin(a*1.7)*2.8,yaw:Math.atan2(Math.cos(a)*actor.rz,Math.sin(a)*actor.rx)};
+  }
+
+  function drawCivilAirTraffic(drawMesh) {
+    if(!selectedMap.city)return;
+    for(const actor of civilAirTraffic){
+      const pose=civilAirlinerPose(actor,sceneryTime),dx=pose.x-camPos[0],dz=pose.z-camPos[2];
+      if(dx*dx+dz*dz>620*620)continue;
+      const front=[Math.sin(pose.yaw),0,Math.cos(pose.yaw)],right=[front[2],0,-front[0]];
+      const model=mat4FromBasis([pose.x,pose.y,pose.z],right,worldUp,front,actor.scale);
+      const meshes=civilAirlinerMeshes[actor.livery];
+      drawMesh(meshes.body,model);
+      drawMesh(meshes.trim,model);
+      if(Math.sin(sceneryTime*3.0+actor.phase)>-0.15)drawMesh(meshes.lights,model,true);
+    }
+  }
+
   const officerMeshes=[
     buildStreetVehicle('officer',[0.18,0.25,0.35],[0.73,0.54,0.40]),
     buildStreetVehicle('officer',[0.19,0.26,0.36],[0.51,0.36,0.29])
@@ -9447,6 +9639,7 @@
     drawMapScenery(drawMeshWithOutline);
     drawSphereShow(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
+    drawCivilAirTraffic(drawMeshWithOutline);
     drawSkylineRescue(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
     drawCityTraffic(drawMeshWithOutline);
