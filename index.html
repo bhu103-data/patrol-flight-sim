@@ -269,7 +269,7 @@
       <select id="skySeason"><option value="auto">Season Cycle</option><option value="0">Spring</option>
         <option value="1">Summer</option><option value="2">Autumn</option><option value="3">Winter</option></select>
       <label for="nyStreetQuality">NYC Street FX</label>
-      <select id="nyStreetQuality"><option value="2">Cinematic</option><option value="1">Balanced</option><option value="0">Off</option></select>
+      <select id="nyStreetQuality"><option value="3">Ultra · Layered NYC</option><option value="2">Cinematic</option><option value="1">Balanced</option><option value="0">Off</option></select>
       <label for="skyWeather">Weather</label>
       <select id="skyWeather"><option value="auto">Weather Cycle</option><option>Clear</option><option>Overcast</option>
         <option>Rain</option><option>Snow</option><option>Fog</option></select>
@@ -2092,6 +2092,44 @@
       albedo*=1.0-0.075*ground-0.11*facadeWeather*streak;
     }
 
+    // PATROL_NYC_AAA_LAYERS_V2: close-view material breakup.
+    // Derivative antialiasing suppresses micro-geometry shimmer in aerial views.
+    void nyLayeredMaterial(inout vec3 albedo, vec3 normal) {
+      if(uNyStreetQuality<1.5 || !uManhattanView)return;
+      float nearArea=(1.0-smoothstep(95.0,225.0,length(vWorld.xz-vec2(0.0,-24.0))));
+      if(nearArea<0.01)return;
+      if(normal.y>0.78 && vWorld.y>14.7 && vWorld.y<15.4) {
+        // Individual worn stone pavers and dark road-edge gutters.
+        vec2 paving=vWorld.xz*1.25;
+        vec2 uv=fract(paving);
+        float edge=min(min(uv.x,uv.y),min(1.0-uv.x,1.0-uv.y));
+        float aa=max(fwidth(paving.x),fwidth(paving.y))*1.7;
+        float joint=1.0-smoothstep(0.015,0.035+aa,edge);
+        float worn=nyStreetNoise(paving*0.52+vec2(19.0,47.0));
+        float sidewalk=smoothstep(0.43,0.52,albedo.r)
+            *smoothstep(0.39,0.50,albedo.g);
+        albedo*=1.0-sidewalk*nearArea*(joint*0.10+(0.5-worn)*0.065);
+        float grit=nyStreetNoise(vWorld.xz*5.0+13.0);
+        albedo*=1.0-nearArea*sidewalk*(grit-0.5)*0.045;
+      }
+      if(abs(normal.y)<0.20 && vWorld.y>14.0 && vWorld.y<68.0) {
+        // Limestone pores, masonry coursing and rain-darkened lower walls.
+        vec2 wall=vec2(abs(normal.x)>0.5?vWorld.z:vWorld.x,vWorld.y);
+        vec2 mortarUV=vec2(wall.x*0.46+mod(floor(wall.y*0.56),2.0)*0.5,
+                           wall.y*0.56);
+        vec2 cell=fract(mortarUV);
+        float mortar=min(min(cell.x,1.0-cell.x),min(cell.y,1.0-cell.y));
+        float anti=max(fwidth(mortarUV.x),fwidth(mortarUV.y))*0.8;
+        float groove=1.0-smoothstep(0.012,0.042+anti,mortar);
+        float stone=smoothstep(0.37,0.49,albedo.r)*
+                    (1.0-smoothstep(0.68,0.89,albedo.r));
+        float dirt=nyStreetNoise(wall*vec2(0.6,0.23)+31.0);
+        float base=(1.0-smoothstep(15.0,24.0,vWorld.y));
+        albedo*=1.0-nearArea*stone*(groove*0.090+
+          0.045*(1.0-dirt)+base*0.08);
+      }
+    }
+
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2133,6 +2171,7 @@
       if(uManhattanView && uSmooth && uNyStreetQuality>0.5){
         nyStreetMaterial(material,surfaceRoughness,n,nyRoad,nyPuddle);
         nyFacadeRainStreaks(material,n);
+        nyLayeredMaterial(material,n);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
@@ -2193,7 +2232,18 @@
         }
         vec3 windowLight=vec3(0.0);
         float distanceToEye = length(toEye);
-        if (uCityFacade && abs(n.y)<0.15) {
+        // Explicit geometric glass should not acquire a second procedural
+        // window lattice; it instead gets a restrained Fresnel sky reflection.
+        bool realGlass=vColor.r<0.31 && vColor.g>vColor.r*1.21 &&
+                       vColor.b>vColor.r*1.43 && vColor.b<0.50;
+        if(uManhattanView && realGlass && abs(n.y)<0.2 &&
+           uNyStreetQuality>1.5){
+          float grazing=pow(1.0-clamp(abs(dot(normalize(toEye),n)),0.0,1.0),3.0);
+          vec3 reflectTint=mix(vec3(0.19,0.26,0.32),vec3(0.39,0.52,0.61),
+                               uAtmosphere.x);
+          material=mix(material,reflectTint,grazing*0.52);
+        }
+        if (uCityFacade && abs(n.y)<0.15 && !realGlass) {
           float span=abs(n.x)>0.50?vWorld.z:vWorld.x;
           float facadePlane=abs(n.x)>0.50?vWorld.x:vWorld.z;
           float brick=smoothstep(0.07,0.20,material.r-material.b);
@@ -2267,6 +2317,24 @@
     uniform vec3 uWeatherVisual;
     uniform vec3 uPalette[36];
     uniform vec2 uRes;
+
+    // PATROL_NYC_AAA_LAYERS_V2: film-style color separation, subtle toe
+    // compression and vignetting. Scoped to Manhattan, never other maps.
+    uniform float uNyCinema;
+    vec3 nyGrade(vec3 source,vec2 uv) {
+      float lum=dot(source,vec3(0.2126,0.7152,0.0722));
+      vec3 blueShadows=source*vec3(0.954,0.982,1.035);
+      vec3 warmHighlights=source*vec3(1.045,1.015,0.975);
+      vec3 balanced=mix(blueShadows,warmHighlights,
+        smoothstep(0.21,0.77,lum));
+      float desat=0.05+0.08*uWeatherVisual.x;
+      balanced=mix(balanced,vec3(dot(balanced,vec3(0.2126,0.7152,0.0722))),
+                   desat);
+      vec3 toe=balanced*balanced*(3.0-2.0*balanced);
+      balanced=mix(balanced,toe,0.13);
+      float edge=dot((uv-0.5)*vec2(1.05,0.91),(uv-0.5)*vec2(1.05,0.91));
+      return max(balanced*(1.0-clamp(edge*0.15,0.0,0.13)),vec3(0.0));
+    }
 
     float weatherHash(vec2 cell){
       return fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
@@ -2349,6 +2417,8 @@
             emissiveAt(vUv+vec2(diagonal.x,-diagonal.y))+emissiveAt(vUv+vec2(-diagonal.x,diagonal.y));
           smoothColor+=glow*0.062+outer*0.035;
         }
+        if(uNyCinema>0.5)smoothColor=mix(smoothColor,
+          nyGrade(smoothColor,vUv),min(uNyCinema/3.0,1.0));
         fragColor = vec4(precipitation(smoothColor,vUv), 1.0);
         return;
       }
@@ -3643,6 +3713,77 @@
           addModelBox(addQuad,x,y+level,z,w+0.08,0.12,d+0.08,trim);
         }
       }
+
+      // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
+      // windows, shopfronts, rooftop clutter and architectural depth are
+      // batched into this EXISTING mesh (no new per-object draw calls).
+      if(!local && !destroyed && h>7.5 && Math.abs(x)<137 &&
+          z>-192 && z<128){
+        const steel=[0.235,0.27,0.30],stone=[0.51,0.51,0.48];
+        const glass=[0.13+tone*0.065,0.21+tone*0.075,0.28+tone*0.08];
+        const mullion=[0.37,0.42,0.44],recess=[0.11,0.15,0.18];
+        const bays=Math.max(2,Math.min(4,Math.floor(w/2.9)));
+        const levels=Math.max(0,Math.min(6,Math.floor((h-3.7)/2.78)));
+        const bayWidth=Math.min(1.52,(w-0.85)/bays*0.68);
+        for(const side of [-1,1]){
+          const wall=z+side*d/2;
+          // Strong silhouette: plinth, shop cornice, window reveals, cap.
+          addModelBox(addQuad,x,y+2.62,wall+side*0.19,w*0.93,0.16,0.32,steel);
+          addModelBox(addQuad,x,y+0.24,wall+side*0.15,w*0.98,0.42,0.26,stone);
+          addModelBox(addQuad,x,y+1.39,wall+side*0.079,w*0.83,1.78,0.14,recess);
+          for(let col=0;col<bays;col++){
+            const bx=x+(col-(bays-1)/2)*((w-0.72)/bays);
+            addModelBox(addQuad,bx,y+1.42,wall+side*0.19,bayWidth,1.59,0.065,glass);
+            addModelBox(addQuad,bx,y+2.28,wall+side*0.22,bayWidth+0.14,0.075,0.11,mullion);
+            addModelBox(addQuad,bx,y+0.62,wall+side*0.22,bayWidth+0.14,0.072,0.11,mullion);
+            addModelBox(addQuad,bx,y+1.45,wall+side*0.24,0.065,1.55,0.10,mullion);
+          }
+          for(let floor=0;floor<levels;floor++){
+            const py=y+4.0+floor*2.78;
+            const band=py-1.02;
+            if(band<y+h-0.20)
+              addModelBox(addQuad,x,band,wall+side*0.095,w*0.92,0.085,0.18,trim);
+            if(py+0.97>y+h-0.24)break;
+            for(let col=0;col<bays;col++){
+              const bx=x+(col-(bays-1)/2)*((w-0.72)/bays);
+              addModelBox(addQuad,bx,py,wall+side*0.060,bayWidth+0.19,1.76,0.08,recess);
+              addModelBox(addQuad,bx,py,wall+side*0.116,bayWidth,1.58,0.068,glass);
+              addModelBox(addQuad,bx,py-0.80,wall+side*0.155,bayWidth+0.17,0.09,0.12,mullion);
+              addModelBox(addQuad,bx,py+0.81,wall+side*0.151,bayWidth+0.17,0.09,0.12,mullion);
+              if((col+floor+Math.round(tone*11))%4===0)
+                addModelBox(addQuad,bx,py,wall+side*0.161,0.043,1.52,0.09,mullion);
+            }
+          }
+          // Metal entrance canopy casts an actual geometric recess.
+          if(h>12 && tone>0.26)
+            addModelBox(addQuad,x,y+2.63,wall+side*0.53,w*0.74,0.13,0.92,steel);
+        }
+        for(const side of [-1,1]){
+          const xWall=x+side*w/2;
+          addModelBox(addQuad,xWall+side*0.075,y+h*0.5,z,0.17,h*0.94,0.16,stone);
+          for(let row=0;row<Math.min(levels,5);row++){
+            const py=y+4.0+row*2.78;
+            if(py+0.9>=y+h)break;
+            const sideBays=Math.max(1,Math.min(3,Math.floor(d/3.8)));
+            for(let col=0;col<sideBays;col++){
+              const pz=z+(col-(sideBays-1)/2)*(d-0.75)/sideBays;
+              addModelBox(addQuad,xWall+side*0.065,py,pz,0.08,1.52,Math.min(1.32,d/sideBays*0.60),glass);
+              addModelBox(addQuad,xWall+side*0.105,py-0.77,pz,0.14,0.10,Math.min(1.49,d/sideBays*0.72),mullion);
+            }
+          }
+        }
+        // Air-handling equipment, vent cowls and maintenance roof coping.
+        if(h>13.0){
+          const roofY=y+h;
+          const offset=tone>0.5?-0.23:0.20;
+          addModelBox(addQuad,x+w*offset,roofY+0.38,z,Math.min(2.3,w*0.29),0.69,Math.min(2.7,d*0.30),steel);
+          addModelBox(addQuad,x+w*offset,roofY+0.76,z,Math.min(2.5,w*0.31),0.078,Math.min(2.9,d*0.32),mullion);
+          for(let i=0;i<3;i++)
+            addModelBox(addQuad,x+w*offset-0.45+i*0.45,roofY+0.42,z+d*0.16,0.07,0.40,0.26,recess);
+          addModelBox(addQuad,x-w*0.26,roofY+0.55,z+d*0.20,0.34,1.10,0.34,stone);
+          addModelBox(addQuad,x-w*0.26,roofY+1.10,z+d*0.20,0.58,0.10,0.54,steel);
+        }
+      }
     }
     return upload();
   }
@@ -4798,6 +4939,34 @@
         span-0.27,Math.min(panelHeight*0.46,1.24),white);
       // Keep the soffit and cantilever readable at street level.
       box(x,ground+2.89,z-d/2-0.31,w*0.82,0.18,0.79,[0.25,0.28,0.31]);
+
+      // PATROL_NYC_AAA_LAYERS_V2: authored depth at Times Square hero scale.
+      const masonry=[0.43,0.45,0.46], brushed=[0.29,0.34,0.37];
+      const sideMasonry=color.map(c=>Math.min(0.88,c*0.82));
+      for(const side of [-1,1]){
+        const facade=z+side*(d/2+0.126);
+        for(let floor=3.10;floor<h-0.42;floor+=2.56){
+          box(x,ground+floor,facade,w*0.93,0.105,0.18,sideMasonry);
+        }
+        for(let col=-4;col<=4;col++){
+          const cx=x+col*w/9.7;
+          box(cx,ground+3.05+(h-3.55)/2,facade+side*0.026,
+            0.075,Math.max(0.22,h-3.55),0.13,masonry);
+          if(col%2===0)box(cx,ground+2.37,facade+side*0.08,0.11,0.76,0.15,brushed);
+        }
+      }
+      // Real entrance reveals and a rain canopy, not billboard-only walls.
+      for(const side of [-1,1]){
+        const e=x+(x<avenue?1:-1)*(w/2+0.088);
+        box(e,ground+2.75,z,0.33,0.17,d*0.84,brushed);
+        for(let j=-2;j<=2;j++){
+          const pz=z+j*d/6.3;
+          box(e,ground+1.24,pz,0.085,2.27,0.094,brushed);
+          box(e+(x<avenue?1:-1)*0.040,ground+1.16,pz,
+            0.045,1.43,Math.min(1.28,d*0.115),[0.11,0.17,0.23]);
+        }
+        box(e+(x<avenue?1:-1)*0.47,ground+2.61,z,0.82,0.115,d*0.75,brushed);
+      }
     }
 
     const stairs={x:-0.9,z:42.8},stepCount=12;
@@ -4950,6 +5119,78 @@
     }
     buildPoliceStop({box,addQuad,place},
       {x:15.21,y:street+0.032,z:36.1,yaw:Math.PI,sidewalkX:17.22,footY:ground+0.035});
+
+    // PATROL_NYC_AAA_LAYERS_V2: layered street furniture at street level.
+    // All pieces reuse the existing single scenery mesh and original lighting mesh.
+    const asphaltDark=[0.14,0.17,0.19],blackSteel=[0.20,0.23,0.24];
+    const concrete=[0.50,0.51,0.49],trafficYellow=[0.79,0.58,0.18];
+    for(const [i,z] of [-57,-41,-21,-5,15,31,52].entries()){
+      const sx=avenue+(i%2===0?4.73:-4.73);
+      // Utility drain: inset border, iron grate and visible grill slots.
+      box(sx,street+0.133,z,0.96,0.031,1.23,concrete);
+      box(sx,street+0.155,z,0.77,0.019,1.03,asphaltDark);
+      for(let k=-3;k<=3;k++)
+        box(sx+k*0.105,street+0.171,z,0.032,0.014,0.91,blackSteel);
+      // Rain-streaked electrical cabinet and a capped bollard.
+      const bx=sx+(i%2===0?1.42:-1.42),bz=z+1.3;
+      box(bx,ground+0.64,bz,0.69,1.26,0.48,[0.34,0.38,0.38]);
+      box(bx,ground+1.30,bz,0.73,0.055,0.52,blackSteel);
+      box(bx,ground+0.63,bz+0.260,0.54,0.012,0.060,[0.20,0.25,0.27]);
+      for(let v=0;v<4;v++)
+        box(bx-0.19+v*0.127,ground+1.08,bz+0.282,
+          0.048,0.075,0.025,blackSteel);
+    }
+    for(const [i,z] of [-53,-25,6,31,58].entries()){
+      const x=avenue+(i%2?5.0:-5.04);
+      const red=[0.71,0.17,0.12],lid=[0.79,0.69,0.42];
+      // Fire hydrant on sidewalk with separate caps, couplings and base.
+      box(x,ground+0.10,z,0.50,0.19,0.50,blackSteel);
+      box(x,ground+0.53,z,0.29,0.83,0.29,red);
+      box(x,ground+0.91,z,0.42,0.14,0.42,red);
+      box(x,ground+0.52,z,0.73,0.24,0.29,lid);
+      box(x,ground+0.52,z+0.36,0.23,0.30,0.23,lid);
+      box(x,ground+0.52,z-0.36,0.23,0.30,0.23,lid);
+    }
+    // Broadway pedestrian plaza: metal benches, fine structure,
+    // flyer racks and stanchions add scale without closing driving lanes.
+    for(const [i,site] of [[-5.8,-13.2],[3.1,14.2],[-3.6,43.0]].entries()){
+      const [x,z]=site;
+      box(x,ground+0.42,z,2.05,0.12,0.58,[0.31,0.34,0.35]);
+      box(x,ground+0.78,z-0.30,2.10,0.79,0.09,[0.37,0.38,0.37]);
+      for(const sx of [-0.84,0.84]){
+        box(x+sx,ground+0.24,z-0.05,0.10,0.48,0.38,blackSteel);
+        box(x+sx,ground+0.73,z-0.25,0.12,0.72,0.10,blackSteel);
+      }
+    }
+    // Two actual scaffolding runs with open braces and rain canopies.
+    for(const [x,z0,span] of [[-8.8,-26.2,8.1],[38.8,11.0,9.0]]){
+      const beam=[0.26,0.30,0.32],awning=[0.25,0.30,0.35];
+      for(let i=0;i<=4;i++){
+        const z=z0+i*span/4;
+        for(const bx of [x-1.14,x+1.14]){
+          box(bx,ground+1.79,z,0.095,3.56,0.095,beam);
+          box(bx,ground+3.49,z,0.18,0.14,0.18,beam);
+        }
+        if(i<4){
+          const zn=z0+(i+0.5)*span/4;
+          box(x,ground+3.31,zn,2.48,0.15,span/4+0.06,awning);
+          box(x,ground+3.43,zn,2.48,0.15,0.055,beam);
+          addRideBeam(addQuad,[x-1.14,ground+0.37,z],
+            [x+1.14,ground+3.19,z+span/4],0.06,beam);
+          addRideBeam(addQuad,[x+1.14,ground+0.37,z],
+            [x-1.14,ground+3.19,z+span/4],0.06,beam);
+        }
+      }
+    }
+    // Painted maintenance and reflective markers on the asphalt.
+    for(const z of [-54.5,-31.3,-10.8,9.3,33.6,55.1]){
+      box(avenue+0.17,street+0.086,z,1.25,0.019,0.73,[0.14,0.18,0.21]);
+      box(avenue+0.17,street+0.102,z,0.92,0.013,0.54,[0.27,0.29,0.30]);
+      for(let j=-2;j<=2;j++)
+        box(avenue+0.17+j*0.16,street+0.116,z,0.044,0.014,0.45,blackSteel);
+      // Tiny amber lane reflectors (not oversized signs).
+      box(avenue-1.92,street+0.09,z+2.0,0.13,0.035,0.09,trafficYellow);
+    }
   }
 
   function buildPoliceStop({box,addQuad,place},{x,y,z,yaw,sidewalkX,footY}){
@@ -8754,6 +8995,7 @@
     scene: gl.getUniformLocation(ditherProg, 'uScene'),
     smooth: gl.getUniformLocation(ditherProg, 'uSmooth'),
     neonGlow: gl.getUniformLocation(ditherProg,'uNeonGlow'),
+    nyCinema:gl.getUniformLocation(ditherProg,'uNyCinema'),
     palette: gl.getUniformLocation(ditherProg, 'uPalette'),
     res: gl.getUniformLocation(ditherProg, 'uRes')
   };
@@ -9865,6 +10107,8 @@
       gl.uniform1i(uDither.scene, 0);
       gl.uniform1i(uDither.smooth, smoothScenery());
       gl.uniform1i(uDither.neonGlow,Boolean(selectedMap.vegas||selectedMap.city));
+      gl.uniform1f(uDither.nyCinema,selectedMap.city && !graphicsCompat ?
+        Number(nyStreetQuality.value) : 0);
       gl.uniform3fv(uDither.palette, paletteFlat);
       gl.uniform2f(uDither.res, fboW, fboH);
 
