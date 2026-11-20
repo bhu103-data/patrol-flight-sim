@@ -1217,6 +1217,40 @@
       return 0.5 / max(gv + gl, 0.0001);
     }
 
+    // Northern curtains: slow waves plus local brightening that travels
+    // along individual folds instead of flashing the entire sky.
+    vec3 alaskaAurora(vec3 rd) {
+      float night=1.0-smoothstep(-0.23,-0.13,uSun.y);
+      float visibility=night*(1.0-smoothstep(0.18,0.91,uAtmosphere.z))
+                       *(1.0-smoothstep(0.12,0.86,uAtmosphere.w));
+      if(visibility<0.005 || rd.y<0.065 || rd.z<0.08)return vec3(0.0);
+      float az=atan(rd.x,rd.z);
+      float el=asin(clamp(rd.y,0.0,1.0));
+      float t=uTime;
+      vec3 glow=vec3(0.0);
+      for(int i=0;i<3;i++){
+        float layer=float(i);
+        float a=az+layer*0.53;
+        float phase=a*5.8-t*(0.24+layer*0.05);
+        float edge=0.225+layer*0.118+0.042*sin(phase)
+                   +0.022*sin(a*13.0+t*0.29)+0.009*sin(a*29.0-t*0.51);
+        float above=el-edge;
+        float height=0.102+0.036*sin(a*9.5-t*0.38)+0.029*sin(a*4.0+t*0.21);
+        float veil=smoothstep(-0.010,0.013,above)
+                   *(1.0-smoothstep(0.016,height,above));
+        float rim=exp(-abs(above-0.009)*59.0)*0.25;
+        float thread=0.57+0.24*sin(a*61.0+sin(phase)*2.1-t*1.16)
+                         +0.13*sin(a*109.0-t*1.79);
+        float flicker=0.50+0.50*sin(a*17.0-t*3.8+sin(a*31.0+t*0.49));
+        float pulse=0.55+0.45*flicker*flicker;
+        float sides=1.0-smoothstep(0.45,1.07,abs(az+0.10-layer*0.13));
+        vec3 color=mix(vec3(0.086,0.78,0.47),vec3(0.43,0.25,0.79),
+                       smoothstep(0.030,height,above)*(0.68+layer*0.12));
+        glow+=color*(veil*thread+rim)*pulse*sides*(0.70-layer*0.15);
+      }
+      return glow*visibility;
+    }
+
     vec3 getSky(vec3 rd) {
       float up=clamp(rd.y,0.0,1.0);
       float sunAmt=max(dot(rd,sunDirection()),0.0);
@@ -1234,6 +1268,7 @@
       vec2 center=vec2(0.35+0.27*seed,0.28+0.32*hash12(floor(stars)+19.0));
       float star=(1.0-smoothstep(0.07,0.15,length(fract(stars)-center)))*step(0.972,seed);
       horizon+=vec3(0.66,0.74,0.92)*star*(1.0-day)*(1.0-cloud)*smoothstep(0.01,0.20,rd.y);
+      if(uAlaska)horizon+=alaskaAurora(rd);
       float openness=(1.0-cloud*0.88)*(1.0-uAtmosphere.w*0.7);
       horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*smoothstep(-0.08,0.04,uSun.y)*0.40;
       float solarRadius=0.0125+0.0025*(1.0-smoothstep(0.02,0.24,uSun.y));
@@ -1704,6 +1739,7 @@
     layout(location=0) in vec3 aPos;
     layout(location=1) in vec3 aNorm;
     layout(location=2) in vec3 aColor;
+    layout(location=3) in float aHarborSurface;
 
     uniform mat4 uViewProj;
     uniform mat4 uModel;
@@ -1712,12 +1748,14 @@
     out vec3 vNorm;
     out vec3 vColor;
     out vec3 vWorld;
+    flat out float vHarborSurface;
 
     void main() {
       vec3 pos = aPos + aNorm * uOutline;
       vec4 worldPos = uModel * vec4(pos, 1.0);
       vNorm = mat3(uModel) * aNorm;
       vColor = aColor;
+      vHarborSurface = aHarborSurface;
       vWorld = worldPos.xyz;
       gl_Position = uViewProj * worldPos;
     }
@@ -1728,6 +1766,7 @@
     in vec3 vNorm;
     in vec3 vColor;
     in vec3 vWorld;
+    flat in float vHarborSurface;
     out vec4 fragColor;
     uniform bool uSmooth;
     uniform vec3 uEye;
@@ -1754,6 +1793,36 @@
     uniform vec2 uSurfaceWeather;
     uniform highp sampler2DArray uDcMaps;
     uniform int uDcSurface;
+
+    float harborGrain(vec2 cell) {
+      return fract(sin(dot(cell,vec2(71.17,159.73)))*43758.5453);
+    }
+
+    // Material detail only. Tags belong to existing triangles, not new geometry.
+    vec3 harborSurfaceColor(vec3 base, vec3 n) {
+      bool wall=vHarborSurface==1.0;
+      bool paving=vHarborSurface==2.0;
+      vec2 uv=wall ? vec2(dot(vWorld.xz,normalize(vec2(-n.z,n.x)+vec2(0.0001))),vWorld.y) : vWorld.xz;
+      float variation=sin(uv.x*0.31+sin(uv.y*0.42))*0.024;
+      vec2 aggregate=uv*(wall?6.0:8.0);
+      float grainFade=1.0-smoothstep(0.28,0.90,max(fwidth(aggregate.x),fwidth(aggregate.y)));
+      variation+=(harborGrain(floor(aggregate))-0.5)*grainFade*(wall?0.14:0.10);
+      if(wall||paving){
+        vec2 tile=uv/(wall?vec2(1.35,0.49):vec2(1.28,0.82));
+        vec2 footprint=max(fwidth(tile),vec2(0.004));
+        tile.x+=wall?0.5*mod(floor(tile.y),2.0):0.0;
+        vec2 edge=min(fract(tile),1.0-fract(tile));
+        vec2 seam=1.0-smoothstep(vec2(0.016),vec2(0.043)+footprint,edge);
+        float fade=1.0-smoothstep(0.15,0.65,max(footprint.x,footprint.y));
+        variation+=fade*((harborGrain(floor(tile)+19.0)-0.5)*0.16-max(seam.x,seam.y)*0.20);
+      }
+      vec3 color=base*(1.0+variation);
+      if(wall){
+        float damp=(1.0-smoothstep(0.05,0.84,vWorld.y-12.2));
+        color*=mix(vec3(1.0),vec3(0.72,0.78,0.76),damp*0.60);
+      }
+      return color;
+    }
 
     void dcSurface(inout vec3 material, inout vec3 n, out float roughness) {
       vec3 axes=abs(n);
@@ -1844,6 +1913,7 @@
       }
       vec3 n = normalize(vNorm);
       vec3 material = vColor;
+      if(vHarborSurface>0.0) material=harborSurfaceColor(material,n);
       float surfaceRoughness=1.0;
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
@@ -2001,6 +2071,32 @@
       float peak=max(sampleColor.r,max(sampleColor.g,sampleColor.b));
       return sampleColor*smoothstep(0.73,1.0,peak);
     }
+    // Directional edge AA, integrated into the existing WebGL compositor.
+    // Reference: three.js FXAAPass. No extra render target or engine dependency.
+    float edgeLuma(vec3 color) {
+      return dot(color,vec3(0.2126,0.7152,0.0722));
+    }
+    vec3 smoothGeometryEdges(vec2 uv, vec2 px, vec3 center) {
+      float nw=edgeLuma(texture(uScene,uv+px*vec2(-1.0, 1.0)).rgb);
+      float ne=edgeLuma(texture(uScene,uv+px*vec2( 1.0, 1.0)).rgb);
+      float sw=edgeLuma(texture(uScene,uv+px*vec2(-1.0,-1.0)).rgb);
+      float se=edgeLuma(texture(uScene,uv+px*vec2( 1.0,-1.0)).rgb);
+      float lum=edgeLuma(center);
+      float low=min(lum,min(min(nw,ne),min(sw,se)));
+      float high=max(lum,max(max(nw,ne),max(sw,se)));
+      float contrast=high-low;
+      float threshold=max(0.045,high*0.14);
+      if(contrast<=threshold)return center;
+
+      vec2 span=vec2(sw+se-nw-ne,nw+sw-ne-se);
+      float damping=max((nw+ne+sw+se)*0.027,0.019);
+      span=clamp(span/(min(abs(span.x),abs(span.y))+damping),-6.0,6.0)*px;
+      vec3 inner=(texture(uScene,uv-span/6.0).rgb+texture(uScene,uv+span/6.0).rgb)*0.5;
+      vec3 wide=inner*0.5+(texture(uScene,uv-span*0.5).rgb+texture(uScene,uv+span*0.5).rgb)*0.25;
+      float filtered=edgeLuma(wide);
+      vec3 result=(filtered<low||filtered>high)?inner:wide;
+      return mix(center,result,0.85*smoothstep(threshold,threshold+0.045,contrast));
+    }
     const float BAYER4[16] = float[16](
        0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
       12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
@@ -2012,15 +2108,7 @@
       vec3 col = texture(uScene, vUv).rgb;
       if (uSmooth) {
         vec2 texel = 1.0 / uRes;
-        vec3 north = texture(uScene,vUv+vec2(0.0,texel.y)).rgb;
-        vec3 south = texture(uScene,vUv-vec2(0.0,texel.y)).rgb;
-        vec3 east = texture(uScene,vUv+vec2(texel.x,0.0)).rgb;
-        vec3 west = texture(uScene,vUv-vec2(texel.x,0.0)).rgb;
-        const vec3 luma = vec3(0.2126,0.7152,0.0722);
-        float edgeX = abs(dot(east-west,luma));
-        float edgeY = abs(dot(north-south,luma));
-        vec3 edgeNeighbors = edgeY > edgeX ? (north+south)*0.5 : (east+west)*0.5;
-        vec3 smoothColor = mix(col,edgeNeighbors,smoothstep(0.05,0.20,max(edgeX,edgeY))*0.30);
+        vec3 smoothColor = smoothGeometryEdges(vUv,texel,col);
         if(uNeonGlow){
           // Lift dark street detail while preserving headroom on signs and the Sphere.
           smoothColor+=0.078*sqrt(max(smoothColor,vec3(0.0)))*(1.0-clamp(smoothColor,0.0,1.0));
@@ -2069,7 +2157,8 @@
 
   function createTriangleMesh() {
     const pos = [], norm = [], col = [];
-    function addTri(a, b, c, rgb) {
+    let surfaces = null;
+    function addTri(a, b, c, rgb, surface=0) {
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
       let nx = uy * vz - uz * vy;
@@ -2077,30 +2166,33 @@
       let nz = ux * vy - uy * vx;
       const len = Math.hypot(nx, ny, nz) || 1;
       nx /= len; ny /= len; nz /= len;
+      if(surface && !surfaces) surfaces=new Array(pos.length/3).fill(0);
+      if(surfaces) surfaces.push(surface,surface,surface);
       pos.push(...a, ...b, ...c);
       norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
       col.push(...rgb, ...rgb, ...rgb);
     }
-    function addQuad(a, b, c, d, rgb) {
-      addTri(a, b, c, rgb);
-      addTri(a, c, d, rgb);
+    function addQuad(a, b, c, d, rgb, surface=0) {
+      addTri(a, b, c, rgb, surface);
+      addTri(a, c, d, rgb, surface);
     }
 
     function upload() {
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       const buffers = [];
-      function makeBuf(arr, loc) {
+      function makeBuf(arr, loc, size=3) {
         const b = gl.createBuffer();
         buffers.push(b);
         gl.bindBuffer(gl.ARRAY_BUFFER, b);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(loc);
-        gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
       }
       makeBuf(pos, 0);
       makeBuf(norm, 1);
       makeBuf(col, 2);
+      if(surfaces) makeBuf(surfaces, 3, 1);
       return { vao, buffers, count: pos.length / 3 };
     }
     return { addTri, addQuad, upload };
@@ -2726,13 +2818,13 @@
     return lerp(bridge.deck+0.60, STREET_Y, approach);
   }
 
-  function pushRoadStrip(addQuad, a, b, width, color, lift=0) {
+  function pushRoadStrip(addQuad, a, b, width, color, lift=0, surface=0) {
     const [dx,dz] = [b[0]-a[0],b[2]-a[2]];
     const length = Math.hypot(dx,dz);
     if (!length) return;
     const x = dz/length*width/2, z = -dx/length*width/2;
     addQuad([a[0]+x,a[1]+lift,a[2]+z],[a[0]-x,a[1]+lift,a[2]-z],
-      [b[0]-x,b[1]+lift,b[2]-z],[b[0]+x,b[1]+lift,b[2]+z],color);
+      [b[0]-x,b[1]+lift,b[2]-z],[b[0]+x,b[1]+lift,b[2]+z],color,surface);
   }
 
   function railwayPoints(track) {
@@ -2757,7 +2849,7 @@
       const limit=a<x-halfLength?x-halfLength:a<x+halfLength?x+halfLength:x+reach;
       const b=Math.min(a+3,limit),ya=bridgeRoadHeight(a),yb=bridgeRoadHeight(b);
       pushRoadStrip(addQuad,[a,ya,z],[b,yb,z],halfWidth*2,concrete);
-      pushRoadStrip(addQuad,[a,ya,z],[b,yb,z],halfWidth*2-1.2,road,0.021);
+      pushRoadStrip(addQuad,[a,ya,z],[b,yb,z],halfWidth*2-1.2,road,0.021,3);
       for(const side of [-1,1]){
         const zz=z+side*halfWidth;
         const edgeA=[a,ya,zz],edgeB=[b,yb,zz];
@@ -2804,9 +2896,9 @@
       if(a===null || b===null || Math.abs(a-b)>11)continue;
       const x=a+side*0.85, next=b+side*0.85;
       const y=Math.max(sampleTerrainHeight(x,z),sampleTerrainHeight(next,z+4))+0.10;
-      pushRoadStrip(addQuad,[x+side*2.05,y,z],[next+side*2.05,y,z+4],3.4,promenade);
-      addQuad([x,WATER_H-0.4,z],[next,WATER_H-0.4,z+4],[next,y+0.30,z+4],[x,y+0.30,z],harborStone);
-      pushRoadStrip(addQuad,[x,y+0.30,z],[next,y+0.30,z+4],0.53,harborStone);
+      pushRoadStrip(addQuad,[x+side*2.05,y,z],[next+side*2.05,y,z+4],3.4,promenade,0,2);
+      addQuad([x,WATER_H-0.4,z],[next,WATER_H-0.4,z+4],[next,y+0.30,z+4],[x,y+0.30,z],harborStone,1);
+      pushRoadStrip(addQuad,[x,y+0.30,z],[next,y+0.30,z+4],0.53,harborStone,0,2);
       if(Math.abs(z-EAST_RIVER_BRIDGE.z)>9){
         box(x+side*0.63,y+0.43,z+0.55,0.22,0.87,0.22,[0.28,0.34,0.37]);
       }
