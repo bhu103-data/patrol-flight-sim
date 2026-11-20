@@ -373,6 +373,31 @@
 
   const MAP_SPAN = 1920;
   const FLIGHT_RADIUS = 860;
+  // PATROL_NYC_LANDMARK_SCOPE_V3: NYC has an independent reachable radius.
+  // Other maps retain their original limits and terrain extents.
+  const NYC_FLIGHT_RADIUS = 735;
+  // [east, north, fully-detailed radius, skyline radius] in flight-scale units.
+  // Only important landmarks get dense physical facades and street detail.
+  const NYC_FOCUS_ZONES = [
+    [13,4,118,168],       // Times Square / Broadway / 7th Avenue
+    [-7,-117,78,115],     // Empire State Building
+    [65,-46,64,93],       // Chrysler Building / Grand Central area
+    [-30,-180,72,108],    // Flatiron
+    [-85,-398,75,112],    // One World Trade Center
+    [-140,-611,50,78],    // Liberty Island
+    [82,-342,78,118],     // Brooklyn Bridge and waterfront
+    [79,206,50,100],     // Central Park edge
+    [354,-389,35,77]     // Harbor runway approach
+  ];
+  function nycDetailBand(x,z){
+    let band=0;
+    for(const zone of NYC_FOCUS_ZONES){
+      const dx=x-zone[0],dz=z-zone[1],d2=dx*dx+dz*dz;
+      if(d2<zone[2]*zone[2])return 2;
+      if(d2<zone[3]*zone[3])band=1;
+    }
+    return band;
+  }
   const WARNING_DISTANCE = 130;
   const CEILING = 100;
   // X increases east and Z increases north throughout the simulation.
@@ -517,7 +542,7 @@
   ];
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
-    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, timesSquareBounds:TIMES_SQUARE.bounds, streets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],runway:HARBOR_RUNWAY, railway:BROOKLYN_RAIL
+    blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, timesSquareBounds:TIMES_SQUARE.bounds, streets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],runway:HARBOR_RUNWAY, railway:BROOKLYN_RAIL,focusZones:NYC_FOCUS_ZONES
   };
   const ALASKA_PLACES = {
     harbor:{name:'Kittiwake Harbor',x:151,z:-525},
@@ -645,7 +670,7 @@
       shipAnchor: [-142,-611],
       runwayStart: {x:287,z:-389,yaw:Math.PI/2},
       city: MANHATTAN_GRID,
-      spawn: [-153, 44, -698],
+      spawn: [-108, 48, -594], // Scenic harbor entry, inside compact NYC boundary
       landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }, { name: 'Brooklyn Bridge', x: 88, z: -342 }, { name:'Harbor Runway',x:354,z:-389 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     },
@@ -818,6 +843,12 @@
         const z=(iz+0.5+(hash(ix,iz,811)-0.5)*0.18)*city.blockLength;
         const x=(ix+0.5+(hash(ix,iz,813)-0.5)*0.18)*city.blockWidth+city.tilt*z+city.offset;
         if (Math.abs(x)>span/2 || Math.abs(z)>span/2) continue;
+        // Keep geometry/collision and terrain heightfields coherent:
+        // a parcel not admitted here is not baked into the height map.
+        if(city.focusZones && !city.focusZones.some(zone=>{
+          const dx=x-zone[0],dz=z-zone[1];
+          return dx*dx+dz*dz<zone[3]*zone[3];
+        }))continue;
         const base = cityHeight(x,z)*scale;
         const top = cityHeight(x,z,true)*scale;
         if (top-base<2.9) continue;
@@ -960,6 +991,17 @@
       if (y > 0 && y % 24 === 0) yield;
       for (let x = 0; x < N; x++) {
         const idx = y * N + x;
+        // Expensive 76-step baked shadows are wasted outside scenic bubbles.
+        // Use a neutral far-field shade rather than raycasting empty skyline.
+        if(city && city.focusZones){
+          const east=(x+0.5)/N*span-span*0.5;
+          const north=(y+0.5)/N*span-span*0.5;
+          const nearLandmark=city.focusZones.some(zone=>{
+            const dx=east-zone[0],dz=north-zone[1],r=zone[3]+34;
+            return dx*dx+dz*dz<r*r;
+          });
+          if(!nearLandmark){shade[idx]=0.92;continue;}
+        }
         const h0 = Math.max(height[idx], waterLevel);
         let shadow = 1.0;
         let rx = x + 0.5, ry = y + 0.5;
@@ -3210,6 +3252,17 @@
     for (const street of CITY_STREETS.slice(1)) {
       for (let i=1;i<street.length;i++) {
         const a=street[i-1], b=street[i];
+        // Stop authoring roads outside the landmark neighborhoods.
+        // A nearest-point segment check retains roads crossing a focus area.
+        const nearZone=NYC_FOCUS_ZONES.some(zone=>{
+          const vx=b[0]-a[0],vz=b[1]-a[1];
+          const t=Math.max(0,Math.min(1,
+            ((zone[0]-a[0])*vx+(zone[1]-a[1])*vz)/(vx*vx+vz*vz||1)));
+          const dx=a[0]+vx*t-zone[0],dz=a[1]+vz*t-zone[1];
+          const r=zone[3]+16;
+          return dx*dx+dz*dz<r*r;
+        });
+        if(!nearZone)continue;
         const start=[a[0],STREET_Y,a[1]], end=[b[0],STREET_Y,b[1]];
         pushRoadStrip(addQuad,start,end,11.6,sidewalk);
         pushRoadStrip(addQuad,start,end,8.0,pavement,0.035);
@@ -3540,6 +3593,7 @@
       }
       const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
       if (Math.hypot(x-camPos[0],z-camPos[2])>455) continue;
+      if(selectedMap.city && nycDetailBand(x,z)===0)continue;
       if(actor.kind==='walker'){
         drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45});
       } else {
@@ -3682,6 +3736,10 @@
   function buildCityBuildings(parcels,local=false) {
     const {addQuad,upload}=createTriangleMesh();
     for(const [east,north,w,d,h,tone,destroyed] of parcels){
+      // Local collapsing rubble must bypass regional LOD; it is positioned
+      // later by a model transform and does not live at world origin.
+      const detailBand=local?2:nycDetailBand(east,north);
+      if(detailBand===0)continue;
       const x=local?0:east,z=local?0:north,y=local?0:WATER_H+2.38;
       const material=tone<0.35?[0.41,0.48,0.52]:tone<0.68?[0.65,0.61,0.53]:[0.53,0.39,0.32];
       const trim=material.map(value=>Math.min(0.96,value*1.26));
@@ -3698,17 +3756,17 @@
       addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,material.map(value=>value*0.69));
       addModelBox(addQuad,x,y+h-0.16,z,w+0.12,0.29,d+0.12,trim);
       const roof=[0.31,0.34,0.35];
-      if(h>13){
+      if(detailBand===2 && h>13){
         addModelBox(addQuad,x+w*(tone-0.5)*0.32,y+h+0.48,z-d*0.12,w*0.40,0.96,d*0.44,roof);
         addModelBox(addQuad,x-w*0.24,y+h+0.21,z+d*0.20,w*0.19,0.42,d*0.18,[0.44,0.46,0.46]);
       }
-      if(tone>0.52){
+      if(detailBand===2 && tone>0.52){
         for(const side of [-1,1]){
           for(const tip of [-1,1]){
             addModelBox(addQuad,x+tip*(w/2-0.24),y+h*0.51,z+side*(d/2+0.022),0.38,h*0.91,0.13,trim);
           }
         }
-      } else if(h>7){
+      } else if(detailBand===2 && h>7){
         for(let level=3.7;level<h-0.6;level+=tone>0.24?3.5:5.3){
           addModelBox(addQuad,x,y+level,z,w+0.08,0.12,d+0.08,trim);
         }
@@ -3717,8 +3775,7 @@
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
-      if(!local && !destroyed && h>7.5 && Math.abs(x)<137 &&
-          z>-192 && z<128){
+      if(!local && !destroyed && h>7.5 && detailBand===2){
         const steel=[0.235,0.27,0.30],stone=[0.51,0.51,0.48];
         const glass=[0.13+tone*0.065,0.21+tone*0.075,0.28+tone*0.08];
         const mullion=[0.37,0.42,0.44],recess=[0.11,0.15,0.18];
@@ -4385,7 +4442,8 @@
       const score=dx*dx+dz*dz;
       if(score>=best)continue;
       const east=x+dx,north=z+dz;
-      if(Math.hypot(east,north)>FLIGHT_RADIUS-60 || avoid?.(east,north))continue;
+      if(Math.hypot(east,north)>(selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)-60 ||
+          avoid?.(east,north))continue;
       const y=sampleTerrainHeight(east,north);
       if(water?y>WATER_H:y<WATER_H+1.1)continue;
       const corners=[[-1,-1],[-1,1],[1,-1],[1,1]];
@@ -8519,7 +8577,8 @@
     ctx.fillStyle = '#0b1024a6';
     ctx.beginPath();
     ctx.rect(0, 0, mapWidth, mapWidth);
-    ctx.arc(mapWidth / 2, mapWidth / 2, FLIGHT_RADIUS * mapScale, 0, 2 * Math.PI);
+    ctx.arc(mapWidth / 2, mapWidth / 2,
+      (city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)*mapScale, 0, 2 * Math.PI);
     ctx.fill('evenodd');
   }
 
@@ -8559,7 +8618,8 @@
     if (now - lastMapFrame < 100) return;
     lastMapFrame = now;
     const center = mapWidth / 2;
-    const edge = FLIGHT_RADIUS - Math.hypot(plane.pos[0], plane.pos[2]);
+    const activeRadius=selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS;
+    const edge = activeRadius - Math.hypot(plane.pos[0], plane.pos[2]);
     const warning = edge < WARNING_DISTANCE;
     const status = assisted ? 'AUTO TURN' : warning ? 'EDGE AHEAD' : 'EDGE';
     const text = status + ' · ' + Math.max(0, Math.ceil(edge)) + ' u';
@@ -8572,7 +8632,7 @@
     mapCtx.lineWidth = 4;
     mapCtx.setLineDash([10, 7]);
     mapCtx.beginPath();
-    mapCtx.arc(center, center, FLIGHT_RADIUS * mapScale, 0, 2 * Math.PI);
+    mapCtx.arc(center, center, activeRadius * mapScale, 0, 2 * Math.PI);
     mapCtx.stroke();
     mapCtx.setLineDash([]);
 
@@ -9064,7 +9124,8 @@
         const route = { x, z, rx: kind === 'cruise' ? 23 : 24, rz: 48+index*3 };
         const clearance = size.halfLength + 3;
         const safe = (px,pz) => {
-          if (Math.hypot(px,pz)>=FLIGHT_RADIUS-12 || sampleGroundHeight(px,pz)>WATER_H) return false;
+          if (Math.hypot(px,pz)>=(selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)-12 ||
+              sampleGroundHeight(px,pz)>WATER_H) return false;
           if (selectedMap.alaska && Math.abs(pz-ALASKA_PLACES.harbor.z)<19 && px>43 && px<142) return false;
           if (!selectedMap.city) return true;
           const bridge=EAST_RIVER_BRIDGE;
@@ -9488,7 +9549,8 @@
       pitchInput = -mouseNorm.y;
     }
 
-    const edgeDistance = FLIGHT_RADIUS - Math.hypot(plane.pos[0], plane.pos[2]);
+    const activeRadius=selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS;
+    const edgeDistance = activeRadius - Math.hypot(plane.pos[0], plane.pos[2]);
     let boundaryAssist = false;
     if (edgeDistance < WARNING_DISTANCE) {
       const inwardYaw = Math.atan2(-plane.pos[0], -plane.pos[2]);
@@ -9527,8 +9589,8 @@
     plane.pos[2] += basis.fwd[2] * plane.speed * dt;
 
     const radius = Math.hypot(plane.pos[0], plane.pos[2]);
-    if (radius > FLIGHT_RADIUS) {
-      const limit = FLIGHT_RADIUS / radius;
+    if (radius > activeRadius) {
+      const limit = activeRadius / radius;
       plane.pos[0] *= limit;
       plane.pos[2] *= limit;
     }
