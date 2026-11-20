@@ -6742,7 +6742,10 @@
   const laserMesh = buildConeMesh(4.4, 0.045, [0.64, 0.98, 1.0], [0.15, 0.78, 1.0]);
 
   // Dynamically scaled scene framebuffer. The HUD has a separate logical size.
-  let resScale = graphicsCompat ? 0.78 : 1.0;
+  // Start with a small buffer so the first raymarch does not submit a
+  // full-resolution workload before the frame-time controller can react.
+  const startupScale = 0.35;
+  let resScale = startupScale, scaleCeiling = 1, fastFrames = 0;
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
   let directRendering = graphicsCompat, frameCheckPending = true;
@@ -8355,7 +8358,9 @@
     }
     if(selectedMap.dc)loadDcTextures();
     document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
-    resScale = 1.0;
+    resScale = startupScale;
+    scaleCeiling = 1;
+    fastFrames = slowFrames = 0;
     resizeTargets();
     const mode=settings.get('flightMode');
     selectedAircraft = settings.get('aircraft');
@@ -9326,16 +9331,20 @@
     const dt = Math.min(rawDt, 0.05);
     const time = now * 0.001;
 
-    // Auto-lower internal resolution if integrated GPU slows down
-    if (rawDt > 0.036 && resScale > 0.55) {
-      slowFrames++;
-      if (slowFrames > 18) {
-        resScale = Math.max(0.55, resScale * 0.82);
+    // Keep all scene effects and raise resolution only after stable frames.
+    if (rawDt > 0 && !document.hidden && !frameCheckPending) {
+      const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
+      fastFrames = rawDt < 0.023 ? fastFrames + 1 : 0;
+      slowFrames = rawDt > 0.040 ? slowFrames + 1 : 0;
+      if (slowFrames >= 6 && resScale > startupScale) {
+        scaleCeiling = resScale = Math.max(startupScale, resScale - 0.10);
+        fastFrames = slowFrames = 0;
         resizeTargets();
-        slowFrames = 0;
+      } else if (fastFrames >= 40 && resScale < limit) {
+        resScale = Math.min(limit, resScale + 0.10);
+        fastFrames = slowFrames = 0;
+        resizeTargets();
       }
-    } else {
-      slowFrames = Math.max(0, slowFrames - 1);
     }
 
     sceneryTime += Math.min(rawDt, 0.12);
