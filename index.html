@@ -1584,7 +1584,12 @@
           float roughness = 0.028 + sqrt(meanSquareSlope) * unresolved;
           vec3 roughRefl = normalize(mix(reflDir, vec3(reflDir.x, max(reflDir.y,0.19), reflDir.z), roughness * 1.7));
           vec3 reflectedSky = getSky(roughRefl);
-          waterCol = mix(waterCol, reflectedSky, min(0.965, 0.045 + fresnel * 0.955));
+          // Exact dielectric air-to-water Fresnel with rough-slope grazing correction.
+           // F0 is ~2% instead of a constant +4.5% artistic reflection floor.
+           float filteredFresnel=waterFresnel(clamp(ndv-0.035*roughness*
+             smoothstep(0.08,1.1,pixel),0.0001,1.0));
+           float waterReflectance=clamp(mix(fresnel,filteredFresnel,0.48),0.02,0.975);
+           waterCol=mix(waterCol,reflectedSky,waterReflectance);
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
           if(hasOceanCascades()){
@@ -1980,6 +1985,9 @@
     // PATROL_SALTLINE_STREETS_V1
     uniform float uNyStreetWetness;
     uniform float uNyStreetQuality;
+    uniform sampler2D uNyAsphaltPhoto;
+    uniform sampler2D uNyConcretePhoto;
+    uniform float uNyPhotoReady;
     uniform highp sampler2DArray uDcMaps;
     uniform int uDcSurface;
 
@@ -2088,6 +2096,14 @@
       road=max(1.0-smoothstep(0.042,0.137,length(albedo-asphaltA)),
                1.0-smoothstep(0.040,0.128,length(albedo-asphaltB)));
       if(road<0.015)return;
+      // yolo-mini-fps-inspired use of CC0 Poly Haven physical asphalt.
+      // Real diffuse variation complements the existing wet road roughness.
+      if(uNyPhotoReady>0.5){
+        vec3 photo=texture(uNyAsphaltPhoto,vWorld.xz*0.38).rgb;
+        float aggregate=dot(photo,vec3(0.2126,0.7152,0.0722));
+        float grit=clamp(0.68+aggregate*1.15,0.70,1.42);
+        albedo*=mix(1.0,grit,road*0.85);
+      }
       float wet=clamp(uNyStreetWetness,0.0,1.0);
       vec2 p=vWorld.xz;
       float fine=nyStreetNoise(p*1.75+vec2(8.3,4.1));
@@ -2151,6 +2167,11 @@
         float sidewalk=smoothstep(0.43,0.52,albedo.r)
             *smoothstep(0.39,0.50,albedo.g);
         albedo*=1.0-sidewalk*nearArea*(joint*0.10+(0.5-worn)*0.065);
+        if(uNyPhotoReady>0.5 && sidewalk>0.08){
+          vec3 photo=texture(uNyConcretePhoto,vWorld.xz*0.42).rgb;
+          float tone=clamp(0.63+dot(photo,vec3(0.22,0.70,0.08)),0.65,1.38);
+          albedo*=mix(1.0,tone,sidewalk*nearArea*0.71);
+        }
         float grit=nyStreetNoise(vWorld.xz*5.0+13.0);
         albedo*=1.0-nearArea*sidewalk*(grit-0.5)*0.045;
       }
@@ -3048,6 +3069,22 @@
   const newYorkMeshes = Object.fromEntries(
     NEW_YORK_LANDMARKS.map(({ kind }) => [kind, buildNewYorkLandmark(kind)])
   );
+
+  // PATROL_NYC_GLTF_YOLO_PBR_V4: city-specific GLB/PBR addon.
+  // Dynamically imported only for Manhattan, never added to other maps.
+  let nycRealismAssets=null,nycRealismLoading=false;
+  function prepareNycRealismAssets(){
+    if(!selectedMap.city || graphicsCompat || directRendering ||
+       nycRealismAssets || nycRealismLoading)return;
+    nycRealismLoading=true;
+    import('./assets/nyc/nyc-realism.js')
+      .then(module=>module.loadNycRealism(gl))
+      .then(result=>{
+        if(!gl.isContextLost())nycRealismAssets=result;
+      })
+      .catch(error=>console.warn('[PATROL] NYC asset fallback:',error))
+      .finally(()=>{nycRealismLoading=false;});
+  }
 
   function addModelBox(addQuad, x, y, z, width, height, length, color) {
     const l = x-width/2, r = x+width/2, b = y-height/2, t = y+height/2;
@@ -8817,6 +8854,7 @@
       disposeSceneMesh(backgroundBuildings);
       disposeSceneMesh(landscapeDetails);
       backgroundBuildings = selectedMap.city ? buildCityBuildings(cityLots) : null;
+      if(selectedMap.city && smoothScenery())prepareNycRealismAssets();
       landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
       prepareAlaskaLandmarks();
       prepareCoastalTraffic();
@@ -9028,6 +9066,9 @@
     surfaceWeather:gl.getUniformLocation(meshProg,'uSurfaceWeather'),
     nyStreetWetness:gl.getUniformLocation(meshProg,'uNyStreetWetness'),
     nyStreetQuality:gl.getUniformLocation(meshProg,'uNyStreetQuality'),
+    nyAsphaltPhoto:gl.getUniformLocation(meshProg,'uNyAsphaltPhoto'),
+    nyConcretePhoto:gl.getUniformLocation(meshProg,'uNyConcretePhoto'),
+    nyPhotoReady:gl.getUniformLocation(meshProg,'uNyPhotoReady'),
     viewProj: gl.getUniformLocation(meshProg, 'uViewProj'),
     model: gl.getUniformLocation(meshProg, 'uModel'),
     outline: gl.getUniformLocation(meshProg, 'uOutline'),
@@ -10029,6 +10070,19 @@
     gl.uniform1f(uMesh.nyStreetWetness, selectedMap.city ? nyStreetWetness : 0);
     gl.uniform1f(uMesh.nyStreetQuality,
       selectedMap.city && !graphicsCompat ? Number(nyStreetQuality.value) : 0);
+    const nycPhotos=nycRealismAssets?.photos;
+    const usePhoto=Boolean(selectedMap.city && smoothScenery() && !graphicsCompat &&
+      !directRendering && nycPhotos && Number(nyStreetQuality.value)>0);
+    gl.uniform1f(uMesh.nyPhotoReady,usePhoto?1:0);
+    if(usePhoto){
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D,nycPhotos.asphalt);
+      gl.uniform1i(uMesh.nyAsphaltPhoto,3);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D,nycPhotos.concrete);
+      gl.uniform1i(uMesh.nyConcretePhoto,4);
+      gl.activeTexture(gl.TEXTURE0);
+    }
 
     function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true) {
       gl.uniform1i(uMesh.cityFacade, cityFacade);
@@ -10075,9 +10129,14 @@
         const origin = [mark.x, sampleGroundHeight(mark.x, mark.z) - 0.03, mark.z];
         const model = mat4FromBasis(origin, [1,0,0], [0,1,0], [0,0,1], 1);
         const meshes=newYorkMeshes[mark.kind];
-        drawMeshWithOutline(meshes.body,model,false,mark.kind==='flatiron');
+        const photoModel=smoothScenery()&&!graphicsCompat?
+          nycRealismAssets?.models[mark.kind]:null;
+        drawMeshWithOutline(photoModel||meshes.body,model,false,mark.kind==='flatiron');
         gl.uniform1f(uMesh.dimLights,mark.kind==='times'?0:1);
-        if(meshes.lights.count)drawMeshWithOutline(meshes.lights,model,true);
+        // The procedural lights follow the old model, so do not overlay them
+        // when a real GLB mesh has replaced its architectural geometry.
+        if(meshes.lights.count && !photoModel)
+          drawMeshWithOutline(meshes.lights,model,true);
         gl.uniform1f(uMesh.dimLights,0);
       }
     }
