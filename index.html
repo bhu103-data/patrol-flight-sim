@@ -6304,8 +6304,17 @@ const CENTRAL_PARK_SITES=[
       const porchZ=z-l/2-1.10;
       const porchTerrain=[-1.1,0,1.1].map(dx=>
         sampleTerrainHeight(doorX+dx,porchZ));
+      // The centerline alone misses flooded corners on narrow fjord inlets.
+      // Check the entire 2.66 m by 1.88 m deck at its actual outer edges.
+      const porchFootprintTerrain=[];
+      for(const dx of [-1.33,-.665,0,.665,1.33])
+        for(const dz of [-.94,-.47,0,.47,.94])
+          porchFootprintTerrain.push(sampleTerrainHeight(
+            doorX+dx,porchZ+dz));
       if(Math.min(...porchTerrain)>WATER_H+.95 &&
-          Math.max(...porchTerrain)-Math.min(...porchTerrain)<2.4){
+          Math.max(...porchTerrain)-Math.min(...porchTerrain)<2.4 &&
+          porchFootprintTerrain.every(h=>Number.isFinite(h)&&h>WATER_H+.95) &&
+          Math.max(...porchFootprintTerrain)-Math.min(...porchFootprintTerrain)<2.4){
         const porch=floor+.05;
         box(doorX,porch-.11,porchZ,2.66,.22,1.88,[.42,.33,.24]);
         for(const dx of [-1.08,1.08]){
@@ -6315,7 +6324,14 @@ const CENTRAL_PARK_SITES=[
         }
         // Offset treads follow the downhill elevation, never hang over water.
         const stepZ=porchZ-1.02,stepGround=sampleTerrainHeight(doorX,stepZ);
-        if(stepGround>WATER_H+.95 && porch-stepGround<2.5){
+        // Treads project beyond their centerline toward water; inspect edges.
+        const stepTerrain=[];
+        for(const dx of [-.86,0,.86])
+          for(const dz of [-.43,0,.18])
+            stepTerrain.push(sampleTerrainHeight(doorX+dx,stepZ+dz));
+        if(stepGround>WATER_H+.95 && porch-stepGround<2.5 &&
+            stepTerrain.every(h=>Number.isFinite(h)&&h>WATER_H+.95) &&
+            Math.max(...stepTerrain)-Math.min(...stepTerrain)<2.4){
           const levels=Math.max(1,Math.ceil((porch-stepGround)/.29));
           for(let n=0;n<levels;n++){
             const treadY=porch-(n+1)*(porch-stepGround)/levels;
