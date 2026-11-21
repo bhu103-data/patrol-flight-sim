@@ -195,6 +195,74 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     put('amber',83.9,ground(80,z)+2.25,z,0.22,.25,4);
   }
 
+  // Geometric connection to the steep Yuzhong hillside: the upper city actually
+  // meets the 11th-floor entrance, with visible masonry terraces below the road.
+  // Individual stone blocks hide the artificial mathematical terrain beneath.
+  for(let tier=0;tier<4;tier++){
+    const z=216+tier*24;
+    for(let col=0;col<13;col++){
+      const x=83+col*12.3;
+      const low=ground(x,z-14),high=ground(x,z+9);
+      const wallHeight=Math.max(1.3,high-low+2.2);
+      const base=low-.25;
+      put('stone',x,base+wallHeight*.5,z-1.3,12.05,wallHeight,1.9);
+      put('carved',x,base+wallHeight+.15,z-2.6,12.05,.38,3.4);
+      if((tier+col)%3===0){
+        put('carved',x,base+wallHeight*.5,z-2.53,.33,wallHeight*.89,.18);
+        put('amber',x,base+wallHeight+1.55,z-3.5,.35,.22,.65);
+      }
+    }
+  }
+  // Broad paved upper street at the real hillside connection; no floating platform.
+  for(let i=0;i<19;i++){
+    const x=77+i*8.6,z=304+1.6*Math.sin(i*.45),y=ground(x,z)+.24;
+    put('paving',x,y,z,8.4,.37,13);
+    if(i%2===0){
+      put('rail',x,y+1.6,z-6.9,.28,3.1,.28);
+      put('carved',x,y+3.04,z-6.9,7,.27,.35);
+    }
+    if(i%5===0){
+      put('rail',x,y+4.25,z+5.6,.38,8.3,.38);
+      put('amber',x,y+8.6,z+5.5,2.0,.21,.83);
+    }
+  }
+  // Two raised pedestrian routes bridge from the top roof deck to upper streets.
+  for(const x of [121,187]){
+    for(let step=0;step<20;step++){
+      const t=step/19,z=206+t*94;
+      const bridgeY=127+(ground(x,300)-127)*t;
+      put('paving',x,bridgeY,z,7,.5,5.25);
+      for(const side of [-1,1]){
+        put('rail',x+side*3.75,bridgeY+1.3,z,.18,2.6,.21);
+        if(step>0&&step<19)put('carved',x+side*3.75,bridgeY+2.2,z,.2,.2,5);
+      }
+      if(step%4===0){
+        const earth=ground(x,z);
+        if(bridgeY-earth>3)put('stone',x,earth+(bridgeY-earth)*.5,z,1.8,bridgeY-earth,1.8);
+      }
+    }
+  }
+  // River-level entrance and lower promenade: heavy masonry arches rather than flat cubes.
+  for(let bay=0;bay<7;bay++){
+    const cx=90+bay*19.9,z=91;
+    const baseY=ground(cx,z)+1.0;
+    const radius=6.6,archCy=baseY+8.9;
+    for(const dx of [-radius,radius]){
+      put('stone',cx+dx,baseY+4.1,z,2.5,8.4,2.0);
+    }
+    for(let j=0;j<=12;j++){
+      const a=Math.PI*j/12;
+      const x=cx+radius*Math.cos(a),y=archCy+radius*Math.sin(a);
+      put('stone',x,y,z,1.8,2.0,2.1,0,0,a-Math.PI/2);
+    }
+    put('timber',cx,baseY+4.2,z+1.5,10,7.9,.33);
+    put('window',cx,baseY+5.0,z+1.8,9.2,5.4,.14);
+    for(const side of [-1,1]){
+      put('carved',cx+side*4.5,baseY+4.2,z+1.95,.24,7.7,.28);
+    }
+    put('amber',cx,baseY+15.6,z-.35,13.8,.22,.4);
+  }
+
   // Qiansimen Jialing River Bridge — SINGLE PYLON, SINGLE CENTRAL CABLE PLANE.
   // Reference: Chongqing Municipal Urban Management Bureau (official description).
   // Red deck-side steel lattice sits below a pale inverted-V cable tower; NOT an arch bridge.
