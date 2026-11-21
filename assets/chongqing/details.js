@@ -667,6 +667,9 @@ put('paving',sx,sy+.36,sz+31.3,72,.7,14);
   // Toggle purely ornamental layers for battery life; core landmarks stay intact.
   return {
     setHongyadongReplacement,
+    hongyadongReplacementCounts:{...Object.fromEntries([...pools].map(([name,p])=>[
+      name,hongEnd[name]-hongStart[name]
+    ])),curvedRoofs:hongRoofEnd-hongRoofStart},
     stats:{...Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),curvedRoofs:curvedRoofs.count},
     detailMeshes:pools.size+3,
     setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;pools.get('lattice').mesh.visible=!low;}
