@@ -56,3 +56,39 @@ test('NY Central Park camera button and all 8 views preserve flight',()=>{
     assert.ok(city.includes(name),'missing '+name);
   assert.match(city,/NYC_ORBIT_CEILING\s*=\s*180/);
 });
+
+test('the four original Lake boats have watertight-looking tapered 3D hulls',()=>{
+  const lakeWater=12.2+2.83,panels=[],stems=[],paddles=[];
+  const isHull=rgb=>Array.isArray(rgb)&&
+    (rgb.join(',')==='.42,.28,.2'||rgb.join(',')==='.29,.34,.36');
+  const isPaddle=rgb=>Array.isArray(rgb)&&rgb.join(',')==='.57,.43,.28';
+  const capture=(out,points)=>out.push(...points);
+  const stats=context.am({
+    grid,quality:'high',waterY:12.2,
+    terrainAt:(x,z)=>15.5+.12*Math.cos(x/30)+.13*Math.sin(z/24),
+    addTri:(a,b,c,color)=>{if(isHull(color))capture(stems,[a,b,c]);},
+    addQuad:(a,b,c,d,color)=>{
+      if(isHull(color))capture(panels,[a,b,c,d]);
+      if(isPaddle(color))paddles.push([a,b,c,d]);
+    },
+    box(){},beam(){},ribbon(){}
+  });
+  assert.equal(stats.boats,4);
+  assert.equal(panels.length,4*8*4,'four boats have two hull sides per section');
+  assert.equal(stems.length,4*2*3,'each rowboat has a formed bow and stern');
+  assert.equal(paddles.length,8,'both oars have real paddle blades');
+  assert.ok(Math.min(...panels.map(p=>p[1]))<lakeWater-.07,
+    'keel must project beneath water');
+  assert.ok(Math.max(...panels.map(p=>p[1]))>lakeWater+.25,
+    'gunwales rise above water, rather than a single flat rectangle');
+  // Audit every actual hull vertex against the same irregular Lake geometry
+  // defined in central-park.js. No boat may be positioned on the shoreline.
+  for(const p of [...panels,...stems,...paddles.flat()]){
+    const u=p[0]-grid.offset-grid.tilt*p[2],z=p[2];
+    const dx=(u+14)/24,dz=(z-150)/16.2;
+    const a=Math.atan2(dz,dx);
+    const shore=1+.055*Math.sin(3*a+1.15)+.025*Math.cos(7*a-1.15);
+    assert.ok(Math.hypot(dx,dz)/shore<.84,
+      'rowboat geometry must remain over open Lake water at '+u+','+z);
+  }
+});
