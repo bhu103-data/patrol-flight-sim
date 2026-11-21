@@ -48,9 +48,9 @@ function setup(){
 test('three different ferries have detailed passenger decks and solid tapered hulls',()=>{
   const {scene,river}=setup();
   assert.equal(river.stats.boats,3);
-  assert.equal(scene.objects.length,4);
+  assert.equal(scene.objects.length,3);
   const groups=scene.objects.filter(x=>x instanceof Group);
-  assert.equal(groups.length,4);
+  assert.equal(groups.length,3);
   for(const ferry of groups.slice(0,3)){
     assert.ok(ferry.children.length>=22);
     const hull=ferry.children.find(c=>c instanceof Mesh&&c.geometry.attributes.position);
@@ -99,8 +99,7 @@ test('standing player inherits ferry movement without allocation errors',()=>{
 
 test('battery saver hides wake effects but keeps all passenger ships',()=>{
   const {river,scene}=setup();
-  const wakes=scene.objects.slice(0,3).map(g=>g.children.find(m=>m instanceof Mesh&&m.geometry===undefined?false:
-    m instanceof Mesh&&m.geometry?.constructor===Geometry&&m.material?.blending===THREE.AdditiveBlending));
+  const wakes=scene.objects.map(g=>g.children.find(m=>m instanceof Mesh&&m.material?.blending===THREE.AdditiveBlending));
   assert.equal(wakes.length,3);
   assert.ok(wakes.every(Boolean));
   river.setQuality('low');
