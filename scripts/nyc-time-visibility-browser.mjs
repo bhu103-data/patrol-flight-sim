@@ -120,10 +120,18 @@ try{
     el.dispatchEvent(new Event('change',{bubbles:true}));
    }
   },time);
-  // Updating the dropdown does not alter the camera or reset the aircraft.
-  // Let two shader frames settle before capturing, without advancing the
-  // automatic day/night clock (the user has chosen a fixed time).
-  await page.waitForTimeout(1600);
+  // SwiftShader can take several seconds per world frame. A fixed
+  // wait previously recorded "skyTime=12" while the game still reported
+  // its launch state "14:45". Wait for sampleFlightEnvironment() to
+  // acknowledge THIS clock and weather before trusting any pixel metrics.
+  const minutes=Math.floor(Number(time.value)*60);
+  const clock=String(Math.floor(minutes/60)).padStart(2,'0')+':'+
+    String(minutes%60).padStart(2,'0');
+  const expectedStatus=clock+' · Summer · '+(time.weather||'Clear');
+  await page.waitForFunction(expected=>
+    document.getElementById('skyStatus')?.textContent?.trim()===expected,
+    expectedStatus,{timeout:90000,polling:250});
+  await page.waitForTimeout(850);
   const state=await page.evaluate(()=>{
    const el=document.getElementById('glCanvas'),gl=el?.getContext('webgl2');
    return {map:document.querySelector('input[name="flightMap"]:checked')?.value,
@@ -138,7 +146,8 @@ try{
   });
   if(!state.webgl2||state.glError!==0||state.map!=='manhattan'||
      state.camera!==camera||state.zoom!=='42'||state.angle!=='0'||
-     state.clock!==time.value||state.weather!==(time.weather||'Clear')||state.season!=='1')
+     state.clock!==time.value||state.weather!==(time.weather||'Clear')||
+     state.season!=='1'||state.status?.trim()!==expectedStatus)
    throw Error('Fixed-camera invariant failed: '+JSON.stringify(state));
   await page.evaluate(()=>document.body.classList.add('patrol-env-qa'));
   let buffer;
