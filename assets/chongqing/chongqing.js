@@ -467,8 +467,19 @@ scene.add(trees,stems,branches);
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
-const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
-const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter });
+// The same occupied volumes control road clipping, decorations and actual cars.
+// Check road elevation so intentionally elevated structures remain passable below.
+function streetSpaceClear(x,z,y,radius=0){
+  if(![x,z,y,radius].every(Number.isFinite))return false;
+  for(const o of obstacles){
+    if(Math.abs(x-o.x)>=o.w*.5+radius ||
+       Math.abs(z-o.z)>=o.d*.5+radius)continue;
+    if(y+2.2>=(o.base??-Infinity)&&y-1.6<=(o.top??Infinity))return false;
+  }
+  return true;
+}
+const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
+const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
 // Match electrical street lighting to the independently selected city environment.
 streetBuild.setTimeOfDay(cqTimeSelect.value);
 wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
