@@ -11,7 +11,7 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
-import { chongqingTerraceRoads,clipRoadToFreeSegments } from './road-clearance.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
@@ -563,7 +563,9 @@ const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // sidewalk margin), instead of visually running underneath a tower.
 const roadClearanceStats={paths:0,clipped:0,removedLength:0};
 for(const plan of plannedRoads){
-  const points=plan.points.map(p=>new THREE.Vector3(p.x,ground(p.x,p.z)+1.6,p.z));
+  // Follow the same analytical bends as street traffic, sampling terrain at
+  // <=5.5-unit intervals before clipping against building volumes.
+  const points=sampleChongqingTerraceSurface(plan,ground,riverCenter);
   const clear=clipRoadToFreeSegments(points,plan.width,obstacles,.8,2.5);
   for(const path of clear.paths){
     if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
