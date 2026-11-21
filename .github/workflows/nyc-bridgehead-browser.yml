@@ -1,0 +1,56 @@
+name: NYC Brooklyn Bridgehead WebGL smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "assets/nyc/**"
+      - "scripts/nyc-road-browser-smoke.mjs"
+      - "tests/nyc-road-clearance.test.mjs"
+      - "tests/nyc-road-coastline.test.mjs"
+      - "tests/nyc-intersection-*.test.mjs"
+      - ".github/workflows/nyc-bridgehead-browser.yml"
+
+# Isolated from long-running Chongqing/Alaska browser queues so that a
+# bridgehead road change gets its own visual acceptance evidence.
+concurrency:
+  group: nyc-bridgehead-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  brooklyn-bridgehead:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate NYC road and waterfront clearance
+        run: |
+          node --test tests/nyc-road-clearance.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs
+      - name: Install Chromium with software WebGL
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Serve the actual game
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Render NYC spawn and Brooklyn Bridge close-up
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-road-browser-smoke.mjs
+      - name: Upload New York WebGL screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-brooklyn-bridgehead-webgl
+          path: artifacts/nyc/
+          retention-days: 7
+          if-no-files-found: ignore
