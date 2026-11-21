@@ -1,10 +1,10 @@
-// PATROL_NYC_STREET_FURNITURE_V11 — native WebGL2 street realism; retains V10.
+// PATROL_NYC_ROAD_MARKINGS_V12 — material and markings upgrade retaining V11.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -15,7 +15,9 @@ export function buildNycStreetNetwork({
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
     skippedWater:0,skippedLOD:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
-    accessibleCorners:0,skippedBuildings:0};
+    accessibleCorners:0,skippedBuildings:0,
+    bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
+    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -172,9 +174,35 @@ export function buildNycStreetNetwork({
     }else return;
     stats.streetFurniture++;
   }
+  // PATROL_NYC_ROAD_MARKINGS_V12 — orient road paint to the slanted avenue
+  // tangent instead of placing axis-aligned white rectangles.
+  function orientedRect(x,z,w,length,tangent,color,y=markY){
+    const mag=Math.hypot(tangent[0],tangent[1])||1;
+    const f=[tangent[0]/mag,tangent[1]/mag],n=[f[1],-f[0]];
+    const at=(u,v)=>[x+n[0]*u+f[0]*v,y,z+n[1]*u+f[1]*v];
+    // Upward +Y normals are essential for the existing NYC photo/PBR
+    // shader. The previous clockwise XZ winding faced downward.
+    addQuad(at(-w*.5,-length*.5),at(-w*.5,length*.5),
+      at(w*.5,length*.5),at(w*.5,-length*.5),color);
+  }
+  const mag=Math.hypot(grid.tilt,1);
+  const ave=[grid.tilt/mag,1/mag],cross=[ave[1],-ave[0]];
+  function bikeIcon(x,z,side){
+    // Small white bike lane stencil, visible from aircraft and street level.
+    const pos=(u,v)=>[x+cross[0]*(side*2.45+u)+ave[0]*v,
+      markY+.028,z+cross[1]*(side*2.45+u)+ave[1]*v];
+    for(const dv of [-.40,.43])for(let k=0;k<10;k++){
+      const a=k*2*Math.PI/10,b=(k+1)*2*Math.PI/10,r=.20;
+      ribbon(pos(Math.sin(a)*r,dv+Math.cos(a)*r),
+        pos(Math.sin(b)*r,dv+Math.cos(b)*r),.052,[.84,.86,.81]);
+    }
+    for(const [a,b] of [[[0,-.40],[.15,0]],[[.15,0],[0,.43]],[[0,.43],[0,-.40]]])
+      ribbon(pos(...a),pos(...b),.046,[.87,.87,.83]);
+    stats.bikeSymbols++;
+  }
   function rect(x,z,w,d,color,y=roadY){
-    addQuad([x-w/2,y,z-d/2],[x+w/2,y,z-d/2],
-      [x+w/2,y,z+d/2],[x-w/2,y,z+d/2],color);
+    addQuad([x-w/2,y,z-d/2],[x-w/2,y,z+d/2],
+      [x+w/2,y,z+d/2],[x+w/2,y,z-d/2],color);
   }
   function streetSegment(a,b,kind,i,j){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
@@ -183,7 +211,35 @@ export function buildNycStreetNetwork({
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
+    const dx=b[0]-a[0],dz=b[1]-a[1],
+      normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
+    // Only selected game corridors receive red bus and green bike lanes;
+    // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
+    const greenBike=kind==='avenue' && (i===1||i===-3) &&
+      mid[1]>-390 && mid[1]<135;
+    const redBus=kind==='avenue' && (i===-1||i===3) &&
+      mid[1]>-270 && mid[1]<145;
+    if(greenBike){
+      const side=1,lane=shift(a,b,side*(half-.67));
+      slab(lane[0],lane[1],1.15,[.13,.33,.28],roadY+.015);
+      const separator=shift(a,b,side*(half-1.30));
+      slab(separator[0],separator[1],.066,paint,markY+.008);
+      if(j%3===0 && distance>16)bikeIcon(mid[0],mid[1],side);
+      stats.bikeLaneSegments++;
+    }
+    if(redBus){
+      const side=-1,lane=shift(a,b,side*(half-1.05));
+      slab(lane[0],lane[1],1.65,[.49,.17,.16],roadY+.016);
+      const separator=shift(a,b,side*(half-2.00));
+      slab(separator[0],separator[1],.076,paint,markY+.008);
+      if(pavementText && j%4===0 && stats.busLaneSegments<14){
+        const p=[mid[0]+cross[0]*side*(half-.96),markY+.026,
+          mid[1]+cross[1]*side*(half-.96)];
+        pavementText('BUS',p,1.28,.54,paint);
+      }
+      stats.busLaneSegments++;
+    }
     // Independent stone sidewalks, raised curb faces and drainage channels.
     // They sit OUTSIDE the asphalt: no two large overlapping quads.
     for(const side of [-1,1]){
@@ -198,6 +254,16 @@ export function buildNycStreetNetwork({
         point(c[1][0],c[1][1],roadY),
         point(c[1][0],c[1][1],roadY+.128),
         point(c[0][0],c[0][1],roadY+.128),granite);
+      // Concrete saw-cut lines break the unrealistic uninterrupted sidewalk.
+      if(detailBand(...mid)>=3 && hash(i,j,71)>.39){
+        for(let along=6.2;along<distance-1.5;along+=8.9){
+          const t=along/distance,x=a[0]+dx*t,z=a[1]+dz*t,
+            offs=side*(half+.53);
+          orientedRect(x+normal[0]*offs,z+normal[1]*offs,1.34,.025,
+            [dx,dz],[.39,.40,.38],paveY+.004);
+          stats.sidewalkJoints++;
+        }
+      }
     }
     const lines=kind==='avenue'?2:1;
     for(let along=4;along<distance-1.5;along+=7.4){
@@ -243,10 +309,10 @@ export function buildNycStreetNetwork({
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
-  function signal(x,z,phase=0){
+  function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;
     // NYC yellow traffic signal heads and dark pedestrian walk/countdown box.
-    box(x,base+2.05,z,.115,4.10,.115,iron);
+    box(x,base+2.52,z,.115,5.04,.115,iron);
     box(x,base+4.08,z,.20,.14,.20,iron);
     beam([x,base+3.93,z],[x-.96,base+3.93,z],.075,steel);
     box(x-.96,base+3.59,z,.36,.84,.35,signalYellow);
@@ -256,26 +322,68 @@ export function buildNycStreetNetwork({
       const [delta,active]=lights[k];
       const bright=k===(phase%3);
       const rgb=bright?active:active.map(v=>v*.26);
-      box(x-.96,base+3.59+delta,z+.224,.175,.17,.028,rgb);
+      const px=x-.96,py=base+3.59+delta,pz=z+.226;
+      // Octagonal glass/lens geometry reads round rather than a square box
+      // at close camera distances; inner light and metallic edge are separate.
+      for(let segment=0;segment<10;segment++){
+        const a=segment*Math.PI/5,b=(segment+1)*Math.PI/5;
+        const ring=(ang,r,zLift)=>[px+Math.cos(ang)*r,
+          py+Math.sin(ang)*r,pz+zLift];
+        addQuad(ring(a,.108,-.019),ring(b,.108,-.019),
+          ring(b,.080,.001),ring(a,.080,.001),[.13,.15,.17]);
+        addQuad(ring(a,.078,.002),ring(b,.078,.002),
+          ring(b,.024,.004),ring(a,.024,.004),rgb);
+      }
       box(x-.96,base+3.59+delta,z+.184,.25,.04,.12,iron);
     }
     box(x,base+2.48,z+.13,.37,.58,.26,iron);
     box(x,base+2.53,z+.278,.25,.40,.028,
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
+    // NYC DOT green street-name blades and ONE WAY wayfinding; labels are
+    // simulated in the compressed game grid, not official surveyed signs.
+    if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
+      const named=j===-1?'W 42 ST':j===0?'W 44 ST':
+        j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
+      box(x,base+4.65,z+.025,1.62,.32,.12,[.055,.31,.22]);
+      box(x,base+4.65,z+.093,1.46,.245,.022,[.09,.41,.31]);
+      lettering(named,[x,base+4.65,z+.111],1.34,.19,[.90,.94,.88]);
+      stats.streetNamePlates++;
+    }
     stats.signals++;
   }
   function crosswalk(x,z,i,j){
     const s=grid.blockWidth;
     // Opposing ladder crosswalks plus recessed stop bars.
     for(const side of [-1,1]){
-      const zz=z+side*3.75;
+      // Avenue crosses this junction on a slight diagonal. All ladder bars
+      // and stop bars follow that road bearing, avoiding the previous
+      // axis-aligned, visibly pasted-on road markings.
+      const c=[x+ave[0]*side*3.75,z+ave[1]*side*3.75];
       for(let k=-3;k<=3;k++){
-        const xk=x+k*.77;
-        rect(xk,zz,.47,1.30,paint,markY+.006);
+        orientedRect(c[0]+cross[0]*k*.77,
+          c[1]+cross[1]*k*.77,.47,1.30,ave,paint,markY+.006);
         stats.crosswalks++;
       }
-      rect(x,z+side*5.0,s*.32,.10,paint,markY+.004);
+      orientedRect(x+ave[0]*side*5,z+ave[1]*side*5,
+        s*.32,.10,ave,paint,markY+.004);
+      // Second pedestrian crossing, across the numbered east-west side street
+      // where the narrow side-road corridor is present.
+      if(detailBand(x,z)>=3 && hash(i,j,31)>.30){
+        for(let k=-3;k<=3;k++){
+          orientedRect(x+side*4.20,z+k*.73,
+            .46,1.21,[1,0],paint,markY+.009);
+          stats.crosswalks++;
+        }
+      }
+    }
+    // Rare edge hatching and corner protection, not repeated at every block.
+    if(hash(i,j,72)>.77){
+      for(const side of [-1,1])for(let k=0;k<3;k++){
+        orientedRect(x+side*(4.80+k*.39),z+side*4.92,
+          .085,1.0,[.64,side*.76],paint,markY+.009);
+        stats.intersectionHatching++;
+      }
     }
     // Sewer chamber and slab-joint at the crosswalk nose.
     if((i+j)%3===0){
@@ -286,7 +394,9 @@ export function buildNycStreetNetwork({
     }
     const cornerX=x+4.48,cornerZ=z+4.55;
     if(hash(i,j,3)>.40 && siteClear(cornerX,cornerZ,.30)){
-      signal(cornerX,cornerZ,(Math.abs(i)+j+30)%3);
+      // Alternating red and green visual state, rather than random yellow
+      // at most corners. Still static, not a vehicle control simulation.
+      signal(cornerX,cornerZ,(Math.abs(i+j)%2)?2:0,i,j);
       stats.intersections++;
     }
     // Pedestrian tactile curb ramp pads; restricted to featured intersections.
