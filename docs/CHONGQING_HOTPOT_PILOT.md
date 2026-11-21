@@ -78,3 +78,5 @@ In the game it is a 19-storey station block with a real through-opening around t
 ### Validation and scope
 
 Run `node --test tests/chongqing-landmarks.test.mjs` and `node --test tests/chongqing-spatial.test.mjs`. The landmark test covers the eight towers, Crystal length and collider, the physically open Liziba tunnel, train motion and GPU instance capacity; five landmark tests passed in the isolated JavaScript mock runner. No GPU rendering test, measured FPS or public Pages deployment verification was available. The city layout remains a compressed artistic arrangement — **not** surveyed 1:1 coordinates, photogrammetry or an exact topology of Chongqing.
+
+**Scenic navigation:** press **1** for the Hongyadong riverfront, **2** for Raffles City/The Crystal, **3** for Liziba Station, and **4** to return to the hotpot start. Press **H** to hide the HUD for a cinematic view and **H** again to restore it. These optional viewpoint shortcuts reposition the avatar without editing or restarting the map. The `Battery Saver` quality setting hides select detailed facade bands and lights but retains all key landmarks and the moving monorail.
