@@ -2373,7 +2373,9 @@ const CENTRAL_PARK_SITES=[
       return (magenta+blue+amber+lamp)*intensity*(1.0-uAtmosphere.x*0.82);
     }
     void nyFacadeRainStreaks(inout vec3 albedo, vec3 normal) {
-      if (uNyStreetQuality<1.5 || uCityFacade==false || abs(normal.y)>0.17 ||
+      if (uNyStreetQuality<1.5 || uCityFacade==false ||
+          vHarborSurface==10.0 || vHarborSurface==7.0 ||
+          abs(normal.y)>0.17 ||
           vWorld.y>125.0 || vWorld.y<14.0)return;
       float vert=abs(normal.x)>0.55 ? vWorld.z : vWorld.x;
       float scratch=nyStreetNoise(vec2(vert*3.5,floor(vWorld.y*0.62)));
@@ -2460,7 +2462,10 @@ const CENTRAL_PARK_SITES=[
       bool stone=cls==1 || cls==5 || (cls==2 && vWorld.y<27.0);
       bool metal=cls==3;
       bool glass=cls==4 || cls==6;
-      bool commonWall=cls==0 && uCityFacade;
+      // Avoid applying a second generic image projection on a tagged
+      // NYC OTI or Times Square footprint material.
+      bool officialSurface=vHarborSurface>5.5 && vHarborSurface<11.5;
+      bool commonWall=cls==0 && uCityFacade && !officialSurface;
       if(!(stone||metal||glass||commonWall))return;
       vec2 uv=vec2(abs(normal.x)>abs(normal.z)?vWorld.z:vWorld.x,vWorld.y);
       uv*=stone?0.27:0.40;
@@ -2484,16 +2489,23 @@ const CENTRAL_PARK_SITES=[
         roughness=mix(roughness,.24,near*.30);
       }
     }
+    // PATROL_NYC_GIS_PBR_V13: City Building Footprints at Times Square
+    // and NYC OTI registered financial-district polygons share real
+    // stone/glass/roof shading. Surface IDs 6/7/8 and 9/10/11
+    // are two distinct sources with equivalent material classes.
+    // The original geometry/collision, NYC LED displays and other maps
+    // remain unchanged.
     // PATROL_NYC_GIS_PBR_V12: geometry from official City Building Footprints.
     // Flat interpolated aHarborSurface tags 6/7/8 distinguish genuine
     // polygon masonry, authored window planes and triangulated rooftops.
     // Original Poly Haven CC0 maps are already bound by NYC material atlas.
     void nyOfficialGisPbr(inout vec3 albedo,inout vec3 n,inout float roughness){
       if(!uManhattanView || !uSmooth || uNyStreetQuality<1.5 ||
-          vHarborSurface<5.5 || vHarborSurface>8.5)return;
+          vHarborSurface<5.5 || vHarborSurface>11.5)return;
       float nearDetail=1.0-smoothstep(98.0,340.0,distance(vWorld,uEye));
       if(nearDetail<0.002)return;
-      if(vHarborSurface<6.5){
+      float materialClass=mod(floor(vHarborSurface+.5),3.0);
+      if(materialClass<.5){
         // Stable world-space stone/brick mapping keeps scale consistent even
         // across non-axis-aligned official building footprint edges.
         vec3 t=normalize(vec3(-n.z,0.0,n.x)+vec3(0.00001,0.0,0.00001));
@@ -2515,7 +2527,7 @@ const CENTRAL_PARK_SITES=[
                        clamp(uNyStreetWetness,0.0,1.0);
         albedo*=mix(1.0,modulation*(1.0-.18*damping),nearDetail*.80);
         roughness=mix(roughness,roughTarget,nearDetail*.70);
-      }else if(vHarborSurface<7.5){
+      }else if(materialClass<1.5){
         // Embedded window quads receive Fresnel glazing and deterministic
         // varied indoor light, not a second procedural window grid.
         vec3 view=normalize(uEye-vWorld);
@@ -2669,7 +2681,8 @@ const CENTRAL_PARK_SITES=[
                                uAtmosphere.x);
           material=mix(material,reflectTint,grazing*0.52);
         }
-        if (uCityFacade && abs(n.y)<0.15 && !realGlass) {
+        if (uCityFacade && abs(n.y)<0.15 && !realGlass &&
+            !(vHarborSurface>8.5 && vHarborSurface<11.5)) {
           float span=abs(n.x)>0.50?vWorld.z:vWorld.x;
           float facadePlane=abs(n.x)>0.50?vWorld.x:vWorld.z;
           float brick=smoothstep(0.07,0.20,material.r-material.b);
@@ -4912,7 +4925,7 @@ const CENTRAL_PARK_SITES=[
       if(length<.10)continue;
       const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
       const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
-      face(loA,loB,hiB,hiA,wallTint);
+      face(loA,loB,hiB,hiA,wallTint,9);
       walls++;
       if(destroyed||length<1.4||detailBand<2)continue;
       const normal=[sign*dz/length,-sign*dx/length];
@@ -4930,9 +4943,9 @@ const CENTRAL_PARK_SITES=[
           const tint=(i*11+floor*17+bay*7)%23===0?
             [.40,.40,.37]:glass;
           face(at(left,bottom,.062),at(right,bottom,.062),
-            at(right,top,.062),at(left,top,.062),tint,5);
+            at(right,top,.062),at(left,top,.062),tint,10);
           face(at(left,bottom+.05,.071),at(right,bottom+.05,.071),
-            at(right,bottom+.095,.071),at(left,bottom+.095,.071),frameTint);
+            at(right,bottom+.095,.071),at(left,bottom+.095,.071),frameTint,9);
           windows++;
         }
       }
@@ -4960,8 +4973,8 @@ const CENTRAL_PARK_SITES=[
         }
         if(blocked)continue;
         const A=[a[0],roofY,a[1]],B=[b[0],roofY,b[1]],C=[c[0],roofY,c[1]];
-        if(sign>0)addTri(C,B,A,isGlass?[.31,.36,.37]:[.47,.44,.40]);
-        else addTri(A,B,C,isGlass?[.31,.36,.37]:[.47,.44,.40]);
+        if(sign>0)addTri(C,B,A,isGlass?[.31,.36,.37]:[.47,.44,.40],11);
+        else addTri(A,B,C,isGlass?[.31,.36,.37]:[.47,.44,.40],11);
         indices.splice(i,1);roof++;clipped=true;break;
       }
       if(!clipped)break;
