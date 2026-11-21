@@ -49,6 +49,7 @@ export function buildMurrayHillVisualMesh(snapshot,{addQuad,addTri},{origin=[-73
  if(typeof addQuad!=='function'||typeof addTri!=='function')throw new TypeError('Geometry callbacks required');
  if(!Number.isFinite(ground))throw new RangeError('Ground must be finite');
  const mesh={buildings:0,roofTriangles:0,facadeQuads:0,windowQuads:0,approximateTerraces:0,visualOnly:true};
+ const accepted=new Set();
  const mat=[[.52,.50,.47],[.41,.46,.48],[.57,.51,.45],[.47,.42,.40]],glass=[.17,.27,.32],roof=[.38,.39,.39];
  const quad=(a,b,c,d,col,surface)=>{addQuad(a,b,c,d,col,surface);mesh.facadeQuads++};
  const wall=(ring,y0,y1,id,decorate)=>{
@@ -73,12 +74,13 @@ export function buildMurrayHillVisualMesh(snapshot,{addQuad,addTri},{origin=[-73
  };
  murrayHillSilhouettes(snapshot,shape=>{
   if(shape.kind==='footprint'){
-   if(mesh.buildings>=maxBuildings)return;
+   if(mesh.buildings>=maxBuildings||mesh.facadeQuads+shape.ring.length*2>maxFacadeQuads)return;
+   accepted.add(shape.id);
    const y=ground+shape.height;
    wall(shape.ring,ground,y,shape.id,true);
    const result=triangulate(shape.ring,addTri,y,roof);
    mesh.roofTriangles+=result.count;mesh.buildings++;
-  }else if(shape.kind==='approximate-inset-terrace'&&mesh.buildings<=maxBuildings){
+  }else if(shape.kind==='approximate-inset-terrace'&&accepted.has(shape.id)){
    const bottom=ground+shape.baseHeight,top=ground+shape.height;
    wall(shape.ring,bottom,top,shape.id,false);
    mesh.roofTriangles+=triangulate(shape.ring,addTri,top,roof).count;
