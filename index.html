@@ -1116,8 +1116,12 @@ const CENTRAL_PARK_SITES=[
           const iz = Math.floor(north/city.blockLength);
           const parcel = officialLotAt(east,north)||cityParcels.get(iz*256+ix);
           ground[idx] = base;
+          // The rendered roof uses the real OTI polygon, so terrain collision
+          // must not occupy empty L/U-shaped cutouts of the bounding box.
           height[idx] = parcel && Math.abs(east-parcel[0])<parcel[2]/2 &&
-            Math.abs(north-parcel[1])<parcel[3]/2 ? base+parcel[4]/scale : base;
+            Math.abs(north-parcel[1])<parcel[3]/2 &&
+            (!parcel[7] || inOfficialPolygon(east,north,parcel[7]))
+            ? base+parcel[4]/scale : base;
           biome[idx] = hash(Math.floor(east / 8), Math.floor(north / 8), 842);
           continue;
         }
