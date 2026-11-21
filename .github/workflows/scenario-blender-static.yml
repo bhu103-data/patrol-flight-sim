@@ -1,0 +1,37 @@
+name: Scenario Blender authoring static checks
+
+on:
+  push:
+    paths:
+      - 'tools/blender/**'
+      - '.agents/skills/scenario-blender/**'
+      - '.agents/skills/patrol-scenario-chongqing/**'
+      - '.github/workflows/scenario-blender-static.yml'
+  pull_request:
+    paths:
+      - 'tools/blender/**'
+      - '.agents/skills/scenario-blender/**'
+      - '.agents/skills/patrol-scenario-chongqing/**'
+      - '.github/workflows/scenario-blender-static.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Blender authoring scripts without cloud credentials
+        run: |
+          python3 -m py_compile tools/blender/nyc_scenario_author.py
+          python3 -m py_compile tools/blender/chongqing_scenario_author.py
+          python3 -m py_compile tools/scenario_blender_export.py
+      - name: Check existing Chongqing landmarks and visual interfaces
+        run: |
+          node --test tests/chongqing-landmarks.test.mjs tests/chongqing-visual.test.mjs
+      - name: No Blender render or Scenario API call
+        run: |
+          echo "Static checks only; visual Blender render, paid Scenario generation and live GPU FPS are NOT verified."
