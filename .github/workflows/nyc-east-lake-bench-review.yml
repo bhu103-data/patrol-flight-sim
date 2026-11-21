@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install pinned MIT meshoptimizer decoder for source-only GLB inspection
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund meshoptimizer@1.3.0
       - name: Check standalone audit syntax
         run: node --check tools/nyc/audit-east-lake-park-bench.mjs
       - name: Fetch author license pages and immutable tevy publisher metadata
