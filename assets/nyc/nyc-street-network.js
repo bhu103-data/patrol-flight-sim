@@ -3,7 +3,7 @@
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
-  addQuad, box, beam, ribbon, terrainAt, detailBand,
+  addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
   grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
@@ -463,7 +463,7 @@ export function buildNycStreetNetwork({
     const rim=a=>[x+Math.cos(a)*rad,y+3.06,z+Math.sin(a)*rad*.76];
     for(let k=0;k<N;k++){
       const a=2*Math.PI*k/N,b=2*Math.PI*(k+1)/N;
-      addQuad(rim(a),rim(b),[x,y+3.57,z],canopyTop,
+      addTri(rim(a),rim(b),canopyTop,
         (k+variant)%2===0?blue:gold);
       beam(rim(a),canopyTop,.027,steel);
     }
