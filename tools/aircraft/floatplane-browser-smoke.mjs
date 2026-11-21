@@ -1,0 +1,98 @@
+// Live WebGL2 Cessna 185 cross-map smoke test; optional visual snapshots in CI.
+// Validates real GLB publication and that a safe-water launch can taxi and rotate.
+// No artificial flight-state injection; all controls are real keyboard events.
+import {chromium} from 'playwright';
+import {mkdirSync} from 'node:fs';
+
+const base=process.env.PATROL_TEST_URL||'http://127.0.0.1:8765/';
+const browser=await chromium.launch({headless:true,args:[
+  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+  '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
+]});
+mkdirSync('artifacts',{recursive:true});
+const results=[];
+
+async function testMap(map,exercise){
+  const page=await browser.newPage({viewport:{width:1152,height:720}});
+  const errors=[],requests=[],log=[];
+  page.on('pageerror',e=>errors.push('JavaScript: '+e.message));
+  page.on('console',msg=>{
+    const m=msg.text();log.push(m);
+    if(msg.type()==='error')errors.push('Console: '+m);
+  });
+  page.on('response',response=>{
+    if(response.url().includes('/assets/aircraft/cessna185-floats.glb'))
+      requests.push(response.status());
+  });
+  try{
+    await page.goto(base,{waitUntil:'domcontentloaded',timeout:30000});
+    if(!(await page.evaluate(()=>!!document.querySelector('#glCanvas')?.getContext('webgl2'))))
+      throw Error('No WebGL2 in Chromium');
+    await page.locator('input[name="flightMap"][value="'+map+'"]').check({force:true});
+    await page.locator('input[name="aircraft"][value="seaplane"]').check({force:true});
+    const waterStart=page.locator('#waterStart');
+    if(!(await waterStart.isVisible()))throw Error('Global water-start control not visible');
+    await waterStart.check({force:true});
+    await page.locator('#startFlight').click({timeout:15000});
+    await page.waitForFunction(()=>{
+      const error=document.getElementById('menuError');
+      const title=document.getElementById('titleOverlay');
+      const load=document.getElementById('loadOverlay');
+      return (error&&!error.hidden)||(title?.hidden&&load?.classList.contains('done'));
+    },null,{timeout:130000});
+    const state=await page.evaluate(()=>({
+      menuError:document.querySelector('#menuError')?.hidden?null:
+        document.querySelector('#menuError')?.textContent,
+      aircraft:document.querySelector('#aircraftName')?.textContent,
+      floats:document.querySelector('#gearStatus')?.textContent,
+      isCrashOpen:!document.querySelector('#crashOverlay')?.hidden,
+      glLost:document.querySelector('#glCanvas')?.getContext('webgl2')?.isContextLost()
+    }));
+    if(state.menuError||state.glLost||state.isCrashOpen||
+       state.aircraft!=='Cessna 185 Floatplane'||
+       !/FLOATS · WATER TAXI 0/.test(state.floats))
+      throw Error('Water start not stable: '+JSON.stringify(state));
+    await page.waitForFunction(()=>{
+      return document.querySelector('#gearStatus')?.textContent?.includes('WATER TAXI');
+    },null,{timeout:15000});
+    // Guard the actual GLB, not an unreported procedural fallback.
+    await page.waitForTimeout(3500);
+    if(!requests.includes(200)||!log.some(m=>m.includes('[PATROL] Blender Cessna 185 loaded')))
+      throw Error('Real Blender C185 GLB did not load: '+JSON.stringify({requests,log:log.slice(-10)}));
+    await page.screenshot({path:'artifacts/floatplane-'+map+'-afloat.png'});
+    if(exercise){
+      await page.keyboard.down('Shift');
+      await page.waitForTimeout(1300);
+      const taxi=(await page.locator('#gearStatus').textContent())||'';
+      if(!taxi.includes('WATER TAXI')||taxi.endsWith(' 0'))
+        throw Error('Floatplane has no positive water taxi speed: '+taxi);
+      await page.screenshot({path:'artifacts/floatplane-'+map+'-taxi.png'});
+      await page.keyboard.down('w');
+      await page.waitForFunction(()=>{
+        const label=document.querySelector('#gearStatus')?.textContent||'';
+        return label.includes('WATER LANDING')||
+          !document.querySelector('#crashOverlay')?.hidden;
+      },null,{timeout:10000});
+      await page.keyboard.up('w');
+      await page.keyboard.up('Shift');
+      const after=(await page.locator('#gearStatus').textContent())||'';
+      if(!after.includes('WATER LANDING'))
+        throw Error('Floatplane failed to rotate into flight: '+after);
+      await page.screenshot({path:'artifacts/floatplane-'+map+'-airborne.png'});
+    }
+    if(errors.length)throw Error(errors.join('\n'));
+    results.push({map,aircraft:state.aircraft,waterStart:state.floats,
+      blenderGLB:requests.includes(200),takeoff:exercise});
+    console.log('PASS floatplane WebGL2: '+JSON.stringify(results.at(-1)));
+  }finally{
+    await page.close();
+  }
+}
+
+try{
+  await testMap('manhattan',false);
+  await testMap('alaska',true);
+  console.log('C185 Browser verification complete '+JSON.stringify(results));
+}finally{
+  await browser.close();
+}
