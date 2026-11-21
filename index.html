@@ -2429,6 +2429,10 @@ const CENTRAL_PARK_SITES=[
     uniform int uNySurfaceClass;
     uniform highp sampler2DArray uDcMaps;
     uniform int uDcSurface;
+    uniform bool uAlaskaMesh;
+    uniform bool uAlaskaPhotoReady;
+    uniform sampler2D uAlaskaPhotoAlbedo;
+    uniform sampler2D uAlaskaPhotoNormalRough;
 
     float harborGrain(vec2 cell) {
       return fract(sin(dot(cell,vec2(71.17,159.73)))*43758.5453);
@@ -2766,6 +2770,39 @@ const CENTRAL_PARK_SITES=[
         roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
       }
     }
+    // Tagged surface 12: Alaska glacier mesh; distant, other-map and
+    // compatibility geometry retains the existing lightweight fallback.
+    void alaskaGlacierFace(inout vec3 material,inout vec3 n,
+                           inout float roughness){
+      if(!uAlaskaMesh || vHarborSurface<11.5 || vHarborSurface>12.5)return;
+      float near=1.0-smoothstep(95.0,305.0,distance(vWorld,uEye));
+      if(near<.002)return;
+      vec2 uv0=abs(n.y)>.64?vWorld.xz*.115:
+                vec2(vWorld.x*.091+vWorld.z*.028,vWorld.y*.16);
+      float band=.5+.5*sin(vWorld.y*1.18+vWorld.x*.13+vWorld.z*.038);
+      float vein=sin(vWorld.x*.29+vWorld.y*.52+sin(vWorld.z*.08)*2.4);
+      float seam=(1.0-smoothstep(.027,.16,abs(vein)))*.29;
+      material=mix(material,vec3(.44,.67,.77),
+        near*(.22+.18*(1.0-max(n.y,0.0))));
+      material*=1.0-near*(.08*band+seam);
+      if(uAlaskaPhotoReady){
+        // Reuse bundled Poly Haven CC0 snow photo/normal/roughness
+        // (atlas column 1 of four), no extra asset/network request.
+        vec2 tile=fract(uv0);
+        vec2 uv=vec2((1.0+.022+.956*tile.x)*.25,.022+.956*tile.y);
+        vec3 photographed=texture(uAlaskaPhotoAlbedo,uv).rgb;
+        vec4 normalRough=texture(uAlaskaPhotoNormalRough,uv);
+        vec2 micro=normalRough.rg*2.0-1.0;
+        vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.001,0.0,.001));
+        vec3 bitangent=normalize(cross(n,tangent));
+        n=normalize(n+(tangent*micro.x+bitangent*micro.y)*.10*near);
+        material=mix(material,photographed*vec3(.66,.84,.94),.32*near);
+        roughness=mix(roughness,clamp(normalRough.a,.38,.88),.75*near);
+      }
+      float frostFresnel=pow(1.0-abs(dot(n,normalize(uEye-vWorld))),3.0);
+      material+=vec3(.025,.075,.095)*frostFresnel*near;
+    }
+
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2817,6 +2854,7 @@ const CENTRAL_PARK_SITES=[
         nyOfficialGisPbr(material,n,surfaceRoughness);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
+      alaskaGlacierFace(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
         float wind=uSceneTime*1.28;
         float a=dot(vWorld.xz,vec2(0.33,1.47))+wind;
@@ -11720,6 +11758,7 @@ const CENTRAL_PARK_SITES=[
     try {
       let meshSource = MESH_FS;
       if(!map.dc)meshSource=meshSource.replace('uniform int uDcSurface;', 'const int uDcSurface = -1;');
+      if(!map.alaska)meshSource=meshSource.replace('uniform bool uAlaskaMesh;', 'const bool uAlaskaMesh = false;');
       if(!map.vegas)meshSource=meshSource.replace('uniform bool uSphereShow;', 'const bool uSphereShow = false;');
       if(!map.city)meshSource=meshSource.replace('uniform bool uTimesScreen;', 'const bool uTimesScreen = false;');
       if(graphicsCompat || !map.city)meshSource=meshSource.replace('uniform float uNyStreetQuality;', 'const float uNyStreetQuality = 0.0;');
@@ -11789,6 +11828,10 @@ const CENTRAL_PARK_SITES=[
     manhattan:gl.getUniformLocation(meshProg,'uManhattanView'),
     dcMaps:gl.getUniformLocation(meshProg,'uDcMaps'),
     dcSurface:gl.getUniformLocation(meshProg,'uDcSurface'),
+    alaskaMesh:gl.getUniformLocation(meshProg,'uAlaskaMesh'),
+    alaskaPhotoReady:gl.getUniformLocation(meshProg,'uAlaskaPhotoReady'),
+    alaskaPhotoAlbedo:gl.getUniformLocation(meshProg,'uAlaskaPhotoAlbedo'),
+    alaskaPhotoNormalRough:gl.getUniformLocation(meshProg,'uAlaskaPhotoNormalRough'),
     sphereShow: gl.getUniformLocation(meshProg, 'uSphereShow'),
     spherePattern: gl.getUniformLocation(meshProg, 'uSpherePattern'),
     sphereCenter: gl.getUniformLocation(meshProg, 'uSphereCenter'),
@@ -12861,6 +12904,17 @@ const CENTRAL_PARK_SITES=[
     gl.uniform1i(uMesh.scenarioDiffuse,10);
     gl.uniform1i(uMesh.dcMaps,2);
     gl.uniform1i(uMesh.dcSurface,-1);
+    gl.uniform1i(uMesh.alaskaMesh,Boolean(selectedMap.alaska));
+    gl.uniform1i(uMesh.alaskaPhotoReady,alaskaPhotoReady?1:0);
+    if(alaskaPhotoReady){
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.albedo);
+      gl.uniform1i(uMesh.alaskaPhotoAlbedo,1);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.normalRough);
+      gl.uniform1i(uMesh.alaskaPhotoNormalRough,3);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform2f(uMesh.surfaceWeather,environment.climate[2],environment.climate[3]);
     gl.uniform3fv(uMesh.sun,environment.sun);
     gl.uniform4fv(uMesh.atmosphere,environment.atmosphere);
