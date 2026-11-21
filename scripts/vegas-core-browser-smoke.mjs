@@ -5,6 +5,7 @@ import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const qaTag=process.env.PATROL_QA_TAG||'candidate';
+if(!/^[A-Za-z0-9_-]{1,48}$/.test(qaTag))throw Error('Invalid PATROL_QA_TAG');
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const browser=await chromium.launch({headless:true,args:[
