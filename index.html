@@ -2036,6 +2036,7 @@
     layout(location=1) in vec3 aNorm;
     layout(location=2) in vec3 aColor;
     layout(location=3) in float aHarborSurface;
+    layout(location=4) in vec3 aScenarioUVMask;
 
     uniform mat4 uViewProj;
     uniform mat4 uModel;
@@ -2044,6 +2045,7 @@
     out vec3 vNorm;
     out vec3 vColor;
     out vec3 vWorld;
+    out vec3 vScenarioUVMask;
     flat out float vHarborSurface;
 
     void main() {
@@ -2052,6 +2054,7 @@
       vNorm = mat3(uModel) * aNorm;
       vColor = aColor;
       vHarborSurface = aHarborSurface;
+      vScenarioUVMask = aScenarioUVMask;
       vWorld = worldPos.xyz;
       gl_Position = uViewProj * worldPos;
     }
@@ -2062,6 +2065,7 @@
     in vec3 vNorm;
     in vec3 vColor;
     in vec3 vWorld;
+    in vec3 vScenarioUVMask;
     flat in float vHarborSurface;
     out vec4 fragColor;
     uniform bool uSmooth;
@@ -2093,6 +2097,8 @@
     uniform sampler2D uNyAsphaltPhoto;
     uniform sampler2D uNyConcretePhoto;
     uniform float uNyPhotoReady;
+    uniform sampler2D uScenarioDiffuse;
+    uniform float uScenarioDiffuseReady;
     uniform sampler2D uNyLedAtlas;
     uniform float uNyLedReady;
     // PATROL_NYC_MATERIAL_ATLAS_V5: independent building-type materials.
@@ -2465,6 +2471,10 @@
       }
       vec3 n = normalize(vNorm);
       vec3 material = vColor;
+      // One UV-unwrapped, baked base-color atlas per approved Blender GLB.
+      // Untouched procedural meshes and untextured GLB faces remain colored.
+      if(uScenarioDiffuseReady>0.5 && vScenarioUVMask.z>0.5)
+        material*=texture(uScenarioDiffuse,vScenarioUVMask.xy).rgb;
       if(vHarborSurface>0.0 && vHarborSurface<3.5) material=harborSurfaceColor(material,n);
       float surfaceRoughness=1.0;
       float nyRoad=0.0,nyPuddle=0.0;
@@ -10757,6 +10767,8 @@
     nyAsphaltPhoto:gl.getUniformLocation(meshProg,'uNyAsphaltPhoto'),
     nyConcretePhoto:gl.getUniformLocation(meshProg,'uNyConcretePhoto'),
     nyPhotoReady:gl.getUniformLocation(meshProg,'uNyPhotoReady'),
+    scenarioDiffuse:gl.getUniformLocation(meshProg,'uScenarioDiffuse'),
+    scenarioDiffuseReady:gl.getUniformLocation(meshProg,'uScenarioDiffuseReady'),
     nyLedAtlas:gl.getUniformLocation(meshProg,'uNyLedAtlas'),
     nyLedReady:gl.getUniformLocation(meshProg,'uNyLedReady'),
     nyWallDiffuse:gl.getUniformLocation(meshProg,'uNyWallDiffuse'),
@@ -11764,6 +11776,7 @@
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.useProgram(meshProg);
+    gl.uniform1i(uMesh.scenarioDiffuse,10);
     gl.uniform1i(uMesh.dcMaps,2);
     gl.uniform1i(uMesh.dcSurface,-1);
     gl.uniform2f(uMesh.surfaceWeather,environment.climate[2],environment.climate[3]);
@@ -11810,6 +11823,13 @@
     }
 
     function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true) {
+      const hasBlenderDiffuse=Boolean(selectedMap.city && mesh.texture);
+      gl.uniform1f(uMesh.scenarioDiffuseReady,hasBlenderDiffuse?1:0);
+      if(hasBlenderDiffuse){
+        gl.activeTexture(gl.TEXTURE10);
+        gl.bindTexture(gl.TEXTURE_2D,mesh.texture);
+        gl.activeTexture(gl.TEXTURE0);
+      }
       gl.uniform1i(uMesh.cityFacade, cityFacade);
       gl.bindVertexArray(mesh.vao);
       gl.uniformMatrix4fv(uMesh.model, false, modelMat);
