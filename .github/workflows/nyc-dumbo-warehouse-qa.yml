@@ -1,0 +1,48 @@
+name: DUMBO real parcel pedestrian and low-flight WebGL A/B
+on:
+  push:
+    branches:
+      - qa/dumbo-corner-pedestrian-webgl-20261121
+    paths:
+      - "scripts/nyc-dumbo-warehouse-qa.mjs"
+      - "tests/nyc-dumbo-warehouse-qa.test.mjs"
+      - ".github/workflows/nyc-dumbo-warehouse-qa.yml"
+  pull_request:
+    paths:
+      - "scripts/nyc-dumbo-warehouse-qa.mjs"
+      - "tests/nyc-dumbo-warehouse-qa.test.mjs"
+      - ".github/workflows/nyc-dumbo-warehouse-qa.yml"
+permissions:
+  contents: read
+jobs:
+  real-parcel-street-and-flight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Existing warehouse geometry + new QA contract tests
+        run: |
+          node --test tests/nyc-dumbo-corner-warehouses.test.mjs tests/nyc-dumbo-warehouse-qa.test.mjs
+          node --check scripts/nyc-dumbo-warehouse-qa.mjs
+      - name: Install isolated free headless Chromium and PNG pixel decoder
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start original game with its existing published static server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/patrol-dumbo-qa-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Two real parcels, four street/low-flight cameras, controlled A/B pixels
+        run: PATROL_BASE_URL=http://127.0.0.1:8765 node scripts/nyc-dumbo-warehouse-qa.mjs
+      - name: Preserve PNGs and JSON even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dumbo-real-parcels-low-flight-webgl
+          path: artifacts/dumbo-warehouse-qa/
+          retention-days: 10
+          if-no-files-found: warn
