@@ -45,7 +45,7 @@
   #skyPanel{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px 10px;
     padding:10px;background:#142334eb;border:1px solid #a8c6dc90;border-radius:6px;min-width:233px;}
   #skyStatus{grid-column:1/-1;color:#e6d4ab;font-variant-numeric:tabular-nums;}
-  #hotelViewButton,#bridgeShortcutButton,#hotelViews button,#hotelViews select{
+  #hotelViewButton,#bridgeShortcutButton,#centralParkShortcutButton,#hotelViews button,#hotelViews select{
     border:1px solid #96bac988;border-radius:4px;background:#234151;color:#eff7fb;
     padding:5px 8px;font:inherit;cursor:pointer;
   }
@@ -305,6 +305,7 @@
     <div class="bar-right">
       <button id="hotelViewButton" type="button" aria-controls="hotelViews" aria-expanded="false" hidden>Scenic Views <span class="desktop-only">[H]</span></button>
       <button id="bridgeShortcutButton" type="button" title="Open Brooklyn Bridge close view" hidden>Bridge View</button>
+      <button id="centralParkShortcutButton" type="button" title="Explore Central Park without moving your aircraft" hidden>Central Park [P]</button>
       <button id="flightMenuBtn" type="button">Flight Menu</button>
       <button id="audioBtn" type="button">SOUND: OFF</button>
     </div>
@@ -341,6 +342,7 @@
   const rescueViewButton = document.getElementById('rescueViewButton');
   const bridgeFocusButton = document.getElementById('bridgeFocusButton');
   const bridgeShortcutButton = document.getElementById('bridgeShortcutButton');
+  const centralParkShortcutButton=document.getElementById('centralParkShortcutButton');
   rescueViewButton.addEventListener('click',triggerSkylineRescue);
   const resumeFlight = document.getElementById('resumeFlight');
   const runwayChoice = document.getElementById('runwayChoice');
@@ -6056,18 +6058,22 @@ const CENTRAL_PARK_SITES=[
     // Park geometry uses a separate, bounded triangle batch, but the same
     // WebGL renderer as Manhattan. Load only when the city is active.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
-      import('./assets/nyc/central-park.js').then(({buildCentralPark})=>{
+      Promise.all([import('./assets/nyc/central-park.js'),
+        import('./assets/nyc/central-park-amenities.js')]).then(([{buildCentralPark},{buildCentralParkAmenities}])=>{
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
-        const stats=buildCentralPark({
+        const parkQuality=window.matchMedia('(max-width:760px), (pointer:coarse)').matches?'low':'high';
+        const parkOpts={
           addQuad:detail.addQuad,addTri:detail.addTri,
           box:(...args)=>addModelBox(detail.addQuad,...args),
           beam:(a,b,w,color)=>addRideBeam(detail.addQuad,a,b,w,color),
           ribbon:(a,b,w,color)=>pushRoadStrip(detail.addQuad,a,b,w,color),
           terrainAt:(x,z)=>sampleTerrainHeight(x,z),
           waterY:WATER_H,streetY:STREET_Y,grid:MANHATTAN_GRID,
-          quality:window.matchMedia('(max-width:760px), (pointer:coarse)').matches?'low':'high'
-        });
+          quality:parkQuality
+        };
+        const stats=buildCentralPark(parkOpts);
+        const amenityStats=buildCentralParkAmenities(parkOpts);
         const uploaded=detail.upload();
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
           disposeSceneMesh(uploaded);return;
@@ -6079,7 +6085,7 @@ const CENTRAL_PARK_SITES=[
         const by=sampleTerrainHeight(bx,181);
         sceneryObjects.push({name:'Belvedere Castle',x:bx,z:181,y:by,
           top:by+7.4,halfX:5,halfZ:5});
-        console.info('[PATROL] Central Park',stats);
+        console.info('[PATROL] Central Park',stats,amenityStats);
       }).catch(error=>console.warn('[PATROL] Central Park fallback:',error));
     }
     const box=(...args)=>addModelBox(solid.addQuad,...args);
@@ -6087,9 +6093,15 @@ const CENTRAL_PARK_SITES=[
     const iron=[0.30,0.35,0.38], pale=[0.79,0.80,0.74], red=[0.64,0.24,0.18];
     const timber=[0.41,0.32,0.24], amber=[0.95,0.71,0.38];
     const place=(name,site)=>sceneryPlaces.push({name,x:site.x,z:site.z});
-    if(selectedMap.city)for(const site of CENTRAL_PARK_SITES){
-      place(site.name,{x:MANHATTAN_GRID.tilt*site.z+MANHATTAN_GRID.offset+site.u,
-        z:site.z});
+    if(selectedMap.city){
+      for(const site of [...CENTRAL_PARK_SITES,
+        {name:'Central Park Zoo',u:27,z:89},
+        {name:'Strawberry Fields',u:-28,z:130},
+        {name:'Loeb Boathouse',u:18,z:157},
+        {name:'Gapstow Bridge',u:20,z:78},
+        {name:'Conservatory Garden',u:24,z:324}]){
+        place(site.name,{x:MANHATTAN_GRID.tilt*site.z+MANHATTAN_GRID.offset+site.u,z:site.z});
+      }
     }
     const solidAt=(name,x,z,y,top,halfX,halfZ,roofSlope=0,roofSlopeZ=0)=>
       sceneryObjects.push({name,x,z,y,top,halfX,halfZ,roofSlope,roofSlopeZ});
@@ -9416,7 +9428,24 @@ const CENTRAL_PARK_SITES=[
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
       detail:'Wedge-shaped masonry landmark'},
     {name:'Skyline Rescue',x:40,z:-70,height:31,bearing:156,radius:67,rise:18,
-      detail:'Watch the rescue climber and drone projections. Press J to start.'}
+      detail:'Watch the rescue climber and drone projections. Press J to start.'},
+    // Central Park viewpoints are city-only and do not teleport aircraft.
+    {name:'Central Park · Reservoir Aerial',x:88.8,z:245,height:11,bearing:216,radius:82,rise:23,
+      detail:'Reservoir shoreline and park canopy from overhead'},
+    {name:'Central Park · Bethesda Terrace',x:67.16,z:134,height:2.2,bearing:140,radius:14,rise:3.8,
+      detail:'Limestone steps and Bethesda Fountain'},
+    {name:'Central Park · Bow Bridge',x:52.24,z:151,height:2,bearing:225,radius:21,rise:6.4,
+      detail:'Iron arch, the Lake and rowboats'},
+    {name:'Central Park · Belvedere Castle',x:57.44,z:181,height:4,bearing:160,radius:24,rise:8,
+      detail:'Castle turrets and Turtle Pond'},
+    {name:'Central Park · Great Lawn',x:80.56,z:194,height:5,bearing:155,radius:46,rise:16,
+      detail:'Great Lawn fields and woodland'},
+    {name:'Central Park · Zoo',x:78.36,z:89,height:2.7,bearing:105,radius:17,rise:7,
+      detail:'Pavilions, enclosure and aviary'},
+    {name:'Central Park · Strawberry Fields',x:33.2,z:130,height:1.8,bearing:150,radius:12,rise:3,
+      detail:'Circular stone memorial-inspired garden'},
+    {name:'Central Park · Loeb Boathouse',x:85.68,z:157,height:3,bearing:175,radius:17,rise:6.8,
+      detail:'Lakeside roof, veranda and rowboats'}
   ].map(view=>({...view,site:{name:view.name}}));
   const DC_SCENIC_VIEWS=[
     {site:DC_SITES.lincoln,x:-590,z:0,height:5.5,bearing:90,radius:34,rise:4,
@@ -9464,6 +9493,7 @@ const CENTRAL_PARK_SITES=[
     rescueViewButton.hidden=!selectedMap.city;
     bridgeFocusButton.hidden=!selectedMap.city;
     bridgeShortcutButton.hidden=!selectedMap.city;
+    centralParkShortcutButton.hidden=!selectedMap.city;
     rescueStart=null;
     rescueForm=RESCUE_FORMS.length-1;
     if(hasScenicViews())for(const {site} of scenicViews())hotelTarget.add(new Option(site.name));
@@ -9553,6 +9583,20 @@ const CENTRAL_PARK_SITES=[
   }
   bridgeFocusButton.addEventListener('click',openBrooklynCloseView);
   bridgeShortcutButton.addEventListener('click',openBrooklynCloseView);
+  function openCentralParkView(){
+    if(!selectedMap.city||!flying||crash||
+       window.PatrolNYCosmos?.isActive?.())return;
+    if(!scenicViewActive)setScenicView(true);
+    const index=scenicViews().findIndex(view=>
+      view.name==='Central Park · Reservoir Aerial');
+    if(index<0)return;
+    hotelTarget.selectedIndex=index;
+    hotelAngle.value='0';
+    hotelZoom.value='55';
+    onboardView=false;
+    updateScenicView();
+  }
+  centralParkShortcutButton.addEventListener('click',openCentralParkView);
   resumeFlight.addEventListener('click',()=>setScenicView(false));
   hotelTarget.addEventListener('change',()=>{
     setDcAutoTour(false);
@@ -9805,6 +9849,12 @@ const CENTRAL_PARK_SITES=[
       return;
     }
     if(skySettings.contains(e.target))return;
+    if(e.code==='KeyP' && !e.repeat && selectedMap.city &&
+       !/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||'')){
+      e.preventDefault();
+      openCentralParkView();
+      return;
+    }
     if(e.code==='KeyJ' && !e.repeat && selectedMap.city){
       triggerSkylineRescue();
       return;
