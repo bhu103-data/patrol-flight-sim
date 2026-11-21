@@ -274,7 +274,12 @@ function panelArt(ctx,x,y,size,info,index,campaign){
 }
 export function createNycLedAtlas(gl,panels){
   if(!panels||!panels.length)return null;
-  const size=2048,cols=Math.max(8,Math.ceil(Math.sqrt(panels.length))),
+  // Low-memory and touch devices need only a 1K atlas; desktop keeps sharp 2K artwork.
+  // Texture contents are still generated uniquely for each campaign.
+  const smallDevice=(typeof navigator!=='undefined' && Number(navigator.deviceMemory)>0 && navigator.deviceMemory<=4)
+    || (typeof matchMedia==='function' && matchMedia('(pointer:coarse)').matches);
+  const size=Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE)||2048,smallDevice?1024:2048),
+    cols=Math.max(8,Math.ceil(Math.sqrt(panels.length))),
     step=size/cols,canvas=document.createElement('canvas');
   const creativeRun=reserveCreativeSerials(panels.length);
   canvas.width=canvas.height=size;
