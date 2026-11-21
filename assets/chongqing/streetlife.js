@@ -81,6 +81,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     side:THREE.DoubleSide
   });
   const bodies=pool(vehicleBody(),bodyMaterial,12);
+  bodies.castShadow=true;
   const windows=pool(glassGeom(),glass,12);
   const tireGeo=new THREE.CylinderGeometry(.52,.52,.32,14,1);
   tireGeo.rotateX(Math.PI/2);
