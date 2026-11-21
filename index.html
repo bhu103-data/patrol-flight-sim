@@ -2570,6 +2570,7 @@ const CENTRAL_PARK_SITES=[
     void nyFacadeRainStreaks(inout vec3 albedo, vec3 normal) {
       if (uNyStreetQuality<1.5 || uCityFacade==false ||
           vHarborSurface==10.0 || vHarborSurface==7.0 ||
+          vHarborSurface==13.0 ||
           abs(normal.y)>0.17 ||
           vWorld.y>125.0 || vWorld.y<14.0)return;
       float vert=abs(normal.x)>0.55 ? vWorld.z : vWorld.x;
@@ -2659,8 +2660,8 @@ const CENTRAL_PARK_SITES=[
       bool glass=cls==4 || cls==6;
       // Avoid applying a second generic image projection on a tagged
       // NYC OTI or Times Square footprint material.
-      bool officialSurface=vHarborSurface>5.5 && vHarborSurface<11.5;
-      bool commonWall=cls==0 && uCityFacade && !officialSurface;
+      bool taggedFacadeSurface=vHarborSurface>5.5 && vHarborSurface<14.5;
+      bool commonWall=cls==0 && uCityFacade && !taggedFacadeSurface;
       if(!(stone||metal||glass||commonWall))return;
       vec2 uv=vec2(abs(normal.x)>abs(normal.z)?vWorld.z:vWorld.x,vWorld.y);
       uv*=stone?0.27:0.40;
@@ -2687,7 +2688,8 @@ const CENTRAL_PARK_SITES=[
     // PATROL_NYC_GIS_PBR_V13: City Building Footprints at Times Square
     // and NYC OTI registered financial-district polygons share real
     // stone/glass/roof shading. Surface IDs 6/7/8 and 9/10/11
-    // are two distinct sources with equivalent material classes.
+    // are surveyed sources; 12/13/14 mark *procedural Brooklyn* brick,
+    // glazing and roofs using the same PBR material classes, not GIS data.
     // The original geometry/collision, NYC LED displays and other maps
     // remain unchanged.
     // PATROL_NYC_GIS_PBR_V12: geometry from official City Building Footprints.
@@ -2696,7 +2698,7 @@ const CENTRAL_PARK_SITES=[
     // Original Poly Haven CC0 maps are already bound by NYC material atlas.
     void nyOfficialGisPbr(inout vec3 albedo,inout vec3 n,inout float roughness){
       if(!uManhattanView || !uSmooth || uNyStreetQuality<1.5 ||
-          vHarborSurface<5.5 || vHarborSurface>11.5)return;
+          vHarborSurface<5.5 || vHarborSurface>14.5)return;
       float nearDetail=1.0-smoothstep(98.0,340.0,distance(vWorld,uEye));
       if(nearDetail<0.002)return;
       float materialClass=mod(floor(vHarborSurface+.5),3.0);
@@ -2877,7 +2879,7 @@ const CENTRAL_PARK_SITES=[
           material=mix(material,reflectTint,grazing*0.52);
         }
         if (uCityFacade && abs(n.y)<0.15 && !realGlass &&
-            !(vHarborSurface>8.5 && vHarborSurface<11.5)) {
+            !(vHarborSurface>8.5 && vHarborSurface<14.5)) {
           float span=abs(n.x)>0.50?vWorld.z:vWorld.x;
           float facadePlane=abs(n.x)>0.50?vWorld.x:vWorld.z;
           float brick=smoothstep(0.07,0.20,material.r-material.b);
@@ -5405,6 +5407,7 @@ const CENTRAL_PARK_SITES=[
         heroDowntown?facadeSet[archType]:
         tone<0.35?[0.41,0.48,0.52]:
         tone<0.68?[0.65,0.61,0.53]:[0.53,0.39,0.32];
+      const windowSurface=bridgeheadBrooklyn?13:5;
       const trim=bridgeheadBrooklyn?
         (archType%3===0?[.75,.71,.63]:archType%3===1?[.68,.64,.58]:[.60,.58,.53]):
         material.map((value,i)=>Math.min(.95,
@@ -5463,11 +5466,20 @@ const CENTRAL_PARK_SITES=[
         addModelBox(addQuad,x,y+h*(1+k)*.5,z,w*(.68+(archType%3)*.05),
           h*(1-k),d*(.69+(archType%4)*.045),material);
       }else{
-        addModelBox(addQuad,x,y+h/2,z,w,h,d,material);
+        addModelBox(addQuad,x,y+h/2,z,w,h,d,material,
+          bridgeheadBrooklyn?12:0);
       }
       addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,
         material.map(value=>value*0.69));
       addModelBox(addQuad,x,y+h-0.16,z,w+0.12,0.29,d+0.12,trim);
+      // Source-aware tag 14: a thin gravel rooftop plane. Body surfaces
+      // use procedural Brooklyn brick tag 12; window glazing uses tag 13.
+      if(bridgeheadBrooklyn && !destroyed){
+        const roofY=y+h+.018;
+        addQuad([x-w*.5,roofY,z-d*.5],[x-w*.5,roofY,z+d*.5],
+          [x+w*.5,roofY,z+d*.5],[x+w*.5,roofY,z-d*.5],
+          [.34,.36,.35],14);
+      }
       const roof=[0.31,0.34,0.35];
       if(detailBand>=2 && h>13){
         addModelBox(addQuad,x+w*(tone-0.5)*0.32,y+h+0.48,z-d*0.12,w*0.40,0.96,d*0.44,roof);
@@ -5556,7 +5568,7 @@ const CENTRAL_PARK_SITES=[
           addModelBox(addQuad,x,y+1.39,wall+side*0.079,w*0.83,1.78,0.14,recess);
           for(let col=0;col<bays;col++){
             const bx=x+(col-(bays-1)/2)*((w-0.72)/bays);
-            addModelBox(addQuad,bx,y+1.42,wall+side*0.19,bayWidth,1.59,0.065,glass,5);
+            addModelBox(addQuad,bx,y+1.42,wall+side*0.19,bayWidth,1.59,0.065,glass,windowSurface);
             addModelBox(addQuad,bx,y+2.28,wall+side*0.22,bayWidth+0.14,0.075,0.11,mullion);
             addModelBox(addQuad,bx,y+0.62,wall+side*0.22,bayWidth+0.14,0.072,0.11,mullion);
             addModelBox(addQuad,bx,y+1.45,wall+side*0.24,0.065,1.55,0.10,mullion);
@@ -5582,8 +5594,8 @@ const CENTRAL_PARK_SITES=[
                 cc=[cx+paneW*.5,py+paneH*.5,zf],
                 d0=[cx-paneW*.5,py+paneH*.5,zf];
               const tint=((archType*17+floor*11+col*7)%19<3)?[.39,.38,.33]:glass;
-              if(side>0)addQuad(a,b,cc,d0,tint,5);
-              else addQuad(d0,cc,b,a,tint,5);
+              if(side>0)addQuad(a,b,cc,d0,tint,windowSurface);
+              else addQuad(d0,cc,b,a,tint,windowSurface);
               addModelBox(addQuad,cx,py-paneH*.5,zf+side*.02,
                 paneW+.1,.07,.07,mullion);
               if(col%2===0)addModelBox(addQuad,cx,py,zf+side*.02,
@@ -5609,7 +5621,7 @@ const CENTRAL_PARK_SITES=[
               fasciaW*.97,.035,.09,[.83,.79,.69]);
             // Recessed entrance set against the storefront glazing.
             addModelBox(addQuad,x+offset,y+1.10,wall+side*.253,
-              Math.min(1.02,w*.23),1.91,.052,[.08,.15,.19],5);
+              Math.min(1.02,w*.23),1.91,.052,[.08,.15,.19],windowSurface);
             addModelBox(addQuad,x+offset,y+1.10,wall+side*.277,
               .045,1.85,.050,[.59,.61,.60]);
             addModelBox(addQuad,x+offset+.23,y+1.05,wall+side*.32,
@@ -5654,8 +5666,8 @@ const CENTRAL_PARK_SITES=[
                 b=[xx,py+ph*.5,zz-pw*.5],
                 cc=[xx,py+ph*.5,zz+pw*.5],
                 d0=[xx,py-ph*.5,zz+pw*.5];
-              if(side>0)addQuad(a,b,cc,d0,glass,5);
-              else addQuad(d0,cc,b,a,glass,5);
+              if(side>0)addQuad(a,b,cc,d0,glass,windowSurface);
+              else addQuad(d0,cc,b,a,glass,windowSurface);
             }
           }
         }
