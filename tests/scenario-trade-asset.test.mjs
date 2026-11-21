@@ -68,8 +68,10 @@ test('the activated original GLB is present, licensed and within budget',()=>{
   assert.match(manifest.landmarks.trade.license,/Original/);
   assert.equal(manifest.landmarks.trade.file,'scenario/trade.glb');
   for(const [name,entry] of Object.entries(manifest.landmarks)){
-    if(name!=='trade')assert.equal(entry.enabled,false);
+    if(!['trade','empire'].includes(name))assert.equal(entry.enabled,false);
   }
+  assert.equal(manifest.landmarks.empire.enabled,true);
+  assert.match(manifest.landmarks.empire.license,/Original/);
 });
 test('production loader decodes the ACTUAL complete One WTC with atlas and normals',async()=>{
   const gl=createGL();
