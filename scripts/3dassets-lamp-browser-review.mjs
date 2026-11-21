@@ -6,7 +6,8 @@ import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {PNG} from 'pngjs';
 
 const base=(process.env.CHONGQING_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
-const dir='artifacts/3dassets-lamp';
+const timePreset=process.env.PATROL_REVIEW_TIME==='night'?'night':'day';
+const dir='artifacts/3dassets-lamp/'+timePreset;
 await mkdir(dir,{recursive:true});
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
@@ -30,7 +31,7 @@ async function capture(label,pose,preview,quality='high'){
     if(msg.type()==='warning')warnings.push({label,message:msg.text().slice(0,200)});
   });
   const params=new URLSearchParams({
-    quality,time:'day',assetQA:pose
+    quality,time:timePreset,assetQA:pose
   });
   if(preview)params.set('lampReview','3dassets');
   try{
@@ -117,11 +118,13 @@ try{
   // Identical viewport, quality, clock preset, streets and scene positions.
   await capture('street-original','street',false);
   await capture('street-candidate','street',true);
-  await capture('lowair-original','air',false);
-  await capture('lowair-candidate','air',true);
-  await capture('low-quality-fallback','street',true,'low');
+  if(timePreset==='day'){
+    await capture('lowair-original','air',false);
+    await capture('lowair-candidate','air',true);
+    await capture('low-quality-fallback','street',true,'low');
+  }
   const comparisons=[];
-  for(const pose of ['street','air']){
+  for(const pose of (timePreset==='day'?['street','air']:['street'])){
     const baseShot=experiments.find(x=>x.pose===pose&&!x.preview);
     const candidate=experiments.find(x=>x.pose===pose&&x.preview&&x.quality==='high');
     const imageA=PNG.sync.read(await readFile(baseShot.screenshot));
@@ -156,13 +159,13 @@ try{
       drawCallDelta:candidate.calls-baseShot.calls,
       triangleDelta:candidate.triangles-baseShot.triangles
     });
-    if(meanBaselineBrightness<30)
+    if(meanBaselineBrightness<(timePreset==='night'?5:30))
       throw Error('Camera still obscured/black: '+pose+', brightness '+meanBaselineBrightness);
     if(changedPixels<150)
       throw Error('Replacement not visibly confirmed at '+pose+': only '+changedPixels+' pixels changed');
 
   }
-  report={passed:true,environment:'Chromium SwiftShader (software WebGL2, not GPU benchmark)',
+  report={passed:true,timePreset,environment:'Chromium SwiftShader (software WebGL2, not GPU benchmark)',
     experiments,comparisons,warnings,
     decision:'828-triangle asset was visible; manual art review and hardware performance still required before production decision'};
 }catch(e){
