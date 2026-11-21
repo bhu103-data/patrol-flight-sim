@@ -42,10 +42,10 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     texture.anisotropy=4;texture.generateMipmaps=true;
     return texture;
   }
-  const woodTexture=tiledTexture('wood');
+  const woodTexture=pbr?.wood?null:tiledTexture('wood');
   const materials={
-    timber:new THREE.MeshStandardMaterial({color:0x9f6855,map:woodTexture,bumpMap:woodTexture,bumpScale:.025,roughness:.79}),
-    carved:new THREE.MeshStandardMaterial({color:0xbd8b62,map:woodTexture,roughness:.67}),
+    timber:pbr?.wood??new THREE.MeshStandardMaterial({color:0x9f6855,map:woodTexture,bumpMap:woodTexture,bumpScale:.025,roughness:.79}),
+    carved:pbr?.carvedWood??new THREE.MeshStandardMaterial({color:0xbd8b62,map:woodTexture,roughness:.67}),
     terra:pbr?.roof??new THREE.MeshStandardMaterial({color:0x5d6061,roughness:.86}),
     rail:new THREE.MeshStandardMaterial({color:0x7e8791,metalness:.52,roughness:.5}),
     stone:pbr?.stone??new THREE.MeshStandardMaterial({color:0xb6adb0,roughness:.91}),
