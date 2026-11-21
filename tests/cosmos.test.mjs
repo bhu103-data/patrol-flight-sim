@@ -25,3 +25,12 @@ test('J2000 sky catalog and fallback remain available',()=>{
   assert.match(scene,/equatorialDirection\(270,66\.5607\)/);
   assert.match(scene,/Star catalog fallback/);
 });
+
+test('main flight and Chongqing engine JavaScript parse',()=>{
+  const html=get('index.html');
+  const inline=html.match(/<script>\s*([\s\S]*?)<\/script>/);
+  assert.ok(inline && inline[1].length>1000,'main flight script must exist');
+  assert.doesNotThrow(()=>new Script(inline[1]));
+  const chongqing=get('assets/chongqing/chongqing.js').replace(/^import .*;\s*$/gm,'');
+  assert.doesNotThrow(()=>new Script(chongqing));
+});
