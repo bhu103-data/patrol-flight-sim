@@ -6773,7 +6773,7 @@ const CENTRAL_PARK_SITES=[
     const wood=[0.43,0.32,0.24], roof=[0.24,0.29,0.32], glass=[0.28,0.47,0.52];
     const ivory=[0.89,0.88,0.81], red=[0.66,0.26,0.19];
     const harbor=ALASKA_PLACES.harbor;
-    const alaskaVillageAudit={cabins:0,sidingRows:0,roofSeams:0};
+    const alaskaVillageAudit={cabins:0,sidingRows:0,roofSeams:0,walkwayJoins:0};
     const cape=ALASKA_PLACES.beacon;
     const waterline=WATER_H;
     const deck=waterline+1.60;
@@ -7070,6 +7070,20 @@ const CENTRAL_PARK_SITES=[
         const top=walkwayY(x),topNext=walkwayY(next);
         box((x+next)*.5,(top+topNext)*.5-.13,pierZ,
           next-x+.05,.24,3.42,deckColor);
+        // Only the first four near-pier spans get real slender timber
+        // deck joints. Follow the ramp slope; do not change its footprint,
+        // dry-land test, dock collision or original pedestrian connection.
+        if(x<100){
+          addRideBeam(addQuad,
+            [next-.08,topNext+.034,pierZ-1.52],
+            [next-.08,topNext+.034,pierZ+1.52],
+            .035,[.31,.25,.19]);
+          for(const zz of [pierZ-.60,pierZ+.60])
+            addRideBeam(addQuad,
+              [x+.08,top+.034,zz],[next-.08,topNext+.034,zz],
+              .025,[.38,.31,.23]);
+          alaskaVillageAudit.walkwayJoins+=3;
+        }
         for(const side of [-1,1]){
           const z=pierZ+side*1.44;
           const base=Math.min(top-.28,
