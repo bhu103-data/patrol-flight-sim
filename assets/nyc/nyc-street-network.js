@@ -1,3 +1,4 @@
+import {createStreetFurnitureChunkBudget} from './petalwake-chunk-lod.js';
 // PATROL_NYC_ROAD_MARKINGS_V12 — material and markings upgrade retaining V11.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
@@ -29,6 +30,7 @@ export function buildNycStreetNetwork({
     dumboCrack=[.179,.202,.222],dumboCurbStain=[.455,.465,.447],
     dumboSawcut=[.412,.418,.395];
   const inDumboMaterialZone=(i,j)=>i>=9&&i<=20&&j>=-13&&j<=-7;
+  const furnitureChunks=createStreetFurnitureChunkBudget();
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
@@ -109,8 +111,9 @@ export function buildNycStreetNetwork({
     const usedHere=bridgehead?stats.brooklynStreetFurniture:
       stats.streetFurniture-stats.brooklynStreetFurniture;
     const capHere=bridgehead?22:82;
+    const cx=(a[0]+b[0])/2,cz=(a[1]+b[1])/2;
     if(usedHere>=capHere ||
-       detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<(bridgehead?2:3))
+       !furnitureChunks.permits(cx,cz,detailBand(cx,cz),bridgehead))
       return;
     const chance=hash(i,j,49);
     if(chance<.76)return;
@@ -223,6 +226,7 @@ export function buildNycStreetNetwork({
       box(p[0],p[1]-.07,p[2],.25,.03,.36,[.89,.85,.70]);
       stats.streetlamps++;
     }else return;
+    furnitureChunks.record(cx,cz,bridgehead);
     stats.streetFurniture++;
     if(bridgehead)stats.brooklynStreetFurniture++;
   }
