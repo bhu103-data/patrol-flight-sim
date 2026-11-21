@@ -2,6 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {decodeVegasRidgeDEM} from '../assets/vegas/usgs-ridges.js';
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
 function extract(start,end){
  const a=html.indexOf(start),b=html.indexOf(end,a+start.length);
@@ -10,11 +11,11 @@ function extract(start,end){
 }
 const sampleSource=extract('  function buildVegasCoreRidgeSample(geometry) {',
   '  function buildVegasStrip(geometry) {');
-function scene(){
+function scene(measured=null){
  const triangles=[],quads=[];
  const build=new Function('sampleTerrainHeight','VEGAS_BOULEVARD','vegasMeasuredRidges',
   sampleSource+'return buildVegasCoreRidgeSample;')(
-    (x,z)=>13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7,-35,null);
+    (x,z)=>13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7,-35,measured);
  const stats=build({
    addTri:(a,b,c,rgb)=>triangles.push({a,b,c,rgb}),
    addQuad:(a,b,c,d,rgb)=>quads.push({a,b,c,d,rgb})
@@ -53,4 +54,19 @@ test('fixed QA camera names a real Vegas scenic view',async()=>{
  const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
  assert.match(html,/site:\{name:'Strip Street View'\}/);
  assert.match(script,/selectOption\(\{label:'Strip Street View'\}\)/);
+});
+test('survey-backed ridge mesh truly replaces synthetic heights',async()=>{
+ const payload=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const measured=decodeVegasRidgeDEM(payload);
+ const original=scene(),survey=scene(measured);
+ assert.equal(survey.triangles.length,original.triangles.length);
+ const ridgePeaks=triangles=>triangles.flatMap(face=>
+   [face.a,face.b,face.c].filter(p=>Math.abs(p[0])===811).map(p=>p[1]));
+ const peaksOriginal=ridgePeaks(original.triangles);
+ const peaksSurvey=ridgePeaks(survey.triangles);
+ assert.equal(peaksOriginal.length,peaksSurvey.length);
+ assert.ok(peaksSurvey.some((y,i)=>Math.abs(y-peaksOriginal[i])>8),
+   'real 3DEP values must affect actual rendered mesh vertices');
+ assert.ok(survey.triangles.every(face=>[face.a,face.b,face.c].every(p=>
+   p.every(Number.isFinite))),'no invalid game vertices');
 });
