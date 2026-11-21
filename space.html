@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL | Universe Explorer</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif;color:#ebf5ff;color-scheme:dark}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#01040c}
+#universe{display:block;width:100%;height:100%;touch-action:none}
+#ui{position:absolute;inset:0;pointer-events:none}
+.panel{background:#09182bdc;border:1px solid #81b5dd63;border-radius:14px;backdrop-filter:blur(14px);box-shadow:0 6px 28px #0007}
+#header{position:absolute;left:18px;top:18px;max-width:330px;padding:15px 18px}
+#header h1{font-size:clamp(19px,2.5vw,28px);letter-spacing:2px;margin:0 0 5px;color:#f3e0b8}
+#header p{font-size:12px;line-height:1.5;color:#b5d6ef;margin:4px 0}
+#controls{position:absolute;right:18px;top:18px;width:min(280px,calc(100vw - 36px));padding:14px}
+#controls h2{font-size:13px;letter-spacing:1.4px;color:#bcdfff;margin:0 0 11px}
+#controls label{font-size:12px;display:block;margin:10px 0 5px;color:#b9d4ee}
+#controls select,#controls input{width:100%;min-width:0;background:#102640;border:1px solid #6e9fbc;color:#fff;border-radius:7px;padding:8px;font:13px inherit}
+#controls input{accent-color:#e0ae62;padding:0}
+#tabs{display:flex;gap:5px}
+#tabs button{flex:1;padding:8px 3px;font-size:11px}
+button,a#back{cursor:pointer;border:1px solid #75a6c8;border-radius:7px;background:#133456;color:#eef6ff;font:inherit;text-decoration:none}
+button:hover,a#back:hover{background:#22557c}
+#footer{position:absolute;bottom:18px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+#flightInfo{padding:10px 13px;font:12px/1.6 ui-monospace,monospace;max-width:min(400px,70vw)}
+#back{display:inline-flex;align-items:center;justify-content:center;padding:11px 14px;pointer-events:auto;font-size:13px;max-width:180px;text-align:center}
+#controls button,#controls select,#controls input{pointer-events:auto}
+#tutorial{color:#a8cce6;font-size:11px}
+#loading{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle,#193454,#020812 72%);z-index:5;text-align:center;pointer-events:none;transition:opacity .7s}
+#loading.hidden{opacity:0}
+#loading strong{font-size:21px;color:#f2ddb9}
+#notice{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);padding:14px 17px;background:#0b1c31df;border:1px solid #9fcaf4;border-radius:10px;color:#fff;opacity:0;transition:opacity .2s}
+#notice.show{opacity:1}
+@media(max-width:690px){
+ #header{top:9px;left:9px;padding:8px 10px;max-width:50vw}
+ #header h1{font-size:15px;letter-spacing:0}
+ #header p{font-size:10px}
+ #controls{top:9px;right:9px;padding:9px;width:min(193px,47vw)}
+ #controls h2{margin-bottom:5px;font-size:10px}
+ #controls label{margin:5px 0 3px;font-size:10px}
+ #controls select{padding:5px;font-size:11px}
+ #tabs button{font-size:10px;padding:6px 2px}
+ #footer{bottom:8px;left:9px;right:9px}
+ #flightInfo{padding:7px 9px;font-size:10px}
+ #tutorial{display:none}
+ #back{padding:9px;font-size:11px}
+}
+</style>
+</head>
+<body>
+<canvas id="universe" aria-label="交互式三维宇宙、地球和太阳系"></canvas>
+<div id="ui">
+  <header id="header" class="panel">
+    <h1>✦ PATROL / COSMOS</h1>
+    <p id="originLabel">EARTH · Orbital insertion</p>
+    <p>城市 → 地球轨道 → 太阳系 → 银河系</p>
+    <p id="tutorial">拖动旋转 · 滚轮缩放 · WASD 平移 · Shift 加速 · U 返回</p>
+  </header>
+  <aside id="controls" class="panel" aria-label="宇宙导航">
+    <h2>INTERSTELLAR NAVIGATION / 宇宙导航</h2>
+    <div id="tabs">
+      <button type="button" data-stage="orbit">地球轨道</button>
+      <button type="button" data-stage="solar">太阳系</button>
+      <button type="button" data-stage="galaxy">银河系</button>
+    </div>
+    <label for="destination">航行目的地</label>
+    <select id="destination">
+      <option value="earth">地球 · Earth</option>
+      <option value="moon">月球 · Moon</option>
+      <option value="sun">太阳 · Sun</option>
+      <option value="mercury">水星 · Mercury</option>
+      <option value="venus">金星 · Venus</option>
+      <option value="mars">火星 · Mars</option>
+      <option value="jupiter">木星 · Jupiter</option>
+      <option value="saturn">土星 · Saturn</option>
+      <option value="uranus">天王星 · Uranus</option>
+      <option value="neptune">海王星 · Neptune</option>
+      <option value="pluto">冥王星 · Pluto</option>
+      <option value="solar">太阳系全景 · Solar System</option>
+      <option value="galaxy">银河系全景 · Milky Way</option>
+    </select>
+    <label for="timeScale">轨道时间流速 <output id="timeLabel">1×</output></label>
+    <input type="range" id="timeScale" min="0" max="4" step="1" value="1">
+  </aside>
+  <div id="footer">
+    <div id="flightInfo" class="panel" aria-live="off">Initializing navigation…</div>
+    <a id="back" href="./index.html">↩ 返回城市地图</a>
+  </div>
+  <div id="notice" aria-live="polite"></div>
+</div>
+<div id="loading"><div><strong>✦ ENTERING ORBIT</strong><p>Loading the local solar system and galactic sky…</p></div></div>
+<script type="module" src="./assets/cosmos/cosmos.js"></script>
+</body>
+</html>

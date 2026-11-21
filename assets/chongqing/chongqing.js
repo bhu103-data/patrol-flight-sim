@@ -781,6 +781,7 @@ function frame(){
   time+=dt;
   waterUniforms.uTime.value=time;
   move(dt);updateFlames(dt);updateCamera(dt);
+  if(state.pos.y>=650&&state.vel.y>.4){window.dispatchEvent(new Event('patrol:orbitLaunch'));}
   if((mapTimer+=dt)>.09){drawMinimap();updateQuest();mapTimer=0;}
   if(toastUntil&&clock.getElapsedTime()>toastUntil){toastEl.style.opacity='0';toastUntil=0;}
   renderer.render(scene,camera);
@@ -806,6 +807,7 @@ function frame(){
     }
   }
 }
+window.PatrolSpaceBridge={getState:()=>({map:'chongqing',aircraft:'jetpack',playing:!graphicsLost,altitude:state.pos.y,climb:state.vel.y})};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);
