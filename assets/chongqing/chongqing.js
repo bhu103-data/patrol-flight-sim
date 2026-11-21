@@ -803,6 +803,12 @@ function intersectsBuilding(x,y,z){
   return obstacleIndex.collides(x,y,z);
 }
 function move(dt){
+  // If standing on a moving ferry deck, inherit its motion before player input.
+  if(state.onGround&&!state.flying){
+    const drift=riverBuild.deckDrift(state.pos.x,state.pos.z,state.pos.y);
+    state.pos.x=clamp(state.pos.x+drift.dx,-935,935);
+    state.pos.z=clamp(state.pos.z+drift.dz,-635,635);
+  }
   const forward=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)+touchForward;
   const sideways=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touchSideways;
   const motion=temp.set(
@@ -852,8 +858,11 @@ function move(dt){
   if(!intersectsBuilding(state.pos.x,state.pos.y,nz)&&!streetBuild.nearby(state.pos.x,nz,state.pos.y,.7))state.pos.z=nz;
   else state.vel.z=0;
   // Distinguish walkable roofs from solid walls; the water surface is also walkable.
-  const floor=obstacleIndex.landingSurface(state.pos.x,state.pos.z,py,state.pos.y,
-    Math.max(ground(state.pos.x,state.pos.z),-2.0));
+  const floor=Math.max(
+    obstacleIndex.landingSurface(state.pos.x,state.pos.z,py,state.pos.y,
+      Math.max(ground(state.pos.x,state.pos.z),-2.0)),
+    riverBuild.deckSurface(state.pos.x,state.pos.z,py,state.pos.y)
+  );
   if(state.pos.y<floor&&state.vel.y<=0){
     state.pos.y=floor;state.vel.y=0;state.onGround=true;
     if(state.flying){state.flying=false;message('安全降落');}
