@@ -72,7 +72,8 @@ try{
   const villageLine=villageLogs.find(m=>m.includes('[PATROL] Alaska surveyed village'));
   const audit=villageLine && JSON.parse(villageLine.slice(
     villageLine.indexOf('{')));
-  if(!audit||audit.cabins!==6||audit.sidingRows!==72||audit.roofSeams<45)
+  if(!audit||audit.cabins!==6||audit.sidingRows!==72||audit.roofSeams<45||
+     audit.undergrowth<100)
     throw new Error('Alaska harbor lodge geometry not present in real WebGL: '+
       JSON.stringify({audit,villageLogs}));
   // A second reproducible screenshot faces the actual glacier mouth.
@@ -111,6 +112,11 @@ try{
      harborState.altitude<25 || !Number.isFinite(harborState.yaw))
     throw new Error('Alaska harbor visual QA camera failed: '+JSON.stringify(harborState));
   await page.screenshot({path:'artifacts/alaska-surveyed-harbor-houses.png'});
+  // Separate art-only evidence from the gameplay UI. No special renderer or
+  // fake static image: this is the same live WebGL2 canvas, minus HTML HUD.
+  await page.addStyleTag({content:
+    '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden !important;}'});
+  await page.screenshot({path:'artifacts/alaska-surveyed-harbor-clean.png'});
   console.log('Alaska village WebGL2 scene:',JSON.stringify(audit),
     'camera:',JSON.stringify(harborState));
   if(errors.length)throw new Error(errors.join('\n'));
