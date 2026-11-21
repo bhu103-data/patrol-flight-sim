@@ -54,7 +54,7 @@ Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene,
 - Alaska-only surface shader: multi-scale spruce, slate/strata, snowpack, glacier-blue ice.
 - An optional one-batch original mesh under `assets/alaska/alaska-fjord-detail.js`: glacier crevasses, fractured drift ice, sparse cliff strata. GPU resources are disposed on map switches; low-fidelity mode does not load this mesh.
 - All original flight physics, existing procedural terrain, Alaska landmarks, harbor, routes and boundary are preserved.
-- The glacier and fjord positions are **stylized flight-scale geometry, not surveyed Alaska**. No USGS raster has been imported in this patch. No third-party source code, imagery, meshes, textures, or new runtime network request is copied or bundled.
+- The Alaska heightfield now has a **real USGS Tracy Arm DEM** when the baked local asset loads, while its authored harbor, glacier decoration and fauna remain artistic. The map is rotated and vertically compressed as described above; it is not 1:1 georeferenced gameplay. No third-party source code, imagery or meshes are copied or bundled. The game fetches its own lightweight local DEM JSON only when Alaska starts.
 
 ## Verified upstream references and rights
 
@@ -78,7 +78,7 @@ Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene,
 
 1. Choose **one** real bounded area (for example Juneau/Mendenhall or a Glacier Bay flight corridor) rather than claiming Denali, Fairbanks, and Juneau appear at true relative distances inside a 1,920-unit arena.
 2. Fetch USGS public-domain IfSAR/3DEP DEM and its CRS/vertical-datum metadata; derive low/medium/high LOD tiles offline with GDAL. Preserve the original source attribution and acquisition date.
-3. Define a documented WGS84 -> local tangent-plane transform; convert real horizontal meters and heights into *one explicit flight game scale*, and use that exact transform in terrain mesh, shader, collision, nav-map, waterline and spawn.
+3. Improve the already documented WGS84 -> game-space rotation with a formal ENU transform and geospatial metadata for every authored landmark; preserve consistent terrain, collision, nav-map, waterline and spawn sampling.
 4. Create real-world water masks/shoreline from licensed sources (USGS/OSM with attribution) and photographic landscape textures with their own credits. Avoid Google Maps 3D/photogrammetry scraping or ambiguous model licensing.
 5. Stream/cull only visible bounded tiles and pre-compress assets so GitHub Pages loads promptly; keep coarse procedural fallback for offline/slow connections.
 6. Validate low-altitude flight, waterline, crash detection, spawn and map switching on mobile and desktop GPU. Compare a fixed set of surveyed reference points; never market the result as a 1:1 map until those checks pass.
