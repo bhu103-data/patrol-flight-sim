@@ -70,3 +70,10 @@ GitHub Actions executes script syntax and Node tests. These **are not** proof of
 - Existing CC0 walls: `assets/nyc/concrete_wall_008_diff_1k.jpg` and `concrete_wall_008_nor_gl_1k.jpg` (credited in `assets/nyc/PBR_TEXTURE_SOURCES.md`).
 
 The downloaded source photos are temporary and not checked in; Blender embeds the required images in the review GLB. The renderer still uses only approved base PBR materials, not a real city scan. The manuscript keeps initial collision volumes for safe preview. The PBR GLB is suitable for inspection, not proof of survey accuracy, realistic street-level architecture or final game art acceptance.
+
+## Final isolated browser verification — November 20, 2026 (New York)
+
+- [Chromium WebGL2 workflow 44854557026](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44854557026) **passed** on the shipped third-pass GLB; actual page state `scenario=ready`, WebGL2 true, log reported `bytes:4425416, triangles:24348, images:4` and returned an actual 1280×720 screenshot.
+- The model is **still opt-in** (`?scenario=hongyadong`), and `assets/chongqing/scenario-manifest.json` remains `enabled:false`.
+- The browser screenshot is an accurate representation of the prototype's remaining limits: repetitive window/floor structure, coarse neighboring towers, compressed road/river geography, simplified bridge, and no high-resolution licensed photogrammetry. The review result does not mean AAA or 1:1 Chongqing.
+- Separate repository-wide checks can fail for unrelated files under concurrent development; in particular, a One World Trade Center GLB decoder test reported nonfinite JSON and a Chongqing tower road-overlap test also failed. The isolated Chongqing Blender export and WebGL screenshot checks did **not** fail. Do not conflate these statuses.
