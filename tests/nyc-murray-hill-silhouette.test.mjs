@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {normalize,snapshot} from '../scripts/nyc-murray-hill-footprints.mjs';
-import {murrayHillSilhouettes} from '../assets/nyc/murray-hill-silhouette.js';
+import {murrayHillSilhouettes,buildMurrayHillVisualMesh} from '../assets/nyc/murray-hill-silhouette.js';
 const shape=[[-73.98,40.75],[-73.9798,40.75],[-73.9798,40.7502],[-73.98,40.7502],[-73.98,40.75]];
 const feature=(id,heightFt,ring=shape)=>({properties:{DOITT_ID:id,HEIGHT_ROOF:heightFt},geometry:{type:'Polygon',coordinates:[ring]}});
 test('rejects unknown roof heights, duplicate IDs and exterior geometry',()=>{
@@ -19,4 +19,24 @@ test('official roof heights and authored setbacks remain distinguishable',async(
 });
 test('never accepts a collision-enabled snapshot',()=>{
  assert.throws(()=>murrayHillSilhouettes({schema:'patrol-nyc-murray-hill-visual-only-v1',viewOnly:true,collision:true,buildings:[]},()=>{}));
+});
+test('visual mesh generates true walls, roof triangles, bounded window details and inset roof',async()=>{
+ const snapshotData=await snapshot(async()=>({ok:true,json:async()=>({features:[feature(20,300)]})}));
+ const quads=[],tris=[];
+ const stats=buildMurrayHillVisualMesh(snapshotData,{addQuad:(...args)=>quads.push(args),addTri:(...args)=>tris.push(args)});
+ assert.equal(stats.buildings,1);
+ assert.equal(stats.approximateTerraces,1);
+ assert.ok(stats.windowQuads>0);
+ assert.ok(stats.roofTriangles>=4);
+ assert.ok(quads.some(q=>q.at(-1)===7));
+ assert.ok(tris.every(t=>t.at(-1)===8&&t.slice(0,3).every(p=>p.every(Number.isFinite))));
+ assert.ok(stats.facadeQuads<=2800);
+ assert.equal(stats.visualOnly,true);
+});
+test('concave source shape retains true roof triangulation without invented terraces',async()=>{
+ const notch=[[-73.98,40.75],[-73.9797,40.75],[-73.9797,40.7501],[-73.97985,40.7501],[-73.97985,40.7502],[-73.98,40.7502],[-73.98,40.75]];
+ const data=await snapshot(async()=>({ok:true,json:async()=>({features:[feature(21,300,notch)]})}));
+ const tris=[];const s=buildMurrayHillVisualMesh(data,{addQuad:()=>{},addTri:(...x)=>tris.push(x)});
+ assert.equal(s.buildings,1);assert.equal(s.approximateTerraces,0);
+ assert.equal(s.roofTriangles,4);
 });
