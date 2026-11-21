@@ -114,6 +114,7 @@ test('map material bindings and riverfront building placement remain wired',asyn
 
 test('cinematic Chongqing uses PBR curved hotpot roof and grounded river-facing bays',async()=>{
   const source=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  const detail=await readFile(new URL('../assets/chongqing/details.js',import.meta.url),'utf8');
   const blender=await readFile(new URL('../tools/blender/chongqing_scenario_author.py',import.meta.url),'utf8');
   const bridge=await readFile(new URL('../assets/chongqing/scenario-assets.js',import.meta.url),'utf8');
   const manifest=JSON.parse(await readFile(new URL('../assets/chongqing/scenario-manifest.json',import.meta.url),'utf8'));
