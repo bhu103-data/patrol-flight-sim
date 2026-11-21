@@ -118,7 +118,12 @@
       "crossing": "median shared path to Johnson Street; 2026 planned barrier-protected two-way bike-link toward Fulton",
       "current_completion_status": null,
       "evidence_date": "2026-06-09",
-      "verified_current_lion_bike_trafdir": null
+      "verified_current_lion_bike_trafdir": null,
+      "official_oct2026_update": {
+        "status": "NYC DOT announced work commenced on Adams/Boerum in Oct 2026; completion not verified",
+        "url": "https://www.nyc.gov/html/dot/html/pr2026/biketober-brooklyn-bridge-cycling-upgrade.shtml",
+        "open_to_public": null
+      }
     },
     {
       "id": "washington_prospect",
@@ -130,6 +135,24 @@
       "crossing": "Brooklyn Bridge promenade staircase into DUMBO; not a car-road turn",
       "official_reference": "https://brooklynbridgepark.org/places-to-see/brooklyn-bridge/",
       "verified_current_lion_trafdir": null
+    },
+    {
+      "id": "sands_adams_york_front",
+      "real_streets": [
+        "Sands Street",
+        "Jay Street",
+        "Pearl Street",
+        "Adams Street",
+        "York Street",
+        "Front Street"
+      ],
+      "mode": "bicycle_pedestrian_and_vehicle_intersection_review",
+      "actual_motor_vehicle_trafdir": null,
+      "current_bike_route_completion_status": null,
+      "planned_year": 2027,
+      "planned_bicycle_connection": "Jay-to-Adams Sands lane; protected Adams Sands-to-York; standard lane Adams York-to-Front; daylighted crossings after resurfacing",
+      "official_reference": "https://www.nyc.gov/html/dot/html/about/current-projects.shtml",
+      "note": "Planned design, not as-built geometry or a verified 2026 LION route"
     }
   ],
   "acceptance_gates": [
@@ -138,7 +161,8 @@
     "No bridge-to-feeder turns until LION roadbed and ramp node topology is verified",
     "No at-grade vehicle connection through nonpedestrian or grade-separated segments",
     "Crosswalks depend on the confirmed reachable curb endpoints and real refuge islands",
-    "Current lane counts, turn restrictions and bike-link construction status remain unresolved until checked"
+    "Current lane counts, turn restrictions and bike-link construction status remain unresolved until checked",
+    "Treat city 2026 October started construction separately from 2027 DUMBO proposals; verify as-built before marking connected"
   ],
   "forbidden_changes": [
     "main",
