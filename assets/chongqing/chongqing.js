@@ -1371,7 +1371,14 @@ window.PatrolSpaceBridge={getState:()=>({
   signalCrossings:streetBuild.stats.signalizedCrossings,
   signalMasts:streetBuild.stats.trafficSignals,
   signalStopLines:streetBuild.stats.stopLines,
-  signalAspect:streetBuild.snapshot().signalAspect
+  signalAspect:streetBuild.snapshot().signalAspect,
+  renderMetrics:{
+    fps:Number.isFinite(measuredFPS)?Math.round(measuredFPS*10)/10:null,
+    drawCalls:renderer.info.render.calls,
+    triangles:renderer.info.render.triangles,
+    pixelRatio:renderRatio,
+    quality:qualityMode
+  }
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
