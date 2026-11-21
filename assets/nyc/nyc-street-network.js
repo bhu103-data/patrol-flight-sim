@@ -180,8 +180,10 @@ export function buildNycStreetNetwork({
     const mag=Math.hypot(tangent[0],tangent[1])||1;
     const f=[tangent[0]/mag,tangent[1]/mag],n=[f[1],-f[0]];
     const at=(u,v)=>[x+n[0]*u+f[0]*v,y,z+n[1]*u+f[1]*v];
-    addQuad(at(-w*.5,-length*.5),at(w*.5,-length*.5),
-      at(w*.5,length*.5),at(-w*.5,length*.5),color);
+    // Upward +Y normals are essential for the existing NYC photo/PBR
+    // shader. The previous clockwise XZ winding faced downward.
+    addQuad(at(-w*.5,-length*.5),at(-w*.5,length*.5),
+      at(w*.5,length*.5),at(w*.5,-length*.5),color);
   }
   const mag=Math.hypot(grid.tilt,1);
   const ave=[grid.tilt/mag,1/mag],cross=[ave[1],-ave[0]];
@@ -199,8 +201,8 @@ export function buildNycStreetNetwork({
     stats.bikeSymbols++;
   }
   function rect(x,z,w,d,color,y=roadY){
-    addQuad([x-w/2,y,z-d/2],[x+w/2,y,z-d/2],
-      [x+w/2,y,z+d/2],[x-w/2,y,z+d/2],color);
+    addQuad([x-w/2,y,z-d/2],[x-w/2,y,z+d/2],
+      [x+w/2,y,z+d/2],[x+w/2,y,z-d/2],color);
   }
   function streetSegment(a,b,kind,i,j){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
@@ -367,7 +369,7 @@ export function buildNycStreetNetwork({
         s*.32,.10,ave,paint,markY+.004);
       // Second pedestrian crossing, across the numbered east-west side street
       // where the narrow side-road corridor is present.
-      if(hash(i,j,31)>.30){
+      if(detailBand(x,z)>=3 && hash(i,j,31)>.30){
         for(let k=-3;k<=3;k++){
           orientedRect(x+side*4.20,z+k*.73,
             .46,1.21,[1,0],paint,markY+.009);
