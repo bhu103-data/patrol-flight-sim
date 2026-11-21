@@ -18,3 +18,6 @@
 - No additional draw call, FFT texture, render pass, third-party asset or browser dependency in the production page. A handful of analytic shader operations are added; CI screenshot performance is SwiftShader software, not a 60 FPS guarantee.
 - **Unverified / follow-up:** manual color comparison with Tidewater's golden-hour screenshots, hardware FPS/milliseconds with a 60 FPS target, realistic foam volume and beaches, all-map weather dusk/noon regression, NYC floatplane touchdown and low-graphics recovery.
 - Draft stacked on #116; do not merge into main or the shared integration branch until visual QA.
+
+## Visual screenshot follow-up: warm cloud light and correct twilight stars
+In a real 19:00 New York Harbor WebGL2 screenshot, the sun is visible and reflects across the harbor, but stars were showing prematurely and clouds remained neutral grey. The updated shader gates the visible stars by solar altitude and adds weak warm forward lighting to the existing seven-sample cloud layer. No FFT import, cloud pass or extra draw call. Subsequent screenshots and hardware GPU frame timing remain required before considering this complete.

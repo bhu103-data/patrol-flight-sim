@@ -46,6 +46,16 @@ test('atmosphere retains moon, Alaska aurora and physically motivated sun glow',
   assert.ok(sky.includes(token),'Missing sky term: '+token);
  }
  assert.match(sky,/float solarRadius=0\.0058/);
+ assert.match(sky,/float starVisibility=1\.0-smoothstep\(-0\.14,-0\.04,uSun\.y\)/);
+ assert.doesNotMatch(sky,/\*star\*\(1\.0-day\)/);
+});
+
+test('twilight cloud warm-light gate retains existing fixed seven ray-march steps',()=>{
+ const clouds=between('      // Cumulus cloud layer below cruise altitude',
+   '      gl_FragDepth = 1.0;');
+ assert.match(clouds,/float golden=smoothstep\(-0\.08,0\.0,uSun\.y\)/);
+ assert.match(clouds,/float forward=max\(dot\(rd,uSun\),0\.0\)/);
+ assert.match(clouds,/for \(int c = 0; c < 7; c\+\+\)/);
 });
 
 test('ocean glints use angular LOD and beach foam follows falling crests',()=>{
