@@ -11,7 +11,8 @@ const sources=[
   {id:'3dassets-lite',path:'/tmp/3dassets-lite.glb',metadata:'/tmp/3dassets-lite.json',
    publishedId:'18714',maxBytes:850000},
   {id:'innerscene-twin',path:'/tmp/innerscene-twin.glb',source:'https://www.innerscene.com/tools/library/3d-parts/high-wing-4-seat-floatplane-twin-floats-8fde8873',maxBytes:2200000},
-  {id:'innerscene-amphibious',path:'/tmp/innerscene-amphibious.glb',source:'https://www.innerscene.com/tools/library/3d-parts/high-wing-4-seat-on-amphibious-floats-4be93185',maxBytes:2500000}
+  {id:'innerscene-amphibious',path:'/tmp/innerscene-amphibious.glb',source:'https://www.innerscene.com/tools/library/3d-parts/high-wing-4-seat-on-amphibious-floats-4be93185',maxBytes:2500000},
+  {id:'innerscene-sixseat',path:'/tmp/innerscene-sixseat.glb',source:'https://www.innerscene.com/tools/library/3d-parts/seaplane-floatplane-edd77cd2',maxBytes:12000000}
 ];
 const identity=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
 function mult(a,b){const out=new Array(16).fill(0);
