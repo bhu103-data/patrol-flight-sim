@@ -11,6 +11,7 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
@@ -242,8 +243,10 @@ cqTimeSelect.addEventListener('change',()=>applyCinematicEnvironment(cqTimeSelec
 // Modern Chongqing facade atlases have balcony/AC/window rhythms and realistic
 // rooftop setbacks; original landmark footprints and collisions stay intact.
 const dummy=new THREE.Object3D(),obstacles=[];
+const plannedRoads=chongqingTerraceRoads(riverCenter);
+// Buildings and the visible asphalt must use one identical street plan.
 const skyline=createChongqingUrbanArchitecture({
-  THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr
+  THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr,plannedRoads
 });
 
 // Roads are swept strips following terraces, not an infinite grid.
@@ -266,15 +269,8 @@ function road(points,width,material=M.road){
   o.receiveShadow=true;
   scene.add(o);return o;
 }
-for(const side of [-1,1])for(let l=0;l<3;l++){
-  const points=[];
-  for(let i=0;i<=72;i++){
-    const x=-960+1920*i/72;
-    const z=riverCenter(x)+side*(145+l*105+14*Math.sin(x/115+l));
-    points.push(new THREE.Vector3(x,ground(x,z)+1.6,z));
-  }
-  road(points,13-l*1.5);
-}
+// Actual street strips are emitted AFTER all landmark and shop footprints are
+// registered, so their surface can be clipped around every physical building.
 function bridge(x,style=0){
   const y=59+style*13;
   box(x,y,-1,17,2.4,335,M.road);
@@ -481,6 +477,18 @@ cqTimeSelect.addEventListener('change',()=>{
   wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
 });
 const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
+// Each generated road is clipped against the FULL building footprint (plus a
+// sidewalk margin), instead of visually running underneath a tower.
+const roadClearanceStats={paths:0,clipped:0,removedLength:0};
+for(const plan of plannedRoads){
+  const points=plan.points.map(p=>new THREE.Vector3(p.x,ground(p.x,p.z)+1.6,p.z));
+  const clear=clipRoadToFreeSegments(points,plan.width,obstacles,.8,2.5);
+  for(const path of clear.paths){
+    if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+  }
+  roadClearanceStats.clipped+=clear.stats.clippedSegments;
+  roadClearanceStats.removedLength+=clear.stats.removedLength;
+}
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
@@ -1029,7 +1037,8 @@ function frame(){
         '\nSkyline profiles '+skyline.stats.towers+' / 5'+
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
         '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips+
-        '\nJialing River ferries '+riverBuild.stats.boats;
+        '\nJialing River ferries '+riverBuild.stats.boats+
+        '\nStreet cuts '+roadClearanceStats.clipped+' / clear strips '+roadClearanceStats.paths;
     }
   }
 }
