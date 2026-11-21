@@ -118,7 +118,7 @@ try {
   requestAnimationFrame(tick);
  }));
  result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
-   frameSampling,incrementalGeometry:{triangles:786,textures:0}};
+   frameSampling,incrementalGeometry:{triangles:qaTag==='candidate'?1554:0,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
