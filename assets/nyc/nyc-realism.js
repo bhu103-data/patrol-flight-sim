@@ -18,7 +18,7 @@ function nodeMatrix(node){
     ...t,1
   ];
 }
-function decodeGLB(gl,buffer,targetHeight){
+async function decodeGLB(gl,buffer,targetHeight){
   const dv=new DataView(buffer);
   if(buffer.byteLength<28||dv.getUint32(0,true)!==0x46546c67||
     dv.getUint32(4,true)!==2||dv.getUint32(8,true)!==buffer.byteLength)
@@ -56,7 +56,8 @@ function decodeGLB(gl,buffer,targetHeight){
     const ret={result,components,count:a.count};
     cache.set(id,ret);return ret;
   }
-  const pos=[],nor=[],col=[];
+  const pos=[],nor=[],col=[],uvMask=[];
+  let baseTextureIndex=null;
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
   const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
   function walk(id,parent,depth=0){
@@ -74,8 +75,22 @@ function decodeGLB(gl,buffer,targetHeight){
         if(color0 && color0.components!==3 && color0.components!==4)
           throw Error('Unsupported GLB COLOR_0');
         const idx=primitive.indices!==undefined?readAccessor(primitive.indices):null;
-        const faceColor=document.materials?.[primitive.material??0]?.pbrMetallicRoughness
-          ?.baseColorFactor||[0.6,0.62,0.63,1];
+        const pbr=document.materials?.[primitive.material??0]?.pbrMetallicRoughness;
+        const faceColor=pbr?.baseColorFactor||[1,1,1,1];
+        const diffuse=pbr?.baseColorTexture;
+        let uv=null;
+        if(diffuse){
+          if((diffuse.texCoord||0)!==0 || diffuse.extensions?.KHR_texture_transform)
+            throw Error('Only the primary UV layer is supported');
+          if(baseTextureIndex!==null && baseTextureIndex!==diffuse.index)
+            throw Error('Bake Blender diffuse materials into one atlas');
+          baseTextureIndex=diffuse.index;
+          if(primitive.attributes.TEXCOORD_0===undefined)
+            throw Error('GLB material is missing TEXCOORD_0');
+          uv=readAccessor(primitive.attributes.TEXCOORD_0);
+          if(uv.components!==2 || uv.count!==p.count)
+            throw Error('Bad GLB texture coordinates');
+        }
         const length=idx?idx.count:p.count;
         for(let k=0;k+2<length;k+=3){
           for(let j=0;j<3;j++){
@@ -104,6 +119,8 @@ function decodeGLB(gl,buffer,targetHeight){
               :[1,1,1];
             col.push(faceColor[0]*tint[0],faceColor[1]*tint[1],
               faceColor[2]*tint[2]);
+            uvMask.push(uv?uv.result[index*2]:0,
+              uv?uv.result[index*2+1]:0,uv?1:0);
           }
         }
       }
@@ -120,20 +137,34 @@ function decodeGLB(gl,buffer,targetHeight){
     pos[i+1]=(pos[i+1]-minY)*scale;
     pos[i+2]=(pos[i+2]-mz)*scale;
   }
+  const texture=baseTextureIndex===null?null:
+    await import('./scenario-textures.js').then(mod=>mod.loadEmbeddedBaseColor(
+      gl,buffer,document,binOffset,binSize,baseTextureIndex));
+  if(gl.isContextLost()){
+    if(texture)gl.deleteTexture(texture);
+    throw Error('WebGL context unavailable');
+  }
   const vao=gl.createVertexArray(),buffers=[];
   gl.bindVertexArray(vao);
   try{
-    for(const [slot,array] of [pos,nor,col].entries()){
+    const streams=[[0,pos],[1,nor],[2,col]];
+    if(texture)streams.push([4,uvMask]);
+    for(const [slot,array] of streams){
       const b=gl.createBuffer();buffers.push(b);
       gl.bindBuffer(gl.ARRAY_BUFFER,b);
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(array),gl.STATIC_DRAW);
       gl.enableVertexAttribArray(slot);
       gl.vertexAttribPointer(slot,3,gl.FLOAT,false,0,0);
     }
+  }catch(error){
+    for(const b of buffers)gl.deleteBuffer(b);
+    if(vao)gl.deleteVertexArray(vao);
+    if(texture)gl.deleteTexture(texture);
+    throw error;
   }finally{
     gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
   }
-  return {vao,buffers,count:pos.length/3};
+  return {vao,buffers,count:pos.length/3,texture};
 }
 function imageFile(filename){
   return new Promise((resolve,reject)=>{
@@ -198,7 +229,7 @@ export async function loadNycRealism(gl){
       if(!response.ok)throw Error('HTTP '+response.status);
       const bytes=await response.arrayBuffer();
       if(gl.isContextLost())return;
-      models[kind]=decodeGLB(gl,bytes,height);
+      models[kind]=await decodeGLB(gl,bytes,height);
     }catch(error){failures.push(kind+': '+error.message);}
   }));
   // Scenario for Blender assets are optional; the public game never calls
@@ -230,16 +261,18 @@ export async function loadNycRealism(gl){
              bytes.byteLength>(Number(manifest.max_glb_bytes)||8388608))
             throw Error('GLB exceeds import limit');
           if(gl.isContextLost())return;
-          const mesh=decodeGLB(gl,bytes,spec.target_height);
+          const mesh=await decodeGLB(gl,bytes,spec.target_height);
           if(mesh.count<spec.min_triangles*3){
             for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
             gl.deleteVertexArray(mesh.vao);
+            if(mesh.texture)gl.deleteTexture(mesh.texture);
             throw Error('Not enough triangles for premium mesh');
           }
           mesh.source='scenario';
           if(models[kind]){
             for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
             gl.deleteVertexArray(models[kind].vao);
+            if(models[kind].texture)gl.deleteTexture(models[kind].texture);
           }
           models[kind]=mesh;
         }catch(error){failures.push('scenario '+kind+': '+error.message);}
