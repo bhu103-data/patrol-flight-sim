@@ -31,6 +31,7 @@ test('solar azimuth keeps seasonal elevation and horizontal sun radius',()=>{
 });
 
 test('sun angle UI updates live in shared environment, independent of map',()=>{
+ assert.match(html,/<option value="19">Golden Hour<\/option>/);
  assert.match(html,/id="skyAzimuth" type="range" min="-1" max="359" step="1" value="-1"/);
  assert.match(html,/id="skyAzimuthValue"/);
  assert.match(source,/skyAzimuth\.addEventListener\('input'/);
