@@ -53,7 +53,7 @@ test('no new lot files, collision rules, roads or flying controls',()=>{
 test('solid cornices stay within the official-footprint batch budget and face outward',()=>{
  let totalQuads=0;
  for(const lot of source.footprints)totalQuads+=build(lot).quads.length;
- assert.equal(totalQuads,8894,'source window 119028 replaces overlapping facade details');
+ assert.equal(totalQuads,8894,'physical 119028 upper window replaces four overlapping facade quads');
  assert.ok(totalQuads<9000,'original OTI facade batch budget');
  const outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
  // Both valid NYC polygon winding directions must keep cap normals correct.
