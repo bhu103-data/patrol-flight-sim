@@ -2779,6 +2779,26 @@ const CENTRAL_PARK_SITES=[
                        clamp(uNyStreetWetness,0.0,1.0);
         albedo*=mix(1.0,modulation*(1.0-.18*damping),nearDetail*.80);
         roughness=mix(roughness,roughTarget,nearDetail*.70);
+        // PATROL_DUMBO_RUNNING_BOND_V1: the source-aware Brooklyn brick
+        // faces use staggered masonry courses instead of large flat color
+        // blocks. Derivative-width mortar lines fade before aliasing, and
+        // remain entirely on surface 12 (no OTI/Times Square or Alaska bleed).
+        if(vHarborSurface>11.5 && vHarborSurface<12.5){
+          vec2 brick=vec2(dot(vWorld,t)*1.36,vWorld.y*2.68);
+          float course=floor(brick.y);
+          brick.x+=mod(course,2.0)*.5;
+          vec2 cell=fract(brick);
+          vec2 edge=min(cell,1.0-cell);
+          vec2 aa=max(fwidth(brick)*1.25,vec2(.003));
+          float vertical=1.0-smoothstep(.022,.054+aa.x,edge.x);
+          float horizontal=1.0-smoothstep(.025,.054+aa.y,edge.y);
+          float mortar=max(vertical,horizontal);
+          float fired=nyStreetNoise(vec2(floor(brick.x),course)*.73+
+            vec2(13.2,5.7));
+          albedo*=1.0+nearDetail*(fired-.5)*.15;
+          albedo=mix(albedo,albedo*.61,mortar*nearDetail*.76);
+          roughness=mix(roughness,.85,mortar*nearDetail*.45);
+        }
       }else if(materialClass<1.5){
         // Embedded window quads receive Fresnel glazing and deterministic
         // varied indoor light, not a second procedural window grid.
