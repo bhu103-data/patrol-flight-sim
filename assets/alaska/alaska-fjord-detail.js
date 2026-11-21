@@ -16,7 +16,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   const cols=20,rows=17;
   function glacierPoint(col,row) {
     const across=2*col/cols-1, t=row/rows;
-    const x=-34+across*(78-28*t)+Math.sin(t*3.9)*21;
+    const x=130+across*(66-24*t)+Math.sin(t*3.9)*12;
     const z=449+t*148-(1-across*across)*17+Math.sin(col*1.8)*2.3;
     const edge=1-Math.pow(Math.abs(across),8);
     const ice=(4.6+5.8*edge)*Math.min(1,(1-t)*5.8);
@@ -47,8 +47,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // No shoreline changes or terrain tessellation.
   for (let i=0;i<86;i++) {
     const h=hash(i*11+17),j=hash(i*13+37);
-    const north= i<56 ? 260+h*187 : -600+h*215;
-    const east= i<56 ? -118+j*212 : -43+j*157;
+    const north= i<56 ? 250+h*195 : -600+h*215;
+    const east= i<56 ? 28+j*152 : 38+j*137;
     const radius=1.35+3.9*hash(i*19+3);
     if(terrainAt(east,north)>waterY+.12 ||
        terrainAt(east+radius,north)>waterY+.12 ||
@@ -93,7 +93,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const x=-735+hash(i*71+53)*1470;
     const z=-735+hash(i*107+19)*1470;
     if(Math.hypot(x,z)>750 || Math.hypot(x-151,z+525)<75 ||
-       Math.hypot(x+155,z+610)<28 || z>390&&Math.abs(x+34)<113)continue;
+       Math.hypot(x+155,z+610)<28 || z>390&&Math.abs(x-130)<95)continue;
     const y=terrainAt(x,z);
     if(y<waterY+1.5||y>waterY+26)continue;
     const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
