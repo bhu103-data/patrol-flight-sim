@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>PATROL WebGL2 Shader Smoke Test</title>
+<meta name="robots" content="noindex,nofollow">
+<style>body{background:#0d1721;color:#e3e9ed;font:15px/1.6 ui-monospace,monospace;max-width:860px;margin:5vh auto;padding:1rem}pre{white-space:pre-wrap;background:#172633;padding:1.2rem;border-radius:8px}a{color:#a1caff}</style></head>
+<body><h1>NYC WebGL2 mesh shader compilation</h1>
+<p>Read-only check of actual live PATROL shaders. Does not load the game scene or contact third parties.</p>
+<pre id="out" aria-live="polite">Compiling…</pre>
+<p><a href="../index.html">Return to PATROL</a></p>
+<script type="module">
+const out=document.getElementById('out');
+const result={status:'pending',webgl2:false,vertex:false,fragment:false,linked:false,errors:[]};
+try{
+  const response=await fetch('../index.html?glsl-audit='+Date.now(),{cache:'no-store'});
+  if(!response.ok)throw new Error('index.html HTTP '+response.status);
+  const html=await response.text(),tick=String.fromCharCode(96);
+  function extract(name){
+    const marker='const '+name+' = '+tick,at=html.indexOf(marker);
+    if(at<0)throw new Error('Missing '+name+' declaration');
+    const begin=at+marker.length,end=html.indexOf(tick+';',begin);
+    if(end<0)throw new Error('Unterminated '+name+' template');
+    return html.slice(begin,end);
+  }
+  const vsSource=extract('MESH_VS');
+  const fsSource=extract('MESH_FS').replace(
+    String.fromCharCode(36,123)+'VEGAS_LIGHTING}',extract('VEGAS_LIGHTING'));
+  if(fsSource.includes(String.fromCharCode(36,123)))
+    throw new Error('Unexpanded GLSL template variable');
+  const gl=document.createElement('canvas').getContext('webgl2',{antialias:false});
+  if(!gl)throw new Error('WebGL2 unavailable');
+  result.webgl2=true;
+  const compile=(stage,source,label)=>{
+    const shader=gl.createShader(stage);
+    gl.shaderSource(shader,source);gl.compileShader(shader);
+    const passed=Boolean(gl.getShaderParameter(shader,gl.COMPILE_STATUS));
+    result[label]=passed;
+    if(!passed)result.errors.push(label+': '+gl.getShaderInfoLog(shader));
+    return shader;
+  };
+  const vert=compile(gl.VERTEX_SHADER,vsSource,'vertex');
+  const frag=compile(gl.FRAGMENT_SHADER,fsSource,'fragment');
+  if(result.vertex&&result.fragment){
+    const program=gl.createProgram();gl.attachShader(program,vert);
+    gl.attachShader(program,frag);gl.linkProgram(program);
+    result.linked=Boolean(gl.getProgramParameter(program,gl.LINK_STATUS));
+    if(!result.linked)result.errors.push('link: '+gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
+  }
+  gl.deleteShader(vert);gl.deleteShader(frag);
+  result.status=result.linked?'PASS':'FAIL';
+  result.shaders={vertexChars:vsSource.length,fragmentChars:fsSource.length};
+}catch(error){result.status='FAIL';result.errors.push(String(error));}
+document.body.dataset.shaderStatus=result.status;
+out.textContent=JSON.stringify(result,null,2);
+</script></body></html>
