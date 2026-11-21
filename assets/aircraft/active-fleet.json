@@ -8,7 +8,7 @@
       "name": "Viper Jet",
       "identity": "original fictional aircraft, NOT an F-15/F-22/real manufacturer type",
       "origin": "PATROL procedural geometry",
-      "license": "self-authored project source; see repository license and authorship",
+      "license": "PATROL internally authored asset. No root LICENSE exists in integration 6d50bfd; public third-party redistribution terms NOT separately granted or independently established.",
       "runtime": "index.html::buildFighterMesh",
       "materials": "embedded RGB surface colors; no external PBR textures",
       "modelState": "active"
@@ -18,7 +18,7 @@
       "name": "Cessna 185 Floatplane",
       "identity": "C185-inspired, Blender-authored non-CAD game model with two pontoons",
       "origin": "PATROL original Blender asset",
-      "license": "self-authored project source; verify any downstream distribution against repository author license",
+      "license": "PATROL internally authored asset. No root LICENSE exists in integration 6d50bfd; public third-party redistribution terms NOT separately granted or independently established.",
       "runtime": "assets/aircraft/cessna185-floats.glb",
       "authoring": "assets/aircraft/cessna185-floats.blend",
       "source": "tools/blender/cessna185_floatplane.py",
