@@ -1,7 +1,7 @@
 // PATROL Chongqing: compact animated street layer.
 // Original geometry only: yellow taxis, civilian cars, asphalt markings and streetlights.
 // Yellow center-city taxis and checker waistlines match the city's official road transport guide.
-export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
+export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadClear=()=>true}) {
   const unit=new THREE.BoxGeometry(1,1,1);
   const temp=new THREE.Object3D();
   const white=new THREE.MeshBasicMaterial({color:0xe8dfc9,side:THREE.DoubleSide});
@@ -121,6 +121,19 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   function routeZ(x,side,tier){
     return riverCenter(x)+side*(145+tier*105+14*Math.sin(x/115+tier));
   }
+  function laneIsClear(v,x){
+    for(const dx of [-3.5,0,3.5]){
+      const bx=x+dx;
+      if(bx<-935||bx>935)return false;
+      const center=routeZ(bx,v.side,v.tier);
+      const y=ground(bx,center)+1.65;
+      // Require the whole asphalt ribbon AND the 6m car to be off footprints.
+      if(!isRoadClear(bx,center,y,(13-v.tier*1.5)*.5+.98))return false;
+      const laneZ=center+v.lane;
+      if(!isRoadClear(bx,laneZ,ground(bx,laneZ)+1.65,3.6))return false;
+    }
+    return true;
+  }
   function positionFor(v,x){
     const z=routeZ(x,v.side,v.tier)+v.lane;
     return {x,z,y:ground(x,z)+1.65};
@@ -150,6 +163,11 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       const z=routeZ(x,side,tier);
       if(z<-640||z>640)continue;
       const y=ground(x,z)+1.78;
+      // No paint, curbs or poles on asphalt removed for a building.
+      if(![-16,-8,0,8,16].every(dx=>{
+        const xx=x+dx,zz=routeZ(xx,side,tier);
+        return isRoadClear(xx,zz,ground(xx,zz)+1.78,(13-tier*1.5)*.5+1.3);
+      }))continue;
       const dzdx=(routeZ(x+1,side,tier)-routeZ(x-1,side,tier))*.5;
       const angle=Math.atan2(dzdx,1);
       if(markCount<outlines.capacity){
@@ -158,11 +176,13 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       }
       if(i%2===0)for(const railSide of [-1,1]){
         if(curbCount>=curbs.capacity)continue;
-        pose(curbs,curbCount++,{x,y:y-.15,z:z+railSide*7.3},angle,[0,0,0],[31,.38,.38],0);
+        const curbZ=z+railSide*7.3;
+        if(!isRoadClear(x,curbZ,ground(x,curbZ)+1.78,1.2))continue;
+        pose(curbs,curbCount++,{x,y:y-.15,z:curbZ},angle,[0,0,0],[31,.38,.38],0);
       }
       if(i%3===0&&lampCount<150){
         const place={x,y:ground(x,z+side*10.8),z:z+side*10.8};
-        if(!Number.isFinite(place.y))continue;
+        if(!Number.isFinite(place.y)||!isRoadClear(place.x,place.z,place.y+6,1.7))continue;
         pose(poles,lampCount++,place,0,[0,6,0],[.31,12,.32],0);
         if(lanternCount<160)pose(lanterns,lanternCount++,place,0,[0,12.25,0],[1.45,.23,1.15],0);
         if(glintCount<160)pose(brightGlints,glintCount++,place,0,[0,12.38,0],[1.85,.1,1.48],0);
@@ -176,16 +196,23 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   }
   // A pedestrian crossing on the upper riverside road near the hotpot street.
   // White zebra strips are physically laid across the road rather than billboard text.
-  const crossingX=285,crossingZ=routeZ(crossingX,1,1);
+  // The earlier fixed crossing at x=285 could be INSIDE the hotpot building.
+  // Pick the nearest collision-free patch of the actual upper riverside road.
+  const candidates=[285,360,390,420,470,520,600,-450,-600];
+  const crossingX=candidates.find(cx=>[-18,0,18].every(dx=>{
+    const x=cx+dx,z=routeZ(x,1,1);
+    return isRoadClear(x,z,ground(x,z)+1.78,11.2);
+  }))??null;
+  const crossingZ=crossingX===null?null:routeZ(crossingX,1,1);
   const zebra=pool(unit,white,14);
-  for(let n=0;n<10;n++){
+  for(let n=0;crossingX!==null&&n<10;n++){
     const x=crossingX-6.75+n*1.5;
     const z=routeZ(x,1,1);
     const y=ground(x,z)+1.80;
     const dz=(routeZ(x+1,1,1)-routeZ(x-1,1,1))*.5;
     pose(zebra,n,{x,y,z},Math.atan2(dz,1),[0,0,0],[.85,.032,10.2],0);
   }
-  zebra.count=10;zebra.instanceMatrix.needsUpdate=true;
+  zebra.count=crossingX===null?0:10;zebra.instanceMatrix.needsUpdate=true;
   zebra.computeBoundingSphere();zebra.frustumCulled=true;
   // Two six-metre traffic signal poles, black heads and alternating bulbs.
   // All visible structures use instancing; no new draw call per light.
@@ -193,7 +220,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   const signalHeads=pool(unit,dark,2);
   const signalRed=pool(unit,new THREE.MeshBasicMaterial({color:0xff4539}),2);
   const signalGreen=pool(unit,new THREE.MeshBasicMaterial({color:0x4ee28b}),2);
-  for(let side=0;side<2;side++){
+  for(let side=0;crossingX!==null&&side<2;side++){
     const lateral=side===0?-9.1:9.1;
     const x=crossingX+11,z=crossingZ+lateral;
     const pavement=ground(x,z)+1.7;
@@ -203,7 +230,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     pose(signalGreen,side,{x,y:pavement,z},0,[0,6.33,-.4],[.43,.45,.08],0);
   }
   for(const item of [signalPosts,signalHeads,signalRed,signalGreen]){
-    item.count=2;item.instanceMatrix.needsUpdate=true;
+    item.count=crossingX===null?0:2;item.instanceMatrix.needsUpdate=true;
     item.computeBoundingSphere();item.frustumCulled=true;
   }
   let signalTime=0,vehicleGreen=true;
@@ -211,6 +238,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   const streetLights=[];
   for(const x of [-350,115,335]){
     const z=routeZ(x,1,0)+10.8;
+    if(!isRoadClear(x,z,ground(x,z)+8,2))continue;
     const light=new THREE.PointLight(0xffbf77,23,78,2);
     light.position.set(x,ground(x,z)+12,z);
     scene.add(light);streetLights.push(light);
@@ -235,25 +263,45 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       if(player&&Math.abs(v.x-player.x)<10&&Math.abs(v.z-player.z)<6&&Math.abs(v.y-player.y)<5){
         v.stall=Math.min(1,(v.stall??0)+dt*2.5);
       }else v.stall=Math.max(0,(v.stall??0)-dt*.65);
+      if(!v.initialized){
+        // Never spawn a taxi inside a high-rise: scan to a drivable corridor
+        // once, then keep its motion confined to that corridor.
+        let initialX=v.start,found=laneIsClear(v,initialX);
+        for(let k=1;!found&&k<=170;k++){
+          for(const sign of [1,-1]){
+            const probe=initialX+sign*k*5;
+            if(probe>=-880&&probe<=880&&laneIsClear(v,probe)){
+              v.start=probe;found=true;break;
+            }
+          }
+        }
+        v.initialized=true;
+        v.disabled=!found;
+      }
       const currentDist=v.distance??0;
-      const currentX=((v.start+currentDist+half)%loop+loop)%loop-half;
+      const currentX=((v.start+currentDist+half)%loop+loop-half);
       let nextDistance=currentDist+v.speed*Math.max(.04,1-(v.stall??0)*.95)*dt*v.dir;
       let x=((v.start+nextDistance+half)%loop+loop)%loop-half;
       // Stop cars going west on the upper riverside road at the red crossing.
       // A clamped center point holds the bumper short of the zebra stripes.
       const stopX=crossingX+12;
-      if(!vehicleGreen&&v.side===1&&v.tier===1&&v.dir<0 &&
+      if(crossingX!==null&&!vehicleGreen&&v.side===1&&v.tier===1&&v.dir<0 &&
          currentX>=stopX-.005 && currentX<stopX+36 && x<stopX &&
          currentX-x<6){
         nextDistance=currentDist-(currentX-stopX);
         x=stopX;
+      }
+      if(!v.disabled&&!laneIsClear(v,x)){
+        v.dir*=-1;
+        nextDistance=currentDist;
+        x=currentX;
       }
       v.distance=nextDistance;
       const sample=positionFor(v,x);
       const dz=(routeZ(x+1,v.side,v.tier)-routeZ(x-1,v.side,v.tier))*.5;
       const heading=Math.atan2(dz,1)+(v.dir<0?Math.PI:0);
       v.x=sample.x;v.y=sample.y;v.z=sample.z;v.heading=heading;
-      const o={x:sample.x,y:sample.y,z:sample.z},i=v.id;
+      const o=v.disabled?{x:0,y:-2000,z:0}:{x:sample.x,y:sample.y,z:sample.z},i=v.id;
       pose(bodies,i,o,heading,[0,0,0],[1,1,1],0);
       pose(windows,i,o,heading,[0,0,0],[1,1,1],0);
       pose(grilles,i,o,heading,[3.125,.91,0],[.025,.34,1.1],0);
@@ -296,6 +344,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     }
     let nearest=null,nearDist=7200;
     if(player&&allowDynamicHeadlights)for(const v of vehicles){
+      if(v.disabled)continue;
       const dx=v.x-player.x,dz=v.z-player.z;
       const d2=dx*dx+dz*dz;
       if(d2<nearDist&&Math.abs(v.y-player.y)<32){nearest=v;nearDist=d2;}
@@ -336,7 +385,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     update,setQuality,setTimeOfDay,
     // Explicit snapshots are created only when inspected/tested, never each frame.
     snapshot(){return {
-      vehicleGreen,signalPhase:signalTime%36,
+      vehicleGreen,signalPhase:signalTime%36,crossingX,
       vehicles:vehicles.map(v=>({x:v.x,z:v.z,side:v.side,tier:v.tier,dir:v.dir}))
     }},
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
@@ -344,7 +393,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       zebraStripes:zebra.count,trafficSignals:signalHeads.count,drawGroups:Object.keys(buffer).length+10},
     // For collision avoidance, external consumers can check an individual 3m footprint.
     nearby(x,z,y,radius=3.8){
-      return vehicles.some(v=>Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
+      return vehicles.some(v=>!v.disabled&&Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
     }
   };
 }
