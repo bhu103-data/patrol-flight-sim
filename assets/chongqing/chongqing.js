@@ -6,6 +6,7 @@ import { buildChongqingDetails } from './details.js';
 import { buildChongqingLandmarks } from './landmarks.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
+import { createChongqingAtmosphere } from './atmosphere.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -35,6 +36,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.36;
 
 const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.15, 4000);
+const atmosphere=createChongqingAtmosphere(THREE,scene,camera);
 const hemi = new THREE.HemisphereLight(0x879ec1, 0x534b48, 1.18);
 scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xc3d0e8, 1.03);
@@ -874,7 +876,7 @@ function frame(){
   if(document.hidden||graphicsLost)return;
   time+=dt;
   waterUniforms.uTime.value=time;
-  move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);
+  move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
     window.dispatchEvent(new Event('patrol:orbitLaunch'));
