@@ -18,8 +18,13 @@ The entire set stays inside the same Alaska-only single GPU mesh and
 participates in the existing map-switch disposal and low-graphics fallback.
 
 Validation includes static vertex bounds, counts of the new features and
-the existing WebGL2 Alaska browser smoke capture. These checks do not
-measure native hardware FPS or certify survey-grade glacier geometry.
+the existing WebGL2 Alaska browser smoke capture. A separate opt-in review
+viewpoint can be selected by opening the game with `?alaskaView=glacier`,
+then choosing Alaska and starting the flight; this starts near the glacier
+face at a terrain-cleared altitude. The normal Alaska flight spawn is
+unchanged. The CI browser test saves both full-level and closer glacier
+screenshots. These checks do not measure native hardware FPS or certify
+survey-grade glacier geometry.
 
 
 ## 2026-11-20/21 — CC0 photographic PBR and animated calving
