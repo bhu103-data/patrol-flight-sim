@@ -95,6 +95,10 @@ test('fixed Manhattan camera captures the true summer horizon in addition to UI 
     'slow SwiftShader frames need game-state acknowledgement before screenshots');
   assert.match(script,/state\.status\?\.trim\(\)!==expectedStatus/,
     'reject screenshots whose environment status is still from the previous scene');
+  assert.match(script,/requestAnimationFrame\(\(\)=>requestAnimationFrame\(/,
+    'camera evidence must wait for two paint frames, not just a status label');
+  assert.doesNotMatch(script,/waitForTimeout\(850\)/,
+    'fixed 850 ms cannot guarantee rendering under slow SwiftShader');
   assert.match(script,/name:'midnight',value:'0'/);
   assert.match(script,/o\.value='19\.5'/,'test-only time option does not touch game UI');
   const lat=41*Math.PI/180,declination=22*Math.PI/180;
