@@ -53,7 +53,7 @@ test('no new lot files, collision rules, roads or flying controls',()=>{
 test('solid cornices stay within the official-footprint batch budget and face outward',()=>{
  let totalQuads=0;
  for(const lot of source.footprints)totalQuads+=build(lot).quads.length;
- assert.equal(totalQuads,8898,'100-footprint pilot mesh with true cut-out doors');
+ assert.equal(totalQuads,8894,'OTI physical doors and one recessed second-storey window');
  assert.ok(totalQuads<9000,'original OTI facade batch budget');
  const outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
  // Both valid NYC polygon winding directions must keep cap normals correct.
