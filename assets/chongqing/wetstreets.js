@@ -27,10 +27,13 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
       const distortion=.78+rand()*.22+Math.sin(angle*3.0+rand())*.08;
       const along=Math.cos(angle)*length*distortion;
       const across=Math.sin(angle)*width*distortion;
-      const px=x+along*Math.cos(c.angle)-across*Math.sin(c.angle);
-      const pz=lane+along*Math.sin(c.angle)+across*Math.cos(c.angle);
-      const pt=point(px,pz,side,tier,.038);
-      puddlePositions.push(pt.x,pt.y,pt.z);
+      const px=c.x+along*Math.cos(c.angle)-across*Math.sin(c.angle);
+      const pz=c.z+along*Math.sin(c.angle)+across*Math.cos(c.angle);
+      // Sample the same centerline grade as the underlying road, not
+      // 'lane' interpreted a second time as an absolute world-space Z.
+      const roadX=x+along*Math.cos(c.angle);
+      const py=ground(roadX,roadZ(roadX,side,tier))+1.72;
+      puddlePositions.push(px,py,pz);
       puddleUvs.push(.5+.5*Math.cos(angle),.5+.5*Math.sin(angle));
     }
     for(let k=0;k<N;k++)puddleIndices.push(base,base+k+1,base+(k+1)%N+1);
