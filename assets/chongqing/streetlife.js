@@ -218,7 +218,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   // Only one nearby moving vehicle receives actual headlight cones at a time.
   // Two physically directed SpotLights are far cheaper than lighting all ten cars.
   const headlightCones=[];
-  let allowDynamicHeadlights=true;
+  let allowDynamicHeadlights=true,daylight=false,lowQuality=false;
   for(let n=0;n<2;n++){
     const lamp=new THREE.SpotLight(0xffeac8,36,56,Math.PI/7,.62,2);
     lamp.visible=false;lamp.castShadow=false;
@@ -314,18 +314,26 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     }
   }
   update(0,null);
+  function syncLighting(){
+    allowDynamicHeadlights=!daylight&&!lowQuality;
+    if(!allowDynamicHeadlights)for(const lamp of headlightCones)lamp.visible=false;
+    curbs.visible=!lowQuality;
+    brightGlints.visible=!daylight&&!lowQuality;
+    checker.visible=!lowQuality;checkerLight.visible=!lowQuality;hubs.visible=!lowQuality;
+    grilles.visible=!lowQuality;plates.visible=!lowQuality;rearTrims.visible=!lowQuality;
+    // Lamp poles and car bodies remain; electric light emission depends on time.
+    for(const light of streetLights)light.visible=!daylight&&!lowQuality;
+  }
+  function setTimeOfDay(preset){
+    daylight=preset==='day';
+    syncLighting();
+  }
   function setQuality(mode){
-    const low=mode==='low';
-    allowDynamicHeadlights=!low;
-    if(low)for(const lamp of headlightCones)lamp.visible=false;
-    curbs.visible=!low;brightGlints.visible=!low;
-    checker.visible=!low;checkerLight.visible=!low;hubs.visible=!low;
-    grilles.visible=!low;plates.visible=!low;rearTrims.visible=!low;
-    // The vehicle silhouettes, roads, headlamps and pole lamps always remain.
-    for(const light of streetLights)light.visible=!low;
+    lowQuality=mode==='low';
+    syncLighting();
   }
   return {
-    update,setQuality,
+    update,setQuality,setTimeOfDay,
     // Explicit snapshots are created only when inspected/tested, never each frame.
     snapshot(){return {
       vehicleGreen,signalPhase:signalTime%36,
