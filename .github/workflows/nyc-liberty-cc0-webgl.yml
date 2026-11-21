@@ -50,12 +50,13 @@ jobs:
           test "$(stat -c%s /tmp/patrol-liberty-source.glb)" -gt 1000000
           test "$(stat -c%s /tmp/patrol-liberty-source.glb)" -lt 18000000
           sha256sum /tmp/patrol-liberty-source.glb > artifacts/nyc-liberty/source-sha256.txt
+          cp /tmp/patrol-liberty-source.glb artifacts/nyc-liberty/authorized-original.glb
           printf 'https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f\nCC0 (publisher declaration), original GLB; not an NYC photogrammetry scan\n' \
             > artifacts/nyc-liberty/LICENSE_SOURCE.txt
       - name: Install open-source Blender for headless CPU simplification and atlas bake
         run: |
           sudo apt-get update -qq
-          sudo apt-get install --no-install-recommends -y blender python3-numpy
+          sudo apt-get install --no-install-recommends -y blender python3-numpy python3-pil
           blender --version | head -n 3
           blender -b --python-expr 'import numpy; print("PATROL_BLENDER_NUMPY", numpy.__version__)'
       - name: Bake actual candidate GLB and check PATROL decoder limits
@@ -64,6 +65,25 @@ jobs:
             /tmp/patrol-liberty-source.glb assets/nyc/scenario/liberty.glb
           test -s assets/nyc/scenario/liberty.glb
           node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
+          /usr/bin/python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageStat
+          from io import BytesIO
+          import struct, json
+          b = Path('assets/nyc/scenario/liberty.glb').read_bytes()
+          count = struct.unpack_from('<I', b, 12)[0]
+          data = json.loads(b[20:20+count])
+          base = 20 + count + 8
+          im = data['images'][0]
+          view = data['bufferViews'][im['bufferView']]
+          image = Image.open(BytesIO(b[base+view.get('byteOffset',0):base+view.get('byteOffset',0)+view['byteLength']])).convert('RGB')
+          mean = ImageStat.Stat(image).mean
+          extrema = image.getextrema()
+          colors = image.resize((64,64)).getcolors(5000) or []
+          print('PATROL_LIBERTY_ATLAS_PIXELS',image.size,mean,extrema,'colors64',len(colors))
+          if max(m for m in mean) < 18 or len(colors) < 8:
+              raise SystemExit('FAIL: near-black or uniform atlas; do not launch a game model')
+          PY
           sha256sum assets/nyc/scenario/liberty.glb > artifacts/nyc-liberty/optimized-sha256.txt
           test "$(stat -c%s assets/nyc/scenario/liberty.glb)" -le 8388608
           node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
