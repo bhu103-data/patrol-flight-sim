@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const source=await readFile(new URL('../assets/chongqing/streetlife.js',import.meta.url),'utf8');
-const {buildChongqingStreetlife}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {buildChongqingStreetlife,chongqingPedestrianGlyph}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 
 class Vec{
   constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
@@ -16,7 +16,7 @@ class Object3D {
   updateMatrix(){}
 }
 class Geometry {
-  constructor(){this.attributes={}}
+  constructor(array,size){this.attributes={};this.array=array;this.itemSize=size}
   rotateX(){return this}
   rotateZ(angle){this.zRotation=(this.zRotation??0)+angle;return this}
   setAttribute(k,v){this.attributes[k]=v}
@@ -172,6 +172,20 @@ test('round signal visors surround lit lenses within one bounded GPU batch',()=>
   assert.ok(trim,'one shared metallic housing-edge batch');
   assert.equal(trim.count,16);
   assert.ok(hood.count<=hood.capacity&&trim.count<=trim.capacity);
+});
+
+test('pedestrian WALK and WAIT are distinct human silhouettes, not rectangular LEDs',()=>{
+  const waiting=chongqingPedestrianGlyph(THREE,false);
+  const walking=chongqingPedestrianGlyph(THREE,true);
+  for(const shape of [waiting,walking]){
+    assert.ok(shape.index.length>=40&&shape.index.length<=120,
+      'small original pedestrian figure stays within geometry budget');
+    assert.ok(shape.attributes.position.array.every(Number.isFinite));
+    assert.ok(shape.attributes.position.array.every((v,i)=>i%3!==0||v===0),
+      'figure lies flush with its signal head X-facing plane');
+  }
+  assert.notDeepEqual(waiting.attributes.position.array,
+    walking.attributes.position.array,'red waiting and green walking have distinct poses');
 });
 
 test('red or amber holds traffic approaching from BOTH directions, then green releases it',()=>{
