@@ -37,7 +37,10 @@ try{
   'body.qa-sun-sea *{visibility:hidden!important;}'+
   'body.qa-sun-sea #glCanvas{visibility:visible!important;}'});
  for(const [label,clock,angle] of [
-  ['dusk-east','18.5','140'],['dusk-west','18.5','220'],['noon-auto','12','-1']
+  // This harbor camera faces ~347°; face its sun instead of putting the
+  // sunset behind the viewer (the prior 140° / 220° pair looked like daylight).
+  // Summer 19:00 is close to the horizon in PATROL's 41°-latitude clock.
+  ['golden-left','19','330'],['golden-right','19','359'],['noon-auto','12','-1']
  ]){
   await page.evaluate(([hour,azimuth])=>{
    for(const [id,value] of [

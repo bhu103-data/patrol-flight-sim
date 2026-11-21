@@ -14,7 +14,7 @@
 
 ## Evidence and performance
 - Narrow tests: tests/tidewater-sun-sea.test.mjs, including compass invariants and preservation of the floatplane wave sampler.
-- Fixed-camera browser workflow: .github/workflows/nyc-tidewater-sun-sea.yml. It captures New York Harbor at 18:30/140°, 18:30/220°, and noon/Auto at identical WebGL2 scenic view and viewport. Screenshot checks validate nonblank frames and the interactive UI; they do NOT establish photography accuracy or hardware frame time.
+- Fixed-camera browser workflow: .github/workflows/nyc-tidewater-sun-sea.yml. It captures New York Harbor at 19:00/330° and 19:00/359°, plus noon/Auto at an identical WebGL2 scenic view and viewport. The camera faces approximately 347°, so these azimuths place the low sun in the actual viewport. Earlier 18:30/140° and /220° captures placed the sun behind the spectator and gave false confidence from merely nonblank WebGL frames. Screenshot checks validate nonblank frames and the interactive UI; they do NOT establish photography accuracy or hardware frame time.
 - No additional draw call, FFT texture, render pass, third-party asset or browser dependency in the production page. A handful of analytic shader operations are added; CI screenshot performance is SwiftShader software, not a 60 FPS guarantee.
 - **Unverified / follow-up:** manual color comparison with Tidewater's golden-hour screenshots, hardware FPS/milliseconds with a 60 FPS target, realistic foam volume and beaches, all-map weather dusk/noon regression, NYC floatplane touchdown and low-graphics recovery.
 - Draft stacked on #116; do not merge into main or the shared integration branch until visual QA.
