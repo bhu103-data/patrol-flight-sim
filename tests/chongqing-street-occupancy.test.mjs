@@ -100,6 +100,24 @@ test('mounted traffic signal poles and support arms stay outside buildings',()=>
  }
 });
 
+test('two-sided Chongqing traffic lights face the road from opposite approaches',()=>{
+ const {traffic,objects}=streetFixture();
+ const [posts]=objects.filter(m=>m instanceof Instanced&&
+   m.capacity===8&&m.material.metalness===.62);
+ const actual=[...posts.matrices.values()];
+ const sites=traffic.snapshot().crossingXs;
+ assert.ok(sites.length>=2);
+ assert.equal(actual.length,sites.length*2);
+ for(const cx of sites)for(const side of [-1,1]){
+   const x=cx+(side<0?11:-11);
+   const z=riverCenter(x)+250+14*Math.sin(x/115+1)+side*9.1;
+   assert.ok(actual.some(p=>Math.abs(p.x-x)<.001&&Math.abs(p.z-z)<.001),
+     'both directional approaches need a real street-side signal mast');
+   assert.ok(isRoadClear(x,z,ground(x,z)+2.5,1.5),
+     'the oriented mast must not intersect a building volume');
+ }
+});
+
 test('wet road decals are omitted from building interiors',()=>{
  const old=globalThis.document;
  globalThis.document={createElement(){return {getContext(){return {

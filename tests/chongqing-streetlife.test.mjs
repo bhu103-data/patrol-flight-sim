@@ -66,6 +66,7 @@ test('active Chongqing street traffic has 10 distinct cars including yellow taxi
   assert.ok(traffic.stats.streetLamps>=50);
   assert.ok(traffic.stats.roadMarkings>200);
   assert.equal(traffic.stats.zebraStripes,40);
+  assert.equal(traffic.stats.stopLines,8,'two physical stop bars per crossing');
   assert.equal(traffic.stats.trafficSignals,8);
   assert.equal(traffic.stats.pedestrianSignals,8);
   assert.equal(traffic.stats.signalizedCrossings,4);
@@ -152,6 +153,35 @@ test('four real crossing sites are spaced apart and serve the actual car route',
   const heads=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8);
   assert.ok(heads.length>=9,'batched masts, overhead arms and pedestrian heads');
   assert.ok(heads.every(m=>m.count===8));
+});
+
+test('red or amber holds traffic approaching from BOTH directions, then green releases it',()=>{
+  const {traffic,objects}=setup();
+  const inactive=objects.filter(o=>o instanceof InstancedMesh&&
+    o.capacity===24&&o.material.color===0x232b30);
+  assert.equal(inactive.length,1,'inactive bulbs use one shared dark-glass batch');
+  assert.equal(inactive[0].count,24,'all three lenses stay physically present');
+  const held={east:null,west:null},released={east:false,west:false};
+  for(let frame=0;frame<2400;frame++){
+    traffic.update(.04,null);
+    const state=traffic.snapshot();
+    for(let id=0;id<state.vehicles.length;id++){
+      const vehicle=state.vehicles[id];
+      if(vehicle.disabled||vehicle.side!==1||vehicle.tier!==1)continue;
+      const name=vehicle.dir>0?'east':'west';
+      const stop=state.crossingXs.find(cx=>
+        Math.abs(vehicle.x-(cx+(vehicle.dir<0?12:-12)))<.08);
+      if(!state.vehicleGreen&&stop!==undefined&&!held[name])
+        held[name]={id,x:vehicle.x,dir:vehicle.dir};
+      const prior=held[name];
+      if(prior&&state.vehicleGreen&&id===prior.id&&
+         (vehicle.x-prior.x)*prior.dir>3)released[name]=true;
+    }
+    if(released.east&&released.west)break;
+  }
+  assert.ok(held.east&&held.west,'both lanes encounter and obey a stop signal');
+  assert.deepEqual(released,{east:true,west:true},
+    'neither direction remains stuck after the next green phase');
 });
 
 test('painted car body, cabin glass, wheels and white-black checker are separate batches',()=>{

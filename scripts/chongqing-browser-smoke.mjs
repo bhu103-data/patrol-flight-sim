@@ -93,6 +93,18 @@ try{
   await page.keyboard.press('5');
   await page.waitForTimeout(1100);
   await capture('03b-tributary-safety-guards');
+  // Include the actual street-level light fixtures in the Chromium tour.
+  // Existence alone is not visual validation; capture the real canvas pixels.
+  await page.keyboard.press('7');
+  await page.waitForTimeout(1100);
+  const signalState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(signalState.signalCrossings>=2 &&
+    signalState.signalMasts===signalState.signalCrossings*2 &&
+    signalState.signalStopLines===signalState.signalCrossings*2,
+    'Directional lights/stop bars missing in live scene: '+JSON.stringify(signalState));
+  check(['green','amber','red'].includes(signalState.signalAspect),
+    'No running three-aspect traffic cycle');
+  await capture('03c-signalized-street');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());

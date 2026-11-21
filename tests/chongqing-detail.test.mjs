@@ -80,18 +80,33 @@ function construct(){
   });
   return {out,meshes,obstacles};
 }
-test('curved pitched roof has eleven levels times three bays and a non-flat surface',()=>{
+test('curved pitched roofs include eleven landmark levels and one neighboring shop',()=>{
   const {out,meshes}=construct();
-  assert.equal(out.stats.curvedRoofs,33);
+  assert.equal(out.stats.curvedRoofs,34);
   const roof=meshes.find(m=>m instanceof InstancedMesh&&m.geometry instanceof Geometry&&m.geometry.attributes.position);
   assert.ok(roof,'custom roof mesh exists');
-  assert.equal(roof.count,33);
+  assert.equal(roof.count,34);
   assert.equal(roof.material,pbr.roof,'curved roofs retain live PBR material for async texture update');
   const values=roof.geometry.attributes.position.array;
   const y=[];for(let i=1;i<values.length;i+=3)y.push(values[i]);
   assert.ok(Math.max(...y)-Math.min(...y)>.6,'real roof curvature present');
   assert.ok(roof.geometry.index.length>500,'multi-segment 3D roof surface');
 });
+test('Hongyadong neighboring shop steps back without changing obstacles or GLB facade range',()=>{
+  const {out,obstacles}=construct();
+  const shop=obstacles.filter(b=>b.x===212&&b.z===297&&b.w===20&&b.d===16);
+  assert.equal(shop.length,1,'reuse exact existing shop collision footprint');
+  assert.equal(out.hongyadongReplacementCounts.curvedRoofs,33,
+    'new neighbor curved eave remains visible when the optional GLB replaces only Hongyadong');
+  assert.match(code,/if\(i===0\)\{/);
+  assert.match(code,/put\('timber',x,y\+12\.75,z-7\.4,16\.4,5\.8,13\.2\)/);
+  assert.match(code,/beam\('carved',\[px,y\+7\.1,z-\.35\]/);
+  assert.match(code,/roof\(x,y\+15\.85,z-7\.4,19\.6,1\.15,16\.4\)/);
+  const detailBranch=code.slice(code.indexOf('if(i===0){'),code.indexOf('}else{',code.indexOf('if(i===0){')));
+  assert.doesNotMatch(detailBranch,/obstacles\.push/,
+    'no additional collision proxy inside the new detail-only branch');
+});
+
 test('window latticework is batched and can be hidden in low quality',()=>{
   const {out,meshes}=construct();
   assert.ok(out.stats.lattice>1500,'detailed window bars');

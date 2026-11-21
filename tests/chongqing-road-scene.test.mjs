@@ -11,7 +11,7 @@ const roadSource=await read('../assets/chongqing/road-clearance.js');
 const {chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
 const urbanSrc=(await read('../assets/chongqing/urban-architecture.js'))
   .replace("from './road-clearance.js'",'from '+JSON.stringify(toUrl(roadSource)));
-const {createChongqingUrbanArchitecture}=await import(toUrl(urbanSrc));
+const {createChongqingUrbanArchitecture,makeChongqingWindowFrameGeometry}=await import(toUrl(urbanSrc));
 const {buildChongqingDetails}=await import(toUrl(await read('../assets/chongqing/details.js')));
 const {buildChongqingLandmarks}=await import(toUrl(await read('../assets/chongqing/landmarks.js')));
 const {buildChongqingStreetlife}=await import(toUrl(await read('../assets/chongqing/streetlife.js')));
@@ -167,12 +167,27 @@ test('real Chongqing building parcels still leave safe usable signal crossings',
 test('landmark and background geometry still fit instance buffers',()=>{
   const {sceneObjects,urban,details}=generate();
   assert.ok(urban.stats.towers>100);
-  assert.equal(details.stats.curvedRoofs,33);
+  // PR #93 adds exactly one real curved eave on the adjacent storefront.
+  // The instanced geometry and capacity bounds below remain enforced.
+  assert.equal(details.stats.curvedRoofs,34);
   for(const mesh of sceneObjects.filter(m=>m instanceof Instanced)){
     assert.ok(mesh.count<=mesh.capacity);
     assert.ok(mesh.writes<=mesh.capacity);
   }
 });
+test('street-level scenic windows have hollow 3D frames and recessed glass',()=>{
+ const geo=makeChongqingWindowFrameGeometry(THREE);
+ const p=geo.attributes.position.array,ix=geo.index;
+ assert.equal(p.length/3,96,'four hard-edged rails, each with six planar faces');
+ assert.equal(ix.length/3,48,'true 3D perimeter stays under 50 triangles per bay');
+ for(let i=0;i<p.length;i+=3)
+   assert.ok(Math.abs(p[i])>=.415-1e-9||Math.abs(p[i+1])>=.415-1e-9,
+     'no filled polygon or vertex inside the window aperture');
+ assert.ok(urbanSrc.includes("front+face*.205")&&
+   urbanSrc.includes("front+face*.153"),
+   'glazing must sit behind the frame front plane');
+});
+
 test('scenic Chongqing facades have real window reveal, glass, mullion and sill geometry',()=>{
   const {sceneObjects,urban,obstacles}=generate();
   assert.ok(urban.stats.facadeBuildings>=8,'close riverfront still has architectural details');
