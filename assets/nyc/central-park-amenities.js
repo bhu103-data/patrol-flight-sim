@@ -49,24 +49,104 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
   }
   stats.attractions++;
   // Loeb Boathouse: pitched roof, glass facade, veranda and rowing boats.
+  // Loeb Boathouse: source-referenced architectural massing, not a scan.
+  // Its long green metal roof, pale colonnade and striped waterside awning
+  // distinguish the actual 1950s building from generic gray-roof houses.
+  // Reference: centralparknyc.org/locations/central-park-boathouse and
+  // contemporary exterior photos (no third-party media imported).
   const hu=18,hz=157,hx=ex(hu,hz),hy=y(hu,hz);
+  const lakeRoof=[.27,.45,.37],roofSeam=[.37,.55,.46];
+  const whiteTrim=[.77,.76,.69],awningRed=[.53,.26,.25],
+    awningIvory=[.86,.80,.68],planter=[.27,.35,.30];
   box(hx,hy+1.27,hz,9.1,2.42,5.8,stone);
   for(const side of [-1,1]){
     const z=hz+side*3.03;
     addTri([hx-4.95,hy+2.48,z],[hx,hy+4.08,z],
-      [hx+4.95,hy+2.48,z],roof);
+      [hx+4.95,hy+2.48,z],lakeRoof);
   }
   addQuad([hx-4.95,hy+2.48,hz-3.03],
     [hx-4.95,hy+2.48,hz+3.03],
-    [hx,hy+4.08,hz+3.03],[hx,hy+4.08,hz-3.03],granite);
+    [hx,hy+4.08,hz+3.03],[hx,hy+4.08,hz-3.03],lakeRoof);
   addQuad([hx,hy+4.08,hz-3.03],[hx,hy+4.08,hz+3.03],
     [hx+4.95,hy+2.48,hz+3.03],
-    [hx+4.95,hy+2.48,hz-3.03],granite);
+    [hx+4.95,hy+2.48,hz-3.03],lakeRoof);
+  // Fascia and coping on both roof slopes are retained at low quality.
+  beam([hx,hy+4.12,hz-3.13],[hx,hy+4.12,hz+3.13],.060,roofSeam);
+  for(const side of [-1,1]){
+    const x=hx+side*4.95;
+    beam([x,hy+2.49,hz-3.07],[x,hy+2.49,hz+3.07],
+      .088,whiteTrim);
+  }
   for(let j=-3;j<=3;j++){
     const x=ex(hu+j*1.12,hz);
     box(x,hy+1.40,hz-2.95,.70,1.05,.09,glass);
     if(j%2===0)beam([x,hy,hz-4.05],
       [x,hy+2.40,hz-4.05],.070,bronze);
+  }
+  if(quality==='high'){
+    // Longitudinal raised seams are geometrically separate roof details,
+    // rather than one large featureless triangular face.
+    for(let i=0;i<9;i++){
+      const z=hz-2.77+i*.69;
+      for(const side of [-1,1])
+        beam([hx,hy+4.095,z],
+          [hx+side*4.95,hy+2.51,z],.023,roofSeam);
+    }
+    // The column arcade sits to the west (lake side) of the building.
+    // Require every exposed footprint corner to remain above the SAME
+    // irregular east-Lake mask used by the park paths and rowboats.
+    const eastLakeDry=(u,z)=>{
+      const dx=(u+14)/24,dz=(z-150)/16.2;
+      const a=Math.atan2(dz,dx);
+      return Math.hypot(dx,dz)/(1+.055*Math.sin(3*a+1.15)+
+        .025*Math.cos(7*a-1.15));
+    };
+    const outerU=hu-5.55,innerU=hu-4.65;
+    const terraceSafe=[outerU,innerU].every(u=>
+      [hz-2.74,hz+2.74].every(z=>eastLakeDry(u,z)>1.05));
+    if(terraceSafe){
+      // Pale stone terrace slab, upper entablature and six load-bearing
+      // visible pillars. Each foot samples its actual terrain position.
+      const terraceU=hu-4.95,deckY=y(terraceU,hz)+.15;
+      box(ex(terraceU,hz),deckY,hz,1.35,.20,5.45,whiteTrim);
+      const colU=hu-5.21;
+      for(let i=0;i<6;i++){
+        const z=hz-2.46+i*.984;
+        const x=ex(colU,z),foot=y(colU,z);
+        beam([x,foot+.15,z],[x,hy+2.43,z],.123,whiteTrim);
+        box(x,foot+.18,z,.31,.13,.33,whiteTrim);
+        box(x,hy+2.36,z,.35,.15,.37,whiteTrim);
+      }
+      const corniceX=ex(colU,hz);
+      beam([corniceX,hy+2.49,hz-2.70],
+        [corniceX,hy+2.49,hz+2.70],.14,whiteTrim);
+      // Canopy stripes are authored quad geometry; never download or
+      // reproduce a copyrighted photographic advertising texture.
+      for(let i=0;i<14;i++){
+        const z0=hz-2.74+i*5.48/14,z1=hz-2.74+(i+1)*5.48/14;
+        const panel=i%2?awningIvory:awningRed;
+        addQuad([ex(outerU,z0),hy+2.32,z0],
+          [ex(outerU,z1),hy+2.32,z1],
+          [ex(innerU,z1),hy+2.56,z1],
+          [ex(innerU,z0),hy+2.56,z0],panel);
+      }
+      // Glazed dining bays behind the colonnade, with visible divided
+      // frames, sill depth and a few restrained planter boxes.
+      for(let i=0;i<5;i++){
+        const z=hz-2.16+i*1.08,x=ex(hu-4.56,z);
+        box(x,hy+1.29,z,.070,1.55,.78,glass);
+        for(const edge of [-.41,.41])
+          beam([x-.04,hy+.55,z+edge],
+            [x-.04,hy+2.03,z+edge],.032,whiteTrim);
+        beam([x-.06,hy+1.24,z-.41],
+          [x-.06,hy+1.24,z+.41],.029,whiteTrim);
+      }
+      for(const z of [hz-1.8,hz,hz+1.8]){
+        const x=ex(hu-5.47,z),foot=y(hu-5.47,z);
+        box(x,foot+.22,z,.32,.20,.64,planter);
+        box(x,foot+.38,z,.27,.16,.57,grass);
+      }
+    }
   }
   const lakeWater=waterY+2.83;
   // Four actually volumetric, independently oriented lake rowboats.
