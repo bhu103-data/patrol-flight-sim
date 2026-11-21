@@ -1,0 +1,49 @@
+name: Universal C185 floatplane WebGL visual smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/aircraft/seaplane-browser-smoke.mjs'
+      - '.github/workflows/cessna185-browser.yml'
+      - 'assets/aircraft/cessna185-floats.glb'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: universal-c185-browser
+  cancel-in-progress: true
+
+jobs:
+  floatplane-chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium WebGL test tooling
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve the original static game
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 > /tmp/patrol-floatplane-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8766/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify GLB mesh actually loads in Manhattan and Alaska
+        run: node tools/aircraft/seaplane-browser-smoke.mjs
+      - name: Publish WebGL screenshots and machine-readable report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cessna185-manhattan-alaska-browser
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
