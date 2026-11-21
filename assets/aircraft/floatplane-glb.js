@@ -61,6 +61,11 @@ export function decodeFloatplaneGLB(bytes, addTri) {
     for(const primitive of mesh?.primitives||[]){
       if(primitive.mode!==undefined&&primitive.mode!==4)continue;
       const positions=accessor(primitive.attributes?.POSITION,'VEC3');
+      // Preserve Blender's smooth/crease normals on curved hull and airfoil.
+      const surfaceNormals=primitive.attributes?.NORMAL===undefined ? null :
+        accessor(primitive.attributes.NORMAL,'VEC3');
+      if(surfaceNormals&&surfaceNormals.count!==positions.count)
+        throw new Error('Floatplane vertex normals mismatch');
       const indices=primitive.indices===undefined?null:accessor(primitive.indices,'SCALAR');
       if(indices&&indices.count%3!==0)throw new Error('Invalid floatplane triangles');
       const count=indices?indices.count:positions.count;
@@ -69,7 +74,7 @@ export function decodeFloatplaneGLB(bytes, addTri) {
       const factor=mat?.pbrMetallicRoughness?.baseColorFactor||[.72,.75,.75,1];
       const color=factor.slice(0,3).map(c=>Math.min(1,Math.max(0,Number(c)||0)));
       for(let i=0;i<count;i+=3){
-        const tri=[];
+        const tri=[],normalTri=[];
         for(let k=0;k<3;k++){
           const n=indices?indices.get(i+k):i+k;
           if(n>=positions.count)throw new Error('Floatplane triangle index outside bounds');
@@ -81,8 +86,16 @@ export function decodeFloatplaneGLB(bytes, addTri) {
             max[axis]=Math.max(max[axis],p[axis]);
           }
           tri.push(p);
+          if(surfaceNormals){
+            const normal=[surfaceNormals.get(n,0),surfaceNormals.get(n,1),surfaceNormals.get(n,2)];
+            const magnitude=Math.hypot(...normal);
+            if(!normal.every(Number.isFinite)||magnitude<.25||magnitude>1.75)
+              throw new Error('Invalid Blender surface normal');
+            normalTri.push(normal.map(v=>v/magnitude));
+          }
         }
-        addTri(tri[0],tri[1],tri[2],color,4);
+        addTri(tri[0],tri[1],tri[2],color,4,
+          surfaceNormals?normalTri:null);
         triangles++;
       }
     }
