@@ -50,6 +50,10 @@ test('missing local DEM is an explicit handled failure',async()=>{
 });
 test('worker and texture receive measured elevations, without altering other maps',()=>{
   assert.match(index,/function measuredHeight\(u,v\)/);
+  assert.match(index,/get\('alaskaView'\)==='glacier'/);
+  assert.match(index,/alaskaGlacierView=selectedMap\.alaska && !runway/);
+  assert.match(index,/\? \[105,Math\.min\(CEILING-8,Math\.max\(44,/);
+
   assert.match(index,/if \(alaska && measured\)/);
   assert.match(index,/options\.alaskaDEM\.verticalScale/);
   assert.match(index,/new URLSearchParams\(location\.search\)\.get\('alaskaTerrain'\)!=='legacy'/);
