@@ -21,10 +21,10 @@ const baselineSha='6d50bfda4b2d3837e550751ede49b200b140bc72';
    };
  `;
    html=html.replace(marker,hook+marker);
-   const movement=/    }else{\\r?\\n      flightStep=advanceFlight\\(dt\\);\\r?\\n    }/g;
+   const movement=/    }else{\r?\n      flightStep=advanceFlight\(dt\);\r?\n    }/g;
    const sites=[...html.matchAll(movement)];
    if(sites.length!==1)throw Error('QA flight freeze anchor missing: '+input);
-   const eol=html.includes('\\r\\n')?'\\r\\n':'\\n';
+   const eol=html.includes('\r\n')?'\r\n':'\n';
    html=html.replace(movement,[
      '    }else if(window.__patrolQaHold){',
      '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
