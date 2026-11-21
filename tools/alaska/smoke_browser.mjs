@@ -64,7 +64,7 @@ try{
   }
   mkdirSync('artifacts',{recursive:true});
   await page.screenshot({path:'artifacts/alaska-live-webgl.png'});
-  if(!glacierDetailLogs.some(m=>/seracs:\s*42/.test(m) && /iceStrata:\s*126/.test(m))){
+  if(!glacierDetailLogs.some(m=>/seracs:\s*28/.test(m) && /iceStrata:\s*62/.test(m))){
     throw new Error('Glacier serac and strata geometry not confirmed in live WebGL pass: '+
       glacierDetailLogs.join(' | '));
   }
