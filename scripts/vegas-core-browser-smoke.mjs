@@ -6,6 +6,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const qaTag=process.env.PATROL_QA_TAG||'candidate';
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
+const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 // Default remains CI SwiftShader; opt in to real installed Chrome locally with
 // PATROL_BROWSER_CHANNEL=chrome and PATROL_GRAPHICS_PROFILE=default (Windows).
 // 'chrome' is NOT proof of a discrete GPU: capture the reported GL renderer.
@@ -25,7 +26,6 @@ const browser=await chromium.launch({
   '--enable-unsafe-swiftshader'
  ]:[]
 });
-const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});

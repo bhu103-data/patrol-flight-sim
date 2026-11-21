@@ -7,12 +7,12 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const origin='https://epqs.nationalmap.gov/v1/json';
 const outDir='artifacts/vegas-usgs';
 await mkdir(outDir,{recursive:true});
-const latitudeSamples=Array.from({length:11},(_,i)=>+(36.06+i*.016).toFixed(6));
+const latitudeSamples=[...Array.from({length:11},(_,i)=>+(36.06+i*.016).toFixed(6)),36.1792].sort((a,b)=>a-b);
 const transects=[
  {id:'west-red-rock-sample-line',lon:-115.48,
   note:'West of Strip, Spring Mountains approach; longitude is an exploratory sample transect, not a surveyed visible skyline crest'},
- {id:'east-frenchman-sample-line',lon:-115.025,
-  note:'East of Strip, Sunrise/Frenchman area; longitude is an exploratory sample transect, not a surveyed visible skyline crest'}
+ {id:'east-frenchman-sample-line',lon:-114.997,
+  note:'Near Frenchman Mountain summit longitude (~36.179 N, 114.997 W), exploratory north-south transect rather than a surveyed visible skyline crest'}
 ];
 const results=[],errors=[];
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
