@@ -37,7 +37,7 @@ export function buildNycStreetNetwork({
     const [l,r,s,n]=timesBounds;
     return x>l-9&&x<r+9&&z>s-8&&z<n+8;
   };
-  function permitted(x,z){
+  function permitted(x,z,allowWaterClip=false){
     // Never paint a city grid through the park. Transverse drives are built
     // by central-park.js instead, with paths aligned to the park itself.
     const u=x-grid.tilt*z-grid.offset;
@@ -46,7 +46,11 @@ export function buildNycStreetNetwork({
       stats.skippedPark++;return false;
     }
     if(inTimes(x,z)||detailBand(x,z)<2){stats.skippedLOD++;return false;}
-    if(terrainAt(x,z)<waterY+1.55){stats.skippedWater++;return false;}
+    // A shore-crossing segment may still have a long usable dry section.
+    // Its full swept footprint is clipped in roadCorridorClear below.
+    if(!allowWaterClip && terrainAt(x,z)<waterY+1.55){
+      stats.skippedWater++;return false;
+    }
     return true;
   }
   function nearOld(x,z,clearance=5.8){
@@ -273,8 +277,16 @@ export function buildNycStreetNetwork({
   const activeRoadSegments=[];
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
-    if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
-      nearOld(...mid,7.8))return false;
+    if(!permitted(mid[0],mid[1],true)||
+       !permitted(a[0],a[1],true)||!permitted(b[0],b[1],true)||
+       nearOld(...mid,7.8))return false;
+    // Avoid subdividing wholly submerged grid sections. For shoreline
+    // crossings, roadCorridorClear will preserve only dry, collision-free
+    // pieces (including their sidewalks), not paint across the water.
+    const dry=p=>terrainAt(p[0],p[1])>=waterY+1.55;
+    if(!dry(a)&&!dry(mid)&&!dry(b)){
+      stats.skippedWater++;return false;
+    }
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
