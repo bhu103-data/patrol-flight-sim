@@ -7,7 +7,7 @@ on:
       - "tools/nyc/bake-liberty-cc0.py"
       - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
-      - "tools/nyc/orient-liberty-to-harbor.mjs"
+      - "tools/nyc/check-liberty-harbor-placement.mjs"
       - "scripts/nyc-liberty-static-webgl.mjs"
       - ".github/workflows/nyc-liberty-cc0-webgl.yml"
       - "docs/NYC_LIBERTY_CC0_GLB_QA.md"
@@ -16,7 +16,7 @@ on:
       - "tools/nyc/bake-liberty-cc0.py"
       - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
-      - "tools/nyc/orient-liberty-to-harbor.mjs"
+      - "tools/nyc/check-liberty-harbor-placement.mjs"
       - "scripts/nyc-liberty-static-webgl.mjs"
       - ".github/workflows/nyc-liberty-cc0-webgl.yml"
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
         run: |
           python3 -m py_compile tools/nyc/bake-liberty-cc0.py tools/nyc/rasterize-liberty-colors.py
           node --check tools/nyc/check-liberty-glb.mjs
-          node --check tools/nyc/orient-liberty-to-harbor.mjs
+          node --check tools/nyc/check-liberty-harbor-placement.mjs
           node --check scripts/nyc-liberty-static-webgl.mjs
           node --test tests/scenario-model-preview.test.mjs tests/scenario-glb.test.mjs tests/nyc-procedural-landmark-rollback.test.mjs
           node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
@@ -69,9 +69,9 @@ jobs:
           blender -b --python tools/nyc/bake-liberty-cc0.py -- \
             /tmp/patrol-liberty-source.glb assets/nyc/scenario/liberty.glb
           test -s assets/nyc/scenario/liberty.glb
-          # Source art faces +Z; rotate candidate (not runtime) toward the -Z harbor.
-          # This fails safely if a later upstream model was already rotated.
-          node tools/nyc/orient-liberty-to-harbor.mjs assets/nyc/scenario/liberty.glb
+          # Verified source/rollback front views already align; DO NOT rotate.
+          # Read-only source-specific facing fingerprint + Fort Wood radius bound.
+          node tools/nyc/check-liberty-harbor-placement.mjs assets/nyc/scenario/liberty.glb
           node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
           /usr/bin/python3 - <<'PY'
           from pathlib import Path
