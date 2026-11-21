@@ -3,6 +3,7 @@
 // https://github.com/jjcm/petalwake — credits in docs/CHONGQING_HOTPOT_PILOT.md.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
+import { buildChongqingLandmarks } from './landmarks.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 
@@ -211,6 +212,9 @@ for(let i=0;i<360;i++){
   if(riverDist(x,z)<26)continue;
   if(Math.hypot(x-285,z-225)<100)continue;
   if(Math.hypot(x-160,z-150)<165)continue;
+  // Reserve real landmark envelopes: Raffles City / Chaotianmen and Liziba Station.
+  if(Math.hypot(x+355,z-176)<224)continue;
+  if(Math.abs(x+121)<72&&Math.abs(z+254)<74)continue;
   const w=17+rand()*25,d=17+rand()*30;
   const downtown=x>-190&&x<560;
   const h=(downtown?55:23)+rand()*(downtown?145:70);
@@ -336,11 +340,7 @@ for(let i=0;i<=65;i++){
   if(i%5===0)box(x,(ground(x,z)+28)/2,z,4,ground(x,z)+28,4,M.stone);
 }
 road(railPoints,9,M.rail);
-for(let i=0;i<3;i++){
-  const p=railPoints[27+i];
-  box(p.x,p.y+5,p.z,22,9,7,i===0?M.red:M.gold);
-  box(p.x,p.y+6,p.z-3.9,17,3,.5,M.glass);
-}
+// The actual animated 3-car Line 2 monorail and walk-through Liziba station are in landmarks.js.
 // Cable car, a characteristic river crossing.
 const cableA=new THREE.Vector3(-510,130,240),cableB=new THREE.Vector3(-365,121,-240);
 cylinderBetween(cableA,cableB,.35,M.dark,5);
@@ -398,6 +398,8 @@ scene.add(trees,stems);
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
+// Place the two high-fidelity landmarks before the spatial collision index is built.
+const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 
@@ -663,7 +665,8 @@ function move(dt){
   const px=state.pos.x,pz=state.pos.z,py=state.pos.y;
   const nx=clamp(px+state.vel.x*dt,-935,935);
   const nz=clamp(pz+state.vel.z*dt,-635,635);
-  state.pos.y=clamp(py+state.vel.y*dt,-.25,310);
+  // Permit flight above the 350m Raffles towers and the existing 650m space transition.
+  state.pos.y=clamp(py+state.vel.y*dt,-.25,725);
   // Resolve axes separately so the pilot can slide along facades instead of sticking.
   if(!intersectsBuilding(nx,state.pos.y,pz))state.pos.x=nx;
   else state.vel.x=0;
@@ -693,7 +696,7 @@ function move(dt){
   flyingScarf.rotation.x=Math.sin(time*5.1)*.12;
   flameLight.intensity+=((state.spicy>0&&(state.boosting||state.flying)?65:0)-flameLight.intensity)*Math.min(1,dt*8);
 }
-const visited={hong:false,bridge:false};
+const visited={hong:false,bridge:false,raffles:false,liziba:false};
 function updateQuest(){
   if(!visited.hong&&Math.hypot(state.pos.x-155,state.pos.z-145)<140&&state.pos.y>45){
     visited.hong=true;const el=document.getElementById('questHong');
@@ -702,6 +705,16 @@ function updateQuest(){
   if(!visited.bridge&&([40,470].some(x=>Math.abs(state.pos.x-x)<45))&&Math.abs(state.pos.z)<130&&state.pos.y>35){
     visited.bridge=true;const el=document.getElementById('questBridge');
     el.textContent='✓ 飞过跨江大桥';el.classList.add('done');message('飞越两江大桥！');
+  }
+  if(!visited.raffles&&Math.hypot(state.pos.x-landmarkBuild.raffles.x,state.pos.z-landmarkBuild.raffles.z)<170&&state.pos.y>120){
+    visited.raffles=true;const el=document.getElementById('questRaffles');
+    if(el){el.textContent='✓ 朝天门来福士与水晶连廊';el.classList.add('done');}
+    message('发现地标：朝天门来福士！');
+  }
+  if(!visited.liziba&&Math.hypot(state.pos.x-landmarkBuild.liziba.x,state.pos.z-landmarkBuild.liziba.z)<75){
+    visited.liziba=true;const el=document.getElementById('questLiziba');
+    if(el){el.textContent='✓ 李子坝轻轨穿楼';el.classList.add('done');}
+    message('发现地标：李子坝轻轨穿楼！');
   }
   hint.textContent=Math.hypot(state.pos.x-hotpot.x,state.pos.z-hotpot.z)<48
     ?'🍲 按 E 吃重庆火锅，激活麻辣喷火推进'
@@ -718,7 +731,7 @@ function drawMinimap(){
   mapCtx.strokeStyle='#3b90b4';mapCtx.lineWidth=22;mapCtx.beginPath();
   for(let i=0;i<=40;i++){const x=-990+1980*i/40,px=128+(x-state.pos.x)*.17,py=128+(riverCenter(x)-state.pos.z)*.17;if(i===0)mapCtx.moveTo(px,py);else mapCtx.lineTo(px,py);}
   mapCtx.stroke();
-  for(const [x,z,label] of [[155,145,'洪'],[40,0,'桥'],[470,0,'桥'],[hotpot.x,hotpot.z,'锅']]){
+  for(const [x,z,label] of [[155,145,'洪'],[40,0,'桥'],[470,0,'桥'],[hotpot.x,hotpot.z,'锅'],[landmarkBuild.raffles.x,landmarkBuild.raffles.z,'来'],[landmarkBuild.liziba.x,landmarkBuild.liziba.z,'轨']]){
     const px=128+(x-state.pos.x)*.17,py=128+(z-state.pos.z)*.17;
     mapCtx.fillStyle='#ffd28b';mapCtx.beginPath();mapCtx.arc(px,py,10,0,TAU);mapCtx.fill();
     mapCtx.fillStyle='#30251d';mapCtx.font='bold 13px sans-serif';mapCtx.textAlign='center';mapCtx.textBaseline='middle';mapCtx.fillText(label,px,py);
@@ -780,7 +793,7 @@ function frame(){
   if(document.hidden||graphicsLost)return;
   time+=dt;
   waterUniforms.uTime.value=time;
-  move(dt);updateFlames(dt);updateCamera(dt);
+  move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);
   if(state.pos.y>=650&&state.vel.y>.4){window.dispatchEvent(new Event('patrol:orbitLaunch'));}
   if((mapTimer+=dt)>.09){drawMinimap();updateQuest();mapTimer=0;}
   if(toastUntil&&clock.getElapsedTime()>toastUntil){toastEl.style.opacity='0';toastUntil=0;}
