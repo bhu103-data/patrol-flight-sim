@@ -1,0 +1,91 @@
+name: NYC Liberty CC0 GLB CPU bake and WebGL static QA
+on:
+  push:
+    branches:
+      - qa/nyc-liberty-cc0-glb-20261121
+    paths:
+      - "tools/nyc/bake-liberty-cc0.py"
+      - "tools/nyc/check-liberty-glb.mjs"
+      - "scripts/nyc-liberty-static-webgl.mjs"
+      - ".github/workflows/nyc-liberty-cc0-webgl.yml"
+      - "docs/NYC_LIBERTY_CC0_GLB_QA.md"
+  pull_request:
+    paths:
+      - "tools/nyc/bake-liberty-cc0.py"
+      - "tools/nyc/check-liberty-glb.mjs"
+      - "scripts/nyc-liberty-static-webgl.mjs"
+      - ".github/workflows/nyc-liberty-cc0-webgl.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-liberty-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax checks and existing model preview regressions
+        run: |
+          python3 -m py_compile tools/nyc/bake-liberty-cc0.py
+          node --check tools/nyc/check-liberty-glb.mjs
+          node --check scripts/nyc-liberty-static-webgl.mjs
+          node --test tests/scenario-model-preview.test.mjs tests/scenario-glb.test.mjs
+          node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
+      - name: Verify CC0 original publisher and fetch authorized original GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nyc-liberty assets/nyc/scenario
+          curl --fail --silent --show-error --location --retry 2 --max-time 50 \
+            'https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f' \
+            -o /tmp/liberty-cc0-page.html
+          grep -q 'Original Innerscene model' /tmp/liberty-cc0-page.html
+          grep -q 'Public domain (CC0)' /tmp/liberty-cc0-page.html
+          curl --fail --silent --show-error --location --retry 2 --max-time 180 \
+            'https://www.innerscene.com/api/library/statue-of-liberty-on-its-pedestal-c8a7318f/download' \
+            -o /tmp/patrol-liberty-source.glb
+          test "$(stat -c%s /tmp/patrol-liberty-source.glb)" -gt 1000000
+          test "$(stat -c%s /tmp/patrol-liberty-source.glb)" -lt 18000000
+          sha256sum /tmp/patrol-liberty-source.glb > artifacts/nyc-liberty/source-sha256.txt
+          printf 'https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f\nCC0 (publisher declaration), original GLB; not an NYC photogrammetry scan\n' \
+            > artifacts/nyc-liberty/LICENSE_SOURCE.txt
+      - name: Install open-source Blender for headless CPU simplification and atlas bake
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y blender
+          blender --version | head -n 3
+      - name: Bake actual candidate GLB and check PATROL decoder limits
+        run: |
+          blender -b --python tools/nyc/bake-liberty-cc0.py -- \
+            /tmp/patrol-liberty-source.glb assets/nyc/scenario/liberty.glb
+          node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
+          sha256sum assets/nyc/scenario/liberty.glb > artifacts/nyc-liberty/optimized-sha256.txt
+          test "$(stat -c%s assets/nyc/scenario/liberty.glb)" -le 8388608
+          node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
+      - name: Install free Playwright Chromium / SwiftShader
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve same-origin PATROL game and approved-only browser manifest overlay
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/nyc-liberty-serve.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html > /dev/null
+          PATROL_BASE_URL=http://127.0.0.1:8765 node scripts/nyc-liberty-static-webgl.mjs
+      - name: Verify committed activation remains disabled
+        if: always()
+        run: |
+          node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
+      - name: Upload actual staged GLB, trace and screenshots — NO automatic GitHub import
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-liberty-cc0-staged-model-and-webgl
+          path: |
+            artifacts/nyc-liberty/
+            assets/nyc/scenario/liberty.glb
+          retention-days: 10
+          if-no-files-found: ignore
