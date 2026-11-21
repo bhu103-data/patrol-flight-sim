@@ -60,7 +60,10 @@ for index, (src, dst, material_index) in enumerate(zip(uv_src, uv_atlas, ids)):
     texture = slot_images.get(int(material_index))
     if texture is None:
         raise RuntimeError("Unmapped material at triangle " + str(index))
-    pts = dst * np.array([W - 1, -(H - 1)]) + np.array([0, H - 1])
+    # Blender GLTF export reverses the atlas V when writing TEXCOORD_0.
+    # Rendered PATROL sampling observes high exported V in the PNG top half;
+    # write source colors at the *unflipped Blender V* pixel coordinate.
+    pts = dst * np.array([W - 1, H - 1])
     a, b, c = pts
     area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
     if abs(area) < 1e-6:
@@ -88,7 +91,7 @@ for index, (src, dst, material_index) in enumerate(zip(uv_src, uv_atlas, ids)):
         px = int(np.floor(np.mod(uv[0], 1) * (tex_w - 1)))
         py = int(np.floor((1 - np.mod(uv[1], 1)) * (tex_h - 1)))
         tx = int(np.clip(round(at[0] * (W - 1)), 0, W - 1))
-        ty = int(np.clip(round((1 - at[1]) * (H - 1)), 0, H - 1))
+        ty = int(np.clip(round(at[1] * (H - 1)), 0, H - 1))
         canvas[ty, tx] = texture[py, px]
         painted[ty, tx] = True
         triangles_with_coverage += 1
@@ -115,8 +118,8 @@ quadrant_rgb = {}
 for slot in range(len(blender_names)):
     if slot >= 4:
         raise RuntimeError("Unexpected extra Innerscene material")
-    # glTF UV V is bottom-up but Pillow scanlines are top-down.
-    x0, y0 = (slot % 2) * (W // 2), (1 - slot // 2) * (H // 2)
+    # Match Blender pre-export V, not post-export glTF TEXCOORD_0.
+    x0, y0 = (slot % 2) * (W // 2), (slot // 2) * (H // 2)
     patch = canvas[y0:y0 + H // 2, x0:x0 + W // 2]
     occupied = painted[y0:y0 + H // 2, x0:x0 + W // 2]
     if not np.any(occupied):
