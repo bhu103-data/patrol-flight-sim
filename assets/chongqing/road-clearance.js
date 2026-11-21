@@ -248,8 +248,8 @@ export function clipRoadToDrySegments(points,width,riverDist,margin=1.5,minLengt
           if(dry(mid)===previous)lo=mid;
           else hi=mid;
         }
-        if(previous){append(lerp(a,lo));flush();}
-        else append(lerp(a,hi));
+        if(previous){append(lerp(a,b,lo));flush();}
+        else append(lerp(a,b,hi));
       }
       if(now&&step===probes)append(b);
       if(!now&&step===probes)flush();
