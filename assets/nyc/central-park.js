@@ -210,15 +210,16 @@ export function buildCentralPark({
   for(const z of [55.6,356.3])trail([[-41,z],[41,z]],1.3,granite);
   // Meadow surface follows the terrain; the opening between crown clusters
   // keeps all three recognisable lawns green and unobstructed from above.
-  function lawnEllipse(lawn){
-    const N=32,center=p(lawn.u,lawn.z,.105);
+  function lawnEllipse(meadow){
+    const N=32,center=p(meadow.u,meadow.z,.105);
     for(let i=0;i<N;i++){
       const angle=i/N*TAU,next=(i+1)/N*TAU;
       const r0=.96+.018*Math.sin(5*angle),r1=.96+.018*Math.sin(5*next);
-      const b=p(lawn.u+Math.cos(angle)*lawn.rx*r0,
-        lawn.z+Math.sin(angle)*lawn.rz*r0,.10);
-      const c=p(lawn.u+Math.cos(next)*lawn.rx*r1,
-        lawn.z+Math.sin(next)*lawn.rz*r1,.10);
+      const b=p(meadow.u+Math.cos(angle)*meadow.rx*r0,
+        meadow.z+Math.sin(angle)*meadow.rz*r0,.10);
+      const c=p(meadow.u+Math.cos(next)*meadow.rx*r1,
+        meadow.z+Math.sin(next)*meadow.rz*r1,.10);
+      // lawn is the outer RGB material, not the current meadow definition.
       addTri(center,c,b,i%4===0?[.27,.42,.23]:lawn);
     }
   }

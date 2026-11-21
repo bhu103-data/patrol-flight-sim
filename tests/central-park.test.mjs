@@ -147,3 +147,25 @@ test('Manhattan starts sharper, with frame-time adaptation still enabled',()=>{
  assert.match(html,/resScale = Math\.min\(limit, resScale \+ 0\.10\)/);
  assert.match(html,/#wrap\.smooth-city canvas\{image-rendering:auto/);
 });
+
+test('park triangles carry finite RGB material arrays accepted by real mesh uploader',()=>{
+ for(const quality of ['low','high']){
+  let triangleCount=0;
+  const check=(color)=>{
+   assert.ok(Array.isArray(color),'mesh callback requires iterable RGB');
+   assert.equal(color.length,3,'mesh requires 3 color channels');
+   assert.ok(color.every(Number.isFinite),'mesh color channels must be finite');
+  };
+  const stats=park.buildCentralPark({
+   grid:cityGrid,quality,waterY:12.2,streetY:14.86,
+   terrainAt:(x,z)=>15.5+.12*Math.cos(x/30)+.13*Math.sin(z/24),
+   addTri:(a,b,c,rgb)=>{triangleCount++;check(rgb);},
+   addQuad:(a,b,c,d,rgb)=>check(rgb),
+   box:(x,y,z,w,h,d,rgb)=>check(rgb),
+   beam:(a,b,w,rgb)=>check(rgb),
+   ribbon:(a,b,w,rgb)=>check(rgb)
+  });
+  assert.ok(triangleCount>6000);
+  assert.equal(stats.waterBodies,6);
+ }
+});
