@@ -571,14 +571,15 @@ for(let i=0;i<52;i++){
 const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
 scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0x8fa5b4,size:1.2,sizeAttenuation:false,transparent:true,opacity:.4})));
 
-// The pilot uses rounded anatomical proportions, tapered limbs and a small detailed helmet.
-// All shapes are original game geometry, not an unlicensed third-party character mesh.
+// Slim adult proportions, a close-fitting flight helmet and restrained flight-suit PBR.
+// Authored from local geometry (not a third-party character scan); keep the old
+// rig pivots and collision dimensions so movement/hotpot flight remain unchanged.
 const avatar=new THREE.Group();scene.add(avatar);
 const pilotMetal=new THREE.MeshStandardMaterial({color:0x8c979e,metalness:.82,roughness:.29});
 const pilotLens=new THREE.MeshPhysicalMaterial({color:0x5e99b2,metalness:.55,roughness:.15,clearcoat:.75,clearcoatRoughness:.12,emissive:0x15394a,emissiveIntensity:.25});
 const pilotDark=new THREE.MeshStandardMaterial({color:0x23282e,roughness:.73,metalness:.16});
-const pilotJacket=new THREE.MeshStandardMaterial({color:0x505147,roughness:.93});
-const pilotCloth=new THREE.MeshStandardMaterial({color:0x773f37,roughness:.91});
+const pilotJacket=new THREE.MeshStandardMaterial({color:0x424a47,roughness:.90});
+const pilotCloth=new THREE.MeshStandardMaterial({color:0x525750,roughness:.88});
 const pilotBoot=new THREE.MeshStandardMaterial({color:0x2f3031,roughness:.78,metalness:.08});
 const pilotSkin=new THREE.MeshStandardMaterial({color:0xb7866b,roughness:.93});
 const pilotLimbs={arms:[],legs:[],boots:[]};
@@ -589,31 +590,31 @@ function pilotMesh(geometry,material,x,y,z,parent=avatar){
   mesh.position.set(x,y,z);parent.add(mesh);return mesh;
 }
 // Tapered jacket with shoulders, collar, leather waist belt and a separate pelvis.
-pilotMesh(new THREE.CylinderGeometry(.56,.40,1.43,18),pilotJacket,0,-.69,0);
-pilotMesh(new THREE.CylinderGeometry(.39,.37,.43,16),M.pants,0,-1.51,0);
-pilotMesh(new THREE.CylinderGeometry(.47,.47,.16,16),pilotDark,0,-1.34,0);
+pilotMesh(new THREE.CylinderGeometry(.49,.35,1.51,24),pilotJacket,0,-.70,0);
+pilotMesh(new THREE.CylinderGeometry(.34,.33,.37,20),M.pants,0,-1.55,0);
+pilotMesh(new THREE.CylinderGeometry(.37,.37,.13,20),pilotDark,0,-1.35,0);
 pilotMesh(new THREE.CylinderGeometry(.19,.22,.2,12),pilotSkin,0,.10,0);
-pilotMesh(new THREE.SphereGeometry(.365,20,14),pilotSkin,0,.57,-.03);
-const helmet=pilotMesh(new THREE.SphereGeometry(.415,22,16,0,Math.PI*2,0,Math.PI*.57),pilotDark,0,.67,0);
-pilotMesh(new THREE.CylinderGeometry(.44,.43,.1,20),pilotMetal,0,.61,.03);
-const gogglesStrap=pilotMesh(new THREE.CylinderGeometry(.384,.386,.13,20),pilotDark,0,.56,-.015);
+pilotMesh(new THREE.SphereGeometry(.292,24,18),pilotSkin,0,.54,-.03);
+const helmet=pilotMesh(new THREE.SphereGeometry(.354,28,18,0,Math.PI*2,0,Math.PI*.59),pilotDark,0,.62,0);
+pilotMesh(new THREE.CylinderGeometry(.365,.36,.075,24),pilotMetal,0,.56,.03);
+const gogglesStrap=pilotMesh(new THREE.CylinderGeometry(.335,.337,.08,24),pilotDark,0,.50,-.015);
 for(const dir of [-1,1]){
   // Smoked anti-glare flight goggles have reflective curved lenses with metal retaining rings.
-  const lens=pilotMesh(new THREE.SphereGeometry(.175,16,12),pilotLens,dir*.188,.58,-.353);
-  lens.scale.set(1,.83,.33);
-  const ring=pilotMesh(new THREE.TorusGeometry(.175,.028,7,20),pilotMetal,dir*.188,.58,-.407);
+  const lens=pilotMesh(new THREE.SphereGeometry(.135,20,14),pilotLens,dir*.145,.53,-.303);
+  lens.scale.set(1,.76,.28);
+  const ring=pilotMesh(new THREE.TorusGeometry(.134,.018,8,24),pilotMetal,dir*.145,.53,-.348);
   ring.rotation.y=dir*.075;
-  pilotMesh(new THREE.SphereGeometry(.12,10,8),pilotMetal,dir*.40,.57,-.02);
+  pilotMesh(new THREE.SphereGeometry(.085,12,10),pilotMetal,dir*.34,.51,-.025);
   // Shoulder-origin pivots produce a believable run animation.
-  const armPivot=new THREE.Group();armPivot.position.set(dir*.60,-.20,0);avatar.add(armPivot);
-  const upper=pilotMesh(new THREE.CapsuleGeometry(.20,.49,6,12),pilotJacket,dir*.04,-.43,.01,armPivot);
+  const armPivot=new THREE.Group();armPivot.position.set(dir*.515,-.21,0);avatar.add(armPivot);
+  const upper=pilotMesh(new THREE.CapsuleGeometry(.165,.59,8,14),pilotJacket,dir*.04,-.47,.01,armPivot);
   upper.rotation.z=dir*.12;
-  pilotMesh(new THREE.SphereGeometry(.19,12,10),pilotDark,dir*.08,-.90,-.015,armPivot);
+  pilotMesh(new THREE.SphereGeometry(.145,12,10),pilotDark,dir*.08,-.91,-.015,armPivot);
   pilotLimbs.arms.push(armPivot);
-  const legPivot=new THREE.Group();legPivot.position.set(dir*.255,-1.46,0);avatar.add(legPivot);
-  pilotMesh(new THREE.CapsuleGeometry(.21,.60,7,12),M.pants,0,-.39,.018,legPivot);
-  const boot=pilotMesh(new THREE.SphereGeometry(1,15,11),pilotBoot,0,-.97,-.13,legPivot);
-  boot.scale.set(.265,.19,.39);
+  const legPivot=new THREE.Group();legPivot.position.set(dir*.215,-1.50,0);avatar.add(legPivot);
+  pilotMesh(new THREE.CapsuleGeometry(.174,.78,8,14),M.pants,0,-.47,.018,legPivot);
+  const boot=pilotMesh(new THREE.SphereGeometry(1,18,12),pilotBoot,0,-1.02,-.13,legPivot);
+  boot.scale.set(.232,.16,.34);
   pilotLimbs.legs.push(legPivot);pilotLimbs.boots.push(boot);
   // Sturdy backpack harness, front straps and back-side buckles.
   const strap=pilotMesh(new THREE.BoxGeometry(.11,1.55,.12),pilotMetal,dir*.38,-.66,-.43);
@@ -621,11 +622,10 @@ for(const dir of [-1,1]){
 }
 const scarf=pilotMesh(new THREE.TorusGeometry(.38,.075,8,24),pilotCloth,0,.055,0);
 scarf.rotation.x=Math.PI/2;
-const flyingScarf=pilotMesh(new THREE.BoxGeometry(.90,.13,.22),pilotCloth,.61,.06,.26);
-flyingScarf.rotation.z=-.12;
+// No oversized, free-floating scarf: that was a stylized visual artifact.
 // More grounded metal jet unit: housing, exhaust collars and a small painted chili emblem.
-pilotMesh(new THREE.BoxGeometry(.85,1.13,.34),pilotDark,0,-.66,.51);
-pilotMesh(new THREE.BoxGeometry(.64,.83,.13),pilotMetal,0,-.61,.74);
+pilotMesh(new THREE.BoxGeometry(.70,1.02,.27),pilotDark,0,-.68,.47);
+pilotMesh(new THREE.BoxGeometry(.55,.72,.10),pilotMetal,0,-.64,.66);
 for(const dir of [-1,1]){
   pilotMesh(new THREE.BoxGeometry(.20,.86,.29),pilotMetal,dir*.35,-.68,.64);
   const nozzle=pilotMesh(new THREE.CylinderGeometry(.12,.20,.30,14),pilotDark,dir*.21,-1.22,.75);
