@@ -315,6 +315,11 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   }
   return {
     update,setQuality,
+    // Explicit snapshots are created only when inspected/tested, never each frame.
+    snapshot(){return {
+      vehicleGreen,signalPhase:signalTime%36,
+      vehicles:vehicles.map(v=>({x:v.x,z:v.z,side:v.side,tier:v.tier,dir:v.dir}))
+    }},
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
       streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,movingHeadlights:headlightCones.length,
       zebraStripes:zebra.count,trafficSignals:signalHeads.count,drawGroups:Object.keys(buffer).length+10},
