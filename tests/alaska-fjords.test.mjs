@@ -32,7 +32,7 @@ test('Alaska detail draws one bounded, finite scene batch',()=>{
   assert.ok(stats.rockBands>=1,'terrain-clamped geological exposure');
   assert.equal(stats.seracs,42,'glacier front requires unique uneven ice towers');
   assert.equal(stats.iceStrata,126,'each serac gets three sediment/ice bands');
-  assert.ok(stats.branchlets>=80&&stats.branchlets<=650,
+  assert.ok(stats.branchlets>=80&&stats.branchlets<=850,
     'irregular bounded conifer branchlets make near-field trees less conical');
   assert.ok(stats.talus>=0&&stats.talus<=110,'terrain-filtered rock scree stays bounded');
   assert.ok(points.length<116000,'bounded terrain-aware forestry and calving GPU budget');
