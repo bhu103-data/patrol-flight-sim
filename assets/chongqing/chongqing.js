@@ -28,14 +28,23 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#121c2a');
 scene.fog = new THREE.FogExp2(0x253345, 0.00072);
 
+// PATROL_CQ_ADAPTIVE_LIGHTING_V5: Low preset should not allocate the
+// hardware MSAA framebuffer (often costly on software WebGL browsers).
+const startupLowGpu=new URLSearchParams(location.search).get('quality')==='low';
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false, powerPreference:'high-performance'});
+  renderer = new THREE.WebGLRenderer({
+    canvas,antialias:!startupLowGpu,alpha:false,
+    powerPreference:'high-performance'
+  });
 } catch (error) {
   document.querySelector('#loading p').textContent = '无法启动 WebGL，请打开浏览器图形加速后重试。';
   throw error;
 }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+// Keep bootstrap framebuffer at 1x until scene-specific quality applies.
+// Otherwise high-DPI low-power devices allocate a redundant oversized
+// framebuffer before the adaptive budget is calculated.
+renderer.setPixelRatio(1);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -248,6 +257,7 @@ const plannedRoads=chongqingTerraceRoads(riverCenter);
 const skyline=createChongqingUrbanArchitecture({
   THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr,plannedRoads
 });
+skyline.setTimeOfDay(cqTimeSelect.value);
 
 // Roads are swept strips following terraces, not an infinite grid.
 function road(points,width,material=M.road){
@@ -490,6 +500,7 @@ wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
 cqTimeSelect.addEventListener('change',()=>{
   streetBuild.setTimeOfDay(cqTimeSelect.value);
   wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+  skyline.setTimeOfDay(cqTimeSelect.value);
 });
 const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // Each generated road is clipped against the FULL building footprint (plus a
@@ -749,7 +760,8 @@ window.addEventListener('keydown',e=>{
     cqTimeSelect.value=cqTimeOptions[(cqTimeOptions.indexOf(cqTimeSelect.value)+1)%cqTimeOptions.length];
     applyCinematicEnvironment(cqTimeSelect.value);
     streetBuild.setTimeOfDay(cqTimeSelect.value);
-    wetStreetBuild.setTimeOfDay(cqTimeSelect.value);return;
+    wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+    skyline.setTimeOfDay(cqTimeSelect.value);return;
   }
   if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
