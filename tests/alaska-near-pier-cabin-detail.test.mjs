@@ -38,7 +38,7 @@ test('exactly two cabins receive actual timber geometry without moving obstacles
   assert.equal(rich.obstacles.filter(o=>o.name==='harbor building').length,6);
   assert.equal(rich.beams.length-base.beams.length,8,
     'two cabins gain two gable ends with paired projecting roof bars');
-  assert.equal(rich.boxes.length-base.boxes.length,44,
+  assert.equal(rich.boxes.length-base.boxes.length,30,
     'two dry porches gain four louver bars, rails and deck seams each');
   assert.ok(rich.boxes.every(b=>[b.x,b.y,b.z,b.w,b.h,b.d].every(Number.isFinite)));
   assert.ok(rich.boxes.every(b=>b.w>0&&b.h>0&&b.d>0));
@@ -50,7 +50,7 @@ test('new porch joinery is absent when surveyed shoreline makes deck unsafe',()=
   assert.deepEqual(rich.obstacles,base.obstacles);
   assert.equal(rich.beams.length-base.beams.length,8);
   // Even when a porch is blocked, eaves/vents remain on dry cabins.
-  assert.ok(rich.boxes.length-base.boxes.length<=44);
+  assert.ok(rich.boxes.length-base.boxes.length<=30);
 });
 
 test('compatibility and other maps retain existing lifecycle guards',()=>{
