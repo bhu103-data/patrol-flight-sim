@@ -68,7 +68,7 @@ async function testMap(map,exercise){
       try{
         await page.waitForFunction(()=>{
           const label=document.querySelector('#gearStatus')?.textContent||'';
-          const taxi=label.match(/WATER TAXI (\\d+)/);
+          const taxi=label.match(/WATER TAXI (\d+)/);
           return (taxi && Number(taxi[1])>=2)||label.includes('ON STEP')||
             !document.querySelector('#crashOverlay')?.hidden;
         },null,{timeout:35000});
@@ -78,7 +78,7 @@ async function testMap(map,exercise){
         throw Error('C185 taxi never accelerated (last HUD '+label+'): '+error.message);
       }
       const taxi=(await page.locator('#gearStatus').textContent())||'';
-      if(!(/WATER TAXI [2-9]/.test(taxi)||/WATER TAXI [1-9]\\d+/.test(taxi)||
+      if(!(/WATER TAXI [2-9]/.test(taxi)||/WATER TAXI [1-9]\d+/.test(taxi)||
             taxi.includes('ON STEP')))
         throw Error('Floatplane water taxi not confirmed: '+taxi);
       await page.screenshot({path:'artifacts/floatplane-'+map+'-taxi.png'});
