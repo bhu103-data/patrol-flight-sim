@@ -5642,6 +5642,28 @@ const CENTRAL_PARK_SITES=[
               frontage,.24,h*.86,.13,mortar);
           }
         }
+        // Historic segmental brick window arches above the first warehouse
+        // mezzanine. These follow the same upper-window bay centers used
+        // below, rather than adding pasted-on decals or cloned box windows.
+        // Only selected near-field LOD3 bricks pay for the curved silhouettes.
+        if(detailBand===3 && h>10 && archType%3===0){
+          const bays=Math.max(2,Math.min(4,Math.floor(w/2.9)));
+          const stride=(w-.72)/bays;
+          const archSpan=Math.min(1.52,(w-.85)/bays*.68)+.14;
+          const brickLip=material.map(v=>Math.min(.82,v*1.14));
+          for(const side of [-1,1])for(let bay=0;bay<bays;bay++){
+            const cx=x+(bay-(bays-1)/2)*stride;
+            const face=z+side*(d*.5+.14);
+            const archPoint=t=>{
+              const u=t*2-1;
+              return [cx+u*archSpan*.5,
+                y+4.87+.32*(1-u*u),face];
+            };
+            for(let k=0;k<8;k++)
+              addRideBeam(addQuad,archPoint(k/8),archPoint((k+1)/8),
+                .047,brickLip);
+          }
+        }
         // Exterior service/fire escape on one facade: narrow mesh platforms,
         // railings and angled stair braces, not solid balcony cubes.
         const fireSide=(archType&1)?1:-1;
