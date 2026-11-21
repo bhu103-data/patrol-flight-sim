@@ -50,5 +50,5 @@ test('stays standing on a roof and never teleports up from underneath',()=>{
 test('empty city has no false-positive collision and preserves ground height',()=>{
   const c=new SpatialObstacleIndex([]);
   assert.equal(c.collides(0,0,0),false);
-  assert.equal(c.landingSurface(5,5,30,25,-2),.35);
+  assert.ok(Math.abs(c.landingSurface(5,5,30,25,-2)-.35)<1e-9);
 });
