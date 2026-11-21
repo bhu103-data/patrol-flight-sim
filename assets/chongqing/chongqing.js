@@ -196,15 +196,23 @@ const waterMaterial=new THREE.ShaderMaterial({
   ].join('\n')
 });
 function riverStrip(main=true){
-  const verts=[],inds=[],count=160;
+  const verts=[],inds=[],count=198,across=32;
   for(let i=0;i<=count;i++){
     const u=i/count;
-    let x,z,span;
-    if(main){x=-990+1980*u;z=riverCenter(x);span=76;}
-    else{z=-630+660*u;x=branchCenter(z);span=45;}
-    if(main) verts.push(x,-2.4,z-span,x,-2.4,z+span);
-    else verts.push(x-span,-2.5,z,x+span,-2.5,z);
-    if(i<count){const j=i*2;inds.push(j,j+1,j+2,j+1,j+3,j+2);}
+    const along=main?-990+1980*u:-630+660*u;
+    const center=main?riverCenter(along):branchCenter(along);
+    const span=main?76:45,level=main?-2.4:-2.5;
+    // Subdivide across the river so the wave below the floats is not the
+    // linear interpolation of shoreline vertices 150 metres apart.
+    for(let j=0;j<=across;j++){
+      const side=center+span*(2*j/across-1);
+      if(main)verts.push(along,level,side);
+      else verts.push(side,level,along);
+      if(i<count&&j<across){
+        const k=i*(across+1)+j,next=k+across+1;
+        inds.push(k,k+1,next,k+1,next+1,next);
+      }
+    }
   }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
@@ -1016,6 +1024,20 @@ function floatWaterSite(x,z,heading){
   }
   return true;
 }
+// Matches the Chongqing river vertex shader; sample float corners in world space.
+function cqFloatWavePose(x,z,heading,t){
+  const fx=Math.sin(heading),fz=-Math.cos(heading),rx=-fz,rz=fx;
+  const sample=(along,side)=>{
+    const px=x+fx*along+rx*side,pz=z+fz*along+rz*side;
+    const main=Math.abs(pz-riverCenter(px))<=76;
+    return (main?0:-.10)+.25*Math.sin(px*.065+t*1.1)+.17*Math.cos(pz*.13-t*.9);
+  };
+  const fl=sample(2.35,-1.27),fr=sample(2.35,1.27);
+  const al=sample(-2.35,-1.27),ar=sample(-2.35,1.27);
+  return {height:(fl+fr+al+ar)*.25,
+    pitch:Math.atan2((fl+fr-al-ar)*.5,4.7),
+    bank:Math.atan2((fr+ar-fl-al)*.5,2.54)};
+}
 function moveSharedFloatplane(dt){
   const turn=(Number(keys.has('KeyD')||keys.has('ArrowRight'))-
     Number(keys.has('KeyA')||keys.has('ArrowLeft')))+touchSideways;
@@ -1087,9 +1109,16 @@ function moveSharedFloatplane(dt){
     -Math.cos(state.heading)*f.speed);
   avatar.position.copy(state.pos);
   avatar.rotation.y=-state.heading;
-  avatar.rotation.x=-f.pitch;
-  avatar.rotation.z+=(clamp(-turn*.09,-.22,.22)-avatar.rotation.z)*
-    (1-Math.exp(-dt*4));
+  if(f.waterborne){
+    const wave=cqFloatWavePose(state.pos.x,state.pos.z,state.heading,time);
+    avatar.position.y=-2.4+1.61+wave.height;
+    avatar.rotation.x=-wave.pitch;
+    avatar.rotation.z=wave.bank;
+  }else{
+    avatar.rotation.x=-f.pitch;
+    avatar.rotation.z+=(clamp(-turn*.09,-.22,.22)-avatar.rotation.z)*
+      (1-Math.exp(-dt*4));
+  }
   if(seaplaneRoot)seaplaneRoot.position.y=0;
 }
 

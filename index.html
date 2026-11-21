@@ -1505,6 +1505,36 @@ const CENTRAL_PARK_SITES=[
       return [k*Math.cos(a),k*Math.sin(a),Math.sqrt(9.81*k*1.18),j*2.37+scale*0.17,k,h];
     });
   });
+  // Same spectrum, phase, coast attenuation and clock as WORLD_FS.
+  // Render-only: the buoyancy pose never changes collision or takeoff logic.
+  function floatOceanHeight(x,z,t,depth,map){
+    if(map.vegas||map.dc||map.airfield||depth<=.12)return 0;
+    const ease=(a,b,v)=>{
+      const q=Math.max(0,Math.min(1,(v-a)/(b-a)));
+      return q*q*(3-2*q);
+    };
+    let height=0;
+    for(let i=0;i<oceanModes.length;i++){
+      const [kx,kz,omega,phase,,amp]=oceanModes[i];
+      height+=Math.sin(kx*x+kz*z-omega*t+phase)*amp*
+        (i<6?ease(0,3.2,depth):ease(.06,.72,depth));
+    }
+    const exposure=map.city?1-.62*ease(-560,-300,z):1;
+    return height*exposure*(map.alaska?.30:1);
+  }
+  function floatOceanPose(x,z,yaw,t,map,water,terrain){
+    const fx=Math.sin(yaw),fz=Math.cos(yaw),rx=fz,rz=-fx;
+    const sample=(along,side)=>{
+      const px=x+fx*along+rx*side,pz=z+fz*along+rz*side;
+      return floatOceanHeight(px,pz,t,water-terrain(px,pz),map);
+    };
+    const fl=sample(2.35,-1.27),fr=sample(2.35,1.27);
+    const al=sample(-2.35,-1.27),ar=sample(-2.35,1.27);
+    const left=(fl+al)*.5,right=(fr+ar)*.5;
+    const pitch=Math.atan2((fl+fr-al-ar)*.5,4.7);
+    const bank=Math.atan2(right-left,2.54);
+    return {height:(left+right)*.5,left,right,pitch,bank};
+  }
   const oceanVec4 = mode => 'vec4('+mode.slice(0,4).map(x=>x.toFixed(8)).join(',')+')';
   const oceanVec2 = mode => 'vec2('+mode.slice(4).map(x=>x.toFixed(8)).join(',')+')';
   const WORLD_FS = `#version 300 es
@@ -11625,15 +11655,15 @@ const CENTRAL_PARK_SITES=[
   btnBoost.addEventListener('touchstart', (e) => { e.preventDefault(); if (!flying) return; plane.afterburner = true; btnBoost.classList.add('active'); }, { passive: false });
   btnBoost.addEventListener('touchend', (e) => { e.preventDefault(); plane.afterburner = false; btnBoost.classList.remove('active'); }, { passive: false });
 
-  function getPlaneBasis() {
+  function getPlaneBasis(pitch=plane.pitch,bank=plane.bank,rollAnim=plane.rollAnim) {
     const cy = Math.cos(plane.yaw), sy = Math.sin(plane.yaw);
-    const cp = Math.cos(plane.pitch), sp = Math.sin(plane.pitch);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const fwd = [sy * cp, sp, cy * cp];
     const worldUp = [0, 1, 0];
     let right = v3Norm(v3Cross(worldUp, fwd));
     let up = v3Cross(fwd, right);
 
-    const totalRoll = plane.bank + (plane.rollAnim > 0 ? plane.rollAnim * Math.PI * 2 * plane.rollDir : 0);
+    const totalRoll = bank + (rollAnim > 0 ? rollAnim * Math.PI * 2 * plane.rollDir : 0);
     const cr = Math.cos(totalRoll), sr = Math.sin(totalRoll);
     const rRolled = [
       right[0] * cr + up[0] * sr,
@@ -13136,7 +13166,8 @@ const CENTRAL_PARK_SITES=[
     if(Math.hypot(x-camPos[0],z-camPos[2])>226)return;
     const width=boat.halfWidth,length=boat.halfLength;
     const lift=(boat.washScale??1)*(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
-    const transform=mat4FromBasis([x,WATER_H+0.027,z],right.map(v=>v*width),
+    const washLevel=WATER_H+(boat.waveHeight??0);
+    const transform=mat4FromBasis([x,washLevel+0.027,z],right.map(v=>v*width),
       [0,lift,0],front.map(v=>v*length));
     drawMesh(bowWaveMeshes.water,transform);
     drawMesh(bowWaveMeshes.foam,transform);
@@ -13144,7 +13175,7 @@ const CENTRAL_PARK_SITES=[
       const t=(sceneryTime*(0.72+0.14*i)+boat.phase+i*0.27)%1;
       const across=side*width*(0.67+t*0.70);
       const along=length*(0.83-i*0.16-t*0.30);
-      const p=[x+right[0]*across+front[0]*along,WATER_H+0.24*(boat.washScale??1)+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
+      const p=[x+right[0]*across+front[0]*along,washLevel+0.24*(boat.washScale??1)+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
         z+right[2]*across+front[2]*along];
       if(t>0.075&&t<0.87)drawMesh(bowWaveMeshes.spray,mat4FromBasis(p,right,worldUp,front,(boat.washScale??1)*(1.0-t*0.58)));
     }
@@ -14250,6 +14281,9 @@ const CENTRAL_PARK_SITES=[
     drawMapScenery(drawMeshWithOutline);
     drawSphereShow(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
+    const floatWave=selectedAircraft==='seaplane'&&waterborne&&!crash
+      ?floatOceanPose(plane.pos[0],plane.pos[2],plane.yaw,Math.fround(time),
+        selectedMap,WATER_H,sampleTerrainHeight):null;
     if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5){
       // Both float chines generate wash. A boat-sized wake at the fuselage
       // center hid the two contact points and produced oversized spray.
@@ -14257,7 +14291,7 @@ const CENTRAL_PARK_SITES=[
       for(const side of [-1,1]){
         const offset=side*1.27;
         drawHullWash(drawMeshWithOutline,{halfWidth:.42,halfLength:2.65,
-          phase:side<0?.37:0,washScale},plane.pos[0]+basis.right[0]*offset,
+          phase:side<0?.37:0,washScale,waveHeight:side<0?floatWave?.left:floatWave?.right},plane.pos[0]+basis.right[0]*offset,
           plane.pos[2]+basis.right[2]*offset,basis.fwd,basis.right);
       }
     }
@@ -14271,7 +14305,12 @@ const CENTRAL_PARK_SITES=[
         !(harborArtInspection&&selectedMap.alaska)) {
       // Camera zoom must not enlarge the floats below their physics waterline.
       const planeScale = viewIdx === 2 && selectedAircraft!=='seaplane' ? 1.45 : 1.0;
-      const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
+      let modelPos=plane.pos, modelBasis=basis;
+      if(floatWave){
+        modelPos=[plane.pos[0],WATER_H+FLOAT_CLEARANCE+floatWave.height,plane.pos[2]];
+        modelBasis=getPlaneBasis(floatWave.pitch,floatWave.bank,0);
+      }
+      const planeModel=mat4FromBasis(modelPos,modelBasis.right,modelBasis.up,modelBasis.fwd,planeScale);
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
 
       if (selectedAircraft === "fighter") {
