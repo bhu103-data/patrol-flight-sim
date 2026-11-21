@@ -3170,6 +3170,11 @@ const CENTRAL_PARK_SITES=[
           fogExtinction=mix(fogExtinction,0.0008+0.009*uAtmosphere.w,
                             clamp(uAtmosphere.y,0.0,1.0));
         float haze=1.0-exp(-distanceToEye*fogExtinction);
+        // WORLD_FS.applyFog caps its color blend at 96%. Only during NYC
+        // twilight, match that cap so thick fog does not erase the distant
+        // mesh skyline faster than the terrain and harbor behind it.
+        if(uManhattanView)
+          haze=mix(haze,min(haze,0.96),clamp(uAtmosphere.y,0.0,1.0));
         vec3 horizon=mix(vec3(0.084,0.10,0.17),vec3(0.64,0.73,0.79),uAtmosphere.x);
         if(uManhattanView){
           float sunward=max(dot(normalize(vWorld-uEye),uSun),0.0);
