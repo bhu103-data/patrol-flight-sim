@@ -144,6 +144,34 @@ test('landmark and background geometry still fit instance buffers',()=>{
     assert.ok(mesh.writes<=mesh.capacity);
   }
 });
+test('scenic Chongqing facades have real window reveal, glass, mullion and sill geometry',()=>{
+  const {sceneObjects,urban,obstacles}=generate();
+  assert.ok(urban.stats.facadeBuildings>=8,'close riverfront still has architectural details');
+  assert.ok(urban.stats.facadeBuildings<=44,'detail stays bounded to hero towers');
+  assert.ok(urban.stats.facadePanels>=150,'enough 3D window bays to avoid empty box faces');
+  assert.ok(urban.stats.facadePanels<=3200,'bounded glass and trim budgets');
+  const groups=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===3200);
+  assert.equal(groups.length,4,'four facade instanced batches, not per-window draw calls');
+  for(const group of groups){
+    assert.equal(group.count,urban.stats.facadePanels);
+    assert.ok(group.writes<=group.capacity,'no GPU instance overflow');
+  }
+  const shops=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===32);
+  assert.equal(shops.length,2,'shared storefront glazing and canopy batches');
+  assert.ok(urban.stats.storefronts<=32);
+  assert.ok(shops.every(g=>g.count===urban.stats.storefronts));
+  // The facade glass is retained for low-detail aircraft views; tiny physical
+  // trims and projecting canopies are only drawn in higher-quality scenes.
+  urban.setQuality('low');
+  assert.equal(groups[0].visible,false);
+  assert.equal(groups[1].visible,true);
+  assert.equal(groups[2].visible,false);
+  assert.equal(groups[3].visible,false);
+  urban.setQuality('normal');
+  assert.ok(groups.every(g=>g.visible!==false));
+  assert.ok(obstacles.length>200,'building collisions remain in the scene');
+});
+
 test('clipping is deterministic and does not accidentally empty the city',()=>{
   const a=generate(),b=generate();
   assert.equal(a.urban.stats.towers,b.urban.stats.towers);
