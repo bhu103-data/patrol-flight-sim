@@ -10595,9 +10595,15 @@
 
   async function launchFlight(event) {
     event.preventDefault();
-    // Chongqing is an isolated, additive 3D pilot level; existing maps keep their renderer.
+    // PATROL_CQ_CINEMATIC_V2: use the same map launcher/environment
+    // selection as NYC; Chongqing retains walking and jetpack gameplay.
     if (new FormData(flightSetup).get('flightMap') === 'chongqing') {
-      window.location.assign('./chongqing.html');
+      const selectedHour=document.getElementById('skyTime')?.value||'auto';
+      const hour=Number(selectedHour);
+      const time=selectedHour==='auto'?'dusk':
+        hour>=6&&hour<16?'day':
+        hour>=16&&hour<20?'dusk':'night';
+      window.location.assign('./chongqing.html?'+new URLSearchParams({time}));
       return;
     }
     if (loading) return;
