@@ -96,9 +96,15 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
  const roof=new THREE.InstancedMesh(unit,roofMat,360);
  const balconies=new THREE.InstancedMesh(unit,balconyMat,2200);
  const acs=new THREE.InstancedMesh(unit,acMat,900);
- const windows=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),
-   new THREE.MeshBasicMaterial({color:0xffe6b5,side:THREE.DoubleSide,
-     transparent:true,opacity:.68,depthWrite:false}),4800);
+ // PATROL_CQ_ADAPTIVE_LIGHTING_V5: glazing stays in the PBR atlas.
+ // Sparse interior lights disappear by day to avoid unrealistic glow
+ // and cut one transparent draw of thousands of windows.
+ const interiorLightMaterial=new THREE.MeshBasicMaterial({
+   color:0xffe6b5,side:THREE.DoubleSide,
+   transparent:true,opacity:.38,depthWrite:false
+ });
+ const windows=new THREE.InstancedMesh(
+   new THREE.PlaneGeometry(1,1),interiorLightMaterial,4800);
  const stats={towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
    residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,skippedAdjacentBuilding:0};
  const glassGlow=new THREE.Color(), color=new THREE.Color();
@@ -211,8 +217,22 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    if(n>0)mesh.computeBoundingSphere();
    scene.add(mesh);
  }
- return {stats,setQuality(mode){
-   const low=mode==='low';balconies.visible=!low;acs.visible=!low;
-   windows.visible=!low;
- }};
+ let lowDetail=false,timeOfDay='dusk';
+ function updateInteriorLight(){
+   windows.visible=!lowDetail&&timeOfDay!=='day';
+   interiorLightMaterial.opacity=timeOfDay==='night'?.76:.38;
+ }
+ updateInteriorLight();
+ return {stats,
+   setTimeOfDay(preset){
+     timeOfDay=['day','dusk','night'].includes(preset)?preset:'dusk';
+     updateInteriorLight();
+   },
+   setQuality(mode){
+     lowDetail=mode==='low';
+     balconies.visible=!lowDetail;
+     acs.visible=!lowDetail;
+     updateInteriorLight();
+   }
+ };
 }

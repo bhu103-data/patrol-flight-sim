@@ -98,4 +98,22 @@ test('emissive window decals sit on their actual stepped facade, not in mid-air'
  assert.equal(glass.visible,false);
  built.setQuality('normal');
  assert.equal(glass.visible,true);
+ // PATROL_CQ_ADAPTIVE_LIGHTING_V5: lighting and LOD are independent.
+ built.setTimeOfDay('day');
+ assert.equal(glass.visible,false,'Daytime facades should not emit night lighting');
+ built.setTimeOfDay('dusk');
+ assert.equal(glass.visible,true,'Dusk selectively reveals interior light');
+ assert.equal(glass.material.opacity,.38);
+ built.setTimeOfDay('night');
+ assert.equal(glass.visible,true);
+ assert.equal(glass.material.opacity,.76);
+ built.setQuality('low');
+ assert.equal(glass.visible,false,'Low preset disables transparent decals at night');
+ built.setTimeOfDay('day');
+ built.setQuality('normal');
+ assert.equal(glass.visible,false,'Returning to normal quality in daylight stays unlit');
+ built.setTimeOfDay('night');
+ assert.equal(glass.visible,true,'Night mode restores lights without rebuilding geometry');
+ built.setTimeOfDay('anything-else');
+ assert.equal(glass.visible,true,'Unknown preset falls back to dusk');
 });
