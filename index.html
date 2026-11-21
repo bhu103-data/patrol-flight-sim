@@ -5057,21 +5057,28 @@
       addVegasLettering(lights.addQuad,'BROOKLYN BRIDGE',(u,v)=>[approach-0.105,y+2.54+v,boardZ-u],4.66,0.43,[0.94,0.97,0.89]);
       // Two geometry streams: original screen color fallback + UV-textured
       // artwork, batched as just one draw call per branch.
+      // PATROL_NYC_UNIQUE_ADS_V6: collect once; give every panel its own UV tile.
       const screens=createTriangleMesh(),oldScreens=createTriangleMesh(),adPanels=[];
       const ledQuad=(a,b,c,d,color,label)=>{
         const index=adPanels.length;
-        oldScreens.addQuad(a,b,c,d,color);
-        if(index>=64){screens.addQuad(a,b,c,d,color);return;}
-        const row=Math.floor(index/8),col=index%8,pad=.00085;
-        const u0=col/8+pad,u1=(col+1)/8-pad;
-        const vTop=1-row/8-pad,vBottom=1-(row+1)/8+pad;
+        const shift=0.16*Math.sin((index+1)*2.3999632297);
+        const uniqueFallback=color.map((v,i)=>Math.max(0,Math.min(1,
+          v*(0.85+shift)+0.045*Math.sin(index*13.71+i*3.1))));
+        oldScreens.addQuad(a,b,c,d,uniqueFallback);
+        adPanels.push({label,color,panelId:'times-square-'+index,a,b,c,d});
+      };
+      buildTimesSquareDistrict({box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
+      const ledColumns=Math.max(8,Math.ceil(Math.sqrt(adPanels.length)));
+      for(let i=0;i<adPanels.length;i++){
+        const {a,b,c,d}=adPanels[i],row=Math.floor(i/ledColumns),
+          col=i%ledColumns,pad=.00085;
+        const u0=col/ledColumns+pad,u1=(col+1)/ledColumns-pad;
+        const vTop=1-row/ledColumns-pad,vBottom=1-(row+1)/ledColumns+pad;
         screens.addQuad(a,b,c,d,[
           [u0,vBottom,1],[u1,vBottom,1],
           [u1,vTop,1],[u0,vTop,1]
         ]);
-        adPanels.push({label,color});
-      };
-      buildTimesSquareDistrict({box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
+      }
       timesSquareScreens=screens.upload();
       timesSquareFallback=oldScreens.upload();
       const generation=nycLedGeneration;
