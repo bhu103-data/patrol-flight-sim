@@ -10995,9 +10995,13 @@ const CENTRAL_PARK_SITES=[
     // A dedicated view looks north toward the OTI financial-district
     // south elevations from the harbor approach, exposing real mesh detail
     // rather than a skyline-only silhouette in QA screenshots.
-    {name:'Lower Manhattan · Window Facades',x:-98,z:-452,height:16,
-      bearing:192,radius:42,rise:8,
-      detail:'Inspect near-field masonry, projecting metal jambs, glass and window sills'},
+    // PATROL_NYC_OTI_HARBOR_CAMERA_CLEAR_V2: the previous 192°/42-unit
+    // viewpoint fell between adjacent tall facades, creating an almost
+    // uniform screenshot. Observe the south-facing OTI walls from OPEN
+    // harbor to the southwest, outside the compressed parcel envelope.
+    {name:'Lower Manhattan · Window Facades',x:-98,z:-452,height:15,
+      bearing:228,radius:82,rise:17,
+      detail:'Harbor-side view of OTI masonry, projecting metal jambs, glass and window sills'},
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
       detail:'Wedge-shaped masonry landmark'},
     {name:'Skyline Rescue',x:40,z:-70,height:31,bearing:156,radius:67,rise:18,
