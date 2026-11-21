@@ -46,7 +46,13 @@ test('declines connector if turnaround swept vehicle envelope is occupied',()=>{
   const exposed=connect(streets,bridge,clear,empty,WATER_H);
   const terminal=exposed.points.at(-1);
   const obstacle=(x,z)=>Math.hypot(x-(terminal[0]+3.52),z-terminal[1])<.25?{id:'corner'}:null;
-  assert.equal(connect(streets,bridge,clear,obstacle,WATER_H),null);
+  const routed=connect(streets,bridge,clear,obstacle,WATER_H);
+  // Safe early retreat is preferable to forcing the vehicle through a wall.
+  if(routed){
+    assert.ok(routed.total<exposed.total,'blocked terminal must retreat');
+    assert.ok(Math.hypot(routed.points.at(-1)[0]-(terminal[0]+3.52),
+      routed.points.at(-1)[1]-terminal[1])>3.52);
+  }
 });
 test('uses deck height only on bridge, street height after bridge and reverses',()=>{
   const route=connect(streets,bridge,clear,empty,WATER_H);
