@@ -513,18 +513,24 @@ fire.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 fire.frustumCulled=false;
 const particles=Array.from({length:100},()=>({life:0,age:0,p:new THREE.Vector3(),v:new THREE.Vector3(),size:1}));
 for(let i=0;i<100;i++){fire.setColorAt(i,new THREE.Color(i%3===0?'#fff0a2':i%3===1?'#ffac32':'#f44a21'));dummy.scale.set(0,0,0);dummy.position.set(0,-999,0);dummy.updateMatrix();fire.setMatrixAt(i,dummy.matrix);}
+fire.visible=false;
 scene.add(fire);
-let particleCursor=0,emitAccumulator=0;
+let particleCursor=0,emitAccumulator=0,flameLifetime=0;
 function spawnFlame(){
   const p=particles[particleCursor++%particles.length];
   p.life=.35+rand()*.47;p.age=0;p.size=.5+rand()*1.5;
-  const backward=new THREE.Vector3(-Math.sin(state.heading),0,Math.cos(state.heading));
-  p.p.copy(state.pos).addScaledVector(backward,.8).add(new THREE.Vector3((rand()-.5)*.45,-1.2,(rand()-.5)*.45));
-  p.v.copy(backward).multiplyScalar(10+rand()*17);
-  p.v.y=-7+rand()*6;
+  const sx=-Math.sin(state.heading),sz=Math.cos(state.heading);
+  p.p.set(state.pos.x+sx*.8+(rand()-.5)*.45,state.pos.y-1.2,state.pos.z+sz*.8+(rand()-.5)*.45);
+  const thrust=10+rand()*17;
+  p.v.set(sx*thrust,-7+rand()*6,sz*thrust);
+  flameLifetime=Math.max(flameLifetime,p.life);
 }
 function updateFlames(dt){
-  if(state.spicy>0&&(state.flying||state.boosting)){
+  const active=state.spicy>0&&(state.flying||state.boosting);
+  if(!active&&flameLifetime<=0){fire.visible=false;return;}
+  fire.visible=true;
+  flameLifetime=Math.max(0,flameLifetime-dt);
+  if(active){
     emitAccumulator+=dt*(state.boosting?120:44);
     while(emitAccumulator>=1){spawnFlame();emitAccumulator--;}
   }else emitAccumulator=0;
