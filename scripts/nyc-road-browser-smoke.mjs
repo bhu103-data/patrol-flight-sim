@@ -37,6 +37,24 @@ function screenshotPixels(bytes){
   nearBlackFraction:black/Math.max(count,1),
   upperSkyFraction:visibleHarborSkyFraction(img)};
 }
+// Narrow screenshot ROI corresponding to the previously verified blank
+// FID 384606 right foreground (at the fixed 1280x720, zoom-42 camera).
+// This is a pixel-backed *local wall detail* test, not a realism score.
+function timesWallDetail(bytes){
+ const img=PNG.sync.read(bytes);
+ const bounds=[930,1180,190,320],scaleX=img.width/1280,scaleY=img.height/720;
+ let samples=0,coolGlass=0,sum=0,sum2=0;
+ for(let y=Math.round(bounds[2]*scaleY);y<bounds[3]*scaleY;y+=5)
+  for(let x=Math.round(bounds[0]*scaleX);x<bounds[1]*scaleX;x+=5){
+   const i=(y*img.width+x)*4,r=img.data[i],g=img.data[i+1],b=img.data[i+2];
+   const value=(r+g+b)/3;
+   samples++;sum+=value;sum2+=value*value;
+   if(b>r+5)coolGlass++;
+  }
+ const mean=sum/Math.max(1,samples);
+ return {bounds,samples,coolGlassFraction:coolGlass/Math.max(1,samples),
+   colorStdDev:Math.sqrt(Math.max(0,sum2/Math.max(1,samples)-mean*mean))};
+}
 // HUD panels overlap the canvas in the browser compositor. Even an
 // element.screenshot() includes those overlays unless we hide them.
 // The temporary class preserves canvas visibility and is always removed,
@@ -66,6 +84,13 @@ async function capture(name){
    path:out+'/'+name,animations:'allow',timeout:75000
   });
   const stats=screenshotPixels(image);
+  if(name==='05-times-square-street.png'){
+    stats.rightWall=timesWallDetail(image);
+    check(stats.rightWall.coolGlassFraction>=.025 &&
+      stats.rightWall.colorStdDev>=3.5,
+      'Times Square FID 384606 street wall is still visually blank: '+
+       JSON.stringify(stats.rightWall));
+  }
   captureTimings[name]=Date.now()-started;
   check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
    stats.nearBlackFraction<.97,
