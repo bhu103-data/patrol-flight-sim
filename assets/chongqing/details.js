@@ -1,6 +1,6 @@
 // PATROL Chongqing detailed hero zone — authored locally from procedural geometry.
 // No textures or meshes copied from other games. Deliberately localized for small download size.
-export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles}) {
+export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr=null}) {
   const unit=new THREE.BoxGeometry(1,1,1);
   const up=new THREE.Vector3(0,1,0);
   const dummy=new THREE.Object3D();
@@ -42,16 +42,16 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     texture.anisotropy=4;texture.generateMipmaps=true;
     return texture;
   }
-  const roofTexture=tiledTexture('roof'),stoneTexture=tiledTexture('stone'),woodTexture=tiledTexture('wood');
+  const woodTexture=tiledTexture('wood');
   const materials={
     timber:new THREE.MeshStandardMaterial({color:0x9f6855,map:woodTexture,bumpMap:woodTexture,bumpScale:.025,roughness:.79}),
     carved:new THREE.MeshStandardMaterial({color:0xbd8b62,map:woodTexture,roughness:.67}),
-    terra:new THREE.MeshStandardMaterial({color:0x8c5555,map:roofTexture,bumpMap:roofTexture,bumpScale:.05,roughness:.72}),
+    terra:pbr?.roof??new THREE.MeshStandardMaterial({color:0x5d6061,roughness:.86}),
     rail:new THREE.MeshStandardMaterial({color:0x7e8791,metalness:.52,roughness:.5}),
-    stone:new THREE.MeshStandardMaterial({color:0xb6adb0,map:stoneTexture,bumpMap:stoneTexture,bumpScale:.04,roughness:.91}),
+    stone:pbr?.stone??new THREE.MeshStandardMaterial({color:0xb6adb0,roughness:.91}),
     paving:new THREE.MeshStandardMaterial({color:0x55545a,roughness:.96}),
-    steps:new THREE.MeshStandardMaterial({color:0xbdb2a9,map:stoneTexture,roughness:.89}),
-    window:new THREE.MeshBasicMaterial({color:0xffcf86}),
+    steps:pbr?.cutStone??new THREE.MeshStandardMaterial({color:0xbdb2a9,roughness:.89}),
+    window:pbr?.window??new THREE.MeshBasicMaterial({color:0xffcf86}),
     neon:new THREE.MeshBasicMaterial({color:0xffbd70}),
     red:new THREE.MeshBasicMaterial({color:0xff4142}),
     bridge:new THREE.MeshStandardMaterial({color:0xa7232c,metalness:.46,roughness:.38,emissive:0x7c0917,emissiveIntensity:.4}),
