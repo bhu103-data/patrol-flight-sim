@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {decodeVegasRidgeDEM,loadVegasRidgeDEM} from '../assets/vegas/usgs-ridges.js';
 const bbox=[-115.395,36.035,-114.965,36.245];
 const fixture=()=>({
@@ -33,4 +34,16 @@ test('bad asset response triggers caller-safe rejection',async()=>{
  const payload=fixture();
  const got=await loadVegasRidgeDEM('/verified',async()=>({ok:true,json:async()=>payload}));
  assert.equal(got.elevationMeters.east.length,49);
+});
+test('committed Vegas ridge elevations match the verified USGS source',async()=>{
+ const payload=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const decoded=decodeVegasRidgeDEM(payload);
+ assert.equal(decoded.source.rawGeoTiffSHA256,'856259460e4e687285eb40949ab8764e7543ccf09e9f81177a8d2152bdb8046d');
+ assert.equal(decoded.elevationMeters.west.length,49);
+ assert.equal(decoded.elevationMeters.center.length,49);
+ assert.equal(decoded.elevationMeters.east.length,49);
+ assert.ok(Math.max(...decoded.elevationMeters.west)>1700);
+ assert.ok(Math.min(...decoded.elevationMeters.center)>600);
+ assert.ok(Math.max(...decoded.elevationMeters.east)>1100);
+ assert.equal(payload.rasterExtentWgs84.length,4);
 });
