@@ -378,6 +378,16 @@
   const NYC_FLIGHT_RADIUS = 735;
   // [east, north, fully-detailed radius, skyline radius] in flight-scale units.
   // Only important landmarks get dense physical facades and street detail.
+  // PATROL_NYC_HERO_CORRIDOR_V6: real respawn and statue coordinates
+  // in the compact game world, not WGS84 or metres.
+  const NYC_HERO_ROUTE={spawn:[-108,-594],liberty:[-140,-611],
+    coreRadius:102,skylineRadius:178};
+  function nycHeroDistance(x,z){
+    const [ax,az]=NYC_HERO_ROUTE.spawn,[bx,bz]=NYC_HERO_ROUTE.liberty;
+    const vx=bx-ax,vz=bz-az;
+    const t=Math.max(0,Math.min(1,((x-ax)*vx+(z-az)*vz)/(vx*vx+vz*vz)));
+    return Math.hypot(x-(ax+t*vx),z-(az+t*vz));
+  }
   const NYC_FOCUS_ZONES = [
     [13,4,118,168],       // Times Square / Broadway / 7th Avenue
     [-7,-117,78,115],     // Empire State Building
@@ -385,12 +395,15 @@
     [-30,-180,72,108],    // Flatiron
     [-85,-398,75,112],    // One World Trade Center
     [-140,-611,50,78],    // Liberty Island
+    [-124,-603,103,180],  // Harbor entry and Liberty sight corridor
     [82,-342,78,118],     // Brooklyn Bridge and waterfront
     [79,206,50,100],     // Central Park edge
     [354,-389,35,77]     // Harbor runway approach
   ];
   function nycDetailBand(x,z){
-    let band=0;
+    const distance=nycHeroDistance(x,z);
+    if(distance<NYC_HERO_ROUTE.coreRadius)return 3;
+    let band=distance<NYC_HERO_ROUTE.skylineRadius?1:0;
     for(const zone of NYC_FOCUS_ZONES){
       const dx=x-zone[0],dz=z-zone[1],d2=dx*dx+dz*dz;
       if(d2<zone[2]*zone[2])return 2;
@@ -670,7 +683,7 @@
       shipAnchor: [-142,-611],
       runwayStart: {x:287,z:-389,yaw:Math.PI/2},
       city: MANHATTAN_GRID,
-      spawn: [-108, 48, -594], // Scenic harbor entry, inside compact NYC boundary
+      spawn: [NYC_HERO_ROUTE.spawn[0],48,NYC_HERO_ROUTE.spawn[1]], // Actual harbor spawn
       landmarks: [...NEW_YORK_LANDMARKS, { name: 'Central Park', x: 79, z: 206 }, { name: 'Brooklyn Bridge', x: 88, z: -342 }, { name:'Harbor Runway',x:354,z:-389 }],
       checkpoints: [[-108,-540],[-70,-386],[-16,-180],[62,118],[121,380]]
     },
@@ -3016,6 +3029,21 @@
         [22.31,0.86,0.78,1.47,0.04]],patina,10);
       box(1.57,19.3,-1.43,1.32,2.42,0.32,shade);
       light(-3.68,30.08,-0.54,0.36,0.52,0.34,[1.0,0.78,0.36]);
+      // Procedural granite joints and individual copper robe folds.
+      for(const side of [-1,1]){
+        for(let yy=5;yy<=11.65;yy+=1.12){
+          box(0,yy,side*4.05,7.5,.075,.08,[.61,.58,.53]);
+          box(side*4.05,yy,0,.08,.075,7.5,[.57,.53,.47]);
+        }
+      }
+      for(let fold=0;fold<14;fold++){
+        const a=fold*Math.PI*2/14-.12;
+        const fx=Math.sin(a)*2.12-.14,fz=Math.cos(a)*1.77;
+        const tx=Math.sin(a+.12)*1.26-.16,tz=Math.cos(a+.12)*1.08;
+        addQuad([fx-.082,13.0,fz-.09],[fx+.082,13.0,fz+.09],
+          [tx+.05,22.5,tz+.05],[tx-.05,22.5,tz-.05],
+          fold%3===0?[.20,.43,.37]:[.27,.53,.44]);
+      }
       for(const side of [-1,1]){
         box(side*4.03,7.65,0,0.08,0.72,5.8,[0.63,0.58,0.51]);
         box(0,6.55,side*4.02,2.09,3.0,0.08,[0.31,0.29,0.26]);
@@ -3994,17 +4022,17 @@
       addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,material.map(value=>value*0.69));
       addModelBox(addQuad,x,y+h-0.16,z,w+0.12,0.29,d+0.12,trim);
       const roof=[0.31,0.34,0.35];
-      if(detailBand===2 && h>13){
+      if(detailBand>=2 && h>13){
         addModelBox(addQuad,x+w*(tone-0.5)*0.32,y+h+0.48,z-d*0.12,w*0.40,0.96,d*0.44,roof);
         addModelBox(addQuad,x-w*0.24,y+h+0.21,z+d*0.20,w*0.19,0.42,d*0.18,[0.44,0.46,0.46]);
       }
-      if(detailBand===2 && tone>0.52){
+      if(detailBand>=2 && tone>0.52){
         for(const side of [-1,1]){
           for(const tip of [-1,1]){
             addModelBox(addQuad,x+tip*(w/2-0.24),y+h*0.51,z+side*(d/2+0.022),0.38,h*0.91,0.13,trim);
           }
         }
-      } else if(detailBand===2 && h>7){
+      } else if(detailBand>=2 && h>7){
         for(let level=3.7;level<h-0.6;level+=tone>0.24?3.5:5.3){
           addModelBox(addQuad,x,y+level,z,w+0.08,0.12,d+0.08,trim);
         }
@@ -4013,7 +4041,7 @@
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
-      if(!local && !destroyed && h>7.5 && detailBand===2){
+      if(!local && !destroyed && h>7.5 && detailBand>=2){
         const steel=[0.235,0.27,0.30],stone=[0.51,0.51,0.48];
         const glass=[0.13+tone*0.065,0.21+tone*0.075,0.28+tone*0.08];
         const mullion=[0.37,0.42,0.44],recess=[0.11,0.15,0.18];
@@ -4628,6 +4656,7 @@
   }
 
   let mapScenery=null;
+  let nycHeroScenery=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -4699,6 +4728,9 @@
   }
 
   function createMapScenery() {
+    disposeSceneMesh(nycHeroScenery);
+    nycHeroScenery=null;
+    const heroEpoch=++nycHeroEpoch;
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
     disposeSceneMesh(timesSquareScreens);
@@ -4714,6 +4746,23 @@
     sceneryObjects=[];
     sceneryMovers=[];
     const solid=createTriangleMesh(), lights=createTriangleMesh();
+    // Separate single-batch harbor geometry; no extra renderer/scene graph.
+    if(selectedMap.city && !graphicsCompat && smoothScenery()){
+      import('./assets/nyc/nyc-hero.js').then(({buildNycHeroScenery})=>{
+        if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+        const detail=createTriangleMesh();
+        buildNycHeroScenery({
+          addQuad:detail.addQuad,
+          box:(...args)=>addModelBox(detail.addQuad,...args),
+          beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
+          waterY:WATER_H,groundY:sampleTerrainHeight(-140,-611),
+          spawn:NYC_HERO_ROUTE.spawn,liberty:NYC_HERO_ROUTE.liberty
+        });
+        const uploaded=detail.upload();
+        if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
+        else nycHeroScenery=uploaded;
+      }).catch(error=>console.warn('[PATROL] Harbor detail fallback:',error));
+    }
     const box=(...args)=>addModelBox(solid.addQuad,...args);
     const lamp=(...args)=>addModelBox(lights.addQuad,...args);
     const iron=[0.30,0.35,0.38], pale=[0.79,0.80,0.74], red=[0.64,0.24,0.18];
@@ -7078,6 +7127,7 @@
   function drawMapScenery(drawMesh) {
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
+    if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
       if(textured){
