@@ -6,7 +6,7 @@ const fixture=()=>({
  schema:'patrol-vegas-usgs-3dep-ridges-v1',
  source:{agency:'USGS',crs:'EPSG:4326',verticalUnits:'meters',
     rawGeoTiffSHA256:'e'.repeat(64)},
- boundsWgs84:bbox,
+ boundsWgs84:[...bbox],
  sampleLatitudesNorthing:Array.from({length:49},(_,i)=>36.035+(.21*i/48)),
  elevationMeters:{
    west:Array.from({length:49},(_,i)=>850+i*2),
