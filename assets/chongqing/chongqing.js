@@ -865,7 +865,7 @@ function move(dt){
   flyingScarf.rotation.x=Math.sin(time*5.1)*.12;
   flameLight.intensity+=((state.spicy>0&&(state.boosting||state.flying)?65:0)-flameLight.intensity)*Math.min(1,dt*8);
 }
-const visited={hong:false,bridge:false,raffles:false,liziba:false};
+const visited={hong:false,bridge:false,raffles:false,liziba:false,ferry:false};
 function updateQuest(){
   if(!visited.hong&&Math.hypot(state.pos.x-155,state.pos.z-145)<140&&state.pos.y>45){
     visited.hong=true;const el=document.getElementById('questHong');
@@ -885,9 +885,16 @@ function updateQuest(){
     if(el){el.textContent='✓ 李子坝轻轨穿楼';el.classList.add('done');}
     message('发现地标：李子坝轻轨穿楼！');
   }
+  if(!visited.ferry&&riverBuild.isAboard(state.pos.x,state.pos.z,state.pos.y)){
+    visited.ferry=true;
+    const el=document.getElementById('questFerry');
+    if(el){el.textContent='✓ 搭乘嘉陵江游船';el.classList.add('done');}
+    message('🚢 成功降落游船甲板，可跟随客船沿江巡航！',4);
+  }
   hint.textContent=Math.hypot(state.pos.x-hotpotDoor.x,state.pos.z-hotpotDoor.z)<27&&
     Math.abs(state.pos.y-hotpotDoor.y)<14
     ?'🍲 按 E 吃重庆火锅，激活麻辣喷火推进'
+    :riverBuild.isAboard(state.pos.x,state.pos.z,state.pos.y)?'🚢 正在搭乘嘉陵江游船 · WASD 甲板移动 · F 起飞'
     :state.spicy>0?'🌶️ 麻辣推进中！按 F 飞行，Shift 加速'
     :state.flying?'按 Space 爬升 · Ctrl 下降 · Shift 冲刺 · F 降落'
     :'WASD 移动 · Shift 奔跑 · Space 超级跳 · F 自由飞行';
@@ -905,6 +912,14 @@ function drawMinimap(){
     const px=128+(x-state.pos.x)*.17,py=128+(z-state.pos.z)*.17;
     mapCtx.fillStyle='#ffd28b';mapCtx.beginPath();mapCtx.arc(px,py,10,0,TAU);mapCtx.fill();
     mapCtx.fillStyle='#30251d';mapCtx.font='bold 13px sans-serif';mapCtx.textAlign='center';mapCtx.textBaseline='middle';mapCtx.fillText(label,px,py);
+  }
+  // Moving sightseeing ferries appear as river-blue mini-map markers.
+  for(const boat of riverBuild.snapshot()){
+    const px=128+(boat.x-state.pos.x)*.17,py=128+(boat.z-state.pos.z)*.17;
+    mapCtx.fillStyle='#aee1ed';
+    mapCtx.beginPath();mapCtx.arc(px,py,6,0,TAU);mapCtx.fill();
+    mapCtx.fillStyle='#173442';mapCtx.font='10px sans-serif';
+    mapCtx.textAlign='center';mapCtx.textBaseline='middle';mapCtx.fillText('船',px,py+.5);
   }
   mapCtx.translate(128,128);mapCtx.rotate(state.heading);
   mapCtx.fillStyle='#ff5e39';mapCtx.beginPath();mapCtx.moveTo(0,-14);mapCtx.lineTo(-9,11);mapCtx.lineTo(9,11);mapCtx.closePath();mapCtx.fill();
