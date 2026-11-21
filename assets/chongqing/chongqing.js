@@ -650,6 +650,11 @@ const qualityBtn=document.getElementById('qualityBtn');
 const perfHud=document.getElementById('perfHud');
 const qualityLabels={auto:'画质：自动',high:'画质：高清',low:'画质：省电'};
 const qualityParam=new URLSearchParams(location.search).get('quality');
+const reviewPose=new URLSearchParams(location.search).get('assetQA');
+const lampPreviewChoice=new URLSearchParams(location.search).get('lampReview');
+let lampPreviewController=null;
+document.documentElement.dataset.streetlampReview=
+  lampPreviewChoice==='3dassets'?'loading':'off';
 let qualityMode=Object.hasOwn(qualityLabels,qualityParam)?qualityParam:'auto';
 const coarsePointer=matchMedia('(pointer:coarse)').matches;
 const maxRatio=Math.min(devicePixelRatio||1,coarsePointer?1.25:1.6);
@@ -667,6 +672,7 @@ function applyQuality(){
   skyline.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  lampPreviewController?.setQuality(qualityMode);
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
   riverBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
@@ -678,6 +684,27 @@ qualityBtn.addEventListener('click',()=>{
   applyQuality();
 });
 applyQuality();
+if(lampPreviewChoice==='3dassets'&&qualityMode==='low'){
+  // The original instanced fixture is the low-GPU preset: no GLB download.
+  document.documentElement.dataset.streetlampReview='low-fallback';
+}
+if(lampPreviewChoice==='3dassets'&&qualityMode!=='low'){
+  import('./3dassets-lamp-preview.js')
+    .then(({load3dAssetsLampPreview})=>load3dAssetsLampPreview({
+      THREE,scene,streetBuild,search:location.search
+    }))
+    .then(preview=>{
+      lampPreviewController=preview;
+      preview.setQuality(qualityMode);
+      console.info('SHA-approved 828-triangle lamp review loaded',{bytes:preview.bytes,
+        decodeMs:preview.decodeMs,anchor:preview.anchor});
+    })
+    .catch(error=>{
+      streetBuild.setReviewLampVisible(true);
+      document.documentElement.dataset.streetlampReview='fallback';
+      console.warn('3DAssets GLB review unavailable, original lamp retained:',error);
+    });
+}
 
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
@@ -1311,6 +1338,17 @@ function frame(){
   );
   moon.position.copy(moon.target.position).add(localShadowOffset);
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
+  // QA-only fixed views, surveyed against the current local road terrain.
+  if((reviewPose==='street'||reviewPose==='air')&&streetBuild.reviewLampSlot){
+    const a=streetBuild.reviewLampSlot;
+    const street=reviewPose==='street';
+    const x=a.x-(street?18:30),z=a.z-(street?12:27);
+    const y=street?Math.max(ground(x,z)+5,a.y+3):
+      Math.max(ground(x,z)+25,a.y+24);
+    camera.position.set(x,y,z);
+    camera.lookAt(a.x,a.y+(street?6:4),a.z);
+    camera.updateMatrixWorld(true);
+  }
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
     window.dispatchEvent(new Event('patrol:orbitLaunch'));
@@ -1350,6 +1388,21 @@ window.PatrolSpaceBridge={getState:()=>({
   map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
   position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
+}),
+getAssetReviewState:()=>({
+  status:document.documentElement.dataset.streetlampReview,
+  pose:reviewPose,
+  anchor:streetBuild.reviewLampSlot,
+  cameraPosition:camera.position.toArray(),
+  lampScreenProjection:streetBuild.reviewLampSlot?
+    new THREE.Vector3(streetBuild.reviewLampSlot.x,
+      streetBuild.reviewLampSlot.y+4,
+      streetBuild.reviewLampSlot.z).project(camera).toArray():null,
+  drawCalls:renderer.info.render.calls,
+  triangles:renderer.info.render.triangles,
+  pixelRatio:renderRatio,qualityMode,
+  candidateBytes:lampPreviewController?.bytes??0,
+  decodeMs:lampPreviewController?.decodeMs??null
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
