@@ -193,6 +193,45 @@ export function clipChongqingDryRoadSegments(points,width,ground,riverDist,
   return result;
 }
 
+// Install river dead-end guards only where the FINAL building-clipped road
+// still reaches its original dry shoreline terminus. A river-only clip can
+// leave a visually floating guard inside a tower if the later building-volume
+// pass deletes that stretch of asphalt. These are display-site records; the
+// three-dimensional barrier mesh is still built by shoreline-barriers.js.
+export function collectChongqingShorelineRoadEnds(dryRoads,finalRoads,width){
+  if(!Array.isArray(dryRoads)||!Array.isArray(finalRoads)||
+     dryRoads.length!==finalRoads.length||!Number.isFinite(width)||
+     width<3)return [];
+  const ends=[];
+  const same=(a,b)=>a&&b&&[a.x,a.z,b.x,b.z].every(Number.isFinite)&&
+    Math.hypot(a.x-b.x,a.z-b.z)<.002;
+  const findEdge=(paths,point,last)=>{
+    if(!Array.isArray(paths))return null;
+    return paths.find(path=>Array.isArray(path)&&path.length>=2&&
+      same(last?path.at(-1):path[0],point));
+  };
+  for(let k=0;k<dryRoads.length-1;k++){
+    const a=dryRoads[k],b=dryRoads[k+1];
+    if(!Array.isArray(a)||a.length<2||!Array.isArray(b)||b.length<2)
+      continue;
+    const left=findEdge(finalRoads[k],a.at(-1),true);
+    if(left){
+      const point=left.at(-1),prev=left.at(-2);
+      if(Math.hypot(point.x-prev.x,point.z-prev.z)>.001)
+        ends.push({point,tangent:[point.x-prev.x,point.z-prev.z],
+          width,intoRoad:-1});
+    }
+    const right=findEdge(finalRoads[k+1],b[0],false);
+    if(right){
+      const point=right[0],next=right[1];
+      if(Math.hypot(next.x-point.x,next.z-point.z)>.001)
+        ends.push({point,tangent:[next.x-point.x,next.z-point.z],
+          width,intoRoad:1});
+    }
+  }
+  return ends;
+}
+
 export function chongqingTerraceRoads(riverCenter){
   const paths=[];
   for(const side of [-1,1])for(let tier=0;tier<3;tier++){
