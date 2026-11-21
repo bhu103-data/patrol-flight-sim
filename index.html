@@ -297,10 +297,10 @@
       <span class="desktop-only"><span class="key-pill">WASD / ↑↓←→</span>STEER / MOUSE</span>
       <span class="desktop-only"><span class="key-pill">CLICK</span>ROLL</span>
       <span class="desktop-only"><span class="key-pill">SHIFT / HOLD</span>BOOST</span>
-      <span class="desktop-only fighter-control"><span class="key-pill">M / F / RMB</span>MISSILE</span>
-      <span class="desktop-only fighter-control armor-compatible"><span class="key-pill">C</span>GUN / LASER</span>
+      <span class="desktop-only fighter-control missile-control"><span class="key-pill">M / F / RMB</span>MISSILE</span>
+      <span class="desktop-only fighter-control armor-compatible gun-control"><span class="key-pill">C</span>GUN / LASER</span>
       <span class="desktop-only"><span class="key-pill">SPACE</span>VIEW (<b id="viewName">CHASE</b>)</span>
-      <span class="fighter-control">MSL <span class="missile-pips" id="missilePips">
+      <span class="fighter-control missile-control">MSL <span class="missile-pips" id="missilePips">
         <i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i>
       </span></span>
     </div>
@@ -11622,6 +11622,11 @@ const CENTRAL_PARK_SITES=[
         document.getElementById('btnFire').hidden=true;
       }
       if(selectedAircraft==='jetpack')for(const control of armorCompatibleControls)control.hidden=false;
+      // Unarmed C185 must never show jet-missile or cannon hotkeys.
+      for(const control of document.querySelectorAll('.missile-control'))
+        control.hidden=selectedAircraft!=='fighter';
+      for(const control of document.querySelectorAll('.gun-control'))
+        control.hidden=!['fighter','jetpack'].includes(selectedAircraft);
       camInitialized = false;
       lastMapFrame = -Infinity;
       if (mapPanel.classList.contains('expanded')) toggleFlightMap();
