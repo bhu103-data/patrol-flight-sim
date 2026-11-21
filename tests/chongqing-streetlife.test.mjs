@@ -161,7 +161,8 @@ test('round signal visors surround lit lenses within one bounded GPU batch',()=>
   assert.equal(traffic.stats.signalHoods,traffic.stats.trafficSignals*3);
   assert.equal(traffic.stats.signalSideTrim,traffic.stats.trafficSignals*2);
   const hood=objects.find(o=>o instanceof InstancedMesh&&
-    o.capacity===24&&o.material.color===0x181e23);
+    o.capacity===24&&o.material.color===0x181e23&&
+    Math.abs((o.geometry.zRotation??0)-Math.PI/2)<1e-8);
   assert.ok(hood,'one shared metal visor batch covers every red/yellow/green lamp');
   assert.equal(hood.count,24);
   assert.ok(Math.abs(hood.geometry.zRotation-Math.PI/2)<1e-8,
