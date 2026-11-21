@@ -5682,7 +5682,11 @@
           timesBounds:TIMES_SQUARE.bounds,
           existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],
           lettering:(label,p,w,h,color)=>addVegasLettering(detail.addQuad,label,
-            (u,v)=>[p[0]+u,p[1]+v,p[2]],w,h,color)
+            (u,v)=>[p[0]+u,p[1]+v,p[2]],w,h,color),
+          // PATROL_NYC_ROAD_MARKINGS_V12: flat upward-facing painted
+          // lettering in the existing city batch, no extra texture/renderer.
+          pavementText:(label,p,w,h,color)=>addVegasLettering(detail.addQuad,label,
+            (u,v)=>[p[0]+u,p[1],p[2]-v],w,h,color)
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
