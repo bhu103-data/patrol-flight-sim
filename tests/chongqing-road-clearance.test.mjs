@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const toURL=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const moduleText=await readFile(new URL('../assets/chongqing/road-clearance.js',import.meta.url),'utf8');
-const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads,sampleChongqingTerraceSurface}=await import(toURL(moduleText));
+const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments}=await import(toURL(moduleText));
 
 test('road collision checks entire asphalt width and exact segment interval',()=>{
  const b={x:0,z:0,w:8,d:8};
@@ -67,6 +67,36 @@ test('sloped road remains clear when the crossed building is entirely below it',
  assert.equal(result.paths.length,1);
  assert.equal(result.stats.clippedSegments,0);
 });
+test('terrace roads end at unbridged tributary rather than floating across water',()=>{
+ const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
+ const branchCenter=z=>-390+18*Math.sin(z/175);
+ const riverDist=(x,z)=>Math.min(Math.abs(z-riverCenter(x))-78,
+   z<18&&z>-620?Math.abs(x-branchCenter(z))-47:Infinity);
+ const ground=(x,z)=>riverDist(x,z)<0?-13:18+riverDist(x,z)*.172;
+ const plans=chongqingTerraceRoads(riverCenter);
+ const segments=plans.map(plan=>clipChongqingDryRoadSegments(
+   sampleChongqingTerraceSurface(plan,ground,riverCenter),
+   plan.width,ground,riverDist));
+ assert.deepEqual(segments.map(s=>s.length),[2,2,2,1,1,1],
+   'three tributary-crossing roads require a real bridge before they can connect');
+ let checked=0;
+ for(let k=0;k<plans.length;k++){
+   const {width}=plans[k];
+   for(const path of segments[k])for(let i=1;i<path.length;i++){
+     const a=path[i-1],b=path[i],dx=b.x-a.x,dz=b.z-a.z,
+       len=Math.hypot(dx,dz),nx=-dz/len,nz=dx/len;
+     for(const t of [0,.5,1])for(const side of [-1,-.5,0,.5,1]){
+       const x=a.x+dx*t+nx*(width/2+2.4)*side,
+         z=a.z+dz*t+nz*(width/2+2.4)*side;
+       assert.ok(riverDist(x,z)>=2.4&&ground(x,z)>0,
+         'full road shoulder must remain on dry land');
+       checked++;
+     }
+   }
+ }
+ assert.ok(checked>1000,'audit complete dry asphalt, not a handful of examples');
+});
+
 test('six canonical terrace paths and building reservations agree',()=>{
  const center=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
  const road=chongqingTerraceRoads(center);
