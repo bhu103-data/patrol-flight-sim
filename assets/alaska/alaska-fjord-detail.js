@@ -159,7 +159,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // cloned cuboids or unique textures. Geographically sampled ground altitude
   // and slope determine placement, rather than repeating six tree clusters.
   // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
-  stats.conifers=0;
+  stats.conifers=0;stats.foliageWhorls=0;stats.snowBoughs=0;
   // Jittered shoreline corridors put visible forest where the pilot actually
   // sees the Alaska landscape, while preserving a strict single-batch cap.
   for(let i=0;i<4550 && stats.conifers<940;i++){
@@ -189,42 +189,57 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const trunk=[.25+.07*seed,.22+.05*seed,.18+.035*seed];
     const dark=[.065+.045*seed,.14+.065*seed,.11+.034*seed];
     const bright=[.11+.065*seed,.23+.085*seed,.16+.040*seed];
-    const trunkBase=[x,y+.1,z],trunkTop=[x,y+treeH*.55,z],stem=.075+.028*seed;
+    const stem=.064+.033*seed;
     addQuad([x-stem,y,z],[x+stem,y,z],
-      [x+stem,y+treeH*.57,z],[x-stem,y+treeH*.57,z],trunk);
+      [x+stem,y+treeH*.87,z],[x-stem,y+treeH*.87,z],trunk);
     addQuad([x,y,z-stem],[x,y,z+stem],
-      [x,y+treeH*.57,z+stem],[x,y+treeH*.57,z-stem],trunk);
-    for(let layer=0;layer<3;layer++){
-      const start=y+treeH*(.11+.175*layer),tip=start+treeH*(.45-.038*layer);
-      const radius=treeH*(.20-.033*layer),phase=seed*6.28+layer*.36;
+      [x,y+treeH*.87,z+stem],[x,y+treeH*.87,z-stem],trunk);
+    // Ragged layered branches, not three stacked identical conical crowns.
+    // 5-6 irregular whorls and 7 uneven needles per whorl: ~40 tiny faces.
+    // The two shades and sparse snow catches add volume at close distances.
+    const whorlCount=5+(i%3===0?1:0);
+    for(let layer=0;layer<whorlCount;layer++){
+      const t=layer/(whorlCount-1);
+      const start=y+treeH*(.09+.70*t);
+      const tip=y+treeH*(.40+.58*t);
+      const radius=treeH*.24*Math.pow(1.0-t,.86)*(1.0+.10*Math.sin(layer*1.73+seed*5));
+      const phase=seed*6.28+layer*.48;
       const tone=layer%2===0?dark:bright;
-      for(let j=0;j<6;j++){
-        const a=phase+j*Math.PI/3,b=a+Math.PI/3;
-        const r1=radius*(.84+.26*hash(i*11+j*7+layer*9));
-        const r2=radius*(.83+.27*hash(i*19+j*13+layer*17));
-        const faceTint=1-(j%3)*.055;
-        const iceDust=winter*(j%5===0?.42:.16);
+      for(let j=0;j<7;j++){
+        const a=phase+j*Math.PI*2/7,b=phase+(j+1)*Math.PI*2/7;
+        const r1=radius*(.76+.39*hash(i*11+j*7+layer*9));
+        const r2=radius*(.78+.38*hash(i*19+j*13+layer*17));
+        const drop=treeH*(.025+.042*hash(i*23+j*31+layer*27))*(1.0-t);
+        const iceDust=winter*(j%5===0?.35:.075);
+        const faceTint=1.0-(j%4)*.038;
         const color=tone.map((value,k)=>
-          Math.min(1,value*faceTint*(1-iceDust)+[.76,.86,.87][k]*iceDust));
-        addTri([x+Math.cos(a)*r1,start,z+Math.sin(a)*r1],
-               [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
-               [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
+          Math.min(1,value*faceTint*(1-iceDust)+[.72,.84,.85][k]*iceDust));
+        addTri([x+Math.cos(a)*r1,start-drop,z+Math.sin(a)*r1],
+               [x+Math.cos(b)*r2,start-drop*.68,z+Math.sin(b)*r2],
+               [x+Math.sin(phase)*radius*.14,tip,z+Math.cos(phase)*radius*.10],
                color);
-        // Fine asymmetric branchlet curtains improve nearby spruce shape
-        // with a bounded polygon budget. No repeated cone layers or billboards.
-        if(i%7===0 && layer<2 && j%2===0){
-          const a2=a+.22,b2=b-.16,twigY=start+treeH*.19;
-          const spread=radius*.77,topY=tip-treeH*.10;
+        // Sparse branch feathers break a large triangular silhouette,
+        // rather than another whole ring of billboard foliage.
+        if(i%7===0 && layer<2 && j%3===0){
+          const a2=a+.22,b2=b-.16;
           const green=tone.map((v,k)=>Math.min(1,v*(k===1?1.18:.92)));
           addTri(
-            [x+Math.cos(a2)*spread,start,z+Math.sin(a2)*spread],
-            [x+Math.cos(b2)*spread*.86,start+treeH*.04,z+Math.sin(b2)*spread*.86],
-            [x+Math.cos(a2+.1)*radius*.26,Math.max(twigY,topY),
-              z+Math.sin(a2+.1)*radius*.26],
+            [x+Math.cos(a2)*r1*.87,start-drop*.5,z+Math.sin(a2)*r1*.87],
+            [x+Math.cos(b2)*r2*.72,start+treeH*.02,z+Math.sin(b2)*r2*.72],
+            [x+Math.cos(a2+.1)*radius*.28,tip-treeH*.08,z+Math.sin(a2+.1)*radius*.28],
             green);
           stats.branchlets++;
         }
+        if(winter>.39 && j%4===0 && layer<whorlCount-1 && i%3===0){
+          const snow=[.65+.17*winter,.78+.12*winter,.82+.10*winter];
+          addTri([x+Math.cos(a)*r1*.82,start+.035,z+Math.sin(a)*r1*.82],
+                 [x+Math.cos(b)*r2*.83,start+.03,z+Math.sin(b)*r2*.83],
+                 [x+Math.sin(phase)*radius*.14,tip+.045,z+Math.cos(phase)*radius*.12],
+                 snow);
+          stats.snowBoughs++;
+        }
       }
+      stats.foliageWhorls++;
     }
     // Irregular understorey tufts, not repeated billboard trees. Vary by
     // altitude and local measured slope; hide when collision ground differs.
