@@ -17,7 +17,7 @@ test('prototype loads before native WebGL renderer and only builds in NYC scene'
   assert.match(html,/window\.PatrolNycManhattanSubway\.build\(\{addQuad,box,/);
   const traffic=html.slice(html.indexOf('  function drawCityTraffic('),
     html.indexOf('  let backgroundBuildings'));
-  assert.match(traffic,/if\(selectedMap\.city\)\{/);
+  assert.match(traffic,/if\(selectedMap\.city&&typeof window!==['\"]undefined['\"]&&window\.PatrolNycManhattanSubway\)\{/);
   assert.match(traffic,/subway\.trainPose\(sceneryTime,run,car\)/);
   assert.match(traffic,/streetMeshes\.train/);
   assert.match(html,/const BROOKLYN_RAIL = \{[^\n]*enabled:false/);

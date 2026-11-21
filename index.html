@@ -4783,7 +4783,8 @@ const CENTRAL_PARK_SITES=[
     buildBridgeRiverfront(addQuad,box);
     // Real-world B/D and N/Q rail corridor is on MANHATTAN Bridge, not Brooklyn Bridge.
     // Fixed, original game-scale girder/rail geometry joins the existing WebGL city batch.
-    window.PatrolNycManhattanSubway.build({addQuad,box,
+    if(typeof window!=='undefined'&&window.PatrolNycManhattanSubway)
+      window.PatrolNycManhattanSubway.build({addQuad,box,
       beam:(a,b,w,color)=>addRideBeam(addQuad,a,b,w,color)});
     for (const x of [left-bridge.ramp-1,right+bridge.ramp+1]) {
       for (let stripe=-3;stripe<=3;stripe++) {
@@ -5433,7 +5434,7 @@ const CENTRAL_PARK_SITES=[
     if (bridgeRails) drawMesh(bridgeRails,origin);
     // Active subway pilot: two continuous four-car runs on the Manhattan Bridge.
     // Reuse the original NYC train mesh, timing, distance LOD and camera matrices.
-    if(selectedMap.city){
+    if(selectedMap.city&&typeof window!=='undefined'&&window.PatrolNycManhattanSubway){
       const subway=window.PatrolNycManhattanSubway;
       for(const run of subway.runs)for(let car=0;car<4;car++){
         const {x,y,z,yaw,visible}=subway.trainPose(sceneryTime,run,car);
