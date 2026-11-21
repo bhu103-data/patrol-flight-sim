@@ -546,7 +546,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
       signalHoods:signalHoods.count,signalSideTrim:signalSideTrim.count,
       trafficSignals:signalHeads.count,
       pedestrianSignals:signalPedHeads.count,signalizedCrossings:crossingSites.length,
-      drawGroups:Object.keys(buffer).length+17},
+      drawGroups:Object.keys(buffer).length+19},
     // For collision avoidance, external consumers can check an individual 3m footprint.
     nearby(x,z,y,radius=3.8){
       return vehicles.some(v=>!v.disabled&&Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
