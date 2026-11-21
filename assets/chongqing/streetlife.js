@@ -234,13 +234,19 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   // Meshes are shared instanced batches, so four crossings never mean 8 new
   // separate draw calls per pole.
   const signalMax=8;
-  const signalPosts=pool(unit,frame,signalMax);
-  const signalArms=pool(unit,frame,signalMax);
+  // Low-poly round steel tubes and domed lamp lenses are readable at a
+  // close pedestrian camera without a boxy traffic-signal silhouette.
+  const mastGeo=new THREE.CylinderGeometry(.17,.19,1,12);
+  const armGeo=new THREE.CylinderGeometry(.09,.09,1,12);
+  armGeo.rotateX(Math.PI/2); // arm is cantilevered horizontally along Z
+  const lensGeo=new THREE.SphereGeometry(.5,14,10);
+  const signalPosts=pool(mastGeo,frame,signalMax);
+  const signalArms=pool(armGeo,frame,signalMax);
   const signalHeads=pool(unit,dark,signalMax);
   const signalPedHeads=pool(unit,dark,signalMax);
-  const signalRed=pool(unit,new THREE.MeshBasicMaterial({color:0xff4539}),signalMax);
-  const signalAmber=pool(unit,new THREE.MeshBasicMaterial({color:0xffb92f}),signalMax);
-  const signalGreen=pool(unit,new THREE.MeshBasicMaterial({color:0x4ee28b}),signalMax);
+  const signalRed=pool(lensGeo,new THREE.MeshBasicMaterial({color:0xff4539}),signalMax);
+  const signalAmber=pool(lensGeo,new THREE.MeshBasicMaterial({color:0xffb92f}),signalMax);
+  const signalGreen=pool(lensGeo,new THREE.MeshBasicMaterial({color:0x4ee28b}),signalMax);
   const pedestrianWait=pool(unit,new THREE.MeshBasicMaterial({color:0xf45b4e}),signalMax);
   const pedestrianWalk=pool(unit,new THREE.MeshBasicMaterial({color:0x48dc94}),signalMax);
   let signalCount=0;
@@ -248,13 +254,13 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     const x=cx+11,baseZ=routeZ(x,1,1),
       z=baseZ+side*9.1,pavement=ground(x,z)+1.7,
       at={x,y:pavement,z},idx=signalCount++;
-    pose(signalPosts,idx,at,0,[0,3.2,0],[.32,6.4,.32],0);
-    pose(signalArms,idx,at,0,[0,6.38,-side*2.06],[.18,.17,4.25],0);
+    pose(signalPosts,idx,at,0,[0,3.2,0],[1,6.4,1],0);
+    pose(signalArms,idx,at,0,[0,6.38,-side*2.06],[1,1,4.25],0);
     pose(signalHeads,idx,at,0,[0,6.52,-side*4.08],[.85,2.23,.74],0);
     // Bulbs sit proud of the east-facing head, visible to westbound cars.
-    pose(signalRed,idx,at,0,[.445,7.13,-side*4.08],[.085,.43,.43],0);
-    pose(signalAmber,idx,at,0,[.445,6.52,-side*4.08],[.085,.43,.43],0);
-    pose(signalGreen,idx,at,0,[.445,5.91,-side*4.08],[.085,.43,.43],0);
+    pose(signalRed,idx,at,0,[.445,7.13,-side*4.08],[.24,.46,.46],0);
+    pose(signalAmber,idx,at,0,[.445,6.52,-side*4.08],[.24,.46,.46],0);
+    pose(signalGreen,idx,at,0,[.445,5.91,-side*4.08],[.24,.46,.46],0);
     pose(signalPedHeads,idx,at,0,[0,3.73,-side*.10],[.43,1.02,.62],0);
     pose(pedestrianWait,idx,at,0,[.23,3.96,-side*.10],
       [.05,.30,.37],0);
