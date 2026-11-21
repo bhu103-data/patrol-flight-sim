@@ -63,6 +63,20 @@ const PALETTES=[
   ['#170e29','#6552e8','#fff0f0'],['#2b0b18','#ea5548','#fff4e6'],
   ['#111729','#dfc18b','#fff9ea'],['#0b2327','#7cbaae','#e7fff6']
 ];
+// Deterministic editorial composition for each campaign, even when a genre
+// appears again after the 16-category cycle. Camera/art movement is not used;
+// these transforms bake once into the static WebGL LED atlas.
+export function campaignProductComposition(campaign){
+  const seed=campaign.seed>>>0;
+  return {
+    tilt:(((seed>>>16)&63)-31.5)*.0016,
+    zoom:.92+((seed>>>7)&31)*.003,
+    stretch:.955+((seed>>>22)&15)*.004,
+    shiftX:(((seed>>>2)&31)-15.5)*.003,
+    shiftY:(((seed>>>11)&31)-15.5)*.002,
+    finishHue:(seed>>>4)%360
+  };
+}
 function panelArt(ctx,x,y,size,info,index,campaign){
   // VICE '86 / HEAT art-direction reference: distinct poster compositions,
   // deliberately generated here. No HEAT code, images or IP are included.
@@ -101,7 +115,17 @@ function panelArt(ctx,x,y,size,info,index,campaign){
   ctx.save();
   const offsetX=(((campaign.seed>>>5)%17)-8)*w*.005;
   const offsetY=(((campaign.seed>>>9)%11)-5)*h*.006;
+  const composition=campaignProductComposition(campaign);
   ctx.translate(offsetX,offsetY);
+  // Shift, rotate and reshape only the hero product, not the background,
+  // horizon or typographic copy. An identical perfume/watch/car silhouette
+  // repeating at every 16th LED panel previously looked like cloned signage.
+  if(kind!==3&&kind!==6&&kind!==10&&kind!==14){
+    ctx.translate(w*(.60+composition.shiftX),h*(.55+composition.shiftY));
+    ctx.rotate(composition.tilt);
+    ctx.scale(composition.zoom,composition.stretch);
+    ctx.translate(-w*.60,-h*.55);
+  }
   if(kind===0){
     // Boutique timepiece: beveled bezel, dial, hand, highlights.
     const cx=w*.63,cy=h*.48,r=w*.265;
@@ -151,7 +175,7 @@ function panelArt(ctx,x,y,size,info,index,campaign){
     }
   }else if(kind===4){
     // Product sneaker side profile with grounded midsole, no third-party logo.
-    ctx.fillStyle='#f1f0ea';
+    ctx.fillStyle='hsl('+composition.finishHue+',26%,85%)';
     ctx.beginPath();ctx.moveTo(w*.25,h*.61);ctx.lineTo(w*.47,h*.52);
     ctx.lineTo(w*.61,h*.62);ctx.quadraticCurveTo(w*.79,h*.72,w*.9,h*.73);
     ctx.quadraticCurveTo(w*.98,h*.77,w*.87,h*.84);
@@ -164,7 +188,8 @@ function panelArt(ctx,x,y,size,info,index,campaign){
     // Phone launch billboard.
     ctx.fillStyle='#090c18';ctx.fillRect(w*.46,h*.16,w*.35,h*.72);
     const sc=ctx.createLinearGradient(w*.48,h*.3,w*.81,h*.8);
-    sc.addColorStop(0,'#dce0f6');sc.addColorStop(.4,'#775bc5');
+    sc.addColorStop(0,'#dce0f6');
+    sc.addColorStop(.4,'hsl('+composition.finishHue+',56%,58%)');
     sc.addColorStop(1,'#111526');ctx.fillStyle=sc;
     ctx.fillRect(w*.477,h*.18,w*.316,h*.68);
     ctx.fillStyle='#101624';ctx.beginPath();ctx.ellipse(w*.63,h*.20,w*.035,h*.015,0,0,7);ctx.fill();
@@ -189,7 +214,7 @@ function panelArt(ctx,x,y,size,info,index,campaign){
   }else if(kind===8){
     // Premium automobile side profile and cinematic road horizon.
     ctx.fillStyle='#151923';ctx.fillRect(0,h*.74,w,h*.26);
-    ctx.fillStyle='#e6e9e8';
+    ctx.fillStyle='hsl('+composition.finishHue+',28%,77%)';
     ctx.beginPath();ctx.moveTo(w*.16,h*.69);ctx.lineTo(w*.34,h*.59);
     ctx.lineTo(w*.59,h*.58);ctx.lineTo(w*.73,h*.65);ctx.lineTo(w*.85,h*.68);
     ctx.lineTo(w*.91,h*.80);ctx.lineTo(w*.12,h*.80);ctx.closePath();ctx.fill();

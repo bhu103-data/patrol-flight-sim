@@ -923,6 +923,19 @@ function scenicView(key){
       target:[-420,ground(-420,-271)+12,-271]}
     ,Digit6:{name:'洪崖洞临江步道近景',pos:[155,18,72],target:[155,13,110]}
   };
+  // The integrated Digit6 remains the Hongyadong riverwalk. The newer
+  // signalized-crossing view uses Digit7 to avoid replacing that viewpoint.
+  if(key==='Digit7'){
+    const x=streetBuild.snapshot().crossingXs[0];
+    if(Number.isFinite(x)){
+      const z=riverCenter(x)+250+14*Math.sin(x/115+1);
+      destinations.Digit7={
+        name:'双向红绿灯与山城街面',
+        pos:[x,ground(x,z)+5.5,z],
+        target:[x+18,ground(x,z)+6.3,z]
+      };
+    }
+  }
   const next=destinations[key];
   if(!next)return false;
   state.pos.set(...next.pos);
@@ -1387,7 +1400,11 @@ function frame(){
 window.PatrolSpaceBridge={getState:()=>({
   map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
-  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
+  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying,
+  signalCrossings:streetBuild.stats.signalizedCrossings,
+  signalMasts:streetBuild.stats.trafficSignals,
+  signalStopLines:streetBuild.stats.stopLines,
+  signalAspect:streetBuild.snapshot().signalAspect
 })};
 window.PatrolSpaceBridge.getChongqingStreetDebug=()=>({
   prototype:hongyadongStreetBuild.getDebug(),

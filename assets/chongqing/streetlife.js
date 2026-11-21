@@ -103,7 +103,9 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   let taxisPlaced=0;
   for(let i=0;i<carTypes.length;i++){
     const lane=i%2?-.28:.28;
-    const route=i%4;
+    // Give the signalized upper road traffic in BOTH directions.
+    // Previously every tier-1 car on the north bank headed west only.
+    const route=i===4?1:i%4;
     vehicles.push({
       id:i,taxi:carTypes[i]===0,taxiIndex:carTypes[i]===0?taxisPlaced++:-1,
       side:route<2?1:-1,tier:route%2,
@@ -210,10 +212,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
       const x=cx+dx,z=routeZ(x,1,1);
       return isRoadClear(x,z,ground(x,z)+1.78,11.2);
     });
-    const px=cx+11,pz=routeZ(px,1,1);
     const clearPosts=[-1,1].every(side=>{
-      const z=pz+side*9.1;
-      return isRoadClear(px,z,ground(px,z)+2.5,1.5);
+      const x=cx+(side<0?11:-11);
+      const z=routeZ(x,1,1)+side*9.1;
+      return isRoadClear(x,z,ground(x,z)+2.5,1.5);
     });
     if(clearRoad&&clearPosts)crossingSites.push(cx);
   }
@@ -229,6 +231,20 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   }
   zebra.count=zebraCount;zebra.instanceMatrix.needsUpdate=true;
   if(zebra.count)zebra.computeBoundingSphere();zebra.frustumCulled=true;
+  // White stop bars are on both approaches, safely clear of zebra stripes.
+  // They use the same height and tangent as the actual curving terrace road.
+  const stopBars=pool(unit,white,8);
+  let stopLineCount=0;
+  for(const cx of crossingSites)for(const side of [-1,1]){
+    const x=cx+side*11.5,z=routeZ(x,1,1),
+      slope=(routeZ(x+1,1,1)-routeZ(x-1,1,1))*.5,
+      y=ground(x,z)+1.82;
+    pose(stopBars,stopLineCount++,{x,y,z},Math.atan2(slope,1),
+      [0,0,0],[.22,.035,10.3],0);
+  }
+  stopBars.count=stopLineCount;stopBars.instanceMatrix.needsUpdate=true;
+  if(stopBars.count)stopBars.computeBoundingSphere();
+  stopBars.frustumCulled=true;
   // Chinese three-aspect signal assembly: full-height steel mast, horizontal
   // cantilever, shielded vertical head and pedestrian WALK/WAIT indicator.
   // Meshes are shared instanced batches, so four crossings never mean 8 new
@@ -247,24 +263,37 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   const signalRed=pool(lensGeo,new THREE.MeshBasicMaterial({color:0xff4539}),signalMax);
   const signalAmber=pool(lensGeo,new THREE.MeshBasicMaterial({color:0xffb92f}),signalMax);
   const signalGreen=pool(lensGeo,new THREE.MeshBasicMaterial({color:0x4ee28b}),signalMax);
+  // Keep the inactive bulbs visible as dark glass instead of making the
+  // lens disappear completely whenever its signal aspect is switched off.
+  const inactiveLenses=pool(lensGeo,new THREE.MeshStandardMaterial({
+    color:0x232b30,roughness:.24,metalness:.18
+  }),signalMax*3);
   const pedestrianWait=pool(unit,new THREE.MeshBasicMaterial({color:0xf45b4e}),signalMax);
   const pedestrianWalk=pool(unit,new THREE.MeshBasicMaterial({color:0x48dc94}),signalMax);
   let signalCount=0;
   for(const cx of crossingSites)for(const side of [-1,1]){
-    const x=cx+11,baseZ=routeZ(x,1,1),
+    // Two approaches face opposite travel directions. The eastbound head
+    // must be mounted west of the crossing, not behind its stop line.
+    const x=cx+(side<0?11:-11),baseZ=routeZ(x,1,1),
       z=baseZ+side*9.1,pavement=ground(x,z)+1.7,
-      at={x,y:pavement,z},idx=signalCount++;
+      at={x,y:pavement,z},idx=signalCount++,
+      face=side<0?1:-1;
     pose(signalPosts,idx,at,0,[0,3.2,0],[1,6.4,1],0);
     pose(signalArms,idx,at,0,[0,6.38,-side*2.06],[1,1,4.25],0);
     pose(signalHeads,idx,at,0,[0,6.52,-side*4.08],[.85,2.23,.74],0);
-    // Bulbs sit proud of the east-facing head, visible to westbound cars.
-    pose(signalRed,idx,at,0,[.445,7.13,-side*4.08],[.24,.46,.46],0);
-    pose(signalAmber,idx,at,0,[.445,6.52,-side*4.08],[.24,.46,.46],0);
-    pose(signalGreen,idx,at,0,[.445,5.91,-side*4.08],[.24,.46,.46],0);
+    // Each signal head has three physical lens surfaces. Only the active
+    // emissive/bright overlay switches off; dark glass remains in its frame.
+    const bulbZ=-side*4.08;
+    for(const [n,height] of [7.13,6.52,5.91].entries())
+      pose(inactiveLenses,idx*3+n,at,0,
+        [face*.445,height,bulbZ],[.235,.46,.46],0);
+    pose(signalRed,idx,at,0,[face*.51,7.13,bulbZ],[.24,.43,.43],0);
+    pose(signalAmber,idx,at,0,[face*.51,6.52,bulbZ],[.24,.43,.43],0);
+    pose(signalGreen,idx,at,0,[face*.51,5.91,bulbZ],[.24,.43,.43],0);
     pose(signalPedHeads,idx,at,0,[0,3.73,-side*.10],[.43,1.02,.62],0);
-    pose(pedestrianWait,idx,at,0,[.23,3.96,-side*.10],
+    pose(pedestrianWait,idx,at,0,[face*.23,3.96,-side*.10],
       [.05,.30,.37],0);
-    pose(pedestrianWalk,idx,at,0,[.23,3.52,-side*.10],
+    pose(pedestrianWalk,idx,at,0,[face*.23,3.52,-side*.10],
       [.05,.30,.37],0);
   }
   for(const item of [signalPosts,signalArms,signalHeads,signalPedHeads,
@@ -272,6 +301,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     item.count=signalCount;item.instanceMatrix.needsUpdate=true;
     if(item.count)item.computeBoundingSphere();item.frustumCulled=true;
   }
+  inactiveLenses.count=signalCount*3;
+  inactiveLenses.instanceMatrix.needsUpdate=true;
+  if(inactiveLenses.count)inactiveLenses.computeBoundingSphere();
+  inactiveLenses.frustumCulled=true;
   let signalTime=0,vehicleGreen=true,signalAspect='green';
   // Five localized light sources brighten road asphalt and nearby car roofs.
   const streetLights=[];
@@ -329,12 +362,17 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
       // Each surveyed crossing has its own physical stop line. Yellow is a
       // stop phase, too; a car already inside the junction continues through.
       // Keep the bumper short of the zebra stripes, not inside the people.
-      if(!vehicleGreen&&v.side===1&&v.tier===1&&v.dir<0){
+      if(!vehicleGreen&&!v.disabled&&v.side===1&&v.tier===1){
         for(const cx of crossingSites){
-          const stopX=cx+12;
-          if(currentX>=stopX-.005&&currentX<stopX+36&&
-             x<stopX&&currentX-x<6){
-            nextDistance=currentDist-(currentX-stopX);
+          const stopX=cx+(v.dir<0?12:-12);
+          const approaching=(stopX-currentX)*v.dir;
+          const passed=(x-stopX)*v.dir;
+          // Don't stop cars which have already cleared the crossing.
+          // Keep the test symmetric for both driving directions and avoid
+          // jumping between stop bars when a car changes direction.
+          if(approaching>=-.005&&approaching<36&&passed>0&&
+             Math.abs(x-currentX)<6){
+            nextDistance=currentDist+(stopX-currentX);
             x=stopX;
             break;
           }
@@ -440,9 +478,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     }},
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
       streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,movingHeadlights:headlightCones.length,
-      zebraStripes:zebra.count,trafficSignals:signalHeads.count,
+      zebraStripes:zebra.count,stopLines:stopBars.count,
+      trafficSignals:signalHeads.count,
       pedestrianSignals:signalPedHeads.count,signalizedCrossings:crossingSites.length,
-      drawGroups:Object.keys(buffer).length+15},
+      drawGroups:Object.keys(buffer).length+17},
     // For collision avoidance, external consumers can check an individual 3m footprint.
     nearby(x,z,y,radius=3.8){
       return vehicles.some(v=>!v.disabled&&Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
