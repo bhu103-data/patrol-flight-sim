@@ -135,6 +135,31 @@ fs.mkdirSync(outDir,{recursive:true});
   await photo('nyc-central-park-loeb-bench-close.png');
   report.stages.push({stage:'loeb-bench-close',zoom:'68',...benchClose});
 
+  // Genuine lakeside view: UI slider normally clamps to ±48 degrees.
+  // Extend only this Playwright page's slider range for a reproducible
+  // off-path inspection camera. Gameplay settings/controls remain unchanged.
+  for(const [angle,zoom,shotName] of [
+    [72,'57','nyc-central-park-boathouse-lake-oblique.png'],
+    [95,'68','nyc-central-park-boathouse-lake-facade.png']
+  ]){
+    await page.locator('#hotelAngle').evaluate((el,n)=>{
+      el.max='120';el.value=String(n);
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+    },angle);
+    await page.locator('#hotelZoom').evaluate((el,n)=>{
+      el.value=n;el.dispatchEvent(new Event('input',{bubbles:true}));
+    },zoom);
+    await page.waitForTimeout(850);
+    const inspect=await current();
+    assert.equal(inspect.selectedView,'Central Park · Loeb Boathouse');
+    assert(inspect.webgl2&&!inspect.contextLost);
+    assert.equal(await page.locator('#hotelAngle').inputValue(),String(angle));
+    await photo(shotName);
+    report.stages.push({stage:'boathouse-lake-facade',qaAngleDegrees:angle,
+      zoom,scriptOnlySliderRange:true,shotName,...inspect});
+  }
+
+
   await page.locator('#resumeFlight').click();
   await page.waitForFunction(()=>document.getElementById('hotelViews')?.hidden,
    null,{timeout:10000});
