@@ -5396,13 +5396,15 @@ const CENTRAL_PARK_SITES=[
       const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
       const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
       if (distanceSq>455*455) continue;
-      // PATROL_NYC_TRAFFIC_WATERLINE_V1: traffic on the authored bridge
-      // uses bridgeRoadHeight, but ordinary downtown streets are clipped at
-      // the coast. Do not render cars/pedestrians on an absent road in water.
-      // Expressway actors have their own elevated deck heights. Wrecks use
-      // separate impact physics rather than disappearing at the shoreline.
+      // PATROL_NYC_TRAFFIC_WATERLINE_V2: traffic must obey the same
+      // no-water / no-building footprint rules as the authored NYC roads.
+      // Skipping a segment without an actual street is safer than rendering
+      // a car through a warehouse. The raised bridge and expressway are
+      // intentional exceptions (the terrain/parcel below is not their deck).
+      // Wrecks remain governed by crash physics.
       if(selectedMap.city && !actor.bridge && !actor.expressway &&
-         !actor.wreck && sampleTerrainHeight(x,z)<=WATER_H+.08)continue;
+         !actor.wreck &&
+         (sampleTerrainHeight(x,z)<=WATER_H+.08 || cityLotAt(x,z)))continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
       if(actor.kind==='walker'){
         drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45},distanceSq<130*130);
