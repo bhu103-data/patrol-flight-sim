@@ -70,6 +70,51 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     mesh.frustumCulled=true;
     scene.add(mesh);pools.set(name,{mesh,capacity,count:0});
   }
+  // Curved pitched Chinese-style roof: true continuous 3D surface with lifted
+  // eave corners. One low-cost instanced geometry replaces two intersecting box slabs.
+  function traditionalRoofGeometry(){
+    const positions=[],uvs=[],triangles=[];
+    const cols=18,rows=22;
+    for(let iz=0;iz<=rows;iz++){
+      const z=iz/rows-.5;
+      const edge=Math.abs(z)*2;
+      const pitch=.96*(1-edge*edge)+.07*Math.pow(edge,7);
+      for(let ix=0;ix<=cols;ix++){
+        const x=ix/cols-.5;
+        const cornerCurl=Math.pow(Math.abs(x)*2,6)*Math.pow(edge,6)*.12;
+        const y=.017+pitch+cornerCurl;
+        positions.push(x,y,z);
+        // UVs span repeatable ceramic tiles across the actual surface, not solid paint.
+        uvs.push(ix/cols*2.2,iz/rows*2.5);
+      }
+    }
+    for(let iz=0;iz<rows;iz++)for(let ix=0;ix<cols;ix++){
+      const a=iz*(cols+1)+ix,b=a+1,c=a+cols+1,d=c+1;
+      triangles.push(a,c,b,b,c,d);
+    }
+    const geometry=new THREE.BufferGeometry();
+    geometry.setIndex(triangles);
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+  const roofMaterial=materials.terra.clone();
+  roofMaterial.side=THREE.DoubleSide;
+  const curvedRoofs=new THREE.InstancedMesh(traditionalRoofGeometry(),roofMaterial,96);
+  curvedRoofs.count=0;
+  curvedRoofs.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  scene.add(curvedRoofs);
+  function roof(x,y,z,width,height,depth){
+    const index=curvedRoofs.count;
+    if(index>=96)return;
+    dummy.position.set(x,y,z);
+    dummy.rotation.set(0,0,0);
+    dummy.scale.set(width,height,depth);
+    dummy.updateMatrix();
+    curvedRoofs.setMatrixAt(index,dummy.matrix);
+    curvedRoofs.count=index+1;
+  }
   function put(name,x,y,z,w,h,d,rx=0,ry=0,rz=0){
     const p=pools.get(name);if(!p||p.count>=p.capacity)return;
     dummy.position.set(x,y,z);dummy.scale.set(w,h,d);
@@ -161,12 +206,10 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       const width=(w+5)/3, cx=hongX+(wing-1)*width;
       const roofZ=z-(wing%2===0?0:2);
       const eave=y+11.2, rise=3.2+((level+wing)%3)*.5;
-      const angle=Math.atan2(rise,18);
-      const slope=Math.hypot(18,rise);
-      put('terra',cx,eave+rise/2,roofZ+9,width+2,1.15,slope,angle);
-      put('terra',cx,eave+rise/2,roofZ-9,width+2,1.15,slope,-angle);
-      put('carved',cx,eave+rise,roofZ,width+3,.9,.8);
-      put('amber',cx,eave-.2,roofZ+18,width+3,.21,.45);
+      roof(cx,eave,roofZ,width+3,rise,37);
+      put('carved',cx,eave+rise,roofZ,width+3,.52,.8);
+      put('amber',cx,eave+.15,roofZ+18.1,width+3,.18,.42);
+      put('carved',cx,eave+.13,roofZ-18.1,width+3,.22,.39);
       // Upturned eave ends + tile seams.
       for(const edge of [-1,1]){
         put('carved',cx+edge*(width/2+1),eave+.65,roofZ+17.7,2.0,1.3,.8);
@@ -563,10 +606,12 @@ put('paving',sx,sy+.36,sz+31.3,72,.7,14);
     pool.mesh.instanceMatrix.needsUpdate=true;
     if(pool.count>0)pool.mesh.computeBoundingSphere();
   }
+  curvedRoofs.instanceMatrix.needsUpdate=true;
+  if(curvedRoofs.count>0)curvedRoofs.computeBoundingSphere();
   // Toggle purely ornamental layers for battery life; core landmarks stay intact.
   return {
-    stats:Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),
-    detailMeshes:pools.size+2,
+    stats:{...Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),curvedRoofs:curvedRoofs.count},
+    detailMeshes:pools.size+3,
     setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;}
   };
 }
