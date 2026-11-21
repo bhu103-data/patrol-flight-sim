@@ -5270,26 +5270,62 @@ const CENTRAL_PARK_SITES=[
   function nycParcelCrossesRoad(lot,roadMargin=5.85){
     if(!lot||![lot[0],lot[1],lot[2],lot[3]].every(Number.isFinite))return true;
     const [x,z,w,d]=lot;
-    const minX=x-w*.5-roadMargin,maxX=x+w*.5+roadMargin;
-    const minZ=z-d*.5-roadMargin,maxZ=z+d*.5+roadMargin;
-    // Reserve both ordinary streets and waterfront expressway/ramp corridors.
-    // A conservative footprint clear keeps elevated decks from crossing roofs.
+    // The surveyed NYC polygon is more accurate than its bounding box.
+    // Keep the old conservative box clearance for procedural buildings.
+    const poly=Array.isArray(lot[7])&&lot[7].length>=3&&lot[7].length<=64&&
+      lot[7].every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))
+      ?lot[7]:null;
+    const extents=poly||[[x-w*.5,z-d*.5],[x+w*.5,z+d*.5]];
+    const minX=Math.min(...extents.map(p=>p[0]))-roadMargin,
+          maxX=Math.max(...extents.map(p=>p[0]))+roadMargin;
+    const minZ=Math.min(...extents.map(p=>p[1]))-roadMargin,
+          maxZ=Math.max(...extents.map(p=>p[1]))+roadMargin;
+    const distanceSq=(p,a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+      const t=den>0?Math.max(0,Math.min(1,
+        ((p[0]-a[0])*dx+(p[1]-a[1])*dz)/den)):0;
+      return (p[0]-a[0]-dx*t)**2+(p[1]-a[1]-dz*t)**2;
+    };
+    const orient=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    const marginSq=roadMargin*roadMargin;
+    // Measure the road centerline to each real polygon edge, including
+    // intersections where neither road endpoint lies inside the building.
+    const polygonTouches=(a,b)=>{
+      if(insideCityFootprint(a[0],a[1],poly)||
+         insideCityFootprint(b[0],b[1],poly))return true;
+      for(let i=0;i<poly.length;i++){
+        const c=poly[i],d=poly[(i+1)%poly.length],
+              o1=orient(a,b,c),o2=orient(a,b,d),
+              o3=orient(c,d,a),o4=orient(c,d,b);
+        if(((o1>0&&o2<0)||(o1<0&&o2>0))&&
+           ((o3>0&&o4<0)||(o3<0&&o4>0)))return true;
+        if(Math.min(distanceSq(a,c,d),distanceSq(b,c,d),
+          distanceSq(c,a,b),distanceSq(d,a,b))<=marginSq)return true;
+      }
+      return false;
+    };
     for(const path of [...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp])
       for(let j=1;j<path.length;j++){
-      const a=path[j-1],b=path[j];
-      if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
-         Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
-      const dx=b[0]-a[0],dz=b[1]-a[1];
-      let entry=0,exit=1;
-      for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
-        if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
-        const t0=(lo-p)/v,t1=(hi-p)/v;
-        entry=Math.max(entry,Math.min(t0,t1));
-        exit=Math.min(exit,Math.max(t0,t1));
-        if(entry>exit)break;
+        const a=path[j-1],b=path[j];
+        if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
+           Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
+        if(poly){
+          if(polygonTouches(a,b))return true;
+          continue;
+        }
+        // Original swept AABB filter for non-GIS parcels.
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        let entry=0,exit=1;
+        for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
+          if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
+          const t0=(lo-p)/v,t1=(hi-p)/v;
+          entry=Math.max(entry,Math.min(t0,t1));
+          exit=Math.min(exit,Math.max(t0,t1));
+          if(entry>exit)break;
+        }
+        if(entry<=exit)return true;
       }
-      if(entry<=exit)return true;
-    }
     return false;
   }
 
