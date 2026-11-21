@@ -48,12 +48,36 @@ def audit_glb(path: Path, max_bytes: int) -> int:
             raise ValueError("Invalid binary GLB 2.0 header")
         document = json.loads(file.read(json_length).decode("utf-8").rstrip(" \x00"))
     total_triangles = 0
+    diffuse_images = set()
     for mesh in document.get("meshes", []):
         for primitive in mesh.get("primitives", []):
             if primitive.get("mode", 4) != 4:
                 raise ValueError("Only GLB triangle primitives can be imported")
-            accessor = primitive.get("indices", primitive["attributes"].get("POSITION"))
+            attrs = primitive["attributes"]
+            accessor = primitive.get("indices", attrs.get("POSITION"))
             total_triangles += int(document["accessors"][accessor]["count"]) // 3
+            material_id = primitive.get("material")
+            material = (document.get("materials", [])[material_id]
+                        if material_id is not None else {})
+            diffuse = material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+            if diffuse is None:
+                continue
+            if diffuse.get("texCoord", 0) != 0 or diffuse.get("extensions", {}).get("KHR_texture_transform"):
+                raise ValueError("Blender textures must use untransformed TEXCOORD_0")
+            if "TEXCOORD_0" not in attrs:
+                raise ValueError("Missing TEXCOORD_0 on a textured primitive")
+            diffuse_images.add(diffuse["index"])
+    if len(diffuse_images) > 1:
+        raise ValueError("Bake all Base Color images into one texture atlas")
+    if diffuse_images:
+        texture_id = next(iter(diffuse_images))
+        image_id = document["textures"][texture_id]["source"]
+        image = document["images"][image_id]
+        if image.get("mimeType") not in ("image/png", "image/jpeg") or "bufferView" not in image:
+            raise ValueError("Base Color atlas must be an embedded PNG or JPEG")
+        view = document["bufferViews"][image["bufferView"]]
+        if view.get("buffer", 0) != 0 or view.get("byteLength", 0) > 4194304:
+            raise ValueError("Embedded Base Color image exceeds 4 MiB")
     return total_triangles
 
 
@@ -82,9 +106,10 @@ def main() -> None:
                 raise ValueError(f"Unhide {obj.name} before exporting")
             obj.select_set(True)
         bpy.context.view_layer.objects.active = objects[0]
-        # GLB is Y-up, as expected by PATROL's runtime importer. PBR maps
-        # remain embedded, but the current runtime renders baseColor/COLOR_0,
-        # so bake visible colors into Blender vertex colors for now.
+        # GLB is Y-up, as expected by PATROL. The native renderer supports
+        # COLOR_0 plus ONE embedded Base Color PNG/JPEG atlas (TEXCOORD_0).
+        # Bake all diffuse materials to one UV atlas before exporting.
+        # Normal, metal and roughness textures are not yet imported.
         bpy.ops.export_scene.gltf(
             filepath=str(target), export_format="GLB",
             use_selection=True, export_apply=True, export_yup=True,
