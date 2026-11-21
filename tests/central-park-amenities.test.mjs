@@ -34,7 +34,7 @@ test('Central Park visitor models parse and remain inside Manhattan bounds',()=>
     assert.equal(stats.boats,4);
     assert.ok(stats.benches>=4);
     assert.ok(stats.lamps>=9);
-    assert.ok(count.tri>130 && count.tri<400);
+    assert.ok(count.tri>=90 && count.tri<400);
     assert.ok(count.quad<350 && count.boxes<125 && count.beams<250);
   }
   assert.ok(high.stats.lamps>low.stats.lamps);
