@@ -34,3 +34,20 @@ test('main flight and Chongqing engine JavaScript parse',()=>{
   const chongqing=get('assets/chongqing/chongqing.js').replace(/^import .*;\s*$/gm,'');
   assert.doesNotThrow(()=>new Script(chongqing));
 });
+
+
+test('New York is in-page while other map gateways remain unchanged',()=>{
+ const portal=get('assets/cosmos/portal.js'),ny=get('assets/cosmos/ny-cosmos.js');
+ const scene=get('assets/cosmos/cosmos.js'),city=get('index.html');
+ assert.match(portal,/flight\.map==='manhattan'/);
+ assert.match(portal,/import\('\.\/ny-cosmos\.js'\)/);
+ assert.match(ny,/window\.PatrolNYCosmos=\{enter,exit,isActive/);
+ assert.doesNotMatch(ny,/location\.assign|location\.reload/);
+ assert.match(scene,/embeddedNY.*nyCosmosLayer/);
+ assert.match(city,/NYC_ORBIT_CEILING\s*=\s*180/);
+ assert.match(city,/resumeFromOrbit/);
+});
+test('new in-page orbit module parses',()=>{
+ const js=get('assets/cosmos/ny-cosmos.js').replace(/^export /gm,'');
+ assert.doesNotThrow(()=>new Script(js));
+});

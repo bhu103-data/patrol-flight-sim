@@ -436,6 +436,8 @@
   }
   const WARNING_DISTANCE = 130;
   const CEILING = 100;
+  // Manhattan has a taller gate into the in-page orbital view.
+  const NYC_ORBIT_CEILING = 180;
   // X increases east and Z increases north throughout the simulation.
   const COAST_LANDMARKS = [
     { name: 'Copper Ridge', x: -310, z: 220, width: 320, depth: 190, elevation: 0.70 },
@@ -9436,6 +9438,7 @@
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('keydown', (e) => {
+    if(window.PatrolNYCosmos?.isActive?.())return;
     if (e.code === 'Escape' && (flying || crash)) {
       if(!skyPanel.hidden)toggleSkyPanel(false);
       else if(scenicViewActive)setScenicView(false);
@@ -11247,7 +11250,7 @@
         finishFlight([x,y,z],'Runway overrun',floor<=WATER_H+0.04);
       }
     }
-    plane.pos[1] = Math.min(plane.pos[1], CEILING);
+    plane.pos[1] = Math.min(plane.pos[1],selectedMap===FLIGHT_MAPS.manhattan?NYC_ORBIT_CEILING:CEILING);
     if (!crash) checkFlightCollision(grounded ? plane.pos : prevPos,plane.pos);
     renderGearStatus();
     if (!crash) updateMission(dt);
@@ -11395,6 +11398,11 @@
 
   function loop(now) {
     if (!flying) return;
+    if(selectedMap===FLIGHT_MAPS.manhattan && window.PatrolNYCosmos?.isActive?.()){
+      lastTime=now;
+      flightFrame=requestAnimationFrame(loop);
+      return;
+    }
     if (gl.isContextLost())return;
     // Start the clock on the first animation frame. Its timestamp may predate terrain setup.
     const rawDt = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001);
@@ -11443,7 +11451,8 @@
     const { basis, boundaryAssist } = crash || scenicViewActive
       ? { basis: getPlaneBasis(), boundaryAssist: false }
       : advanceFlight(dt);
-    if (!crash && !scenicViewActive && plane.pos[1]>=CEILING-0.15 && plane.vsi>0.5) {
+    const orbitalCap=selectedMap===FLIGHT_MAPS.manhattan?NYC_ORBIT_CEILING:CEILING;
+    if (!crash && !scenicViewActive && plane.pos[1]>=orbitalCap-0.15 && plane.vsi>0.5) {
       window.dispatchEvent(new Event('patrol:orbitLaunch'));
     }
     if (crash) {
@@ -11906,7 +11915,19 @@
     altitude: plane.pos[1], climb: plane.vsi,
     position: [...plane.pos], yaw: plane.yaw, pitch: plane.pitch,
     speed: plane.speed
-  })};
+  }),
+  suspendForOrbit:()=>{
+    steeringKeys.clear();brakes=false;leftDown=false;plane.afterburner=false;
+    mouseNorm.x=mouseNorm.y=0;
+  },
+  resumeFromOrbit:()=>{
+    if(selectedMap!==FLIGHT_MAPS.manhattan)return;
+    plane.pos[1]=Math.min(plane.pos[1],NYC_ORBIT_CEILING-12);
+    plane.pitch=Math.min(plane.pitch,-0.11);
+    plane.vsi=-1;plane.afterburner=false;
+    steeringKeys.clear();lastTime=null;frameCheckPending=true;
+    glCanvas.focus({preventScroll:true});
+  }};
   const graphicsResumeKey='patrol.graphicsResume';
   let resumedGraphics=false, interruptedFlight=null;
   function showGraphicsRecovery(message){

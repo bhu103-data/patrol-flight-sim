@@ -7,6 +7,7 @@
  */
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 
+const embeddedNY=Boolean(document.getElementById('nyCosmosLayer'));
 const canvas = document.getElementById('universe');
 const selector = document.getElementById('destination');
 const telemetry = document.getElementById('flightInfo');
@@ -18,7 +19,7 @@ const timeLabel = document.getElementById('timeLabel');
 const validMaps = ['manhattan','dc','vegas','alaska','coast','valley','chongqing'];
 const query = new URLSearchParams(location.search);
 const requestedMap = query.get('from');
-const from = validMaps.includes(requestedMap) ? requestedMap : 'manhattan';
+const from = embeddedNY?'manhattan':validMaps.includes(requestedMap) ? requestedMap : 'manhattan';
 const craftName = ['fighter','saucer','jetpack'].includes(query.get('craft')) ? query.get('craft') : 'fighter';
 const cityOrigin = {
   manhattan: {name:'Manhattan / New York',lat:40.7128,lon:-74.006},
@@ -34,7 +35,14 @@ originEl.textContent = source.name + ' → EARTH ORBIT / 地球轨道';
 back.href = from === 'chongqing'
   ? './chongqing.html'
   : './index.html?returnSpace=' + encodeURIComponent(from) + '&craft=' + encodeURIComponent(craftName);
-back.textContent = '↩ 返回 ' + source.name;
+back.textContent = embeddedNY?'↩ 下降返回曼哈顿 [U]':'↩ 返回 '+source.name;
+if(embeddedNY){
+  back.href='#';
+  back.addEventListener('click',event=>{
+    event.preventDefault();
+    window.PatrolNYCosmos?.exit?.();
+  });
+}
 const clamp = THREE.MathUtils.clamp;
 function rng(seed) {
   let s = seed >>> 0;
@@ -551,9 +559,12 @@ canvas.addEventListener('wheel',e=>{
     minZoom(),mode==='galaxy'?900:220);
 },{passive:false});
 window.addEventListener('keydown',e=>{
+  if(embeddedNY && !window.PatrolNYCosmos?.isActive?.())return;
   if(e.code==='KeyU' || e.code==='Escape'){
     if(/^(INPUT|SELECT)$/.test(e.target?.tagName||''))return;
-    location.assign(back.href);return;
+    if(embeddedNY)window.PatrolNYCosmos?.exit?.();
+    else location.assign(back.href);
+    return;
   }
   if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||''))return;
   held.add(e.code);
@@ -567,12 +578,19 @@ canvas.addEventListener('webglcontextlost',e=>{
   loading.querySelector('p').textContent='Graphics context lost. Waiting for the browser to restore it.';
 });
 canvas.addEventListener('webglcontextrestored',()=>{
-  location.reload();
+  if(embeddedNY){
+    loading.querySelector('p').textContent='Graphics restored. Reload to restart the orbit renderer.';
+    window.PatrolNYCosmos?.exit?.();
+  }else location.reload();
 });
 const clock=new THREE.Clock();
 let hudTicker=0;
 function frame(){
   requestAnimationFrame(frame);
+  if(embeddedNY && !window.PatrolNYCosmos?.isActive?.()){
+    clock.getDelta();
+    return;
+  }
   if(renderer.getContext().isContextLost())return;
   const dt=Math.min(clock.getDelta(),.06);
   if(document.hidden)return;
@@ -633,7 +651,7 @@ function frame(){
       focus==='moon'?'Moon':focus==='sun'?'Sun':bodies.get(focus)?.name||'Earth';
     telemetry.textContent=text+'\nDESTINATION: '+bodyLabel.toUpperCase()+
       '\nVISUAL RANGE: '+distance.toFixed(1)+(mode==='galaxy'?' kly (artistic)':' render units')+
-      '\nCRAFT: '+craftName.toUpperCase()+' · '+source.name.toUpperCase()+
+      '\nCRAFT: '+(embeddedNY?window.PatrolNYCosmos?.getCraft?.()||craftName:craftName).toUpperCase()+' · '+source.name.toUpperCase()+
       '\nTIME RATE: '+speeds[+timeScale.value]+'× · PERFORMANCE: '+(low?'MOBILE':'DESKTOP')+
       '\nSKY: '+(catalogStarCount?catalogStarCount.toLocaleString()+' REAL CATALOG STARS':'PROCEDURAL BACKUP');
     hudTicker=0;
@@ -642,5 +660,18 @@ function frame(){
     loading.classList.add('hidden');
     setTimeout(()=>{loading.style.display='none';},800);
   }
+}
+if(embeddedNY){
+  window.PatrolCosmosViewer={
+    enterOrbit(flight){
+      held.clear();pointers.clear();pinchLength=0;
+      destination('earth');
+      yaw=Number.isFinite(flight?.yaw)?flight.yaw:.3;
+      pitch=.28;distance=1.45;desiredDistance=4.8;
+      offset.set(0,0,0);curTarget.copy(currentBodyTarget());
+      renderer.setSize(innerWidth,innerHeight,false);
+    },
+    clearInput(){held.clear();pointers.clear();pinchLength=0;}
+  };
 }
 frame();

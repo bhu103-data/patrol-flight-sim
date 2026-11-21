@@ -23,15 +23,30 @@
       avatarFlying: Boolean(bridge?.avatarFlying)
     };
   };
-  let jumping = false;
-  function jumpToOrbit() {
-    if (jumping) return;
-    jumping = true;
-    const flight = state();
-    try { sessionStorage.setItem('patrol.cosmos.lastLaunch', JSON.stringify(flight)); } catch (_) {}
-    const next = new URL('./space.html', location.href);
-    next.searchParams.set('from', flight.map);
-    next.searchParams.set('craft', flight.craft);
+  let jumping=false,lastExitAt=-Infinity;
+  window.addEventListener('patrol:orbitReturn',()=>{
+    jumping=false;lastExitAt=performance.now();
+  });
+  function jumpToOrbit(){
+    if(window.PatrolNYCosmos?.isActive?.()){
+      window.PatrolNYCosmos.exit();return;
+    }
+    if(jumping || performance.now()-lastExitAt<1700)return;
+    const flight=state();
+    jumping=true;
+    if(!isChongqing && flight.map==='manhattan'){
+      import('./ny-cosmos.js').then(module=>module.enter(flight)).catch(error=>{
+        jumping=false;
+        console.error('Manhattan universe could not start:',error);
+        button.title='Cosmos failed to load; check network or WebGL';
+      });
+      return;
+    }
+    // The existing behavior for non-NY maps is unchanged this round.
+    try{sessionStorage.setItem('patrol.cosmos.lastLaunch',JSON.stringify(flight));}catch(_){}
+    const next=new URL('./space.html',location.href);
+    next.searchParams.set('from',flight.map);
+    next.searchParams.set('craft',flight.craft);
     location.assign(next.href);
   }
   const button = document.createElement('button');
@@ -70,7 +85,7 @@
     if (jumping || document.hidden || !window.PatrolSpaceBridge) return;
     const f = state();
     if (f.playing && f.climb > 0.4 &&
-        (isChongqing ? f.altitude > 650 : f.altitude >= 99.6)) {
+        (isChongqing ? f.altitude>650 : f.map==='manhattan'?f.altitude>=179.6:f.altitude>=99.6)) {
       window.clearInterval(watch);
       jumpToOrbit();
     }
