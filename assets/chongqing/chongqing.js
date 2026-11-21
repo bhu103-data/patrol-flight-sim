@@ -391,50 +391,68 @@ for(let i=0;i<380;i++){
 const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
 scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xc5dafa,size:2.4,sizeAttenuation:false})));
 
+// The pilot uses rounded anatomical proportions, tapered limbs and a small detailed helmet.
+// All shapes are original game geometry, not an unlicensed third-party character mesh.
 const avatar=new THREE.Group();scene.add(avatar);
-// Composed pilot silhouette: soft helmet, metal goggles, visor, straps and chili flightpack.
-// Keep the mesh count small because this character stays close to the camera.
-const pilotMetal=new THREE.MeshStandardMaterial({color:0xcfac76,metalness:.65,roughness:.38});
-const pilotLens=new THREE.MeshStandardMaterial({color:0x82cce3,emissive:0x327b96,emissiveIntensity:.35,metalness:.48,roughness:.14});
-const pilotDark=new THREE.MeshStandardMaterial({color:0x342c35,roughness:.6});
-const pilotCloth=new THREE.MeshStandardMaterial({color:0x932e39,roughness:.88});
-const pilotEyes=new THREE.MeshBasicMaterial({color:0x282127});
+const pilotMetal=new THREE.MeshStandardMaterial({color:0x8c979e,metalness:.82,roughness:.29});
+const pilotLens=new THREE.MeshPhysicalMaterial({color:0x5e99b2,metalness:.55,roughness:.15,clearcoat:.75,clearcoatRoughness:.12,emissive:0x15394a,emissiveIntensity:.25});
+const pilotDark=new THREE.MeshStandardMaterial({color:0x23282e,roughness:.73,metalness:.16});
+const pilotJacket=new THREE.MeshStandardMaterial({color:0x505147,roughness:.93});
+const pilotCloth=new THREE.MeshStandardMaterial({color:0x773f37,roughness:.91});
+const pilotBoot=new THREE.MeshStandardMaterial({color:0x2f3031,roughness:.78,metalness:.08});
+const pilotSkin=new THREE.MeshStandardMaterial({color:0xb7866b,roughness:.93});
 const pilotLimbs={arms:[],legs:[],boots:[]};
-const flameLight=new THREE.PointLight(0xff5b17,0,22,2);
-flameLight.position.set(0,-1.3,1.2);avatar.add(flameLight);
-box(0,-.85,0,1.25,1.65,.9,M.coat,avatar);
-ball(0,.53,0,.72,M.skin,avatar);
-ball(0,.88,-.12,.74,M.pants,avatar);
-box(0,-.12,.65,1.25,1.5,.48,M.copper,avatar);
-box(0,.18,-.7,.75,.2,.18,M.glass,avatar);
-for(const dir of [-1,1]){
-  const arm=box(.84*dir,-.52,0,.46,1.35,.5,M.coat,avatar);
-  pilotLimbs.arms.push(arm);
-  const leg=box(.37*dir,-1.9,0,.53,1.1,.58,M.pants,avatar);
-  pilotLimbs.legs.push(leg);
-  const boot=box(.37*dir,-2.47,-.17,.66,.38,1.01,M.boot,avatar);
-  pilotLimbs.boots.push(boot);
-  // Lens, rim, leather strap and earcup: readable even from 10–15 meters.
-  const lens=new THREE.Mesh(new THREE.CircleGeometry(.23,18),pilotLens);
-  lens.position.set(.34*dir,.53,-.75);avatar.add(lens);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(.27,.062,6,18),pilotMetal);
-  ring.position.set(.34*dir,.53,-.78);avatar.add(ring);
-  box(.62*dir,.64,-.12,.24,.28,.46,pilotMetal,avatar);
-  box(.85*dir,-1.06,-.15,.57,.23,.56,pilotDark,avatar);
-  ball(.85*dir,-1.24,-.21,.27,M.skin,avatar);
-  const lash=ball(.23*dir,.17,-.62,.055,pilotEyes,avatar);
-  lash.scale.set(1.3,.5,.3);
-  box(.5*dir,-.8,.57,.24,2.05,.15,pilotMetal,avatar);
+const flameLight=new THREE.PointLight(0xff6a31,0,21,2);
+flameLight.position.set(0,-1.42,1.0);avatar.add(flameLight);
+function pilotMesh(geometry,material,x,y,z,parent=avatar){
+  const mesh=new THREE.Mesh(geometry,material);
+  mesh.position.set(x,y,z);parent.add(mesh);return mesh;
 }
-const scarf=box(0,.17,.60,1.12,.26,.68,M.scarf,avatar);
-const flyingScarf=box(.66,.16,.76,1.25,.19,.27,pilotCloth,avatar);
-const gogglesStrap=box(0,.58,.0,1.65,.19,.53,pilotDark,avatar);
-const helmet=new THREE.Mesh(new THREE.SphereGeometry(.78,18,10,0,Math.PI*2,0,Math.PI*.6),pilotDark);
-helmet.position.set(0,.71,0);avatar.add(helmet);
-box(0,-1.00,.67,1.15,.21,.25,pilotMetal,avatar);
-box(0,-.28,.92,.68,.54,.16,pilotCloth,avatar);
-const badge=ball(0,-.28,1.02,.22,M.red,avatar);
-badge.scale.set(.72,1.3,.28);
+// Tapered jacket with shoulders, collar, leather waist belt and a separate pelvis.
+pilotMesh(new THREE.CylinderGeometry(.56,.40,1.43,18),pilotJacket,0,-.69,0);
+pilotMesh(new THREE.CylinderGeometry(.39,.37,.43,16),M.pants,0,-1.51,0);
+pilotMesh(new THREE.CylinderGeometry(.47,.47,.16,16),pilotDark,0,-1.34,0);
+pilotMesh(new THREE.CylinderGeometry(.19,.22,.2,12),pilotSkin,0,.10,0);
+pilotMesh(new THREE.SphereGeometry(.365,20,14),pilotSkin,0,.57,-.03);
+const helmet=pilotMesh(new THREE.SphereGeometry(.415,22,16,0,Math.PI*2,0,Math.PI*.57),pilotDark,0,.67,0);
+pilotMesh(new THREE.CylinderGeometry(.44,.43,.1,20),pilotMetal,0,.61,.03);
+const gogglesStrap=pilotMesh(new THREE.CylinderGeometry(.384,.386,.13,20),pilotDark,0,.56,-.015);
+for(const dir of [-1,1]){
+  // Smoked anti-glare flight goggles have reflective curved lenses with metal retaining rings.
+  const lens=pilotMesh(new THREE.SphereGeometry(.175,16,12),pilotLens,dir*.188,.58,-.353);
+  lens.scale.set(1,.83,.33);
+  const ring=pilotMesh(new THREE.TorusGeometry(.175,.028,7,20),pilotMetal,dir*.188,.58,-.407);
+  ring.rotation.y=dir*.075;
+  pilotMesh(new THREE.SphereGeometry(.12,10,8),pilotMetal,dir*.40,.57,-.02);
+  // Shoulder-origin pivots produce a believable run animation.
+  const armPivot=new THREE.Group();armPivot.position.set(dir*.60,-.20,0);avatar.add(armPivot);
+  const upper=pilotMesh(new THREE.CapsuleGeometry(.20,.49,6,12),pilotJacket,dir*.04,-.43,.01,armPivot);
+  upper.rotation.z=dir*.12;
+  pilotMesh(new THREE.SphereGeometry(.19,12,10),pilotDark,dir*.08,-.90,-.015,armPivot);
+  pilotLimbs.arms.push(armPivot);
+  const legPivot=new THREE.Group();legPivot.position.set(dir*.255,-1.46,0);avatar.add(legPivot);
+  pilotMesh(new THREE.CapsuleGeometry(.21,.60,7,12),M.pants,0,-.39,.018,legPivot);
+  const boot=pilotMesh(new THREE.SphereGeometry(1,15,11),pilotBoot,0,-.97,-.13,legPivot);
+  boot.scale.set(.265,.19,.39);
+  pilotLimbs.legs.push(legPivot);pilotLimbs.boots.push(boot);
+  // Sturdy backpack harness, front straps and back-side buckles.
+  const strap=pilotMesh(new THREE.BoxGeometry(.11,1.55,.12),pilotMetal,dir*.38,-.66,-.43);
+  strap.rotation.z=dir*.1;
+}
+const scarf=pilotMesh(new THREE.TorusGeometry(.38,.075,8,24),pilotCloth,0,.055,0);
+scarf.rotation.x=Math.PI/2;
+const flyingScarf=pilotMesh(new THREE.BoxGeometry(.90,.13,.22),pilotCloth,.61,.06,.26);
+flyingScarf.rotation.z=-.12;
+// More grounded metal jet unit: housing, exhaust collars and a small painted chili emblem.
+pilotMesh(new THREE.BoxGeometry(.85,1.13,.34),pilotDark,0,-.66,.51);
+pilotMesh(new THREE.BoxGeometry(.64,.83,.13),pilotMetal,0,-.61,.74);
+for(const dir of [-1,1]){
+  pilotMesh(new THREE.BoxGeometry(.20,.86,.29),pilotMetal,dir*.35,-.68,.64);
+  const nozzle=pilotMesh(new THREE.CylinderGeometry(.12,.20,.30,14),pilotDark,dir*.21,-1.22,.75);
+  nozzle.rotation.x=Math.PI/2;
+  pilotMesh(new THREE.TorusGeometry(.17,.033,7,18),pilotMetal,dir*.21,-1.22,.89).rotation.x=0;
+}
+pilotMesh(new THREE.BoxGeometry(.25,.32,.07),pilotCloth,0,-.74,.84);
 avatar.rotation.order='YXZ';
 
 const state={
