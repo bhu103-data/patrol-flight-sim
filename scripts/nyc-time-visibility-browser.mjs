@@ -15,8 +15,8 @@ const times=[{name:'noon',value:'12'},{name:'dusk',value:'18.5'},
 const problems=[],shots=[],started=Date.now();
 let browser;
 function imageMetrics(buffer){
- const png=PNG.sync.read(buffer),luma=[],saturated=0,nearBlack=0;
- let total=0,rSum=0,gSum=0,bSum=0;
+ const png=PNG.sync.read(buffer),luma=[];
+ let saturated=0,nearBlack=0,total=0,rSum=0,gSum=0,bSum=0;
  const buckets=new Set();
  for(let y=0;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
   const k=(y*png.width+x)*4,r=png.data[k],g=png.data[k+1],b=png.data[k+2];
