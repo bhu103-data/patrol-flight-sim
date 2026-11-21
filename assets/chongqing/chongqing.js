@@ -574,6 +574,30 @@ function toggleFlight(){
   if(state.flying)state.vel.y=Math.max(9,state.vel.y);
   message(state.flying?'飞行模式开启！Shift 加速，Space 上升，Ctrl 下降':'关闭飞行，准备降落');
 }
+// Optional viewpoint shortcuts let players visually inspect the distant landmarks
+// without waiting for a long flyover; they do not alter the world or quest progress.
+function scenicView(key){
+  const destinations={
+    Digit1:{name:'洪崖洞临江夜景',pos:[155,132,-72],target:[155,112,168]},
+    Digit2:{name:'朝天门来福士与水晶连廊',pos:[-355,302,-50],target:[-355,294,176]},
+    Digit3:{name:'李子坝轻轨穿楼',pos:[-121,112,-345],target:[-121,100,-254]},
+    Digit4:{name:'重庆老火锅',pos:[285,ground(285,265)+2.7,265],target:[285,ground(285,225)+8,225]}
+  };
+  const next=destinations[key];
+  if(!next)return false;
+  state.pos.set(...next.pos);
+  state.vel.set(0,0,0);
+  state.flying=key!=='Digit4';
+  state.onGround=key==='Digit4';
+  state.boosting=false;
+  jumpQueued=false;
+  const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
+  viewYaw=Math.atan2(dx,-dz);
+  viewPitch=.23;
+  cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
+  message('观景镜头：'+next.name,3);
+  return true;
+}
 function press(key,once=false){
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
@@ -582,6 +606,7 @@ function press(key,once=false){
 }
 window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  if(!e.repeat&&scenicView(e.code))return;
   if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
 });
