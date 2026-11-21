@@ -35,27 +35,40 @@ function screenshotPixels(bytes){
  return {width:img.width,height:img.height,colorBins:colors.size,
   nearBlackFraction:black/Math.max(count,1)};
 }
+// HUD panels overlap the canvas in the browser compositor. Even an
+// element.screenshot() includes those overlays unless we hide them.
+// The temporary class preserves canvas visibility and is always removed,
+// so scenic view controls still work for subsequent camera selections.
+await page.addStyleTag({content:
+ 'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
+ 'body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'});
 const screenshots=[],pixels={},captureTimings={};
 let pendingShot=null;
 async function capture(name){
- // The previous full-page screenshots included the HUD, which could make a
- // blank WebGL canvas appear nonblank. Capture the canvas itself instead.
- // SwiftShader software rendering can exceed Playwright's 30s screenshot
- // default at later camera positions; give the render an explicit budget.
+ // Photograph WebGL color alone. The menu/HUD cannot make a blank scene
+ // appear detailed. Software SwiftShader gets a bounded 75-second budget.
  const started=Date.now();
  pendingShot=name;
- console.log('[PATROL QA] capturing canvas '+name);
- const image=await page.locator('#glCanvas').screenshot({
-  path:out+'/'+name,animations:'allow',timeout:75000
- });
- const stats=screenshotPixels(image);
- captureTimings[name]=Date.now()-started;
- check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
-  stats.nearBlackFraction<.97,
-  'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
- screenshots.push(name);pixels[name]=stats;
- pendingShot=null;
- console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
+ console.log('[PATROL QA] capturing canvas-only scene '+name);
+ await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
+ try{
+  const hidden=await page.locator('#hotelViews').evaluate(
+   el=>getComputedStyle(el).visibility==='hidden');
+  check(hidden,'Scenic Views overlay still covers WebGL screenshot');
+  const image=await page.locator('#glCanvas').screenshot({
+   path:out+'/'+name,animations:'allow',timeout:75000
+  });
+  const stats=screenshotPixels(image);
+  captureTimings[name]=Date.now()-started;
+  check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
+   stats.nearBlackFraction<.97,
+   'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
+  screenshots.push(name);pixels[name]=stats;
+  pendingShot=null;
+  console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
+ }finally{
+  await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
+ }
 }
 
 let result;
