@@ -65,6 +65,8 @@ test('active Chongqing street traffic has 10 distinct cars including yellow taxi
   assert.equal(traffic.stats.movingHeadlights,2);
   assert.ok(traffic.stats.streetLamps>=50);
   assert.ok(traffic.stats.roadMarkings>200);
+  assert.equal(traffic.stats.zebraStripes,10);
+  assert.equal(traffic.stats.trafficSignals,2);
   assert.ok(objects.filter(x=>x instanceof InstancedMesh).length>=15);
 });
 test('moving vehicles keep dynamic matrix counts inside buffers',()=>{
@@ -89,8 +91,24 @@ test('battery mode removes decorative checker and hub detail, not actual car bod
   assert.equal(body.visible,true);
   assert.ok(instanced.filter(x=>!x.visible).length>=3);
   traffic.setQuality('normal');
-  assert.ok(instanced.every(x=>x.visible));
+  // A red traffic signal remains correctly dark while vehicle green is active.
+  assert.ok(instanced.filter(x=>x.capacity!==2).every(x=>x.visible));
   assert.equal(objects.filter(x=>x instanceof THREE.SpotLight).length,2);
+});
+test('crossing changes its active lamp after 24 seconds and again after 36',()=>{
+  const {traffic,objects}=setup();
+  const reds=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===2&&x.material.color===0xff4539);
+  const greens=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===2&&x.material.color===0x4ee28b);
+  assert.equal(reds.length,1);
+  assert.equal(greens.length,1);
+  assert.equal(greens[0].visible,true);
+  assert.equal(reds[0].visible,false);
+  for(let i=0;i<510;i++)traffic.update(.05,null);
+  assert.equal(greens[0].visible,false);
+  assert.equal(reds[0].visible,true);
+  for(let i=0;i<230;i++)traffic.update(.05,null);
+  assert.equal(greens[0].visible,true);
+  assert.equal(reds[0].visible,false);
 });
 test('painted car body, cabin glass, wheels and white-black checker are separate batches',()=>{
   const {objects}=setup();
