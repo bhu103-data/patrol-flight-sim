@@ -130,3 +130,149 @@ export function buildNycHeroScenery({addQuad,box,beam,waterY,groundY,spawn,liber
   }
   return {starPoints:11,walkwayPanels:44,pierPanels:8,shorelineFixtures:11};
 }
+
+
+// PATROL_NYC_FINANCIAL_DISTRICT_WATERFRONT_V1
+// Shore-dependent, batched piers in the bounded Lower Manhattan corridor.
+// All coordinates use the game's compressed flight units, not survey metres.
+// Skip geometry when the source terrain has no land/water transition.
+export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
+  const stone=[.55,.54,.50], curb=[.72,.70,.63], worn=[.37,.35,.32],
+    darkSteel=[.23,.28,.31], handrail=[.53,.57,.57], timber=[.44,.34,.24],
+    deckPaint=[.65,.63,.56], blackRubber=[.12,.15,.17], glass=[.16,.28,.33];
+  let pierCount=0;
+  // Recover the existing coastline rather than guessing a fixed X position.
+  function bank(z,side){
+    const center=.24*z+30.0;
+    if(terrain(center,z)<=waterY+1.15)return null;
+    let last=center;
+    for(let offset=3;offset<145;offset+=1.6){
+      const x=center+side*offset;
+      if(terrain(x,z)<=waterY+.55)return last;
+      last=x;
+    }
+    return null;
+  }
+  // Retain the real coast shape; masonry facing is generated only on a
+  // found land-to-water interface.
+  for(const side of [-1,1]){
+    let prev=null;
+    for(let z=-491;z<=-348;z+=4.4){
+      const x=bank(z,side);
+      if(x===null){prev=null;continue;}
+      const top=Math.min(waterY+2.90,Math.max(waterY+1.65,terrain(x,z)+.08));
+      if(prev && Math.abs(x-prev.x)<7){
+        addQuad([prev.x,waterY-.30,prev.z],[x,waterY-.30,z],
+          [x,top,z],[prev.x,prev.top,prev.z],stone,1);
+        beam([prev.x,prev.top+.06,prev.z],[x,top+.06,z],.09,curb);
+        if(Math.floor((z+491)/4.4)%3===0){
+          const backX=x-side*.13;
+          box(backX,waterY+1.03,z,.12,1.66,.32,worn);
+        }
+      }
+      prev={x,z,top};
+    }
+  }
+  // Different pier lengths and fittings are deliberate; no random identical
+  // clones. Avoid Liberty Island and the Brooklyn Bridge collision footprint.
+  const sites=[
+    {z:-475,side:-1,length:25,width:5.1,type:0},
+    {z:-448,side:-1,length:33,width:6.3,type:1},
+    {z:-411,side:-1,length:22,width:4.6,type:2},
+    {z:-377,side:-1,length:27,width:5.5,type:0},
+    {z:-456,side:1,length:20,width:4.8,type:1},
+    {z:-384,side:1,length:26,width:5.8,type:2}
+  ];
+  for(const site of sites){
+    const {z,side,length,width,type}=site;
+    const edge=bank(z,side);
+    if(edge===null)continue;
+    // Inland connection is anchored before the coastline and extends over
+    // water. The cap retains the same number of fixed-size deck segments.
+    const root=edge-side*1.6,tip=edge+side*length,top=waterY+1.18;
+    const landY=Math.min(waterY+2.75,terrain(root,z)+.07);
+    const panelCount=Math.max(3,Math.ceil(length/2.2));
+    const lengthX=tip-root;
+    const cross=(x,y,w)=>[[x,y,z-w*.5],[x,y,z+w*.5]];
+    for(let j=0;j<panelCount;j++){
+      const t0=j/panelCount,t1=(j+1)/panelCount;
+      const x0=root+lengthX*t0,x1=root+lengthX*t1;
+      const y0=top+(landY-top)*Math.max(0,1-t0*7);
+      const y1=top+(landY-top)*Math.max(0,1-t1*7);
+      const a=cross(x0,y0,width),b=cross(x1,y1,width);
+      addQuad(a[0],b[0],b[1],a[1],
+        j%5===0?deckPaint:timber,2);
+      // Wooden seams remain visible close to the dock.
+      beam(a[0],a[1],.027,worn);
+      for(const lane of [-.30,.30]){
+        beam([x0,y0+.014,z+lane*width],
+          [x1,y1+.014,z+lane*width],.021,worn);
+      }
+    }
+    // No unsupported floating decks: paired piles and cross-bracing reach
+    // beneath the water surface at regular intervals.
+    for(let pos=4;pos<=length;pos+=7.1){
+      const px=edge+side*pos;
+      for(const railSide of [-1,1]){
+        const pz=z+railSide*(width*.42);
+        beam([px,waterY-.95,pz],[px,top+.08,pz],.15,darkSteel);
+        box(px,waterY+.06,pz,.42,.18,.42,blackRubber);
+      }
+      beam([px,waterY+.22,z-width*.42],
+        [px+side*2.9,top-.09,z+width*.42],.057,darkSteel);
+    }
+    // Coherent physical safety rails and mooring hardware.
+    for(const railSide of [-1,1]){
+      const rz=z+railSide*(width*.5-.16);
+      for(let pos=2;pos<=length-2;pos+=2.7){
+        const px=edge+side*pos;
+        beam([px,top+.04,rz],[px,top+.98,rz],.048,handrail);
+      }
+      beam([edge+side*2,top+.97,rz],
+        [tip-side*1.4,top+.97,rz],.056,handrail);
+      for(const pos of [3.2,length-2.2]){
+        const px=edge+side*pos;
+        box(px,top+.20,z+railSide*(width*.48),.37,.33,.29,darkSteel);
+        box(px,top+.38,z+railSide*(width*.48),.53,.075,.30,handrail);
+      }
+      for(let pos=5;pos<length-3;pos+=7.3){
+        const px=edge+side*pos;
+        box(px,top-.37,z+railSide*width*.48,.35,.67,.36,blackRubber);
+      }
+    }
+    // Ferry dock versus workboat pier versus service pier: recognizable
+    // silhouettes with different hardware, without copying proprietary art.
+    if(type===1){
+      const hx=root-side*1.1;
+      box(hx,top+1.62,z,3.2,2.58,width*.70,[.62,.64,.61]);
+      box(hx,top+2.99,z,3.65,.19,width*.84,curb);
+      for(const zSide of [-1,1]){
+        box(hx,top+1.76,z+zSide*width*.351,2.78,1.21,.055,glass);
+        box(hx,top+1.76,z+zSide*width*.375,.09,1.42,.07,handrail);
+      }
+      box(tip-side*.60,top+.18,z,1.15,.20,width*.73,[.75,.65,.39]);
+      for(const lane of [-1,1])
+        box(tip-side*.26,top+.35,z+lane*width*.30,.20,.38,.24,darkSteel);
+    }else if(type===2){
+      const hx=edge+side*(length*.68);
+      for(const railSide of [-1,1]){
+        const zz=z+railSide*width*.26;
+        box(hx,top+.43,zz,.82,.62,.52,[.67,.47,.28]);
+        box(hx,top+.77,zz,.90,.10,.60,handrail);
+      }
+      beam([edge+side*5,top+.18,z],[edge+side*5,top+4.8,z],
+        .11,darkSteel);
+      beam([edge+side*5,top+4.70,z],
+        [edge+side*10.5,top+4.12,z],.09,handrail);
+    }else{
+      for(let pos=6;pos<length-2;pos+=9.4){
+        const px=edge+side*pos;
+        box(px,top+.40,z,1.35,.70,1.15,[.57,.60,.58]);
+        box(px,top+.79,z,1.48,.08,1.27,darkSteel);
+      }
+      box(tip-side*1.6,top+.36,z,.68,.56,1.12,[.79,.34,.15]);
+    }
+    pierCount++;
+  }
+  return {pierCount,coastRange:[-491,-348]};
+}
