@@ -1988,6 +1988,8 @@
     uniform sampler2D uNyAsphaltPhoto;
     uniform sampler2D uNyConcretePhoto;
     uniform float uNyPhotoReady;
+    uniform sampler2D uNyLedAtlas;
+    uniform float uNyLedReady;
     // PATROL_NYC_MATERIAL_ATLAS_V5: independent building-type materials.
     uniform sampler2D uNyWallDiffuse;
     uniform sampler2D uNyWallNormal;
@@ -2285,11 +2287,12 @@
       }
       if (uEmissive > 0.5) {
         if(uTimesScreen){
-          float sweep=0.5+0.5*sin(uSceneTime*0.81+vWorld.y*0.43+vWorld.x*0.19+vWorld.z*0.17);
-          float stripe=0.5+0.5*sin(vWorld.y*1.06+vWorld.x*0.66+vWorld.z*0.32-uSceneTime*0.37);
-          float pixels=1.0-smoothstep(0.011,0.043,length(fract(vWorld.xy*19.0)-0.5));
-          vec3 hue=mix(vColor*0.68,vColor*1.19+vec3(0.05,0.037,0.055),sweep*0.72+stripe*0.28);
-          fragColor=vec4(clamp(hue+pixels*0.045,0.0,1.0),1.0);
+          // Original static ad photography-style illustration, not video.
+          vec3 hue=uNyLedReady>0.5?
+            texture(uNyLedAtlas,vColor.xy).rgb:vColor;
+          float pixelGrid=(1.0-smoothstep(.032,.075,length(fract(vWorld.xy*15.0)-.5)))*.025;
+          vec3 lit=hue*(1.0+pixelGrid)*(1.0-uAtmosphere.x*.08);
+          fragColor=vec4(clamp(lit,0.0,1.0),1.0);
         }else{
           fragColor=vec4(vColor*mix(1.0,0.47,uDimLights*uAtmosphere.x),1.0);
         }
@@ -2602,11 +2605,17 @@
       if(surfaces) surfaces.push(surface,surface,surface);
       pos.push(...a, ...b, ...c);
       norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
-      col.push(...rgb, ...rgb, ...rgb);
+      if(Array.isArray(rgb[0]))col.push(...rgb[0],...rgb[1],...rgb[2]);
+      else col.push(...rgb,...rgb,...rgb);
     }
     function addQuad(a, b, c, d, rgb, surface=0) {
-      addTri(a, b, c, rgb, surface);
-      addTri(a, c, d, rgb, surface);
+      if(Array.isArray(rgb[0])){
+        addTri(a,b,c,[rgb[0],rgb[1],rgb[2]],surface);
+        addTri(a,c,d,[rgb[0],rgb[2],rgb[3]],surface);
+      }else{
+        addTri(a,b,c,rgb,surface);
+        addTri(a,c,d,rgb,surface);
+      }
     }
 
     function upload() {
@@ -4661,6 +4670,8 @@
   }
   let mapLights=null;
   let timesSquareScreens=null;
+  // PATROL_NYC_STATIC_LED_V5 — original, unique, static ad art.
+  let timesSquareFallback=null,nycLedAtlas=null,nycLedLoading=false,nycLedGeneration=0;
   let sceneryPlaces=[];
   let sceneryObjects=[];
   let sceneryMovers=[];
@@ -4691,9 +4702,13 @@
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
     disposeSceneMesh(timesSquareScreens);
+    disposeSceneMesh(timesSquareFallback);
     for(const mesh of dcSurfaceMeshes)disposeSceneMesh(mesh);
     dcSurfaceMeshes=[];
     timesSquareScreens=null;
+    timesSquareFallback=null;
+    nycLedGeneration++;
+    if(nycLedAtlas){gl.deleteTexture(nycLedAtlas);nycLedAtlas=null;}
     mapScenery=mapLights=null;
     sceneryPlaces=[];
     sceneryObjects=[];
@@ -5040,9 +5055,38 @@
       box(approach,y+1.36,boardZ,0.13,2.72,0.12,[0.38,0.43,0.44]);
       box(approach,y+2.54,boardZ,0.19,0.71,4.93,[0.20,0.39,0.29]);
       addVegasLettering(lights.addQuad,'BROOKLYN BRIDGE',(u,v)=>[approach-0.105,y+2.54+v,boardZ-u],4.66,0.43,[0.94,0.97,0.89]);
-      const screens=createTriangleMesh();
-      buildTimesSquareDistrict({box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},screens.addQuad);
+      // Two geometry streams: original screen color fallback + UV-textured
+      // artwork, batched as just one draw call per branch.
+      const screens=createTriangleMesh(),oldScreens=createTriangleMesh(),adPanels=[];
+      const ledQuad=(a,b,c,d,color,label)=>{
+        const index=adPanels.length;
+        oldScreens.addQuad(a,b,c,d,color);
+        if(index>=64){screens.addQuad(a,b,c,d,color);return;}
+        const row=Math.floor(index/8),col=index%8,pad=.00085;
+        const u0=col/8+pad,u1=(col+1)/8-pad;
+        const vTop=1-row/8-pad,vBottom=1-(row+1)/8+pad;
+        screens.addQuad(a,b,c,d,[
+          [u0,vBottom,1],[u1,vBottom,1],
+          [u1,vTop,1],[u0,vTop,1]
+        ]);
+        adPanels.push({label,color});
+      };
+      buildTimesSquareDistrict({box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
       timesSquareScreens=screens.upload();
+      timesSquareFallback=oldScreens.upload();
+      const generation=nycLedGeneration;
+      if(!graphicsCompat&&!directRendering&&!nycLedLoading&&adPanels.length){
+        nycLedLoading=true;
+        import('./assets/nyc/nyc-led.js')
+          .then(module=>module.createNycLedAtlas(gl,adPanels))
+          .then(texture=>{
+            if(!gl.isContextLost() && selectedMap.city && generation===nycLedGeneration)
+              nycLedAtlas=texture;
+            else if(texture&&!gl.isContextLost())gl.deleteTexture(texture);
+          })
+          .catch(error=>console.warn('[PATROL] NYC LED fallback:',error))
+          .finally(()=>{nycLedLoading=false;});
+      }
       const dock=findScenerySite(200,-388,{footprint:10,range:55,avoid:(x,z)=>
         z>=-405 && z<=-359 ? ![13,22,32,46].some(offset=>sampleTerrainHeight(x-offset,z)<=WATER_H) : true});
       if(dock){
@@ -5163,10 +5207,9 @@
       const face=z+side*0.17;
       box(x,y,z,width+0.27,height+0.25,0.30,steel);
       const p=(u,v,offset=0)=>[x+u,y+v,face+side*offset];
-      ledQuad(p(-width/2,-height/2),p(width/2,-height/2),p(width/2,height/2),p(-width/2,height/2),color);
+      ledQuad(p(-width/2,-height/2),p(width/2,-height/2),
+        p(width/2,height/2),p(-width/2,height/2),color,text);
       for(const h of [-height/2,height/2])lamp(x,y+h,face+side*0.032,width,0.072,0.06,color);
-      addVegasLettering(lightQuad,text,(u,v)=>p(-side*u,v,0.052),width-0.32,
-        Math.min(height*0.50,1.29),white);
     }
 
     // Separate building faces give the square a canyon of screens and street-level theatres.
@@ -5221,9 +5264,7 @@
       box(edge,ground+height,z,0.31,panelHeight+0.29,span+0.33,steel);
       const screen=(u,v,over=0)=>[edge+corridorSide*(0.174+over),ground+height+v,z+u];
       ledQuad(screen(-span/2,-panelHeight/2),screen(span/2,-panelHeight/2),
-        screen(span/2,panelHeight/2),screen(-span/2,panelHeight/2),tint);
-      addVegasLettering(lightQuad,caption,(u,v)=>screen(corridorSide*u,v,0.052),
-        span-0.27,Math.min(panelHeight*0.46,1.24),white);
+        screen(span/2,panelHeight/2),screen(-span/2,panelHeight/2),tint,caption);
       // Keep the soffit and cantilever readable at street level.
       box(x,ground+2.89,z-d/2-0.31,w*0.82,0.18,0.79,[0.25,0.28,0.31]);
 
@@ -7044,9 +7085,18 @@
       gl.uniform1i(uMesh.dcSurface,-1);
     }
     if(timesSquareScreens?.count){
+      const ready=Boolean(nycLedAtlas && !graphicsCompat && !directRendering);
       gl.uniform1i(uMesh.timesScreen,1);
-      drawMesh(timesSquareScreens,identity,true);
+      gl.uniform1f(uMesh.nyLedReady,ready?1:0);
+      if(ready){
+        gl.activeTexture(gl.TEXTURE10);
+        gl.bindTexture(gl.TEXTURE_2D,nycLedAtlas);
+        gl.uniform1i(uMesh.nyLedAtlas,10);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+      drawMesh(ready?timesSquareScreens:(timesSquareFallback||timesSquareScreens),identity,true);
       gl.uniform1i(uMesh.timesScreen,0);
+      gl.uniform1f(uMesh.nyLedReady,0);
     }
     if(mapLights && mapLights.count){
       gl.uniform1f(uMesh.dimLights,1);
@@ -9261,6 +9311,8 @@
     nyAsphaltPhoto:gl.getUniformLocation(meshProg,'uNyAsphaltPhoto'),
     nyConcretePhoto:gl.getUniformLocation(meshProg,'uNyConcretePhoto'),
     nyPhotoReady:gl.getUniformLocation(meshProg,'uNyPhotoReady'),
+    nyLedAtlas:gl.getUniformLocation(meshProg,'uNyLedAtlas'),
+    nyLedReady:gl.getUniformLocation(meshProg,'uNyLedReady'),
     nyWallDiffuse:gl.getUniformLocation(meshProg,'uNyWallDiffuse'),
     nyWallNormal:gl.getUniformLocation(meshProg,'uNyWallNormal'),
     nyWallARM:gl.getUniformLocation(meshProg,'uNyWallARM'),
@@ -10273,6 +10325,7 @@
       !directRendering && nycPhotos && Number(nyStreetQuality.value)>0);
     gl.uniform1f(uMesh.nyPhotoReady,usePhoto?1:0);
     gl.uniform1i(uMesh.nySurfaceClass,0);
+    gl.uniform1f(uMesh.nyLedReady,0);
     if(usePhoto){
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D,nycPhotos.asphalt);
