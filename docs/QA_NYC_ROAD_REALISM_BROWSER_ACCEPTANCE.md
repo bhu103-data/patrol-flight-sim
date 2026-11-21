@@ -19,7 +19,21 @@
 
 Use a local checkout at the exact target SHA and a current Chromium supporting WebGL2. Serve the repository via a local static HTTP server; open `index.html`, start Manhattan, and hide the HUD only **during** full-resolution canvas capture. Record the exact SHA and WebGL2 context state in the evidence manifest.
 
-For apples-to-apples captures, set the game's scene controls to **time 12 / season 1 / weather Clear** and **time 21 / season 1 / weather Clear**, keeping the camera coordinates, zoom, screen size (1280×720) and quality preset constant between lighting variants. Verify the control values in the browser before each capture. Do not infer that a screenshot is day/night merely from its filename.
+For apples-to-apples captures, set the game's scene controls to **time 12 / season 1 / weather Clear** and **time 0 / season 1 / weather Clear**, keeping the camera coordinates, zoom, screen size (1280×720) and quality preset constant between lighting variants. Verify the control values in the browser before each capture. Do not infer that a screenshot is day/night merely from its filename.
+
+## Exact game controls confirmed in target production source (not browser-tested)
+
+The branch's actual `index.html` contains:
+- Manhattan menu option: `input[name="flightMap"][value="manhattan"]`
+- Airplane option: `input[name="aircraft"][value="seaplane"]` — **Cessna 185 Floatplane** (two pontoons). Select this **before** `#startFlight`.
+- Open the real scenic-view panel using the `H` key, then `#hotelTarget`.
+- Scenic view **Brooklyn Bridge · Deck View** (declared target anchor `x=82,z=-342,height=15`).
+- Scenic view **DUMBO · Warehouse Blocks** (declared target anchor `x=345,z=-300,height=11`).
+- Set `#hotelZoom` to `42` for identical framing. This is the default control value, but explicitly set it for each shot.
+- Environment `#skyTime` supports `12` (Noon) and `0` (Midnight), **not 21**. Use `#skySeason=1` (Summer), `#skyWeather=Clear`. Dispatch a bubbling `change` event after changing the selection; for `#hotelZoom`, dispatch `input`.
+- Record selected camera text, controls, WebGL2 context validity, selected airplane, and exact commit in each screenshot's manifest. The listed x/z coordinates are scenic *target anchors*, not verified aircraft position or road survey coordinates.
+
+These are DOM/source facts only. The night preset has been corrected from unsupported `21` to supported `0`; no screenshots from these settings exist yet.
 
 ### Required independent views
 
