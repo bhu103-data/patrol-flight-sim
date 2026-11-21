@@ -24,14 +24,14 @@
 - The mountain profile is a placeholder silhouette, not a claimed Spring Mountains or Sunrise Mountain surveyed elevation field. Its world positions deliberately remain `|x|>=686` to avoid existing casino/road collision footprints. The distant scenery should be checked for clipping and flat-shaded facets.
 
 ## Fixed-camera QA / screenshot matrix
-Use one fresh Chromium launch and the existing Las Vegas map selector, then Scenic Views -> **Strip Street View**, angle `0`, same 1280×720 WebGL2 viewport and environment presets. Captures are deterministic interface settings rather than falsely claimed surveyed camera poses.
+Use one fresh Chromium launch and the existing Las Vegas map selector. Near camera = Scenic Views **Strip Street View**; flight-distance camera = **Bellagio**, both angle `0`, same 1280×720 WebGL2 screenshot viewport and environment presets. On software SwiftShader, the internal 3D canvas can render at reduced resolution (observed 704×396); report that separately. Captures are deterministic interface settings rather than falsely claimed surveyed camera poses.
 
 | Shot | Camera target | Zoom | Clock | Check |
 |---|---|---:|---|---|
-| `vegas-core-near-noon.png` | Las Vegas Strip | 70 | 12:00 | Near roadway seams, building/road overlap |
-| `vegas-core-far-noon.png` | Las Vegas Strip | 24 | 12:00 | Skyline and both far mountain wings from flight distance |
-| `vegas-core-near-night.png` | Las Vegas Strip | 70 | 00:00 | Contrast, casino lights, black/blank frames |
-| `vegas-core-far-night.png` | Las Vegas Strip | 24 | 00:00 | Mountain silhouette and existing night sky |
+| `vegas-core-near-noon.png` | Strip Street View | 70 | 12:00 | Near roadway seams, building/road overlap |
+| `vegas-core-far-noon.png` | Bellagio | 24 | 12:00 | Skyline and both far mountain wings from flight distance |
+| `vegas-core-near-night.png` | Strip Street View | 70 | 00:00 | Contrast, casino lights, black/blank frames |
+| `vegas-core-far-night.png` | Bellagio | 24 | 00:00 | Mountain silhouette and existing night sky |
 The automated screenshot script is `scripts/vegas-core-browser-smoke.mjs`. Screenshots must be attached as actual artifacts after running; no screenshot files or FPS measurements are asserted in this PR before execution.
 
 ## Targeted verification
@@ -41,3 +41,9 @@ node --test tests/vegas-strip-core-ridge.test.mjs
 node scripts/vegas-core-browser-smoke.mjs
 ```
 Central QA must compare the same four settings against baseline `6d50bfd` and inspect live navigation, vehicles, lod, night lighting, water start and flight controls. Do not call this an accurate real-city map until legally sourced coordinate/DEM/footprint datasets and camera-matched WebGL evidence have been integrated.
+
+## Evidence from first successful browser run (2026-11-21)
+- GitHub Actions run [44957668461](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44957668461) completed successfully; four actual Vegas screenshots plus JSON report were archived. Headless SwiftShader, `graphics=compat`, CSS screenshots 1280×720, internal canvas 704×396.
+- Measured start-to-verified-frame: **10,167 ms**; WebGL2 context present and `getError()==0`; browser errors: zero.
+- **Observed software frame cadence: 90 frames, 321.1 ms/frame, ~3.11 FPS.** This does not pass the aspirational 30 FPS target; compare against the untouched integrated baseline before judging incremental cost, and do not interpret JS requestAnimationFrame as GPU-only time.
+- Screenshot review: near Strip facades remain flat/blocky, the previous far camera stayed effectively at street level and did not establish clear mountain visibility. The script now uses Bellagio for the flight-distance camera and CI runs the exact same screenshot script against clean `6d50bfd` as a regression control. Authentic GIS/DEM precision remains **not achieved**.
