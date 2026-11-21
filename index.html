@@ -5925,7 +5925,7 @@ const CENTRAL_PARK_SITES=[
 
     // LAND_PAD_GUARD_V1: check all footprints; water-clamped terrain
     // would otherwise place houses exactly at the water surface.
-    function dryPad(x,z,w,d,maxMove=38){
+    function dryPad(x,z,w,d,maxMove=38,maxSlope=1.8){
       const candidates=[[x,z]];
       for(let ring=1;ring<=Math.ceil(maxMove/7);ring++){
         const radius=ring*7;
@@ -5940,20 +5940,26 @@ const CENTRAL_PARK_SITES=[
         for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
           heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
         const low=Math.min(...heights),high=Math.max(...heights);
-        if(low<=WATER_H+.72||high-low>1.8)continue;
+        if(low<=WATER_H+1.0||high-low>maxSlope)continue;
         if(alaskaObstacles.some(o=>Math.abs(cx-o.x)<w*.5+o.halfX+2.2 &&
            Math.abs(cz-o.z)<d*.5+o.halfZ+2.2))continue;
-        return {x:cx,z:cz,y:low};
+        return {x:cx,z:cz,y:low,top:high};
       }
       return null;
     }
     function hut(x,z,w,l,color) {
-      const pad=dryPad(x,z,w,l,42);
+      const pad=dryPad(x,z,w,l,126,3.9);
       if(!pad)return;
       x=pad.x;z=pad.z;
-      const ground=pad.y;
-      const floor=ground+0.24;
+      // Surveyed hillside: floors rest above the highest corner; independent
+      // stilt footings run down to terrain instead of suspending over water.
+      const floor=pad.top+0.24;
       const wallTop=floor+3.5;
+      for(const dx of [-.43,.43])for(const dz of [-.43,.43]){
+        const sx=x+dx*w,sz=z+dz*l,base=sampleTerrainHeight(sx,sz);
+        const h=Math.max(.30,floor-base);
+        box(sx,base+h*.5,sz,.34,h,.34,[.29,.24,.19]);
+      }
       box(x,floor-0.05,z,w+0.3,0.42,l+0.3,wood);
       box(x,floor+1.75,z,w,3.5,l,color);
       const a=x-w/2-0.24,b=x+w/2+0.24,c=z-l/2-0.31,d=z+l/2+0.31;
@@ -5991,23 +5997,48 @@ const CENTRAL_PARK_SITES=[
       box(x,deck-0.20,pierZ-6,2.2,0.29,10.2,[0.49,0.41,0.30]);
       box(x,deck-0.20,pierZ+5.8,2.2,0.29,9.8,[0.49,0.41,0.30]);
     }
-    const rampY=sampleTerrainHeight(139,pierZ)+0.10;
-    const dockRamp = (x,y)=>[x,y,pierZ];
-    const rampLands=sampleTerrainHeight(139,pierZ)>WATER_H+.72 &&
-      sampleTerrainHeight(169,pierZ)>WATER_H+.72;
-    // Piers may be over water; connecting land roads cannot.
-    if(rampLands){
-    pushRoadStrip(addQuad,dockRamp(76,deck),dockRamp(93,rampY-2.2),4.15,wood,0.06);
-    pushRoadStrip(addQuad,dockRamp(93,rampY-2.2),dockRamp(113,rampY+0.6),4.15,wood,0.06);
-    pushRoadStrip(addQuad,dockRamp(113,rampY+0.6),dockRamp(139,rampY),4.15,wood,0.06);
-    for (const x of [80,88,99,108]) {
-      const top=x<93?lerp(deck,rampY-2.2,(x-76)/17):lerp(rampY-2.2,rampY+0.6,(x-93)/20);
-      const ground=sampleTerrainHeight(x,pierZ);
-      for(const side of [-1,1]) {
-        box(x,(top+ground)/2,pierZ+side*1.73,0.29,Math.max(0.1,top-ground),0.29,wood);
-      }
+    // This surveyed coast remains water past the old x=169 road endpoint.
+    // Only the dock over water is allowed, held by real visible timber piles.
+    // Shore trail begins at an elevation-validated dry landing.
+    let shoreX=null;
+    for(let candidate=183;candidate<=235;candidate++){
+      const y=sampleTerrainHeight(candidate,pierZ);
+      if(y<=WATER_H+1.05||Math.abs(y-deck)>1.40)continue;
+      if([-2.4,0,2.4].every(dz=>{
+        const cross=sampleTerrainHeight(candidate,pierZ+dz);
+        return cross>WATER_H+.95 && Math.abs(cross-y)<.55;
+      })){shoreX=candidate;break;}
     }
-    pushRoadStrip(addQuad,[139,rampY,pierZ],[169,sampleTerrainHeight(169,pierZ)+0.10,pierZ],4.15,[0.54,0.45,0.32]);
+    if(shoreX!==null){
+      const landingY=sampleTerrainHeight(shoreX,pierZ)+0.20;
+      const walkwayY=x=>lerp(deck,landingY,
+        clamp((x-76)/Math.max(1,shoreX-76),0,1));
+      const deckColor=[.52,.40,.28],pileColor=[.32,.27,.22];
+      for(let x=76;x<shoreX;x+=6){
+        const next=Math.min(x+6,shoreX);
+        const top=walkwayY(x),topNext=walkwayY(next);
+        box((x+next)*.5,(top+topNext)*.5-.13,pierZ,
+          next-x+.05,.24,3.42,deckColor);
+        for(const side of [-1,1]){
+          const z=pierZ+side*1.44;
+          const base=Math.min(top-.28,
+            Math.max(WATER_H-.72,sampleTerrainHeight(x,z)-.32));
+          const height=top-base;
+          box(x,base+height*.5,z,.33,height,.33,pileColor);
+          box(x,top+.50,pierZ+side*1.71,.11,1.05,.11,pileColor);
+          addRideBeam(addQuad,[x,top+.92,pierZ+side*1.71],
+            [next,topNext+.92,pierZ+side*1.71],.055,pileColor);
+        }
+      }
+      // Pedestrian shore trail follows measured dry terrain; no floating road.
+      for(let x=shoreX;x<shoreX+23;x+=3.5){
+        const next=x+3.5,a=sampleTerrainHeight(x,pierZ),
+          b=sampleTerrainHeight(next,pierZ);
+        if([x,next].some(px=>[-1.25,0,1.25].some(dz=>
+          sampleTerrainHeight(px,pierZ+dz)<=WATER_H+.95)))break;
+        pushRoadStrip(addQuad,[x,a+.13,pierZ],
+          [next,b+.13,pierZ],2.45,[.50,.43,.34],.028);
+      }
     }
     alaskaObstacles.push({x:pierX,z:pierZ,y:deck-0.37,halfX:15,halfZ:2.5,top:deck+0.13,name:'harbor pier'});
 
