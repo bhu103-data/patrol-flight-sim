@@ -826,8 +826,11 @@
     const measured = alaska && options.alaskaDEM && options.alaskaDEM.heights;
     function measuredHeight(u,v) {
       const dem=options.alaskaDEM;
-      const x=clamp(u*dem.width-.5,0,dem.width-1);
-      const z=clamp(v*dem.height-.5,0,dem.height-1);
+      // Rotate 90° to line up the REAL west–east Tracy Arm water corridor
+      // with PATROL's existing south–north flight/harbor route. The DEM itself
+      // retains north-up georeferencing in metadata; game north = real east.
+      const x=clamp(v*dem.width-.5,0,dem.width-1);
+      const z=clamp((1-u)*dem.height-.5,0,dem.height-1);
       const x0=Math.floor(x),z0=Math.floor(z);
       const x1=Math.min(x0+1,dem.width-1),z1=Math.min(z0+1,dem.height-1);
       const tx=x-x0,tz=z-z0,h=dem.heights,w=dem.width;
