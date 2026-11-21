@@ -4594,9 +4594,14 @@ const CENTRAL_PARK_SITES=[
       box(x,17.15,z,1.65,5,1.65,metal);
       box(x,19.31,z,2.32+Math.abs(Math.sin(yaw))*0.38,0.3,2.43,metal);
     }
-    box(336,19.7,-288,33,0.72,1.8,sidewalk);
-    for(const x of [324,336,348]) box(x,21.5,-288,0.27,3.3,0.34,metal);
-    box(336,23.1,-288,35,0.4,2.1,metal);
+    // Place the elevated platform next to the subway car instead of a
+    // detached deck 13 units from the rails. Keep a door-width boarding gap
+    // and align both platform/canopy with the actual rail geometry.
+    const platformZ=track.z-2.55;
+    box(336,track.height-.10,platformZ,33,.72,1.80,sidewalk);
+    for(const xx of [324,336,348])
+      box(xx,track.height+1.70,platformZ,.27,3.30,.34,metal);
+    box(336,track.height+3.30,platformZ,35,.40,2.10,metal);
   }
 
   function updateBridgeRails() {
