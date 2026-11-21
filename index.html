@@ -10323,7 +10323,7 @@ const CENTRAL_PARK_SITES=[
       cycleView();
     } else if (e.code === 'KeyG' && !e.repeat) {
       toggleGear();
-    } else if (e.code === 'KeyB' && selectedAircraft==='fighter') {
+    } else if (e.code === 'KeyB' && ['fighter','seaplane'].includes(selectedAircraft)) {
       brakes=true;
     } else if (e.code === 'KeyC') {
       fireCannon();
@@ -10401,7 +10401,7 @@ const CENTRAL_PARK_SITES=[
   document.getElementById('btnGear').addEventListener('click',toggleGear);
   const btnBrake=document.getElementById('btnBrake');
   btnBrake.addEventListener('pointerdown',event=>{
-    if(!flying || crash || selectedAircraft!=='fighter')return;
+    if(!flying || crash || !['fighter','seaplane'].includes(selectedAircraft))return;
     btnBrake.setPointerCapture(event.pointerId);
     brakes=true;
   });
@@ -11331,6 +11331,7 @@ const CENTRAL_PARK_SITES=[
       missionStatus.hidden = !route.length;
       missionStatus.classList.toggle('tour',Boolean(tourStops.length));
       grounded=Boolean(runway);
+      waterborne=false;
       gearDown=grounded;
       armorLandingMode=false;
       brakes=false;
@@ -11392,8 +11393,15 @@ const CENTRAL_PARK_SITES=[
       updateMissilePips();
       aircraftName.textContent = AIRCRAFT[selectedAircraft].name;
       document.getElementById('btnCannon').textContent=selectedAircraft==='jetpack'?'LASER':'GUN';
-      document.getElementById('btnGear').textContent=selectedAircraft==='jetpack'?'LAND':'GEAR';
-      for (const control of fighterControls) control.hidden = selectedAircraft !== 'fighter';
+      document.getElementById('btnGear').textContent=selectedAircraft==='jetpack'?'LAND':
+        selectedAircraft==='seaplane'?'DOCK':'GEAR';
+      for (const control of fighterControls) control.hidden =
+        !['fighter','seaplane'].includes(selectedAircraft);
+      // No cannon/missile controls on an unarmed civil floatplane.
+      if(selectedAircraft==='seaplane'){
+        document.getElementById('btnCannon').hidden=true;
+        document.getElementById('btnFire').hidden=true;
+      }
       if(selectedAircraft==='jetpack')for(const control of armorCompatibleControls)control.hidden=false;
       camInitialized = false;
       lastMapFrame = -Infinity;
@@ -12024,13 +12032,35 @@ const CENTRAL_PARK_SITES=[
 
   const GEAR_CLEARANCE = 0.96;
   const ROTATE_SPEED = 23;
+  // Pure twin-float landing gear, modeled with pontoon keels 1.48m below
+  // the aircraft origin (no wheels on this configuration).
+  const FLOAT_CLEARANCE=1.50,FLOAT_ROTATE_SPEED=17.5;
+  let waterborne=false;
+  function usableFloatWater(x,z,yaw=plane.yaw){
+    // Nine samples cover the LENGTH and both FLOATS, not just center.
+    // A water touchdown on an island, shallow coast or pier is not valid.
+    const fx=Math.sin(yaw),fz=Math.cos(yaw),sx=fz,sz=-fx;
+    for(const along of [-3.05,0,3.05])for(const across of [-1.85,0,1.85]){
+      const px=x+fx*along+sx*across,pz=z+fz*along+sz*across;
+      if(sampleTerrainHeight(px,pz)>WATER_H+.06 ||
+         cityLotAt(px,pz)||sceneryObstacle(px,pz))return false;
+      if(selectedMap.alaska && alaskaObstacles.some(o=>
+        Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
+    }
+    return true;
+  }
   let gearDown = false;
   let armorLandingMode = false;
   let grounded = false;
   let brakes = false;
 
   function toggleGear() {
-    if (!flying || crash || grounded || !['fighter','jetpack'].includes(selectedAircraft)) return;
+    if (!flying || crash || grounded ||
+      !['fighter','jetpack','seaplane'].includes(selectedAircraft)) return;
+    if(selectedAircraft==='seaplane'){
+      if(waterborne)brakes=!brakes; // G toggles the floatplane's docking brake.
+      renderGearStatus();return;
+    }
     if(selectedAircraft==='jetpack'){
       armorLandingMode=!armorLandingMode;
       renderGearStatus();
@@ -12041,7 +12071,16 @@ const CENTRAL_PARK_SITES=[
   }
 
   function renderGearStatus() {
-    gearStatus.hidden = !['fighter','jetpack'].includes(selectedAircraft);
+    gearStatus.hidden = !['fighter','jetpack','seaplane'].includes(selectedAircraft);
+    if(selectedAircraft==='seaplane'){
+      const state=waterborne
+        ?brakes?'FLOATS · DOCKING BRAKE':plane.speed<FLOAT_ROTATE_SPEED
+          ?'FLOATS · WATER TAXI '+Math.round(plane.speed)
+          :'FLOATS · ON STEP · HOLD BOOST + PULL UP'
+        :'FLOATS · WATER LANDING · APPROACH LEVEL';
+      if(gearStatus.textContent!==state)gearStatus.textContent=state;
+      return;
+    }
     if(selectedAircraft==='jetpack'){
       let text=grounded?'ARMOR GROUNDED � HOLD BOOST TO LAUNCH':
         armorLandingMode?'LANDING ASSIST � DESCENDING':'REPULSOR FLIGHT � G TO LAND';
@@ -12092,8 +12131,13 @@ const CENTRAL_PARK_SITES=[
     const prevPos = [...plane.pos];
     const craft = AIRCRAFT[selectedAircraft];
     const armor=selectedAircraft==='jetpack';
+    const floatplane=selectedAircraft==='seaplane';
     const targetSpeed = armorLandingMode ? 5 : plane.afterburner ? craft.boost : brakes ? 16 : craft.cruise;
-    if (grounded) {
+    if(waterborne){
+      // Pontoon drag: coast to rest at idle, plane on-step only under power.
+      const acceleration=brakes?-9.5:plane.afterburner?5.8:-2.4;
+      plane.speed=clamp(plane.speed+acceleration*dt,0,craft.boost);
+    }else if (grounded) {
       const accel = brakes ? -19 : plane.afterburner ? (armor?15:6.5) : armor?-10:-2.4;
       plane.speed = clamp(plane.speed+accel*dt,0,craft.boost);
     } else {
@@ -12147,19 +12191,25 @@ const CENTRAL_PARK_SITES=[
 
     const prevYaw = plane.yaw;
     const prevPitch = plane.pitch;
-    const taxiTurn=grounded ? clamp(plane.speed/7,0,0.62) : 1;
+    const taxiTurn=(grounded||waterborne) ?
+      clamp(plane.speed/11,.08,.62) : 1;
     plane.yaw += turnInput * craft.turn * dt * taxiTurn;
     const rotate=grounded && plane.afterburner && !brakes &&
       (armor || (plane.speed>=ROTATE_SPEED && pitchInput>0.20));
-    if (rotate) {
+    const floatRotate=waterborne && plane.afterburner && !brakes &&
+      plane.speed>=FLOAT_ROTATE_SPEED && pitchInput>0.20;
+    if(rotate || floatRotate) {
       grounded=false;
+      waterborne=false;
       armorLandingMode=false;
-      plane.pitch=armor?0.48:0.20;
-      plane.pos[1]+=armor?0.16:0.04;
+      plane.pitch=armor?0.48:floatRotate?0.17:0.20;
+      plane.pos[1]+=armor?0.16:floatRotate?0.20:0.04;
     }
-    const targetPitch = grounded ? 0 : armorLandingMode ? -0.34 : clamp(pitchInput,-0.96,1)*craft.maxPitch;
+    const targetPitch = grounded ? 0 : waterborne ? 0 :
+      floatRotate?.21 : armorLandingMode ? -0.34 :
+      clamp(pitchInput,-0.96,1)*craft.maxPitch;
     plane.pitch = lerp(plane.pitch,targetPitch,dt*craft.pitchResponse);
-    plane.bank = lerp(plane.bank,grounded?0:-turnInput*0.92,dt*4.5);
+    plane.bank = lerp(plane.bank,(grounded||waterborne)?0:-turnInput*0.92,dt*4.5);
 
     if (plane.rollAnim > 0) {
       plane.rollAnim += dt * 1.45;
@@ -12169,6 +12219,8 @@ const CENTRAL_PARK_SITES=[
     const basis = getPlaneBasis();
     plane.pos[0] += basis.fwd[0] * plane.speed * dt;
     plane.pos[1] += basis.fwd[1] * plane.speed * dt;
+    if(floatplane&&!waterborne)
+      plane.pos[1]-=dt*(plane.afterburner?.25:1.25);
     plane.pos[2] += basis.fwd[2] * plane.speed * dt;
 
     const radius = Math.hypot(plane.pos[0], plane.pos[2]);
@@ -12180,6 +12232,32 @@ const CENTRAL_PARK_SITES=[
 
     const [x,y,z]=plane.pos;
     const floor=sampleGroundHeight(x,z);
+    if(floatplane && !crash){
+      if(waterborne){
+        if(!usableFloatWater(x,z,plane.yaw)){
+          waterborne=false;
+          finishFlight([x,WATER_H+.20,z],'Float hit shoreline',false);
+        }else{
+          // Simulated pontoon buoyancy: stable center height and small heave.
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+
+            .024*Math.sin(sceneryTime*2.3+plane.speed*.28);
+          plane.pitch=plane.bank=plane.rollAnim=0;
+        }
+      }else if(!floatRotate && y<=WATER_H+FLOAT_CLEARANCE &&
+                floor<=WATER_H+.06){
+        const sink=(y-prevPos[1])/Math.max(dt,1e-4);
+        const smooth=usableFloatWater(x,z,plane.yaw) &&
+          sink>=-7.8 && plane.speed<=24.5 &&
+          plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
+        if(smooth){
+          waterborne=true;
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE;
+          plane.pitch=plane.bank=plane.rollAnim=0;
+        }else{
+          finishFlight([x,WATER_H+.2,z],'Hard water landing',true);
+        }
+      }
+    }
     const armorCanLand=armor && armorLandingMode && !rotate && y<=floor+1.15 &&
       plane.pitch>=-0.48 && plane.pitch<0.15 && Math.abs(plane.bank)<0.30 && plane.speed<=10;
     if (grounded || armorCanLand || (gearDown && !rotate && y<=floor+GEAR_CLEARANCE &&
@@ -12196,13 +12274,13 @@ const CENTRAL_PARK_SITES=[
       }
     }
     plane.pos[1] = Math.min(plane.pos[1],selectedMap===FLIGHT_MAPS.manhattan?NYC_ORBIT_CEILING:CEILING);
-    if (!crash) checkFlightCollision(grounded ? plane.pos : prevPos,plane.pos);
+    if (!crash) checkFlightCollision((grounded||waterborne)?plane.pos:prevPos,plane.pos);
     renderGearStatus();
     if (!crash) updateMission(dt);
 
     const look = 14;
     const ahead = navigationSurface(plane.pos[0] + basis.fwd[0] * look, plane.pos[2] + basis.fwd[2] * look);
-    groundWarning.hidden = Boolean(crash) || grounded || Math.min(plane.pos[1] - floor, plane.pos[1] + basis.fwd[1]*look - ahead) > 5;
+    groundWarning.hidden = Boolean(crash) || grounded || waterborne || Math.min(plane.pos[1] - floor, plane.pos[1] + basis.fwd[1]*look - ahead) > 5;
     plane.radarAlt = Math.max(0.2, plane.pos[1] - floor);
     plane.vsi = (plane.pos[1] - prevPos[1]) / Math.max(dt, 1e-4);
     const yawRate = (plane.yaw - prevYaw) / Math.max(dt, 1e-4);
@@ -12295,6 +12373,7 @@ const CENTRAL_PARK_SITES=[
     plane.speed = 0;
     plane.afterburner = false;
     grounded=false;
+    waterborne=false;
     brakes=false;
     steeringKeys.clear();
     groundWarning.hidden = true;
@@ -12501,7 +12580,7 @@ const CENTRAL_PARK_SITES=[
 
       // Wingtip vapor trails
       trailAccum += dt;
-      if (!crash && trailAccum >= 0.024) {
+      if (!crash && selectedAircraft!=='seaplane' && trailAccum >= 0.024) {
         trailAccum = 0;
         for (const side of [-1, 1]) {
           trails.push({
@@ -12749,6 +12828,10 @@ const CENTRAL_PARK_SITES=[
     drawMapScenery(drawMeshWithOutline);
     drawSphereShow(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
+    if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5)
+      drawHullWash(drawMeshWithOutline,
+        {halfWidth:1.27,halfLength:3.05,phase:0},
+        plane.pos[0],plane.pos[2],basis.fwd,basis.right);
     drawCivilAirTraffic(drawMeshWithOutline);
     drawSkylineRescue(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
