@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const toURL=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const moduleText=await readFile(new URL('../assets/chongqing/road-clearance.js',import.meta.url),'utf8');
-const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads}=await import(toURL(moduleText));
+const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads,sampleChongqingTerraceSurface}=await import(toURL(moduleText));
 
 test('road collision checks entire asphalt width and exact segment interval',()=>{
  const b={x:0,z:0,w:8,d:8};
@@ -11,6 +11,27 @@ test('road collision checks entire asphalt width and exact segment interval',()=
  assert.equal(crossesFootprint({x:-20,z:8},{x:20,z:8},b,5),true);
  assert.deepEqual(sweptSegmentInterval({x:-20,z:0},{x:20,z:0},b,2,1),[.325,.675]);
 });
+test('Chongqing road mesh follows curved taxi centerline and every local hillside grade',()=>{
+ const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
+ const ground=(x,z)=>55+18*Math.sin(x/7)+z*.019;
+ for(const plan of chongqingTerraceRoads(riverCenter)){
+   const points=sampleChongqingTerraceSurface(plan,ground,riverCenter);
+   assert.ok(points.length>plan.points.length*4,'curves must be densified');
+   assert.equal(points[0].x,plan.points[0].x);
+   assert.equal(points.at(-1).x,plan.points.at(-1).x);
+   for(let i=0;i<points.length;i++){
+     const p=points[i];
+     const expectedZ=riverCenter(p.x)+plan.side*
+       (145+plan.tier*105+14*Math.sin(p.x/115+plan.tier));
+     assert.ok(Math.abs(p.z-expectedZ)<1e-9,'asphalt and taxis follow one route');
+     assert.ok(Math.abs(p.y-ground(p.x,p.z)-1.6)<1e-9,
+       'road surface samples the exact local elevation, not interpolated guide heights');
+     if(i)assert.ok(Math.hypot(p.x-points[i-1].x,p.z-points[i-1].z)<=5.6);
+   }
+ }
+ assert.deepEqual(sampleChongqingTerraceSurface(null,ground,riverCenter),[]);
+});
+
 test('building removes only the occupied portion of road',()=>{
  const b={x:0,z:0,w:12,d:15,base:0,top:70};
  const road=clipRoadToFreeSegments([{x:-40,z:0,y:1.6},{x:0,z:0,y:1.6},{x:40,z:0,y:1.6}],8,[b],1);
