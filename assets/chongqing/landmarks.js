@@ -8,6 +8,9 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
   const concrete=pbr?.concrete??makeMat(0xa0a9b1);
   const glass=(pbr?.glass??makeMat(0x365869,.55,.24)).clone();
   glass.side=THREE.DoubleSide;
+  // Separate floor-scale lit-window material from the plain tinted Crystal glass.
+  const sailGlass=(pbr?.curtainWall??glass).clone();
+  sailGlass.side=THREE.DoubleSide;
   const accent=new THREE.MeshBasicMaterial({color:0xa4cbd5});
   const warm=new THREE.MeshBasicMaterial({color:0xf6d5a2});
   const red=makeMat(0xa63438,.38,.4);
@@ -59,7 +62,8 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
       for(let side=0;side<N;side++){
         const [px,pz]=perimeter[side];
         verts.push(px*width*taper+curve,y,pz*depth*taper+bend);
-        uv.push(side/N*3.2,t*height/9);
+        // The atlas holds 12 real floor rows, each approximating 7.5 world units.
+        uv.push(side/N*3.2,t*height/(7.5*12));
       }
     }
     for(let layer=0;layer<segments;layer++)for(let i=0;i<N;i++){
@@ -89,7 +93,7 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
     const [x,z,height,lean]=layout[i];
     const width=i<6?31:35,depth=i<6?27:31;
     const geometry=sailGeometry(width,depth,height,lean);
-    const tower=new THREE.Mesh(geometry,glass);
+    const tower=new THREE.Mesh(geometry,sailGlass);
     tower.position.set(x,podiumY,z);scene.add(tower);
     // The collision envelope includes the gentle curvature but not the surrounding plaza.
     obstacles.push({x:x+lean*.35,z:z+2,w:width+20,d:depth+17,base:podiumY,top:podiumY+height+2});
