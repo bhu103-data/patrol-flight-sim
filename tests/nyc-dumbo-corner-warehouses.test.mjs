@@ -39,7 +39,12 @@ test('two warehouse references use bounded, true inset glass and physical masonr
       'each upper-floor arch strip must have a real raised brick header');
     assert.ok(stats.headerStones>=200&&stats.headerStones<=500,
       'bounded projecting masonry pieces per building');
-    assert.ok(quads.length>1200&&quads.length<2400);
+    assert.equal(stats.shutters,1,'exactly one service shutter on each warehouse');
+    assert.ok(stats.sashMullions>=24&&stats.sashMullions<=80,
+      'ground-floor workshop glazing needs two physical transom divisions');
+    assert.equal(stats.roofPiers,4,'four raised stone-capped brick roof piers');
+    assert.ok(quads.length>1200&&quads.length<2750,
+      'ground-floor service openings and masonry remain bounded');
     assert.ok(quads.some(face=>face[5]===13),'inset windows actually generated');
     assert.ok(quads.some(face=>face[5]===12),'brick and window reveals actually generated');
     for(const face of quads){
@@ -57,7 +62,7 @@ test('two warehouse references use bounded, true inset glass and physical masonr
       assert.ok(Math.abs(b[0]-x)+b[3]/2<=w/2+.01);
       assert.ok(Math.abs(b[2]-z)+b[5]/2<=d/2+.01);
       assert.ok(b[1]-b[4]/2>=y+h-.5);
-      assert.ok(b[1]+b[4]/2<=y+h+.56);
+      assert.ok(b[1]+b[4]/2<=y+h+.68);
     }
     assert.ok(beams.length>=2&&beams.length<=8);
   }
@@ -92,6 +97,8 @@ test('low-quality and compatible render paths preserve the existing box fallback
 });
 test('bridge road and physics source remain outside the warehouse patch',()=>{
   assert.match(html,/PATROL_DUMBO_CORNER_WAREHOUSE_V1/);
+  assert.match(html,/PATROL_DUMBO_LOADING_SHUTTER_V3/);
+  assert.match(html,/PATROL_DUMBO_ROOF_PARAPET_V3/);
   assert.match(builder,/warehouseStyles=new Map\(\)/);
   assert.match(builder,/!p\[7\]/,'do not replace official GIS polygons');
   assert.match(builder,/!graphicsCompat && smoothScenery\(\)/);
