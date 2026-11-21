@@ -59,8 +59,18 @@ export function buildNycStreetNetwork({
     return false;
   }
   function siteClear(x,z,radius=.5){
-    if(!Number.isFinite(x)||!Number.isFinite(z))return false;
-    if(terrainAt(x,z)<waterY+1.58)return false;
+    if(!Number.isFinite(x)||!Number.isFinite(z)||
+       !Number.isFinite(radius)||radius<0)return false;
+    // Sidewalk kiosks, shelters and food carts occupy an AREA, not a point.
+    // Sample their entire dry-ground bounding square so coastal fixtures
+    // cannot stand on a dry center with corners hanging into the harbor.
+    // Larger furniture gets half-step samples to catch narrow inlets.
+    const offsets=radius>1.5?[-1,-.5,0,.5,1]:[-1,0,1];
+    for(const u of offsets)for(const v of offsets){
+      if(terrainAt(x+u*radius,z+v*radius)<waterY+1.58){
+        stats.skippedWater++;return false;
+      }
+    }
     if(!isClear(x,z,radius)){stats.skippedBuildings++;return false;}
     return true;
   }
