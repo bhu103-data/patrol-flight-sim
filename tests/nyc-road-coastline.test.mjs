@@ -56,3 +56,25 @@ test('coastal food carts need a dry footprint, not merely a dry center',()=>{
     'a dry cart center must not allow the kiosk to extend into water');
   assert.ok(harbor.stats.skippedWater>0);
 });
+
+test('a sub-texel shoreline inlet cannot slip between road water probes',()=>{
+  // On the i=0 Manhattan avenue, the old 1.8-unit probe interval missed
+  // the waterline at z≈13.03; the rendered full-width asphalt crossed water.
+  const inletZ=13.026315789473685;
+  const wet=(x,z)=>Math.abs(z-inletZ)<.09 &&
+    Math.abs(x-(30+.24*z))<5?0:100;
+  const avenue=ribbons=>ribbons.filter(r=>r.width===6.35 &&
+    Math.abs(r.a[0]-(30+.24*r.a[2]))<.025 &&
+    Math.abs(r.b[0]-(30+.24*r.b[2]))<.025 &&
+    r.a[2]>=-.01&&r.b[2]<=33.01);
+  const clear=avenue(build(()=>100).ribbons);
+  assert.ok(clear.some(r=>r.a[2]<inletZ&&r.b[2]>inletZ),
+    'unobstructed original avenue must remain connected');
+  const coast=build(wet),segments=avenue(coast.ribbons);
+  assert.ok(coast.stats.skippedRoadFootprints>0);
+  assert.equal(segments.some(r=>r.a[2]<inletZ&&r.b[2]>inletZ),false,
+    'new half-step shoreline probes must break asphalt at the inlet');
+  assert.ok(segments.some(r=>r.b[2]<8) &&
+    segments.some(r=>r.a[2]>17),
+    'preserve safe road approaches rather than erasing the whole block');
+});
