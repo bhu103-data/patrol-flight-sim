@@ -37,6 +37,35 @@ test('an inland shoal under the pier deck is not rendered or registered',()=>{
   assert.equal(s.pierCount,5);
   assert.equal(s.pierObstacles.some(p=>p.z===-475),false);
 });
+test('an offshore islet between old three water probes cannot penetrate the deck',()=>{
+  // The first west-bank dock crosses x=-125 while its older offshore
+  // 45/72/100-percent checks sample x further out. Both shores are dry.
+  const intermittent=(x,z)=>z>-477.5&&z<-472.5&&x>-127&&x<-124
+    ?20:channel(x,z);
+  const s=scene(intermittent);
+  assert.equal(s.pierCount,5);
+  assert.equal(s.pierObstacles.some(p=>p.z===-475),false);
+  // Keep the other five functioning docks rather than erasing the harbor.
+  assert.deepEqual(s.pierObstacles.map(p=>p.z),[-448,-411,-377,-456,-384]);
+});
+
+test('a side-only offshore shoal fails full-width clearance',()=>{
+  const width=5.1;
+  const sideShoal=(x,z)=>x>-127&&x<-124&&
+    Math.abs(z-(-475+width*.25))<.38 ?20:channel(x,z);
+  const s=scene(sideShoal);
+  assert.equal(s.pierCount,5);
+  assert.equal(s.pierObstacles.some(p=>p.z===-475),false);
+});
+
+test('non-finite water-height samples must not create phantom piers',()=>{
+  const missing=(x,z)=>z>-477.5&&z<-472.5&&x>-127&&x<-124
+    ?NaN:channel(x,z);
+  const s=scene(missing);
+  assert.equal(s.pierCount,5);
+  assert.equal(s.pierObstacles.some(p=>p.z===-475),false);
+});
+
 test('a narrow wet inlet underneath a landside deck corner is rejected',()=>{
   // Dry dock center and dry middle shoreline do not prove both edges dry.
   const land=(x,z)=>z>-451.2&&z<-450&&x>-120&&x<-115
