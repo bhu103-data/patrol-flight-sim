@@ -395,6 +395,13 @@
     [65,-46,64,93],       // Chrysler Building / Grand Central area
     [-30,-180,72,108],    // Flatiron
     [-85,-398,75,112],    // One World Trade Center
+    // PATROL_NYC_SPAWN_SKYLINE_V7 — uninterrupted Lower Manhattan view.
+    // Waterfront blocks from the real respawn toward downtown get LOD0
+    // silhouettes and differentiated 3D facades, not repeated blank cubes.
+    [-110,-487,72,131],    // Southern harbor shore from Liberty viewpoint
+    [-91,-426,116,169],    // Financial District lower skyline
+    [-78,-335,127,183],    // Lower Manhattan and waterfront towers
+    [-51,-268,102,146],    // Tribeca / Civic Center skyline transition
     [-140,-611,50,78],    // Liberty Island
     [-124,-603,103,180],  // Harbor entry and Liberty sight corridor
     [82,-342,78,118],     // Brooklyn Bridge and waterfront
@@ -404,6 +411,15 @@
   function nycDetailBand(x,z){
     const distance=nycHeroDistance(x,z);
     if(distance<NYC_HERO_ROUTE.coreRadius)return 3;
+    // A single, broadening sight corridor from harbor spawn to the
+    // One World Trade / Tribeca skyline; no discontinuous circular islands.
+    // Only the NYC map uses this rule. Ocean itself remains geometry-free.
+    const start=NYC_HERO_ROUTE.spawn,end=[-43,-234];
+    const dx=end[0]-start[0],dz=end[1]-start[1];
+    const t=Math.max(0,Math.min(1,
+      ((x-start[0])*dx+(z-start[1])*dz)/(dx*dx+dz*dz)));
+    const lateral=Math.hypot(x-(start[0]+t*dx),z-(start[1]+t*dz));
+    if(z>-558 && z<-215 && lateral<69+91*t)return 3;
     let band=distance<NYC_HERO_ROUTE.skylineRadius?1:0;
     for(const zone of NYC_FOCUS_ZONES){
       const dx=x-zone[0],dz=z-zone[1],d2=dx*dx+dz*dz;
@@ -843,9 +859,16 @@
       if (signature < 0.14) return elevation / scale;
 
       const midtown = Math.exp(-(((north + 80) / 125) ** 2));
-      const downtown = Math.exp(-(((north + 399) / 69) ** 2));
-      const towers = Math.max(midtown, downtown * 0.88);
-      const building = island ? 4.5 + signature * 7 + towers * signature ** 2 * 28 : 3.5 + signature * 9;
+      const downtown = Math.exp(-(((north + 399) / 91) ** 2));
+      const civic = Math.exp(-(((north + 287) / 112) ** 2));
+      const towers = Math.max(midtown,downtown*.98,civic*.54);
+      // Distinct upper-height clusters facing Liberty Island, with
+      // deterministic neighboring variation, rather than a flat box horizon.
+      const highrise = island && north<-200 && north>-517
+        ? Math.max(downtown,civic*.67)*Math.pow(hash(ix*3,iz*5,1289),2)*18:0;
+      const building = island ?
+        4.5 + signature * 7 + towers * signature ** 2 * 28 + highrise :
+        3.5 + signature * 9;
       return Math.min(0.99, (elevation + building) / scale);
     }
 
@@ -4008,8 +4031,27 @@
       const detailBand=local?2:nycDetailBand(east,north);
       if(detailBand===0)continue;
       const x=local?0:east,z=local?0:north,y=local?0:WATER_H+2.38;
-      const material=tone<0.35?[0.41,0.48,0.52]:tone<0.68?[0.65,0.61,0.53]:[0.53,0.39,0.32];
-      const trim=material.map(value=>Math.min(0.96,value*1.26));
+      // NYC_DOWNTOWN_ARCH_V7 — different facade identities for adjacent lots.
+      // HEAT is a VISUAL reference only; no third-party code or assets copied.
+      // Building styles combine Indiana-limestone-like stone, terracotta,
+      // brick, blue/neutral glass and darker late-20th-century curtain walls.
+      const heroDowntown=!local && detailBand>=2 && north>-526 && north<-195;
+      const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-
+        MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
+      const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);
+      const archType=((gridX*3+gridZ*5)%13+13)%13;
+      const facadeSet=[
+        [.67,.65,.58], [.50,.37,.31], [.37,.43,.47],
+        [.29,.42,.48], [.61,.59,.55], [.67,.56,.45],
+        [.49,.48,.50], [.33,.40,.46], [.62,.49,.40],
+        [.39,.52,.56], [.74,.69,.58], [.47,.51,.52],
+        [.57,.45,.39]
+      ];
+      const material=heroDowntown?facadeSet[archType]:
+        tone<0.35?[0.41,0.48,0.52]:
+        tone<0.68?[0.65,0.61,0.53]:[0.53,0.39,0.32];
+      const trim=material.map((value,i)=>Math.min(.95,
+        value*(heroDowntown?(i===0?1.12:1.07):1.26)));
       if(destroyed){
         addModelBox(addQuad,x,y+0.34,z,w*0.89,0.68,d*0.88,[0.35,0.33,0.30]);
         for(let i=0;i<11;i++){
@@ -4019,8 +4061,49 @@
         }
         continue;
       }
-      addModelBox(addQuad,x,y+h/2,z,w,h,d,material);
-      addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,material.map(value=>value*0.69));
+      if(heroDowntown && h>=9.2){
+        // Three-dimensional Art Deco setback and modern step-towers,
+        // sharing the exact original building footprint + collision height.
+        // Each neighboring site receives a different crown and frontage.
+        const split=archType%5,lower=split===0?.57:split===1?.68:
+          split===2?.77:split===3?.63:.73;
+        const middleTop=split===0?.87:split===1?.91:
+          split===2?.94:split===3?.83:.89;
+        const setback=.68+(archType%4)*.055;
+        const crown=.43+(archType%3)*.10;
+        const baseH=h*lower,upperH=h*(middleTop-lower),
+          capH=h*(1-middleTop);
+        addModelBox(addQuad,x,y+baseH*.5,z,w,baseH,d,material);
+        if(upperH>.12)addModelBox(addQuad,
+          x+(split%2?.12:-.12)*w,y+h*(lower+middleTop)*.5,
+          z,setback*w,upperH,setback*d,
+          material.map((v,i)=>v*(i===2?1.05:.96)));
+        if(capH>.09)addModelBox(addQuad,x,y+h*(1+middleTop)*.5,z,
+          crown*w,capH,crown*d,trim);
+        // Distinct roofline from harbor: sandstone crowns, glass mechanical
+        // penthouses, terracotta fins and twin thin antenna masts.
+        if(split===0){
+          for(const side of [-1,1]){
+            addModelBox(addQuad,x+side*w*.28,y+h*.57,z+d*.15,
+              .18,h*.30,.20,trim);
+          }
+        }else if(split===1 || split===3){
+          for(const side of [-1,1])
+            addModelBox(addQuad,x+side*w*.21,y+h+.38,z,
+              .11,.77,.11,[.35,.39,.43]);
+        }else if(split===2){
+          addModelBox(addQuad,x,y+h+.34,z,crown*w*.69,.64,
+            crown*d*.68,[.25,.33,.38]);
+        }else{
+          for(const side of [-1,1])
+            addModelBox(addQuad,x+side*w*.29,y+h*.80,
+              z+side*d*.19,.14,h*.26,.16,trim);
+        }
+      }else{
+        addModelBox(addQuad,x,y+h/2,z,w,h,d,material);
+      }
+      addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,
+        material.map(value=>value*0.69));
       addModelBox(addQuad,x,y+h-0.16,z,w+0.12,0.29,d+0.12,trim);
       const roof=[0.31,0.34,0.35];
       if(detailBand>=2 && h>13){
@@ -4043,11 +4126,24 @@
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
       if(!local && !destroyed && h>7.5 && detailBand>=2){
-        const steel=[0.235,0.27,0.30],stone=[0.51,0.51,0.48];
-        const glass=[0.13+tone*0.065,0.21+tone*0.075,0.28+tone*0.08];
-        const mullion=[0.37,0.42,0.44],recess=[0.11,0.15,0.18];
-        const bays=Math.max(2,Math.min(4,Math.floor(w/2.9)));
-        const levels=Math.max(0,Math.min(6,Math.floor((h-3.7)/2.78)));
+        const steel=heroDowntown?[.26,.32,.37]:[.235,.27,.30];
+        const stone=heroDowntown?
+          material.map(v=>Math.min(.88,v*.96)):[.51,.51,.48];
+        const glazes=[
+          [.14,.23,.29],[.17,.30,.38],[.11,.19,.23],
+          [.25,.35,.39],[.12,.27,.36],[.28,.32,.34],
+          [.18,.23,.29],[.11,.26,.32],[.22,.29,.35],
+          [.15,.32,.38],[.20,.31,.33],[.10,.22,.31],[.26,.31,.36]
+        ];
+        const glass=heroDowntown?glazes[archType]:
+          [.13+tone*.065,.21+tone*.075,.28+tone*.08];
+        const mullion=heroDowntown?[.33,.37,.39]:[.37,.42,.44],
+          recess=[.11,.15,.18];
+        const bays=heroDowntown?Math.max(2,Math.min(7,Math.floor(w/
+          (.86+(archType%5)*.25)))):
+          Math.max(2,Math.min(4,Math.floor(w/2.9)));
+        const levels=Math.max(0,Math.min(heroDowntown?10:6,
+          Math.floor((h-3.7)/(heroDowntown?2.48:2.78))));
         const bayWidth=Math.min(1.52,(w-0.85)/bays*0.68);
         for(const side of [-1,1]){
           const wall=z+side*d/2;
@@ -4063,7 +4159,7 @@
             addModelBox(addQuad,bx,y+1.45,wall+side*0.24,0.065,1.55,0.10,mullion);
           }
           for(let floor=0;floor<levels;floor++){
-            const py=y+4.0+floor*2.78;
+            const py=y+4.0+floor*(heroDowntown?2.48:2.78);
             const band=py-1.02;
             if(band<y+h-0.20)
               addModelBox(addQuad,x,band,wall+side*0.095,w*0.92,0.085,0.18,trim);
@@ -4078,15 +4174,24 @@
                 addModelBox(addQuad,bx,py,wall+side*0.161,0.043,1.52,0.09,mullion);
             }
           }
-          // Metal entrance canopy casts an actual geometric recess.
+          // Metal entrance canopies and limestone upper-frieze vary by
+          // building type, avoiding duplicated shopfronts on each block.
           if(h>12 && tone>0.26)
-            addModelBox(addQuad,x,y+2.63,wall+side*0.53,w*0.74,0.13,0.92,steel);
+            addModelBox(addQuad,x,y+2.63,wall+side*.53,
+              w*(heroDowntown?.48+(archType%4)*.11:.74),
+              .13,heroDowntown?.65+(archType%3)*.17:.92,steel);
+          if(heroDowntown && archType%3===0 && h>14){
+            for(let b=-2;b<=2;b++){
+              addModelBox(addQuad,x+b*w*.16,y+3.06,wall+side*.31,
+                .08,.56,.16,trim);
+            }
+          }
         }
         for(const side of [-1,1]){
           const xWall=x+side*w/2;
           addModelBox(addQuad,xWall+side*0.075,y+h*0.5,z,0.17,h*0.94,0.16,stone);
           for(let row=0;row<Math.min(levels,5);row++){
-            const py=y+4.0+row*2.78;
+            const py=y+4.0+row*(heroDowntown?2.48:2.78);
             if(py+0.9>=y+h)break;
             const sideBays=Math.max(1,Math.min(3,Math.floor(d/3.8)));
             for(let col=0;col<sideBays;col++){
