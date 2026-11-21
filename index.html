@@ -566,6 +566,14 @@
     guide(ramp[Math.floor(ramp.length*0.68)],city?'LOCAL EXIT':'THE STRIP',false);
   }
 
+  // PATROL_NYC_TIMES_SURVEY_SWAP_V14
+  // Original NYC municipal roof outlines identified with Planning Labs'
+  // authoritative address point, then fitted into PATROL's compressed
+  // block parcels. FID and heightFt remain traceable; THIS IS NOT 1:1
+  // terrain or a surveyed building position. 7 Times Square lies outside
+  // this 42–47th Street snapshot and retains its custom building mesh.
+  // Included named sites: 12.
+  const NYC_TIMES_VERIFIED_FOOTPRINTS = {"3 Times Square":{"fid":553211,"ft":488.49,"uv":[[0.42,0.454],[0.4491,0.2219],[0.3919,0.2173],[0.4377,-0.1559],[0.5,-0.271],[0.4726,-0.3976],[0.3,-0.5],[0.2011,-0.4931],[0.1272,-0.4511],[-0.2024,-0.4816],[-0.2536,-0.0569],[-0.4451,-0.0744],[-0.5,0.3809],[-0.4141,0.3902],[-0.4176,0.4275],[0.3524,0.5]]},"1500 Broadway":{"fid":30857,"ft":412.06,"uv":[[0.2215,0.5],[0.2987,-0.0739],[0.4492,-0.0594],[0.5,-0.4389],[-0.1217,-0.5],[-0.1592,-0.2167],[-0.2825,-0.2274],[-0.5,0.4317]]},"1530 Broadway":{"fid":384606,"ft":61.31,"uv":[[0.4582,0.5],[0.5,0.046],[0.3651,0.029],[0.4062,-0.4194],[-0.2211,-0.5],[-0.3354,-0.3681],[-0.5,0.3304],[-0.4738,0.3805]]},"1515 Broadway":{"fid":212747,"ft":700.68,"uv":[[-0.4475,0.2789],[-0.3723,0.2916],[-0.375,0.3234],[-0.3315,0.2748],[-0.0943,0.3148],[-0.071,0.4285],[0.3559,0.5],[0.3757,0.38],[0.4421,0.4284],[0.5,-0.3078],[0.4283,-0.2904],[0.4269,-0.4079],[-0.0193,-0.4831],[-0.0273,-0.3876],[-0.2928,-0.4324],[-0.3081,-0.4992],[-0.3139,-0.4807],[-0.4249,-0.5],[-0.4224,-0.3101],[-0.4438,-0.3139],[-0.4115,-0.2539],[-0.4388,0.0944],[-0.4985,0.1283],[-0.4867,0.1303],[-0.5,0.2937],[-0.449,0.3018]]},"1540 Broadway":{"fid":1000156,"ft":575,"uv":[[-0.0626,0.4358],[0.4471,0.5],[0.5,0.0526],[0.3446,0.0337],[0.3961,-0.3988],[-0.4041,-0.5],[-0.5,0.2926],[-0.0512,0.3486]]},"1535 Broadway / Marriott Marquis":{"fid":948897,"ft":577.5,"uv":[[-0.4859,-0.3283],[-0.5,-0.0962],[-0.3275,-0.0603],[-0.3407,0.1672],[-0.2882,0.1785],[-0.2985,0.365],[0.3688,0.5],[0.4015,0.3314],[0.3392,0.3189],[0.3447,0.231],[0.3885,0.2384],[0.4228,0.2099],[0.4475,0.157],[0.4573,0.0767],[0.4269,-0.0374],[0.3621,-0.0726],[0.3668,-0.152],[0.4688,-0.1317],[0.5,-0.2984],[0.4341,-0.3118],[0.4356,-0.3409],[-0.3424,-0.5],[-0.3436,-0.4822],[-0.3796,-0.489],[-0.3901,-0.3085]]},"1552 Broadway":{"fid":958605,"ft":55.51,"uv":[[0.5,-0.3287],[-0.3545,-0.5],[-0.5,-0.1172],[-0.4493,0.3162],[0.4506,0.5]]},"1565 Broadway / Digital Stack":{"fid":905279,"ft":47.96,"uv":[[0.384,0.5],[0.5,-0.2467],[-0.4656,-0.5],[-0.5,0.2752]]},"1557 Broadway / Duffys Duo":{"fid":189709,"ft":45.5,"uv":[[0.2425,0.5],[0.5,-0.3784],[-0.4255,-0.5],[-0.5,0.4009]]},"TSX Broadway":{"fid":949144,"ft":478.98,"uv":[[0.4552,0.5],[0.5,-0.2247],[0.1139,-0.2998],[0.1204,-0.3911],[-0.4602,-0.5],[-0.5,0.1132],[-0.43,0.3283]]},"2 Times Square":{"fid":941790,"ft":255,"uv":[[0.3749,0.3535],[0.5,-0.481],[0.1453,-0.5],[-0.0731,-0.1902],[-0.2844,0.3187],[-0.4722,0.3086],[-0.5,0.4529],[0.3472,0.5]]},"20 Times Square / EDITION":{"fid":52884,"ft":124,"uv":[[0.2016,0.4628],[0.4387,0.5],[0.5,-0.3092],[0.3789,-0.3285],[0.3523,-0.1694],[0.3539,-0.2078],[0.3003,-0.2178],[0.3395,-0.3789],[-0.4395,-0.5],[-0.5,0.2881],[-0.4541,0.294],[-0.4601,0.3608]]}};
   const TIMES_SQUARE={
     avenue:12, bounds:[-34,56,-52,68],
     crossings:[-40,-19,-2,14,31,50],
@@ -6514,7 +6522,8 @@ const CENTRAL_PARK_SITES=[
         adPanels.push({label,color,panelId:'times-square-'+index,a,b,c,d});
       };
       const protectedTimesSites=buildTimesSquareDistrict(
-        {box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
+        {box,lamp,addTri:solid.addTri,addQuad:solid.addQuad,
+          lightQuad:lights.addQuad,solidAt,place},ledQuad);
       // PATROL_NYC_GIS_INFILL_V11_HOOK — official FID/HEIGHTROOF
       // polygons from NYC public data, clipped to open lots; no extra engine.
       // Disable for troubleshooting: ?nycGIS=off
@@ -6612,7 +6621,7 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
-  function buildTimesSquareDistrict({box,lamp,addQuad,lightQuad,solidAt,place},ledQuad){
+  function buildTimesSquareDistrict({box,lamp,addTri,addQuad,lightQuad,solidAt,place},ledQuad){
     const district=TIMES_SQUARE,avenue=district.avenue;
     const ground=STREET_Y+0.09, street=STREET_Y+0.04;
     const sidewalk=[0.49,0.48,0.47], slate=[0.56,0.54,0.51], granite=[0.61,0.59,0.55];
@@ -6774,13 +6783,29 @@ const CENTRAL_PARK_SITES=[
       // exposed structural ribs and podium profiles. Based on street-level
       // visual characteristics; geometry remains game-scale approximation.
       const style=i%6;
+      const survey=NYC_TIMES_VERIFIED_FOOTPRINTS[b.name];
+      const officialRing=survey?.uv.map(([u,v])=>[x+u*w,z+v*d]);
+      const ledTop=Math.max(...panels.map(([y,hh])=>y+hh*.5))+1.25;
+      // The city uses compressed Z/X and independently authored billboards.
+      // Source heights guide skyline scale, while min clearance keeps the
+      // documented static screens attached instead of suspended in air.
+      const surveyedHeight=survey?Math.max(ledTop,
+        Math.min(h*1.45,Math.max(h*.66,survey.ft*.3048*.32))):h;
       const glazed=style===0||style===3||b.name.includes('Marriott')||
         b.name.includes('EDITION');
       const metal=glazed?[.35,.43,.48]:[.37,.38,.39],
         stone=glazed?[.46,.53,.57]:color.map(v=>Math.min(.91,v*1.16));
       // Source-ordered compact footprints, with the real tapered 2 Times Square
       // parcel represented by an actual nonrectangular prism.
-      if(b.shape==='wedge'){
+      if(survey && officialRing){
+        // Replaces the old cuboid body; source-backed triangulated crown,
+        // polygon side walls and true window geometry use NYC PBR 9/10/11.
+        const lot=[x,z,w,d,surveyedHeight,glazed?.61:.24,false,
+          officialRing,survey.fid];
+        const result=buildOfficialFootprintMesh(addTri,addQuad,lot,ground,4);
+        if(result.roof<1 || result.walls<3)
+          throw Error('Invalid verified Times Square footprint '+b.name);
+      }else if(b.shape==='wedge'){
         const ring=[[-.50,-.50],[.50,-.50],[.27,.50],[-.33,.50]];
         for(let k=0;k<ring.length;k++){
           const a=ring[k],t=ring[(k+1)%ring.length];
@@ -6799,6 +6824,7 @@ const CENTRAL_PARK_SITES=[
         box(x+(i%3-1)*w*.035,ground+h*.925,z,
           w*(.80+(i%3)*.04),h*.15,d*.85,color.map(v=>v*.94));
       }
+      if(!survey){
       box(x,ground+1.34,z,w+0.14,2.68,d+0.18,[0.37,0.39,0.40]);
       box(x,ground+h-0.15,z,w+0.25,0.32,d+0.25,color.map(v=>v*1.19));
       box(x-0.63,ground+h+0.42,z+0.55,w*0.47,0.88,d*0.35,[0.37,0.39,0.40]);
@@ -6840,9 +6866,14 @@ const CENTRAL_PARK_SITES=[
           box(x-w*.28,ground+h*.43,zz,.16,h*.59,.15,metal);
         }
       }
-      solidAt('Times Square streetfront',x,z,ground,ground+h+1.4,w/2,d/2);
+      }
+      // Preserve a conservative collision proxy while the game street
+      // collision system uses boxes. Do not add another visual cuboid.
+      solidAt('Times Square streetfront',x,z,ground,
+        ground+(survey?surveyedHeight:h)+1.4,w/2,d/2);
       for(const side of [-1,1]){
         const face=z+side*(d/2+0.048);
+        if(!survey){
         const floorPitch=glazed?1.76:2.16+(style%3)*.20;
         const columns=glazed?9:6+style%3;
         const paneW=(w*.84)/columns*.68;
@@ -6864,6 +6895,7 @@ const CENTRAL_PARK_SITES=[
           box(x+col*w/5.5,ground+1.30,face,1.10,1.92,0.10,[0.23,0.31,0.39]);
           lamp(x+col*w/5.5,ground+2.48,face+side*0.081,0.80,0.098,0.10,warm);
         }
+        }
         // One real-facing marquee per mapped site, not mirrored on both
         // faces of every building: fixes Times Square's repeated-screen look.
         if(side===b.front)for(const [hgt,size,tint,label] of panels){
@@ -6871,6 +6903,7 @@ const CENTRAL_PARK_SITES=[
         }
       }
       const corridorSide=x<avenue?1:-1, edge=x+corridorSide*(w/2+0.075);
+      if(!survey){
       for(let col=-3;col<=3;col++){
         const pz=z+col*d/8;
         box(edge,ground+1.52,pz,0.089,2.04,1.15,[0.19,0.24,0.29]);
@@ -6882,6 +6915,7 @@ const CENTRAL_PARK_SITES=[
         lamp(edge+corridorSide*0.065,ground+2.49,pz,0.057,0.088,0.94,warm);
       }
       box(edge+corridorSide*0.28,ground+2.83,z,0.58,0.14,d*0.85,[0.28,0.31,0.35]);
+      }
       if(b.sideSign){
         // Curated 7th Ave / plaza wraparound screens only where the real
         // named building has a prominent side canvas.
@@ -6893,6 +6927,9 @@ const CENTRAL_PARK_SITES=[
           screen(span/2,panelHeight/2),screen(-span/2,panelHeight/2),
           tint,caption+' CORNER');
       }
+      // FID-tagged footprint already has authentic windows and roof. Avoid
+      // overpainting with fake repeated rectangular wall bands.
+      if(!survey){
       // Keep the soffit and cantilever readable at street level.
       box(x,ground+2.89,z-d/2-0.31,w*0.82,0.18,0.79,[0.25,0.28,0.31]);
 
@@ -6927,6 +6964,18 @@ const CENTRAL_PARK_SITES=[
             0.045,1.43,Math.min(1.28,d*0.115),[0.11,0.17,0.23]);
         }
         box(e+(x<avenue?1:-1)*0.47,ground+2.61,z,0.82,0.115,d*0.75,brushed);
+      }
+      }
+      if(survey){
+        // Narrow steel scaffold supports sit behind existing signage, rather
+        // than restoring an entire billboard-shaped procedural building.
+        const screenSide=b.front,
+          panelY=Math.min(surveyedHeight-.5,
+            Math.max(3.2,panels[0][0]));
+        for(const dx of [-.33,.33]){
+          box(x+dx*w,ground+panelY*.5,z+screenSide*(d*.5+.06),
+            .095,panelY,.10,[.29,.33,.36]);
+        }
       }
     }
 
