@@ -113,6 +113,29 @@ try{
  await capture('00-harbor.png');
  await page.waitForTimeout(3500);
  await capture('01-city-loaded.png');
+ // Capture the financial-district facade *before* the bridge shortcut
+ // changes zoom to 68 and before a nine-camera tour advances to night.
+ // Both factors previously made 09 render a near-wall/night scene even
+ // when the independent default-zoom daylight view was fully clear.
+ await page.keyboard.press('h');
+ await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
+  null,{timeout:15000});
+ await page.locator('#hotelZoom').evaluate(el=>{
+  el.value='42';
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Window Facades'});
+ await page.waitForTimeout(1600);
+ const facadeView=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null,
+     zoom:document.getElementById('hotelZoom')?.value};
+ });
+ check(facadeView.label==='Lower Manhattan · Window Facades'&&
+   facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
+   'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
+ await capture('09-manhattan-window-facades.png');
  // The previous smoke test photographed only the spawn harbor. Explicitly
  // visit the Brooklyn Bridge camera so bridgehead, nearby parcels and road
  // clipping are visible in CI artifacts rather than being inferred from code.
@@ -186,20 +209,6 @@ try{
  }
 
 
- // Inspect the newly physical OTI window surrounds with the same real
- // headless WebGL pipeline; a distant spawn skyline cannot reveal their
- // geometry or catch the camera facing the wrong side of the city.
- await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Window Facades'});
- await page.waitForTimeout(1600);
- const facadeView=await page.evaluate(()=>{
-   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
-   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
-   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null};
- });
- check(facadeView.label==='Lower Manhattan · Window Facades'&&
-   facadeView.webgl&&facadeView.error===0,
-   'Lower Manhattan facade camera failed: '+JSON.stringify(facadeView));
- await capture('09-manhattan-window-facades.png');
 
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
  result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings};
