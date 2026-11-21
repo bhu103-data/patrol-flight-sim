@@ -3031,6 +3031,90 @@
     jetpack: ironManMeshes.body
   };
 
+  // PATROL_NYC_FLATIRON_V9: based on the NPS National Register description.
+  // Original bounded art: rounded prow, limestone podium, glazed terra cotta
+  // shaft, upper Beaux-Arts cornices and paired sash-window bay rhythm.
+  function buildFlatironArchitecture({addQuad,addTri,addLightQuad}){
+    const plan=[[-6.65,-7.95],[6.65,-7.95],[1.05,6.63]];
+    for(let i=0;i<=6;i++){
+      const t=i/6;
+      plan.push([.32-.76*t,8.11+.20*Math.sin(Math.PI*t)]);
+    }
+    plan.push([-1.14,6.55]);
+    const ring=(y,s=1)=>plan.map(([x,z])=>[s*x,y,s*z]);
+    const base=[.60,.57,.51],shaft=[.73,.68,.59],lime=[.83,.77,.66],
+      dark=[.39,.38,.34],glass=[.20,.30,.34],frame=[.30,.26,.23];
+    let quads=0,windows=0,litWindows=0;
+    const quad=(a,b,c,d,color,lit=false)=>{
+      (lit?addLightQuad:addQuad)(a,b,c,d,color);
+      quads++;if(lit)litWindows++;
+    };
+    for(const [lo,hi,color] of [[0,3.60,base],[3.60,11.85,shaft],
+      [11.85,16.75,lime]]){
+      const lower=ring(lo),upper=ring(hi);
+      for(let i=0;i<plan.length;i++){
+        const j=(i+1)%plan.length;
+        quad(lower[i],upper[i],upper[j],lower[j],color);
+      }
+    }
+    for(const [lo,hi,size,color] of [
+      [0,.21,1.022,dark],[2.96,3.11,1.016,lime],
+      [3.58,3.86,1.032,lime],[11.70,12.02,1.034,lime],
+      [15.45,15.58,1.026,lime],[16.26,16.75,1.055,lime]]){
+      const lower=ring(lo,size),upper=ring(hi,size);
+      for(let i=0;i<plan.length;i++){
+        const j=(i+1)%plan.length;
+        quad(lower[i],upper[i],upper[j],lower[j],color);
+      }
+    }
+    for(let i=0;i<plan.length;i++){
+      const [ax,az]=plan[i],[bx,bz]=plan[(i+1)%plan.length];
+      const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz);
+      if(len<1.4)continue;
+      // Positive winding of the footprint => right-hand outward vector.
+      const ox=dz/len,oz=-dx/len;
+      const at=(t,y,offset)=>[ax+dx*t+ox*offset,y,az+dz*t+oz*offset];
+      const bays=Math.min(9,Math.max(2,Math.floor(len/1.5)));
+      for(let floor=0;floor<21;floor++){
+        const low=.32+floor*.77,high=Math.min(16.24,low+.51);
+        if(high<=low+.1)continue;
+        for(let bay=0;bay<bays;bay++){
+          const a=(bay+.18)/bays,b=(bay+.82)/bays;
+          quad(at(a,low,.060),at(a,high,.060),
+            at(b,high,.060),at(b,low,.060),frame);
+          quad(at(a+.012,low+.036,.086),at(a+.012,high-.035,.086),
+            at(b-.012,high-.035,.086),at(b-.012,low+.036,.086),
+            (floor*13+bay*7+i*17)%19===0?[.32,.37,.35]:glass);
+          windows++;
+          if(floor>4 && (floor*17+bay*11+i*7)%53===1){
+            quad(at(a+.022,low+.062,.093),at(a+.022,low+.19,.093),
+              at(b-.022,low+.19,.093),at(b-.022,low+.062,.093),
+              [.72,.62,.47],true);
+          }
+        }
+      }
+      const piers=Math.min(9,Math.max(2,Math.floor(len/2.2)));
+      for(let k=1;k<piers;k++){
+        const t=k/piers;
+        quad(at(t-.009,3.9,.096),at(t-.009,11.66,.096),
+          at(t+.009,11.66,.096),at(t+.009,3.9,.096),lime);
+      }
+      const bracketCount=Math.min(13,Math.max(2,Math.floor(len/1.25)));
+      for(let k=0;k<bracketCount;k++){
+        const t=(k+.5)/bracketCount;
+        quad(at(t-.012,16.08,.106),at(t-.012,16.25,.106),
+          at(t+.012,16.25,.106),at(t+.012,16.08,.106),lime);
+      }
+    }
+    const roof=ring(16.79,1.02);
+    for(let i=0;i<roof.length;i++){
+      const j=(i+1)%roof.length;
+      const cross=roof[i][0]*roof[j][2]-roof[j][0]*roof[i][2];
+      if(Math.abs(cross)>1e-5)addTri([0,16.79,0],roof[j],roof[i],[.46,.46,.43]);
+    }
+    return {quads,windows,litWindows,outlinePoints:plan.length};
+  }
+
   function buildNewYorkLandmark(kind) {
     const {addTri,addQuad,upload}=createTriangleMesh(),lights=createTriangleMesh();
     const light=(...args)=>addModelBox(lights.addQuad,...args);
@@ -3199,18 +3283,7 @@
       mast(66,79,0.66,steel);
       light(0,78.86,0,0.21,0.22,0.21,[1.0,0.25,0.22]);
     } else if (kind === 'flatiron') {
-      const points=[[-6.65,-7.95],[6.65,-7.95],[1.05,6.63],[0.32,8.11],[-0.44,8.11],[-1.14,6.55]];
-      const ring=(y,scale)=>points.map(([x,z])=>[x*scale,y,z*scale]);
-      const body=[0.70,0.61,0.50];
-      for(const [low,high,scale,tint] of [[0,17,1,body],[0,1.5,1.02,[0.51,0.47,0.41]],
-        [3.7,4.0,1.03,limestone],[11.8,12.08,1.045,limestone],[16.3,16.85,1.06,limestone]]){
-        const a=ring(low,scale),b=ring(high,scale);
-        for(let i=0;i<a.length;i++){
-          const j=(i+1)%a.length;
-          addQuad(a[i],b[i],b[j],a[j],tint);
-        }
-        if(high===17)for(let i=1;i<b.length-1;i++)addTri(b[0],b[i+1],b[i],steel);
-      }
+      buildFlatironArchitecture({addQuad,addTri,addLightQuad:lights.addQuad});
     } else if (kind === 'times') {
       const stone=[0.51,0.47,0.42], copper=[0.30,0.34,0.36], frame=[0.22,0.24,0.27];
       box(0,0,0,10.7,4.35,13.75,stone);
