@@ -11259,7 +11259,10 @@ const CENTRAL_PARK_SITES=[
         hour>=6&&hour<16?'day':
         hour>=16&&hour<20?'dusk':'night';
       const quality=document.getElementById('nyStreetQuality')?.value;
-      const query=new URLSearchParams({time});
+      const aircraft=new FormData(flightSetup).get('aircraft');
+      // Chongqing has a separate renderer but keeps the SAME launcher craft.
+      const query=new URLSearchParams({time,aircraft:
+        aircraft==='seaplane'?'seaplane':aircraft||'jetpack'});
       if(quality==='0')query.set('quality','low');
       window.location.assign('./chongqing.html?'+query);
       return;
