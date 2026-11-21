@@ -467,16 +467,20 @@ scene.add(trees,stems,branches);
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
+// Static building/landmark collision registration is now complete. Build one
+// spatial index reused by the player AND every moving/ornamental street probe.
+const obstacleIndex=new SpatialObstacleIndex(obstacles);
 // The same occupied volumes control road clipping, decorations and actual cars.
 // Check road elevation so intentionally elevated structures remain passable below.
 function streetSpaceClear(x,z,y,radius=0){
   if(![x,z,y,radius].every(Number.isFinite))return false;
-  for(const o of obstacles){
-    if(Math.abs(x-o.x)>=o.w*.5+radius ||
-       Math.abs(z-o.z)>=o.d*.5+radius)continue;
-    if(y+2.2>=(o.base??-Infinity)&&y-1.6<=(o.top??Infinity))return false;
-  }
-  return true;
+  // Spatial hash avoids scanning hundreds of towers several times per
+  // vehicle, streetlight and wet-road decal on every animation frame.
+  return !obstacleIndex.eachNear(x,z,Math.max(0,radius),o=>
+    Math.abs(x-o.x)<o.w*.5+radius &&
+    Math.abs(z-o.z)<o.d*.5+radius &&
+    y+2.2>=(o.base??-Infinity)&&y-1.6<=(o.top??Infinity)
+  );
 }
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
@@ -500,8 +504,7 @@ for(const plan of plannedRoads){
   roadClearanceStats.clipped+=clear.stats.clippedSegments;
   roadClearanceStats.removedLength+=clear.stats.removedLength;
 }
-// Build after the hero-zone shops and towers append their collision volumes.
-const obstacleIndex=new SpatialObstacleIndex(obstacles);
+// The shared obstacle index was built after all static structures above.
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
 // The old collision boxes and all other scenic geometry remain intact.
 const previewScenario=new URLSearchParams(location.search).get('scenario')==='hongyadong';
