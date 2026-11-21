@@ -31,7 +31,7 @@ This project skill is a PATROL-specific adapter, not a bundled copy of the exten
 
 1. Inspect existing geometry and `assets/nyc/scenario-manifest.json`; pick one enabled=false landmark.
 2. Generate or edit a model through the connected Scenario for Blender tools only after approving cost. Check viewport render and silhouette against permitted reference material. Do not promise photogrammetric 1:1 accuracy.
-3. Keep only the meshes to export under a Blender collection named `PATROL_EXPORT`, centered in local horizontal coordinates, vertical Y-up on GLB export. Include materials, but also bake/paint COLOR_0 vertex colors: the existing PATROL runtime recognizes vertex colors and material factors; embedded bitmap PBR texture rendering is **not yet available for the imported GLB path**.
+3. Keep only the meshes to export under a Blender collection named `PATROL_EXPORT`, centered in local horizontal coordinates, vertical Y-up on GLB export. For textured models UV-unwrap and bake material Base Color into **one PNG/JPEG atlas**, exported embedded in the GLB with TEXCOORD_0; optionally add COLOR_0 vertex colors. PATROL now renders one Base Color atlas per GLB and baseColorFactor but does not yet support normal/metalness/roughness bitmap channels or multiple diffuse atlas images.
 4. Export in a desktop Blender session:
 
    ```powershell
