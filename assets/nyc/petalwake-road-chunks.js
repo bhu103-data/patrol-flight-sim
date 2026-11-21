@@ -51,7 +51,7 @@ export function buildNycBridgeheadDetailChunks({
   };
   const paint=(mesh,x,z,w,d,y,color)=>{
     const x0=x-w*.5,x1=x+w*.5,z0=z-d*.5,z1=z+d*.5;
-    mesh.addQuad([x0,y,z0],[x1,y,z0],[x1,y,z1],[x0,y,z1],color);
+    mesh.addQuad([x0,y,z0],[x0,y,z1],[x1,y,z1],[x1,y,z0],color);
   };
   for(const i of [13,14,15,16]){
     const ax=avenueX(i),bx=avenueX(i+1);
