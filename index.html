@@ -3221,7 +3221,7 @@ const CENTRAL_PARK_SITES=[
   function createTriangleMesh() {
     const pos = [], norm = [], col = [];
     let surfaces = null;
-    function addTri(a, b, c, rgb, surface=0) {
+    function addTri(a, b, c, rgb, surface=0, vertexNormals=null) {
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
       let nx = uy * vz - uz * vy;
@@ -3232,7 +3232,11 @@ const CENTRAL_PARK_SITES=[
       if(surface && !surfaces) surfaces=new Array(pos.length/3).fill(0);
       if(surfaces) surfaces.push(surface,surface,surface);
       pos.push(...a, ...b, ...c);
-      norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+      // Asset-specific normals from Blender produce smooth airfoils and floats.
+      // All original scenery/vehicles remain on geometric flat normals.
+      if(vertexNormals && vertexNormals.length===3) {
+        for(const n of vertexNormals) norm.push(...n);
+      } else norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
       if(Array.isArray(rgb[0]))col.push(...rgb[0],...rgb[1],...rgb[2]);
       else col.push(...rgb,...rgb,...rgb);
     }
