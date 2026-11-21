@@ -17,7 +17,7 @@ concurrency:
 jobs:
   verify-c185-source-rights-and-binary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -87,6 +87,28 @@ jobs:
             "
       - name: Parse actual GLB chunks, topology, named float hulls, materials, LOD and footprint
         run: node tools/aircraft/audit-third-party-c185.mjs
+      - name: Stage independently verified CC0 originals for temporary GLTFLoader viewer
+        run: |
+          mkdir -p artifacts/c185-asset-review/viewer
+          for id in 3dassets-highwing 3dassets-lite innerscene-twin innerscene-amphibious; do
+            test -s "/tmp/${id}.glb"
+            cp "/tmp/${id}.glb" "artifacts/c185-asset-review/viewer/${id}.glb"
+          done
+      - name: Install free Chromium + source GLB viewer tooling
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve read-only audit viewer, NOT live index.html
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/patrol-c185-source-qa.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/assets/aircraft/cessna185-floats.glb -o /dev/null; then break; fi
+            sleep 1
+          done
+      - name: Render source-authorized floatplane models in real isolated WebGL2
+        env:
+          PATROL_C185_QA_BASE: http://127.0.0.1:8766
+        run: node tools/aircraft/thirdparty-browser-review.mjs
       - name: Keep audit, publisher metadata and exact access blockers, never import third-party binaries
         if: always()
         uses: actions/upload-artifact@v4
