@@ -21,23 +21,28 @@ const builderSource=extract('buildCityBuildings');
 function build(lot,detail=2){
   const boxes=[];
   let beams=0,quads=0;
+  const quadTags=[];
   const generator=new Function(
     'createTriangleMesh','addModelBox','addRideBeam','nycDetailBand',
     'MANHATTAN_GRID','WATER_H','tintSeed','addDowntownFacadeRelief',
     'return ('+builderSource+')'
   )(
-    ()=>({addQuad(){quads++},addTri(){},upload(){return {quads}}}),
+    ()=>({addQuad(...args){quads++;quadTags.push(args.at(-1))},addTri(){},upload(){return {quads}}}),
     (_quad,...args)=>boxes.push(args),
     ()=>{beams++},
     ()=>detail,
     {tilt:.24,offset:30,blockWidth:24,blockLength:33},
     12.2,()=>.5,()=>0
   );
-  return {mesh:generator([lot]),boxes,beams,quads};
+  return {mesh:generator([lot]),boxes,beams,quads,quadTags};
 }
 test('DUMBO midrise uses brick facade with bounded fire escape geometry',()=>{
   const b=build([342.76,-346.16,9,19,13.82,.41,false]);
-  assert.deepEqual(b.boxes[0].at(-1),[.55,.35,.31]);
+  assert.deepEqual(b.boxes[0].at(-2),[.55,.35,.31]);
+  assert.equal(b.boxes[0].at(-1),12,'brick walls use procedural PBR tag');
+  assert.ok(b.boxes.some(box=>box.at(-1)===13),'window meshes use glass tag');
+  assert.ok(b.quadTags.includes(14),'roof face uses gravel PBR tag');
+  assert.ok(b.quadTags.filter(tag=>tag===13).length>=5,'window quads share glass shader');
   assert.ok(b.beams>=4,'external railings must be present');
   assert.ok(b.boxes.length<175,'detail stays within per-building budget');
   assert.ok(b.mesh.quads>0,'existing shopfront windows remain');
@@ -57,4 +62,11 @@ test('Brooklyn style does not leak beyond bridgehead',()=>{
   const away=build([480,-346.16,9,19,13.82,.41,false]);
   assert.equal(away.beams,0);
   assert.notDeepEqual(away.boxes[0].at(-1),[.55,.35,.31]);
+});
+
+test('Brooklyn PBR tags do not impersonate surveyed NYC footprint source IDs',()=>{
+  assert.match(html,/vHarborSurface<5\.5 \|\| vHarborSurface>14\.5/);
+  assert.match(html,/taggedFacadeSurface=vHarborSurface>5\.5 && vHarborSurface<14\.5/);
+  assert.match(html,/vHarborSurface==13\.0/);
+  assert.match(html,/12\/13\/14 mark \*procedural Brooklyn\*/);
 });
