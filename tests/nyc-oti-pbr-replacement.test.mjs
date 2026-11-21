@@ -1,5 +1,5 @@
 // Run: node --test tests/nyc-oti-pbr-replacement.test.mjs
-// 60 official OTI Financial District buildings: true polygon geometry,
+// 100 official OTI Financial District buildings: true polygon geometry,
 // separate masonry/window/roof PBR tags, no fake procedural window overlay.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,8 +42,8 @@ function trace(){
   }
   return {count,invalid,fronts,roofTris};
 }
-test('all 60 government polygons use tagged render faces, never vehicle glass',()=>{
-  assert.equal(asset.footprints.length,60);
+test('all 100 government polygons use tagged render faces, never vehicle glass',()=>{
+  assert.equal(asset.footprints.length,100);
   const {count,invalid,fronts,roofTris}=trace();
   assert.equal(invalid,0,'no degenerate or invalid polygon faces');
   assert.ok(count.get(9)>=700,'enough stone and architectural frames');
