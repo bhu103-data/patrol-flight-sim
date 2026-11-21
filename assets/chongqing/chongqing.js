@@ -315,10 +315,43 @@ const hotpot={x:285,z:225};
 const shopY=ground(hotpot.x,hotpot.z+28);
 // The entrance follows the graded upper street; rear foundation piers retain the lower slope.
 const hotpotDoor={x:hotpot.x,z:hotpot.z+34,y:shopY+2.7};
-box(hotpot.x,shopY+10,hotpot.z,72,20,50,M.beam);
-box(hotpot.x,shopY+21.8,hotpot.z,80,3,57,M.roof);
-box(hotpot.x,shopY+10,hotpot.z+25.4,68,13,1.4,M.gold);
-sign('重庆老火锅',hotpot.x,shopY+23.5,hotpot.z+28.8,52,12);
+// Photo-grained dark wooden facade, not a plain terracotta cube.
+box(hotpot.x,shopY+10,hotpot.z,72,20,50,pbr.wood);
+// A physically curved dark-tile roof replaces the floating, flat 80x3x57 slab.
+// Its top remains at/below the original collision top (shopY+23.3).
+{
+  const verts=[],uvs=[],indices=[],cols=8,rows=12;
+  for(let rz=0;rz<=rows;rz++){
+    const f=rz/rows,ez=Math.abs(f*2-1);
+    for(let cx=0;cx<=cols;cx++){
+      const u=cx/cols,edge=Math.abs(u*2-1);
+      const lift=2.12*(1-Math.pow(ez,1.5))+.28*Math.pow(edge,6)*Math.pow(ez,6);
+      verts.push((u-.5)*80,lift,(f-.5)*57.5);
+      uvs.push(u*3.2,f*2.4);
+    }
+  }
+  for(let rz=0;rz<rows;rz++)for(let cx=0;cx<cols;cx++){
+    const a=rz*(cols+1)+cx,b=a+1,c=a+cols+1,d=c+1;
+    indices.push(a,c,b,b,c,d);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setIndex(indices);
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geo.computeVertexNormals();
+  const roofMat=pbr.roof.clone();
+  roofMat.side=THREE.DoubleSide;
+  roofMat.roughness=.88;
+  roofMat.metalness=.02;
+  const roof=new THREE.Mesh(geo,roofMat);
+  roof.position.set(hotpot.x,shopY+20.65,hotpot.z);
+  roof.castShadow=true;roof.receiveShadow=true;scene.add(roof);
+  for(const side of [-1,1]){
+    box(hotpot.x,shopY+20.5,hotpot.z+side*28.9,81,.3,.35,pbr.carvedWood);
+  }
+}
+box(hotpot.x,shopY+10.3,hotpot.z+25.35,68,13,1.4,pbr.wood);
+sign('重庆老火锅',hotpot.x,shopY+22.9,hotpot.z+29.1,42,7.5,'#dbbb8f','#302822');
 const cauldron=box(278,shopY+4.5,hotpot.z+31,10,5,10,M.dark);
 ball(278,shopY+7.2,hotpot.z+31,5,M.red);
 const potLight=new THREE.PointLight(0xff693c,85,90,2);
