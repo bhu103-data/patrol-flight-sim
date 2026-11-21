@@ -43,7 +43,7 @@ class InstancedMesh{
   computeBoundingSphere(){}
 }
 const THREE={
-  BoxGeometry:Geometry,CylinderGeometry:Geo,SphereGeometry:Geometry,SphereGeometry:Geometry,BufferGeometry:Geometry,
+  BoxGeometry:Geometry,CylinderGeometry:Geometry,SphereGeometry:Geometry,BufferGeometry:Geometry,
   Float32BufferAttribute:Geometry,Object3D,InstancedMesh,
   MeshBasicMaterial:Material,MeshStandardMaterial:Material,MeshPhysicalMaterial:Material,
   Color,Vector3:Vec,
