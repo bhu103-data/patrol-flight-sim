@@ -156,6 +156,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   const brightGlints=pool(unit,pale,160);
   // Normalized road edge stripe and small "wet" highlight features. Instanced.
   let markCount=0,curbCount=0,lampCount=0,lanternCount=0,glintCount=0;
+  let reviewLampSlot=null;
   for(let route=0;route<6;route++){
     const side=route<3?1:-1,tier=route%3;
     for(let i=0;i<52;i++){
@@ -183,9 +184,15 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
       if(i%3===0&&lampCount<150){
         const place={x,y:ground(x,z+side*10.8),z:z+side*10.8};
         if(!Number.isFinite(place.y)||!isRoadClear(place.x,place.z,place.y+6,1.7))continue;
+        const poleIndex=lampCount,lanternIndex=lanternCount,glintIndex=glintCount;
         pose(poles,lampCount++,place,0,[0,6,0],[.31,12,.32],0);
         if(lanternCount<160)pose(lanterns,lanternCount++,place,0,[0,12.25,0],[1.45,.23,1.15],0);
         if(glintCount<160)pose(brightGlints,glintCount++,place,0,[0,12.38,0],[1.85,.1,1.48],0);
+        const score=Math.abs(x-285)+(route===1?0:route===0?70:190+route*30);
+        if(!reviewLampSlot||score<reviewLampSlot.score)reviewLampSlot={
+          score,anchor:{x:place.x,y:place.y,z:place.z},
+          poleIndex,lanternIndex,glintIndex
+        };
       }
     }
   }
@@ -430,8 +437,29 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     lowQuality=mode==='low';
     syncLighting();
   }
+  const originalReviewMatrices=new Map();
+  function setReviewLampVisible(visible){
+    if(!reviewLampSlot)return false;
+    for(const [mesh,index] of [
+      [poles,reviewLampSlot.poleIndex],
+      [lanterns,reviewLampSlot.lanternIndex],
+      [brightGlints,reviewLampSlot.glintIndex]
+    ]){
+      if(index>=mesh.count)continue;
+      let original=originalReviewMatrices.get(mesh);
+      if(!original){
+        original=new THREE.Matrix4();
+        mesh.getMatrixAt(index,original);
+        originalReviewMatrices.set(mesh,original);
+      }
+      mesh.setMatrixAt(index,visible?original:new THREE.Matrix4().makeScale(0,0,0));
+      mesh.instanceMatrix.needsUpdate=true;
+    }
+    return true;
+  }
   return {
-    update,setQuality,setTimeOfDay,
+    update,setQuality,setTimeOfDay,setReviewLampVisible,
+    reviewLampSlot:reviewLampSlot?Object.freeze({...reviewLampSlot.anchor}):null,
     // Explicit snapshots are created only when inspected/tested, never each frame.
     snapshot(){return {
       vehicleGreen,signalAspect,signalPhase:signalTime%36,crossingX,
