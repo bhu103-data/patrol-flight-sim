@@ -69,3 +69,36 @@ test('original playable C185 remains an exact original asset with its GLB decode
   assert.ok(Math.abs(result.length-7.8105)<.03);
   assert.ok(result.bounds.min[1]<-1.5);
 });
+
+test('actual Viper procedural triangle mesh stays finite and small without PBR dependency',()=>{
+  const fighterBegin=page.indexOf('function buildFighterMesh() {');
+  const fighterEnd=page.indexOf('// Build simple diamond/box mesh for Missiles',fighterBegin);
+  const boxBegin=page.indexOf('function addModelBox(');
+  const boxEnd=page.indexOf('  const SHIP_TYPES',boxBegin);
+  assert.ok(fighterBegin>0&&fighterEnd>fighterBegin&&boxBegin>0&&boxEnd>boxBegin);
+  const source=page.slice(boxBegin,boxEnd)+'\\n'+
+    page.slice(fighterBegin,fighterEnd)+'\\nreturn buildFighterMesh();';
+  let triangles=0,invalid=0;
+  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+  function capture(vertices,color){
+    triangles++;
+    assert.ok(Array.isArray(color)&&color.length===3,'RGB shader material');
+    for(const v of vertices){
+      for(let k=0;k<3;k++){
+        if(!Number.isFinite(v[k]))invalid++;
+        min[k]=Math.min(min[k],v[k]);max[k]=Math.max(max[k],v[k]);
+      }
+    }
+  }
+  const mock=()=>({
+    addTri:(a,b,c,col)=>capture([a,b,c],col),
+    addQuad:(a,b,c,d,col)=>{capture([a,b,c],col);capture([a,c,d],col);},
+    upload:()=>({triangles,min,max})
+  });
+  const result=new Function('createTriangleMesh',source)(mock);
+  assert.equal(result.triangles,700,'Viper source geometry must remain unchanged');
+  assert.equal(invalid,0);
+  const width=result.max.map((v,i)=>+(v-result.min[i]).toFixed(2));
+  assert.deepEqual(width,[4.34,1.16,4.60]);
+  assert.ok(width[2]>width[0],'jet should be longer than it is wide');
+});
