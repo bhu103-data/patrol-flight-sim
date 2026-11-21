@@ -89,7 +89,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // and slope determine placement, rather than repeating six tree clusters.
   // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
   stats.conifers=0;
-  for(let i=0;i<1380 && stats.conifers<460;i++){
+  for(let i=0;i<1380 && stats.conifers<270;i++){
     const x=-735+hash(i*71+53)*1470;
     const z=-735+hash(i*107+19)*1470;
     if(Math.hypot(x,z)>750 || Math.hypot(x-151,z+525)<75 ||
@@ -109,7 +109,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       [x+stem,y+treeH*.57,z],[x-stem,y+treeH*.57,z],trunk);
     addQuad([x,y,z-stem],[x,y,z+stem],
       [x,y+treeH*.57,z+stem],[x,y+treeH*.57,z-stem],trunk);
-    for(let layer=0;layer<4;layer++){
+    for(let layer=0;layer<3;layer++){
       const start=y+treeH*(.11+.175*layer),tip=start+treeH*(.45-.038*layer);
       const radius=treeH*(.20-.033*layer),phase=seed*6.28+layer*.36;
       const tone=layer%2===0?dark:bright;
