@@ -235,7 +235,9 @@ export function buildNycStreetNetwork({
     }
     return true;
   }
-  const visibleStreetSegments=new Set();
+  // An intersection exists only if painted asphalt actually reaches the node.
+  // Clipped remote portions must not count as connected streets.
+  const connectedStreetNodes=new Set();
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
@@ -357,7 +359,16 @@ export function buildNycStreetNetwork({
       stats.streetFixtures++;
     }
     if(kind==='avenue')stats.avenues++;else stats.streets++;
-    visibleStreetSegments.add((kind==='avenue'?'a':'s')+i+':'+j);
+    const startNode=[avenueX(i,j*grid.blockLength),j*grid.blockLength];
+    const endNode=kind==='avenue'
+      ?[avenueX(i,(j+1)*grid.blockLength),(j+1)*grid.blockLength]
+      :[avenueX(i+1,j*grid.blockLength),j*grid.blockLength];
+    const closeTo=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1])<1.35;
+    if(closeTo(a,startNode))connectedStreetNodes.add(
+      (kind==='avenue'?'a':'s')+i+':'+j);
+    if(closeTo(b,endNode))connectedStreetNodes.add(
+      (kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
+      (kind==='avenue'?j+1:j));
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
@@ -516,10 +527,8 @@ export function buildNycStreetNetwork({
       !permitted(x-4,z-4)||!permitted(x+4,z+4))continue;
     // An intersection cannot have painted zebra stripes unless both the
     // approaching avenue AND cross street survived full-footprint clearance.
-    const hasAvenue=visibleStreetSegments.has('a'+i+':'+j)||
-      visibleStreetSegments.has('a'+i+':'+(j-1));
-    const hasStreet=visibleStreetSegments.has('s'+i+':'+j)||
-      visibleStreetSegments.has('s'+(i-1)+':'+j);
+    const hasAvenue=connectedStreetNodes.has('a'+i+':'+j);
+    const hasStreet=connectedStreetNodes.has('s'+i+':'+j);
     if(!hasAvenue||!hasStreet)continue;
     // Crossings are drawn independently of road strips, so they must also
     // reserve the full intersection box. Otherwise zebra paint and yellow
