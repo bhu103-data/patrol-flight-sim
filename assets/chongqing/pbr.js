@@ -58,8 +58,8 @@ export function createChongqingPBR(THREE){
     const ctx=canvas.getContext('2d');
     let seed=type==='tile'?23:type==='window'?883:1601;
     function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
-    const stone=type==='stone',tile=type==='tile',glass=type==='window';
-    ctx.fillStyle=glass?'#1c2c38':tile?'#5f6060':'#9d9390';
+    const stone=type==='stone',tile=type==='tile',glass=type==='window',wood=type==='wood';
+    ctx.fillStyle=glass?'#1c2c38':tile?'#5f6060':wood?'#90705b':'#9d9390';
     ctx.fillRect(0,0,size,size);
     if(tile){
       // Closely overlapping ridged ceramic tiles; weathered charcoal slate, not neon red roofs.
@@ -87,6 +87,24 @@ export function createChongqingPBR(THREE){
         for(let n=0;n<12;n++){
           ctx.fillStyle='rgba(49,43,38,'+(rand()*.1)+')';
           ctx.fillRect(x+rand()*bw,y+rand()*bh,2+rand()*8,1+rand()*2);
+        }
+      }
+    }else if(wood){
+      // Offline wood fallback must look like timber, not the glass window atlas.
+      const plankHeight=42;
+      for(let row=0;row<Math.ceil(size/plankHeight);row++){
+        const y=row*plankHeight;
+        const shade=Math.round(96+rand()*37);
+        ctx.fillStyle='rgb('+Math.round(shade*1.32)+','+Math.round(shade*.97)+','+Math.round(shade*.74)+')';
+        ctx.fillRect(0,y,size,plankHeight-2);
+        ctx.fillStyle='rgba(24,21,19,.48)';ctx.fillRect(0,y+plankHeight-3,size,3);
+        for(let i=0;i<36;i++){
+          const sx=rand()*size,sy=y+rand()*plankHeight;
+          ctx.strokeStyle=rand()>.5?'rgba(25,17,14,.22)':'rgba(240,198,157,.19)';
+          ctx.lineWidth=.5+rand()*1.2;
+          ctx.beginPath();ctx.moveTo(sx,sy);
+          ctx.bezierCurveTo(sx+16,sy+rand()*2,sx+40,sy-rand()*2,sx+70,sy);
+          ctx.stroke();
         }
       }
     }else{
