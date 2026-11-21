@@ -1,0 +1,62 @@
+name: Vegas Strip core flight-scale visual QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "index.html"
+      - "tests/vegas-strip-core-ridge.test.mjs"
+      - "scripts/vegas-core-browser-smoke.mjs"
+      - "docs/VEGAS_STRIP_CORE_PILOT.md"
+      - ".github/workflows/vegas-strip-core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Vegas core geometry budget and clear road footprint
+        run: node --test tests/vegas-strip-core-ridge.test.mjs
+      - name: Install headless Chromium for fixed camera screenshots
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Start local PATROL flight-sim
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-vegas-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture candidate Strip near and flight-distance cameras
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+          PATROL_QA_TAG: candidate
+        run: node scripts/vegas-core-browser-smoke.mjs
+      - name: Start clean 6d50bfd integrated comparison server
+        run: |
+          git fetch --no-tags --depth=1 origin 6d50bfda4b2d3837e550751ede49b200b140bc72
+          git worktree add --detach /tmp/patrol-vegas-baseline 6d50bfda4b2d3837e550751ede49b200b140bc72
+          (cd /tmp/patrol-vegas-baseline && python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/patrol-vegas-baseline-http.log 2>&1) &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8766/index.html >/dev/null
+      - name: Capture exact baseline with same cameras and SwiftShader
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8766
+          PATROL_QA_TAG: baseline-6d50bfd
+        run: node scripts/vegas-core-browser-smoke.mjs
+      - name: Compare elapsed startup and sampled frame intervals
+        run: node scripts/vegas-compare-qa.mjs
+      - name: Preserve screenshots and browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-strip-core-webgl
+          path: artifacts/vegas/
+          retention-days: 7
+          if-no-files-found: ignore

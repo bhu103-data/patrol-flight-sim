@@ -429,11 +429,51 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const facade=(i%4===0?'terra':'timber');
     obstacles.push({x,z:z-6,w:20,d:16,base:y,top:y+16.1});
     put('stone',x,y+.65,z,21,1.3,25);
-    put(facade,x,y+7.9,z-6,20,15.7,16);
-    put('terra',x,y+16.4,z-6,23,1.5,22);
-    put('window',x,y+7,z+2.15,16,6,.15);
-    put('timber',x,y+7.1,z+2.35,.6,9,.4);
-    put('carved',x,y+12,z+3,21,1.0,1.2);
+    if(i===0){
+      // PATROL_CQ_HONGYADONG_NEIGHBOR_STEP_V1 — one locally authored upper-street
+      // storefront, not the GLB-swappable 11-level landmark. All solid tiers
+      // stay inside the EXISTING x±10 / (z-6)±8 obstacle footprint.
+      // A recessed upper storey, visible lower gallery and overhanging tile
+      // eave create real parallax rather than a facade-only material change.
+      put('timber',x,y+5.5,z-6,20,9.7,16);
+      put('timber',x,y+12.75,z-7.4,16.4,5.8,13.2);
+      put('stone',x,y+9.95,z-6,20,.38,16);
+      // The balcony stays inside the existing road-safe volume.
+      put('carved',x,y+10.12,z+1.45,18.5,.26,1.05);
+      for(const side of [-1,1]){
+        const px=x+side*8.4;
+        // Columns and diagonal brackets support the setback/front gallery.
+        put('timber',px,y+5.4,z+1.25,.48,8.6,.52);
+        beam('carved',[px,y+7.1,z-.35],[px,y+9.75,z+1.45],.28,.3);
+        put('carved',px,y+11.12,z+.95,.34,2.1,.34);
+      }
+      // Distinct window bays on each tier have recessed glazing, wooden
+      // reveals, sills, and real depth variation; no duplicated sign.
+      for(const bx of [x-5.2,x,x+5.2]){
+        put('window',bx,y+6.05,z+2.03,3.6,4.8,.14);
+        put('lattice',bx,y+6.05,z+2.16,.14,4.9,.18);
+        put('carved',bx,y+3.48,z+2.1,4,.2,.5);
+        put('window',bx,y+12.65,z-.63,3.05,2.5,.14);
+        put('lattice',bx,y+12.65,z-.46,.12,2.58,.17);
+        put('carved',bx,y+11.28,z-.5,3.5,.2,.5);
+      }
+      for(let c=0;c<=8;c++){
+        const px=x-8.6+c*2.15;
+        put('carved',px,y+10.8,z+2.0,.17,1.15,.2);
+      }
+      put('carved',x,y+11.35,z+2.0,18,.23,.26);
+      put('carved',x,y+10.3,z+2.0,18,.2,.28);
+      // Existing curved tile roof batch, within the original roof silhouette.
+      roof(x,y+15.85,z-7.4,19.6,1.15,16.4);
+      put('carved',x,y+15.75,z+.92,19.5,.24,.36);
+      put('carved',x,y+15.75,z-15.6,19.5,.24,.36);
+    }else{
+      put(facade,x,y+7.9,z-6,20,15.7,16);
+      put('terra',x,y+16.4,z-6,23,1.5,22);
+      put('window',x,y+7,z+2.15,16,6,.15);
+      put('timber',x,y+7.1,z+2.35,.6,9,.4);
+      put('carved',x,y+12,z+3,21,1.0,1.2);
+    }
     sign(names[i],x,y+15.1,z+3.6,17,4.5,'#ffd09a',i%3===0?'#712e35':'#493244');
     for(let t=0;t<3;t++)put('paving',x-7+t*7,y+.22,z+13,6,.15,13);
     if(i%3===0){

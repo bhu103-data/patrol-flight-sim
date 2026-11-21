@@ -1,0 +1,109 @@
+name: Vegas ridge same-camera baseline comparison
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/vegas-ridge-matched-baseline.yml"
+      - "scripts/vegas-core-browser-smoke.mjs"
+      - "tests/vegas-strip-core-ridge.test.mjs"
+      - "index.html"
+
+permissions:
+  contents: read
+
+jobs:
+  matched-screenshots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify Vegas geometry and ridge normal regression
+        run: node --test tests/vegas-strip-core-ridge.test.mjs
+      - name: Install Chromium and PNG comparison dependency
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs
+          npx playwright install --with-deps chromium
+      - name: Prepare immutable integrated baseline server
+        run: |
+          git worktree add --detach /tmp/patrol-vegas-base 6d50bfda4b2d3837e550751ede49b200b140bc72
+          python3 -m http.server 8766 --bind 127.0.0.1 --directory /tmp/patrol-vegas-base >/tmp/patrol-vegas-base-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8766/index.html >/dev/null
+      - name: Capture original integrated baseline with identical script
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8766
+        run: |
+          node scripts/vegas-core-browser-smoke.mjs
+          mv artifacts/vegas artifacts/vegas-baseline
+      - name: Start proposed map server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-vegas-current-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture proposed map with identical script and settings
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: |
+          node scripts/vegas-core-browser-smoke.mjs
+          mv artifacts/vegas artifacts/vegas-current
+      - name: Produce inspectable difference diagnostics (not a photorealism grade)
+        run: |
+          mkdir -p artifacts/vegas-compare
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {PNG} from 'pngjs';
+          const root='artifacts';
+          const baseline=JSON.parse(readFileSync(root+'/vegas-baseline/vegas-core-report.json','utf8'));
+          const current=JSON.parse(readFileSync(root+'/vegas-current/vegas-core-report.json','utf8'));
+          if(baseline.status!=='passed'||current.status!=='passed')throw Error('Baseline or current browser capture failed');
+          const names=[...current.screenshots];
+          if(names.length!==6||baseline.screenshots.join('|')!==names.join('|'))
+            throw Error('Unmatched camera screenshot sets');
+          const comparisons=[];
+          for(const name of names){
+            const a=PNG.sync.read(readFileSync(root+'/vegas-baseline/'+name));
+            const b=PNG.sync.read(readFileSync(root+'/vegas-current/'+name));
+            if(a.width!==b.width||a.height!==b.height)throw Error('Mismatched image dimensions '+name);
+            let sum=0,significant=0;
+            const pixels=a.width*a.height;
+            for(let i=0;i<a.data.length;i+=4){
+              const dr=Math.abs(a.data[i]-b.data[i]);
+              const dg=Math.abs(a.data[i+1]-b.data[i+1]);
+              const db=Math.abs(a.data[i+2]-b.data[i+2]);
+              sum+=dr+dg+db;
+              if(Math.max(dr,dg,db)>=25)significant++;
+            }
+            comparisons.push({name,width:a.width,height:a.height,
+              meanAbsoluteRgbDifference0to255:+(sum/(pixels*3)).toFixed(3),
+              pixelsWithAnyChannelChange25pct:+(100*significant/pixels).toFixed(3)});
+          }
+          const out={referenceCommit:'6d50bfda4b2d3837e550751ede49b200b140bc72',
+            targetCommit:process.env.GITHUB_SHA,
+            note:'Matched captured cameras; dynamic objects and time can contribute pixel changes. Statistics do not prove geography or visual quality.',
+            screenshotCount:names.length,comparisons,
+            baselineLoadMs:baseline.loadMs,currentLoadMs:current.loadMs,
+            baselineFrameSampling:baseline.frameSampling,
+            currentFrameSampling:current.frameSampling,
+            renderer:'headless Chromium ANGLE SwiftShader (software; frame intervals are NOT native GPU time)'};
+          writeFileSync(root+'/vegas-compare/summary.json',JSON.stringify(out,null,2));
+          console.log(JSON.stringify(out,null,2));
+          NODE
+      - name: Preserve actual before/after images and JSON (including failed stages)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-ridge-matched-baseline
+          path: |
+            artifacts/vegas-baseline/
+            artifacts/vegas-current/
+            artifacts/vegas-compare/
+            artifacts/vegas/
+          retention-days: 7
+          if-no-files-found: ignore

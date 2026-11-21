@@ -92,6 +92,37 @@ function timesSquareFlatWallProbe(bytes){
 // The temporary class preserves canvas visibility and is always removed,
 // so scenic view controls still work for subsequent camera selections.
 const screenshots=[],pixels={},captureTimings={},controlPixels={};
+// Actual requestAnimationFrame intervals in Chromium SwiftShader, not PNG
+// capture latency. Use these as diagnostic frame pacing, NOT production FPS.
+const framePacing={};
+async function sampleFramePacing(label,frames=24){
+ // SwiftShader can render much more slowly than hardware. Bound diagnostic
+ // sampling so a zero-rAF tab cannot stall the entire NYC visual regression.
+ const v=await page.evaluate(async count=>{
+  const durations=[];let last=null,done=false;
+  await new Promise(resolve=>{
+   const timeout=setTimeout(()=>{done=true;resolve()},12000);
+   const tick=t=>{
+    if(done)return;
+    if(last!==null)durations.push(t-last);
+    last=t;
+    if(durations.length>=count){
+     done=true;clearTimeout(timeout);resolve();
+    }else requestAnimationFrame(tick);
+   };
+   requestAnimationFrame(tick);
+  });
+  if(!durations.length)return {frames:0,complete:false,available:false,
+    reason:'No rAF intervals within bounded SwiftShader sample'};
+  durations.sort((a,b)=>a-b);
+  const at=p=>durations[Math.min(durations.length-1,Math.floor(p*(durations.length-1)))];
+  return {frames:durations.length,complete:durations.length>=count,
+    available:true,medianFrameMs:at(.5),p95FrameMs:at(.95),
+    minFrameMs:durations[0],maxFrameMs:durations.at(-1)};
+ },frames);
+ framePacing[label]=v;
+ console.log('[PATROL QA] frame pacing '+label+' '+JSON.stringify(v));
+}
 let pendingShot=null,hudStyleInstalled=false;
 async function capture(name,{control=false}={}){
  // Navigation replaces document styles, so install the UI-hiding style
@@ -211,7 +242,18 @@ try{
  check(facadeView.label==='Lower Manhattan · Window Facades'&&
    facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
    'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
+ await sampleFramePacing('09-manhattan-window-facades');
  await capture('09-manhattan-window-facades.png');
+ // Same official OTI camera target, closer zoom for street/roof relief QA.
+ // Higher zoom makes the scenic camera both physically closer and narrower
+ // (see getScenicCamera); 27 would have been farther than the default 42.
+ // Do not call this a free-flight low pass: it is a hotel-camera close view.
+ await page.locator('#hotelZoom').evaluate(el=>{
+  el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.waitForTimeout(1300);
+ await sampleFramePacing('11-oti-downtown-close');
+ await capture('11-oti-downtown-close.png');
  // Restore the same free-flight state as the original tour before invoking
  // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
  await page.locator('#resumeFlight').click({force:true});
@@ -239,6 +281,7 @@ try{
  });
  check(bridge.webgl&&bridge.graphicsError===0,
    'Brooklyn Bridge view lost WebGL: '+JSON.stringify(bridge));
+ await sampleFramePacing('02-brooklyn-bridgehead');
  await capture('02-brooklyn-bridgehead.png');
  // Also inspect the residential/warehouse blocks. The bridge deck camera
  // fills most of the frame with cables and cannot assess street facades.
@@ -252,6 +295,7 @@ try{
  });
  check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
    dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
+ await sampleFramePacing('03-dumbo-warehouse');
  await capture('03-dumbo-warehouse.png');
  // Review the procedural Liberty crown from the dedicated close-up camera,
  // rather than inferring statue quality from distant harbor screenshots.
@@ -326,9 +370,10 @@ try{
  }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
  result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings};
+ result.framePacing=framePacing;
 }catch(e){
  result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
-   captureTimings,errors,warnings};
+   captureTimings,framePacing,errors,warnings};
  // Avoid another potentially stalled screenshot when the failure itself was
  // a SwiftShader capture timeout. Partial completed images stay in artifacts.
  if(!pendingShot)try{
