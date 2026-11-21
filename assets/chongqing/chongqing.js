@@ -333,13 +333,31 @@ for(let side=0;side<4;side++){
   shortHand.rotation.y=angle;
 }
 
+// Liziba Line 2 uses a straddle-type concrete monorail guidebeam, not a wide road slab.
 const railPoints=[];
 for(let i=0;i<=65;i++){
   const x=-850+i*27,z=-235+35*Math.sin(x/210);
-  railPoints.push(new THREE.Vector3(x,ground(x,z)+28,z));
-  if(i%5===0)box(x,(ground(x,z)+28)/2,z,4,ground(x,z)+28,4,M.stone);
+  const surface=ground(x,z);
+  const railY=surface+28;
+  railPoints.push(new THREE.Vector3(x,railY,z));
+  if(i%5===0){
+    const pier=new THREE.Mesh(new THREE.CylinderGeometry(1.35,2.4,27.1,9),M.concrete);
+    pier.position.set(x,surface+13.55,z);scene.add(pier);
+    box(x,railY-1.9,z,6.5,.9,5.2,M.stone);
+  }
 }
-road(railPoints,9,M.rail);
+const monorailBeam=new THREE.InstancedMesh(sharedBoxGeometry,M.concrete,65);
+for(let i=0;i<65;i++){
+  const a=railPoints[i],b=railPoints[i+1];
+  const dx=b.x-a.x,dz=b.z-a.z,dy=b.y-a.y;
+  dummy.position.set((a.x+b.x)*.5,(a.y+b.y)*.5-.45,(a.z+b.z)*.5);
+  dummy.rotation.set(0,-Math.atan2(dz,dx),Math.atan2(dy,Math.hypot(dx,dz)));
+  dummy.scale.set(Math.hypot(dx,dz)+.3,1.55,2.65);
+  dummy.updateMatrix();monorailBeam.setMatrixAt(i,dummy.matrix);
+}
+monorailBeam.count=65;
+monorailBeam.instanceMatrix.needsUpdate=true;
+monorailBeam.computeBoundingSphere();scene.add(monorailBeam);
 // The actual animated 3-car Line 2 monorail and walk-through Liziba station are in landmarks.js.
 // Cable car, a characteristic river crossing.
 const cableA=new THREE.Vector3(-510,130,240),cableB=new THREE.Vector3(-365,121,-240);
@@ -402,6 +420,8 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
+// Raffles shopping podium is an obstacle, in addition to its individual towers.
+
 
 // Player-selectable quality, with conservative automatic resolution scaling.
 const qualityBtn=document.getElementById('qualityBtn');
@@ -711,7 +731,7 @@ function updateQuest(){
     if(el){el.textContent='✓ 朝天门来福士与水晶连廊';el.classList.add('done');}
     message('发现地标：朝天门来福士！');
   }
-  if(!visited.liziba&&Math.hypot(state.pos.x-landmarkBuild.liziba.x,state.pos.z-landmarkBuild.liziba.z)<75){
+  if(!visited.liziba&&Math.hypot(state.pos.x-landmarkBuild.liziba.x,state.pos.z-landmarkBuild.liziba.z)<75&&Math.abs(state.pos.y-landmarkBuild.liziba.y)<75){
     visited.liziba=true;const el=document.getElementById('questLiziba');
     if(el){el.textContent='✓ 李子坝轻轨穿楼';el.classList.add('done');}
     message('发现地标：李子坝轻轨穿楼！');
@@ -778,7 +798,7 @@ function updateCamera(dt){
   const newFov=camera.fov+(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
   if(Math.abs(newFov-camera.fov)>.015){camera.fov=newFov;camera.updateProjectionMatrix();}
 }
-let time=0,mapTimer=0,graphicsLost=false;
+let time=0,mapTimer=0,graphicsLost=false,orbitLaunchSent=false;
 canvas.addEventListener('webglcontextlost',event=>{
   event.preventDefault();graphicsLost=true;keys.clear();
   message('显卡连接中断，等待浏览器恢复图形。',5);
@@ -794,7 +814,11 @@ function frame(){
   time+=dt;
   waterUniforms.uTime.value=time;
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);
-  if(state.pos.y>=650&&state.vel.y>.4){window.dispatchEvent(new Event('patrol:orbitLaunch'));}
+  if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
+    orbitLaunchSent=true;
+    window.dispatchEvent(new Event('patrol:orbitLaunch'));
+  }
+  if(orbitLaunchSent&&state.pos.y<550)orbitLaunchSent=false;
   if((mapTimer+=dt)>.09){drawMinimap();updateQuest();mapTimer=0;}
   if(toastUntil&&clock.getElapsedTime()>toastUntil){toastEl.style.opacity='0';toastUntil=0;}
   renderer.render(scene,camera);
