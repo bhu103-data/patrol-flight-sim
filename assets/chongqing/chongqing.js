@@ -1087,8 +1087,7 @@ function move(dt){
   pilotLimbs.arms[1].rotation.x=-swing;
   pilotLimbs.legs[0].rotation.x=-swing;
   pilotLimbs.legs[1].rotation.x=swing;
-  flyingScarf.rotation.y=Math.sin(time*6.8)*.18-(state.boosting?.23:0);
-  flyingScarf.rotation.x=Math.sin(time*5.1)*.12;
+  // Keep physical gait and helmet animation without the removed toy scarf.
   flameLight.intensity+=((state.spicy>0&&(state.boosting||state.flying)?65:0)-flameLight.intensity)*Math.min(1,dt*8);
 }
 const visited={hong:false,bridge:false,raffles:false,liziba:false,ferry:false};
