@@ -14,6 +14,18 @@ grow. Beyond the near-field threshold, the existing simpler glacier albedo
 remains. The measured USGS topography, terrain collision and physics are
 unchanged.
 
+**Ice geometry PBR fix after visual screenshot review:** The original 3D
+calving-face triangles and Alaska-only serac/crevasse detail triangles now
+carry mesh **surface tag 12**. The shared renderer uses this tag *only on
+Alaska* to sample the already-bundled Poly Haven CC0 snow material's
+photographic albedo, OpenGL tangent normal and roughness. Soft ice-blue
+absorption, banded mineral inclusions and a weak Fresnel tint retain a
+crystalline impression without the old flat dark-cyan wall. When the atlas
+is missing, it falls back to the authored base colors and procedural
+stratification. The tag does not affect ships, planes, NYC buildings or
+unpaved green terrain. This is a practical faceted ice material, not a
+physically correct ice volume/caustics renderer, nor a 1:1 glacier scan.
+
 The Alaska-only scenery batch now builds five or six asymmetric conifer
 branch whorls per tree (instead of three repeated triangular layers), using
 uneven radii, draped branch ends, fine partial needle fans and sparse
