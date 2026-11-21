@@ -82,6 +82,17 @@ test('wet asphalt uses physical clearcoat, emissive reflections fade in low qual
   assert.equal(scene.objects[1].visible,true);
 });
 
+test('daylight retains damp asphalt but switches off artificial lamp reflections',()=>{
+  const {effect,scene}=setup();
+  effect.setTimeOfDay('day');
+  assert.equal(scene.objects[0].visible,true);
+  assert.equal(scene.objects[1].visible,false);
+  effect.setQuality('low');effect.setQuality('normal');
+  assert.equal(scene.objects[1].visible,false);
+  effect.setTimeOfDay('night');
+  assert.equal(scene.objects[1].visible,true);
+});
+
 test('integrates with moving traffic and retains separate quality controls',async()=>{
   const main=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   assert.ok(main.includes("from './wetstreets.js'"));
