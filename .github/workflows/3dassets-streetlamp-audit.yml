@@ -16,7 +16,7 @@ concurrency:
 jobs:
   producer-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,6 +39,23 @@ jobs:
             /tmp/patrol-3dassets-lamp.glb \
             artifacts/3dassets-lamp/publisher-source.json \
             artifacts/3dassets-lamp/binary-audit.json
+      - name: Install audit-passed original only into ephemeral test server
+        run: |
+          mkdir -p assets/chongqing/review
+          cp /tmp/patrol-3dassets-lamp.glb assets/chongqing/review/3dassets-street-light.glb
+      - name: Install free Chromium and image comparison package
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve standalone Chongqing level
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-3dassets-lamp-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent http://127.0.0.1:8765/chongqing.html >/dev/null
+      - name: Verify exact same-camera WebGL rendering and low preset fallback
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/3dassets-lamp-browser-review.mjs
       - name: Preserve audit evidence, do not install the asset into PATROL
         if: always()
         uses: actions/upload-artifact@v4
