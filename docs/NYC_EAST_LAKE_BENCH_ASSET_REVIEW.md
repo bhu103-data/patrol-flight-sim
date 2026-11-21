@@ -53,3 +53,22 @@ Official tevy index: `https://tevy.dev/models.json`. The workflow refuses a mism
 This branch changes only **audit/script/workflow/docs**. The GLBs remain downloadable by pinned URLs or attached as temporary **GitHub Actions artifacts** after source integrity passes; they are **not checked into** runtime `assets/nyc` and no active game loads them. Deleting this Draft PR's three review files leaves the base byte-for-byte unchanged.
 
 Source audit: `node tools/nyc/audit-east-lake-park-bench.mjs` (runs in workflow after downloading pinned GLBs). Only minimal syntax and geometry/site checks are within this PR; do not repeat the integration owner's 442-node full regression suite.
+
+
+## Actual source audit — **PASSED** (2026-11-21)
+[Read-only workflow #44922819943](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44922819943) downloaded source GLBs from both official publishers. Parser decoded the **actual Meshopt-compressed vertices and triangle indices** on tevy and validated their world-space dimensions; it cross-checked original file byte lengths, SHA-256 and triangles against immutable publisher `models.json` version 1. All source artifacts were **temporarily staged in GitHub Actions only**.
+
+| Publisher / LOD | GLB bytes | Actual triangles | World-space W × H × D | Embedded textures / materials | SHA-256 |
+|---|---:|---:|---|---|---|
+| tevy LOD0 | **955,736** | **3,512** | **1.800 × 0.9182 × 0.6843 m** | **3 KTX2**, 921,286 texture bytes; **1 PBR material** | `9525b92636291def968243fb78f9d13ae18597b4835006c6d0b7056591e49787` |
+| **tevy LOD1 (preferred review)** | **300,552** | **1,880** | **1.800 × 0.9160 × 0.6843 m** | **3 KTX2**, 278,202 texture bytes; **1 PBR material** | `f2003970d7ff91e969b9c56689c543a1f8a4716fb24464e96753a32fc396fb8f` |
+| tevy LOD2 | **92,956** | **728** | **1.800 × 0.9182 × 0.6700 m** | **3 KTX2**, 80,548 texture bytes; **1 PBR material** | `0b949f38ee02166fda12acf6438e8f6dc344a0d8b04aa1df85acc2766c0ef694` |
+| **Innerscene original** (uncompressed fallback) | **111,032** | **944** | **1.800 × 0.8400 × 0.5850 m** | **2 PNG 2048×2048**, 73,671 texture bytes; **2 simple materials** | `4d2bc2cc792a8a164b7f9357fd63c73f0d263cbfc0b5a36505209fd5232aa58e` |
+
+**Actual texture dimensions:** tevy LOD1 KTX2 has **1024×512, 1024×512, 512×256** images; LOD2 has **512×256, 512×256, 256×128**. KTX2 is encoded using Basis Universal. tevy PBR material uses **Base Color, Metallic-Roughness and Normal** texture channels. Innerscene's fallback uses **only Base Color** and no normal or roughness maps. Two 2048×2048 RGBA PNG textures could occupy roughly 32 MiB of uncompressed GPU memory before mipmaps despite a 111 KB download.
+
+**Critical integration blocker (do not change loader in this PR):** all three tevy GLBs require `EXT_meshopt_compression`, `KHR_mesh_quantization` and `KHR_texture_basisu` **with KTX2/Basis transcoding**. PATROL's custom game geometry loader does **not** support these as copy-over. This source audit used `meshoptimizer@1.3.0` (MIT) only on the short-lived CI runner; no new dependency is shipped in the game. A later approved runtime sample would need **offline conversion to ordinary baked/uncompressed, supported GLB materials**, or an explicitly authorized separate loader PR. This branch chooses neither.
+
+**Spatial gate verified by executing the actual `central-park.js` shoreline definitions:** proposed local center `u=9,z=163` has The Lake normalized distance **1.2837** (required >1.20), avoids the Loeb model center/footprint, and is **23.33 game units** from the nearest existing procedural park bench. This proves a *candidate center* is not in water/at an existing seat; it does **not** prove full bench footprint clearance or exact photographic appearance. Test center and corners in centralized QA before any render enablement.
+
+**Verdict:** Stage **tevy LOD1 + LOD2** plus **Innerscene fallback** in the auditable source ZIP. Source rights, measured counts, sizes and uncompressed vertex coordinates are **verified**; photorealistic visuals, game placement, GPU footprint and PATROL integration are **not verified**. The permanent integration baseline remains untouched. A lower-quality direct-PNG fallback is technically simpler but visually less detailed; do not enable either by default.
