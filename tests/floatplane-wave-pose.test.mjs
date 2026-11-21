@@ -135,3 +135,31 @@ test('NYC bent long-wave crest is deterministic, continuous and absent in Alaska
   assert.ok(Math.abs(dX)<.026&&Math.abs(dZ)<.023,
     'bounded analytic phase gradient does not cause folded water');
 });
+test('NYC long-wave analytic GLSL slope agrees with four-pontoon CPU height gradient',()=>{
+  const source=html.slice(html.indexOf('  const oceanBands ='),
+    html.indexOf('  const oceanVec4 ='));
+  const calc=new Function(source+'return {floatOceanHeight,oceanModes};')();
+  const x=-84,z=-593,t=20,depth=9,eps=.001;
+  const asCity={city:true};
+  const centralDiff=(dx,dz)=>
+    (calc.floatOceanHeight(x+eps*dx,z+eps*dz,t,depth,asCity)-
+     calc.floatOceanHeight(x-eps*dx,z-eps*dz,t,depth,asCity))/(2*eps);
+  const a=.027*x+.018*z+.035*t,b=.009*x-.013*z-.020*t;
+  const phaseBend=.70*Math.sin(a)*Math.sin(b);
+  const gradX=.70*(.027*Math.cos(a)*Math.sin(b)+.009*Math.sin(a)*Math.cos(b));
+  const gradZ=.70*(.018*Math.cos(a)*Math.sin(b)-.013*Math.sin(a)*Math.cos(b));
+  let analyticX=0,analyticZ=0;
+  for(let i=0;i<calc.oceanModes.length;i++){
+    const [kx,kz,omega,phase,,amp]=calc.oceanModes[i];
+    const modePhase=kx*x+kz*z-omega*t+phase+(i<6?phaseBend:0);
+    analyticX+=Math.cos(modePhase)*amp*(kx+(i<6?gradX:0));
+    analyticZ+=Math.cos(modePhase)*amp*(kz+(i<6?gradZ:0));
+  }
+  // This water point is fully exposed and 9 units deep, so oceanExposure
+  // and shoaling are both exactly 1. The finite differences therefore
+  // verify the normal slope that WebGL2 should produce.
+  assert.ok(Math.abs(analyticX-centralDiff(1,0))<1e-5,
+    'GLSL long crest dHeight/dx matches CPU sampled water surface');
+  assert.ok(Math.abs(analyticZ-centralDiff(0,1))<1e-5,
+    'GLSL long crest dHeight/dz matches CPU sampled water surface');
+});

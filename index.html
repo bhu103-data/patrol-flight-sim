@@ -14206,10 +14206,11 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.sun,environment.sun);
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
-    // Compatibility mode and NYC Basic avoid the extra water shading.
+    // No optional ocean decoration on Compat, Balanced or Street FX Off.
+    // The shared physical ocean phase stays enabled on every quality level.
     gl.uniform1i(uWorld.nycSeaDetail,
       Boolean(selectedMap.city && !graphicsCompat &&
-        nyStreetQuality.value !== '1')?1:0);
+        Number(nyStreetQuality.value) >= 2)?1:0);
     gl.uniform4fv(uWorld.climate,environment.climate);
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);

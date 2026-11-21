@@ -40,12 +40,12 @@ test('existing same-camera A/B harness covers crest and sea-detail independently
   assert.match(testTool,/nyc-water-'\+report\.mode/);
   assert.match(testTool,/gpuFrameMs:null/);
 });
-test('graphics compat and NYC Basic bypass extra visual noise without touching water physics',()=>{
+test('compat and both Balanced/Off skip optional ocean noise without touching physics',()=>{
   assert.match(shader,/uniform bool uNYCSeaDetail;/);
   assert.match(html,/nycSeaDetail:gl\.getUniformLocation\(worldProg,'uNYCSeaDetail'\)/);
   assert.match(html,/gl\.uniform1i\(uWorld\.nycSeaDetail,/);
   assert.match(html,/selectedMap\.city && !graphicsCompat &&/);
-  assert.match(html,/nyStreetQuality\.value !== '1'/);
+  assert.match(html,/Number\(nyStreetQuality\.value\) >= 2/);
 });
 test('NYC long-crest bend uses exactly the same phase and gradient as shader',()=>{
   assert.match(html,/const NYC_CREST_BEND = 0\.70;/);
