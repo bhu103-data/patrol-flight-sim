@@ -18,6 +18,7 @@ on:
       - "tests/nyc-road-clearance.test.mjs"
       - "tests/nyc-authored-road-shoreline.test.mjs"
       - "tests/nyc-oti-harbor-window-depth.test.mjs"
+      - "tests/nyc-unified-webgl-qa.test.mjs"
       - "tests/nyc-road-coastline.test.mjs"
       - "tests/nyc-intersection-*.test.mjs"
       - ".github/workflows/nyc-bridgehead-browser.yml"
@@ -34,7 +35,7 @@ permissions:
 jobs:
   brooklyn-bridgehead:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,7 +43,7 @@ jobs:
           node-version: "22"
       - name: Validate NYC road and waterfront clearance
         run: |
-          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-oti-harbor-window-depth.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
+          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-oti-harbor-window-depth.test.mjs tests/nyc-unified-webgl-qa.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
       - name: Install Chromium with software WebGL
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
@@ -52,7 +53,7 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-http.log 2>&1 &
           sleep 3
           curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
-      - name: Render NYC harbor, Brooklyn, Liberty and Times Square close-ups
+      - name: Render NYC harbor, finance-district facades, Brooklyn and Midtown close-ups
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-road-browser-smoke.mjs
