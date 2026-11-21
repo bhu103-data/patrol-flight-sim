@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "description": "Hongyadong Blender study: OFF by default. Enable only after approved legal, scale and visual review; original collision shapes are preserved.",
+  "hongyadong": {
+    "enabled": false,
+    "file": "generated/hongyadong-study.glb",
+    "position": [
+      155,
+      13,
+      112
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "rotation_y": 0,
+    "license": ""
+  }
+}
