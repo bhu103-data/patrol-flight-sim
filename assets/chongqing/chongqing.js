@@ -650,6 +650,10 @@ const qualityBtn=document.getElementById('qualityBtn');
 const perfHud=document.getElementById('perfHud');
 const qualityLabels={auto:'画质：自动',high:'画质：高清',low:'画质：省电'};
 const qualityParam=new URLSearchParams(location.search).get('quality');
+const assetReviewPose=new URLSearchParams(location.search).get('assetQA');
+const lampReviewMode=new URLSearchParams(location.search).get('lampReview');
+let lampReviewController=null;
+document.documentElement.dataset.streetlampReview=lampReviewMode==='grab3d'?'loading':'off';
 let qualityMode=Object.hasOwn(qualityLabels,qualityParam)?qualityParam:'auto';
 const coarsePointer=matchMedia('(pointer:coarse)').matches;
 const maxRatio=Math.min(devicePixelRatio||1,coarsePointer?1.25:1.6);
@@ -667,6 +671,7 @@ function applyQuality(){
   skyline.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  lampReviewController?.setQuality(qualityMode);
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
   riverBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
@@ -678,6 +683,26 @@ qualityBtn.addEventListener('click',()=>{
   applyQuality();
 });
 applyQuality();
+// Review is opt-in, same-origin and hash-locked; regular production gameplay
+// neither loads nor fetches a third-party lamp.
+if(lampReviewMode==='grab3d'){
+  import('./street-lamp-preview.js')
+    .then(({loadAuditedLampPreview})=>loadAuditedLampPreview({
+      THREE,scene,streetBuild,search:location.search
+    }))
+    .then(review=>{
+      lampReviewController=review;
+      review.setQuality(qualityMode);
+      console.info('PATROL reviewed lamp preview',{
+        bytes:review.bytes,decodeMs:review.decodeMs,anchor:review.anchor
+      });
+    })
+    .catch(error=>{
+      streetBuild.setReviewLampVisible(true);
+      document.documentElement.dataset.streetlampReview='fallback';
+      console.warn('GLB preview failed; restored original instanced streetlight:',error);
+    });
+}
 
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
@@ -1311,6 +1336,19 @@ function frame(){
   );
   moon.position.copy(moon.target.position).add(localShadowOffset);
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
+  // Deterministic screenshot positions only for isolated WebGL A/B review.
+  // Baseline and imported candidate share the same collision-clear anchor.
+  if((assetReviewPose==='street'||assetReviewPose==='air')&&streetBuild.reviewLampSlot){
+    const a=streetBuild.reviewLampSlot;
+    if(assetReviewPose==='street'){
+      camera.position.set(a.x-30,a.y+3.4,a.z+26);
+      camera.lookAt(a.x,a.y+5.4,a.z);
+    }else{
+      camera.position.set(a.x-115,a.y+38,a.z+92);
+      camera.lookAt(a.x,a.y+5,a.z);
+    }
+    camera.updateMatrixWorld(true);
+  }
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
     window.dispatchEvent(new Event('patrol:orbitLaunch'));
@@ -1350,6 +1388,16 @@ window.PatrolSpaceBridge={getState:()=>({
   map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
   position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
+}),
+getAssetReviewState:()=>({
+  status:document.documentElement.dataset.streetlampReview,
+  pose:assetReviewPose,
+  anchor:streetBuild.reviewLampSlot,
+  drawCalls:renderer.info.render.calls,
+  triangles:renderer.info.render.triangles,
+  pixelRatio:renderRatio,qualityMode,
+  candidateBytes:lampReviewController?.bytes??0,
+  decodeMs:lampReviewController?.decodeMs??null
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
