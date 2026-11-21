@@ -1,6 +1,12 @@
 name: Alaska browser WebGL scene smoke
 
 on:
+  push:
+    branches: [feature/alaska-glacier-face-cc0-pbr-validated]
+    paths:
+      - 'index.html'
+      - 'assets/alaska/**'
+      - '.github/workflows/alaska-browser-smoke.yml'
   pull_request:
     paths:
       - 'index.html'
