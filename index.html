@@ -2668,7 +2668,31 @@ const CENTRAL_PARK_SITES=[
       float nearFade=1.0-smoothstep(95.0,295.0,distance(worldPos,uEye));
       float wetGlint=bridgeDetail*wet*road*daylight*nearFade*
         (0.024+0.065*puddle+0.060*view)*(0.66+0.34*grain);
-      vec3 skyGlint=vec3(0.56,0.64,0.70)*wetGlint;
+      // Ported from Petalwake's MIT sun-glitter microfacet reflection.
+      // Original scene uses sea waves; PATROL constrains it to wet asphalt.
+      vec3 halfSun=normalize(uSun+normalize(toEye));
+      float ndh=clamp(dot(normal,halfSun),0.0,1.0);
+      float microR=mix(0.10,0.20,view);
+      float a2=microR*microR;
+      float microfacet=a2/(3.14159*pow(ndh*ndh*(a2-1.0)+1.0,2.0));
+      float sunGlint=bridgeDetail*wet*road*daylight*nearFade*
+        clamp(dot(normal,uSun),0.0,1.0)*
+        clamp(microfacet*0.007,0.0,0.085)*(0.65+0.35*puddle);
+      // Petalwake-style short-lived surface spray, cheap analytic particles
+      // localized to already-wet ground; no new emitter/renderer/mesh.
+      vec2 rainTile=p*1.65;
+      vec2 rainCell=floor(rainTile);
+      float tick=floor(uSceneTime*3.5);
+      float impactSeed=nyStreetHash(rainCell+vec2(tick*11.0,17.0));
+      float lifetime=fract(uSceneTime*3.5+nyStreetHash(rainCell+3.1));
+      float waveRadius=lifetime*0.36;
+      float impactRing=1.0-smoothstep(0.014,0.046,
+        abs(length(fract(rainTile)-0.5)-waveRadius));
+      float impact=step(0.986,impactSeed)*impactRing*
+        (1.0-lifetime)*bridgeDetail*wet*road*nearFade*
+        step(0.40,wet)*step(1.5,uNyStreetQuality)*0.033;
+      vec3 skyGlint=vec3(0.56,0.64,0.70)*(wetGlint+impact)+
+        vec3(0.88,0.85,0.77)*sunGlint;
       return oldNight+skyGlint;
     }
     void nyFacadeRainStreaks(inout vec3 albedo, vec3 normal) {
@@ -7389,6 +7413,9 @@ const CENTRAL_PARK_SITES=[
       .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
   }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
+  // MIT Petalwake-style near/mid/far bridgehead detail chunks. Unlike the
+  // base road mesh these small visual-only draws change with camera distance.
+  let nycRoadDetailChunks=[],nycRoadChunkLevel=null;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -7480,6 +7507,12 @@ const CENTRAL_PARK_SITES=[
     alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
+    for(const chunk of nycRoadDetailChunks){
+      disposeSceneMesh(chunk.mid);
+      disposeSceneMesh(chunk.near);
+    }
+    nycRoadDetailChunks=[];
+    nycRoadChunkLevel=null;
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
@@ -7570,6 +7603,36 @@ const CENTRAL_PARK_SITES=[
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
         else{
           nycStreetMesh=uploaded;
+          // Optional detail import deliberately follows the successful base
+          // street upload; failure must never hide roads or parked vehicles.
+          import('./assets/nyc/petalwake-road-chunks.js').then(({
+            buildNycBridgeheadDetailChunks,selectNycRoadChunkLod
+          })=>{
+            if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+            const pieces=buildNycBridgeheadDetailChunks({
+              makeMesh:()=>createTriangleMesh(),
+              terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+              isClear:(x,z,r=.5)=>[[0,0],[-r,-r],[-r,r],[r,-r],[r,r]]
+                .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
+              detailBand:nycDetailBand,grid:MANHATTAN_GRID,
+              streetY:STREET_Y,waterY:WATER_H,
+              existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,
+                CITY_EXPRESSWAY.ramp]
+            });
+            const chunks=pieces.map(piece=>({
+              bounds:piece.bounds,id:piece.id,
+              mid:piece.mid.upload(),near:piece.near.upload()
+            }));
+            if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
+              for(const chunk of chunks){
+                disposeSceneMesh(chunk.mid);disposeSceneMesh(chunk.near);
+              }
+              return;
+            }
+            nycRoadDetailChunks=chunks;
+            nycRoadChunkLevel=selectNycRoadChunkLod;
+            console.info('[PATROL] NYC Petalwake MIT road LOD chunks',chunks.length);
+          }).catch(error=>console.warn('[PATROL] NYC road chunk LOD fallback:',error));
           cityTraffic=cityTraffic.filter(actor=>!actor.nycCurbside);
           cityTraffic.push(...parkedCars.map(actor=>({...actor,nycCurbside:true})));
           console.info('[PATROL] NYC streets',stats);
@@ -10351,6 +10414,13 @@ const CENTRAL_PARK_SITES=[
     }
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
+    if(selectedMap.city && nycRoadChunkLevel){
+      for(const chunk of nycRoadDetailChunks){
+        const level=nycRoadChunkLevel(chunk.bounds,camPos);
+        if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
+        if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+      }
+    }
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
