@@ -65,8 +65,11 @@ test('heading-aware clearance follows a ferry turning through ninety degrees',()
     'orthogonal wings leave sufficient cross-channel space');
 });
 
-test('broad-phase range does not miss a diagonal approach to a small vessel',()=>{
+test('diagonal taxi gap is passable while a real wing contact is blocked',()=>{
   const buoy={x:300,z:-400,heading:0,halfLength:.5,halfWidth:.5};
-  assert.equal(water([buoy])(306,-394,Math.PI/4),false,
-    'diagonal wing footprint must not be discarded before narrow-phase test');
+  const testWater=water([buoy]);
+  assert.equal(testWater(305.4,-394.6,Math.PI/4),true,
+    'airplane nose clears the tiny hull on both aircraft axes');
+  assert.equal(testWater(303.5,-396.5,Math.PI/4),false,
+    'a closer diagonally aligned aircraft intersects the buffered hull');
 });
