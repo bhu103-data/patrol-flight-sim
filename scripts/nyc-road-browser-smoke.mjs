@@ -3,6 +3,7 @@
 // Test: node scripts/nyc-road-browser-smoke.mjs
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
+import {visibleHarborSkyFraction,MIN_HARBOR_SKY_FRACTION} from './nyc-harbor-sky-qa.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const out='artifacts/nyc';await mkdir(out,{recursive:true});
@@ -33,7 +34,8 @@ function screenshotPixels(bytes){
   count++;
  }
  return {width:img.width,height:img.height,colorBins:colors.size,
-  nearBlackFraction:black/Math.max(count,1)};
+  nearBlackFraction:black/Math.max(count,1),
+  upperSkyFraction:visibleHarborSkyFraction(img)};
 }
 // HUD panels overlap the canvas in the browser compositor. Even an
 // element.screenshot() includes those overlays unless we hide them.
@@ -68,6 +70,12 @@ async function capture(name){
   check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
    stats.nearBlackFraction<.97,
    'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
+  // A diverse set of nearby windows and walls gave a false green check in
+  // actual 44865972470. Harbor-facing OTI camera must ALSO see enough
+  // bright sky in the top half to prove it is outside the building canyon.
+  if(name==='09-manhattan-window-facades.png')
+   check(stats.upperSkyFraction>=MIN_HARBOR_SKY_FRACTION,
+    'NYC facade camera is still hidden by nearby building walls: '+JSON.stringify(stats));
   screenshots.push(name);pixels[name]=stats;
   pendingShot=null;
   console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
