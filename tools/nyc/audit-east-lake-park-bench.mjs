@@ -3,6 +3,8 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {Script} from 'node:vm';
+import {MeshoptDecoder} from 'meshoptimizer';
+await MeshoptDecoder.ready;
 
 const DIR='artifacts/nyc-park-bench-review';
 await mkdir(DIR,{recursive:true});
@@ -102,24 +104,61 @@ function parseGLB(bytes){
   assert(offset===bytes.length&&doc?.asset?.version==='2.0'&&binBase!==null,'Bad GLB manifest');
   const bv=doc.bufferViews||[],accessors=doc.accessors||[];
   let tris=0,primitives=0,meshBounds=[],drawMaterialIds=new Set();
-  function getPosBounds(i){
+  const decodedCache=new Map();
+  function readAccessor(i,expectedType){
     const a=accessors[i],b=bv[a?.bufferView],sz=componentSize[a?.componentType];
-    assert(a?.type==='VEC3'&&sz&&b?.buffer===0&&!a.sparse&&a.count>0,
-      'Unsupported POSITION buffer '+JSON.stringify({accessorIndex:i,type:a?.type,
-        componentType:a?.componentType,bufferView:a?.bufferView,buffer:b?.buffer,
-        count:a?.count,sparse:!!a?.sparse,extensions:b?.extensions}));
-    const stride=b.byteStride||sz*3,base=(b.byteOffset||0)+(a.byteOffset||0);
-    assert(base+stride*(a.count-1)+sz*3<=(b.byteOffset||0)+b.byteLength,'POSITION out of bufferView');
-    assert(base+stride*(a.count-1)+sz*3<=binLength,'POSITION out of BIN');
-    const out=emptyBounds();
-    if(a.min?.length===3&&a.max?.length===3){
-      absorb(out,a.min.map(n=>normalized(n,a.componentType,a.normalized)));
-      absorb(out,a.max.map(n=>normalized(n,a.componentType,a.normalized)));
+    assert(a?.type===expectedType&&sz&&b&&!a.sparse&&
+      Number.isSafeInteger(a.count)&&a.count>0,'Unsupported accessor '+i);
+    const n=expectedType==='VEC3'?3:1;
+    const ext=b.extensions?.EXT_meshopt_compression;
+    let bytesView,base,stride;
+    if(ext){
+      assert(ext.buffer===0&&Number.isSafeInteger(ext.byteOffset)&&
+        Number.isSafeInteger(ext.byteLength)&&Number.isSafeInteger(ext.count)&&
+        Number.isSafeInteger(ext.byteStride)&&
+        ext.byteStride>=n*sz&&ext.byteOffset>=0&&
+        ext.byteOffset+ext.byteLength<=binLength&&
+        ext.count*ext.byteStride<8000000,'Invalid compressed glTF buffer');
+      if(!decodedCache.has(a.bufferView)){
+        const packed=bytes.subarray(binBase+ext.byteOffset,binBase+ext.byteOffset+ext.byteLength);
+        const target=new Uint8Array(ext.count*ext.byteStride);
+        MeshoptDecoder.decodeGltfBuffer(target,ext.count,ext.byteStride,packed,ext.mode,ext.filter);
+        decodedCache.set(a.bufferView,target);
+      }
+      const decoded=decodedCache.get(a.bufferView);
+      bytesView=new DataView(decoded.buffer,decoded.byteOffset,decoded.byteLength);
+      base=a.byteOffset||0;
+      stride=b.byteStride||ext.byteStride;
+      assert(stride===ext.byteStride,'Meshopt decoded buffer stride mismatch');
     }else{
-      for(let j=0;j<a.count;j++){
-        const p=[0,1,2].map(k=>normalized(componentValue(view,a.componentType,binBase+base+j*stride+k*sz),
-          a.componentType,a.normalized));
-        absorb(out,p);
+      assert(b.buffer===0,'Unexpected external uncompressed glTF buffer');
+      bytesView=view;
+      base=binBase+(b.byteOffset||0)+(a.byteOffset||0);
+      stride=b.byteStride||n*sz;
+      assert((b.byteOffset||0)+(a.byteOffset||0)+(a.count-1)*stride+n*sz<=binLength,
+        'Uncompressed GLB accessor outside BIN');
+    }
+    assert(stride>=n*sz&&base>=0&&base+(a.count-1)*stride+n*sz<=bytesView.byteLength,
+      'Decoded glTF accessor outside buffer');
+    return {a,read:(j,k=0)=>{
+      assert(j>=0&&j<a.count&&k<n,'Invalid accessor read');
+      return normalized(componentValue(bytesView,a.componentType,base+j*stride+k*sz),
+        a.componentType,a.normalized);
+    }};
+  }
+  function getPosBounds(i){
+    const {a,read}=readAccessor(i,'VEC3'),out=emptyBounds();
+    for(let j=0;j<a.count;j++){
+      const p=[read(j,0),read(j,1),read(j,2)];
+      assert(p.every(Number.isFinite),'NaN in decoded GLB vertex');
+      absorb(out,p);
+    }
+    if(a.min?.length===3&&a.max?.length===3){
+      const lower=a.min.map(x=>normalized(x,a.componentType,a.normalized));
+      const upper=a.max.map(x=>normalized(x,a.componentType,a.normalized));
+      for(let j=0;j<3;j++){
+        assert(out.min[j]>=lower[j]-0.002&&out.max[j]<=upper[j]+0.002,
+          'Decoded vertex outside publisher glTF bounds');
       }
     }
     return out;
@@ -131,6 +170,11 @@ function parseGLB(bytes){
       const pa=accessors[prim.attributes?.POSITION];assert(pa,'Missing positions');
       const ia=prim.indices===undefined?pa:accessors[prim.indices];
       assert(Number.isInteger(ia?.count)&&ia.count%3===0,'Bad index count');
+      if(prim.indices!==undefined){
+        const idx=readAccessor(prim.indices,'SCALAR');
+        for(let i=0;i<idx.a.count;i++)
+          assert(idx.read(i)<pa.count,'Decoded glTF triangle index out of range');
+      }
       tris+=ia.count/3;primitives++;
       if(prim.material!==undefined)drawMaterialIds.add(prim.material);
       const p=getPosBounds(prim.attributes.POSITION);
@@ -189,7 +233,11 @@ for(let level=0;level<=2;level++){
   const info=parseGLB(bytes);
   assert(info.bytes===record.bytes&&info.sha256===record.sha256&&info.triangles===record.triangles,
     'Actual GLB does not match publisher catalog at LOD '+level);
-  assert(info.requiredExtensions.length===0,'Source GLB requires extension not supported by current browser adapter');
+  // Tevy source uses EXT_meshopt_compression + KHR_mesh_quantization.
+  // MeshoptDecoder is used above for this audit; the existing PATROL
+  // triangle loader does NOT support these GLBs and is never modified here.
+  assert(info.requiredExtensions.every(e=>['EXT_meshopt_compression',
+    'KHR_mesh_quantization'].includes(e)),'Unexpected required extension');
   const dim=info.sizeMeters;
   assert(dim.every(n=>n>=.25&&n<2.5)&&Math.abs(Math.max(...dim)-1.8)<.15,
     'Invalid real-scale bench bounds');
