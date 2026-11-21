@@ -34,13 +34,14 @@ test('an eligible DUMBO lot with a previously suppressed hash now gets buildings
   const x=389.6,z=-346.4;
   const ground=height(x,z);
   const roof=height(x,z,true);
-  assert.ok((roof-ground)*54>2.9,
-    'Bridgehead lot should gain height without changing ground level');
+  assert.ok((roof-ground)*54>9.2,
+    'Bridgehead lot should have enough height for detailed midrise facade');
 });
 test('infill only changes the Brooklyn Bridge district and retains density threshold elsewhere',()=>{
   assert.match(functionSource,/const brooklynBridgeInfill=outerBoroughs/);
   assert.match(functionSource,/north>-415 && north<-195 && east>210 && east<435/);
   assert.match(functionSource,/brooklynBridgeInfill\?0\.035:0\.14/);
+  assert.match(functionSource,/9\.4 \+ signature \* 7\.1 \+ hash\(ix\*3,iz\*7,2921\)\*5\.5/);
 });
 test('road and bridge clearance still runs before a parcel is accepted',()=>{
   assert.match(source,/const inStreet=generatedCityRoadOverlap\(\[x,z,width,length\],5\.85\)/);
