@@ -1,0 +1,56 @@
+name: NYC DUMBO warehouse real WebGL close-camera QA
+
+on:
+  push:
+    branches:
+      - qa/nyc-dumbo-live-warehouses-20261121
+    paths:
+      - scripts/nyc-dumbo-live-warehouses-browser-qa.mjs
+      - .github/workflows/nyc-dumbo-live-warehouses.yml
+  pull_request:
+    paths:
+      - scripts/nyc-dumbo-live-warehouses-browser-qa.mjs
+      - .github/workflows/nyc-dumbo-live-warehouses.yml
+      - index.html
+      - tests/nyc-dumbo-corner-warehouses.test.mjs
+
+concurrency:
+  group: nyc-dumbo-live-warehouses-qa
+  cancel-in-progress: false
+permissions:
+  contents: read
+
+jobs:
+  real-warehouse-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check script syntax and actual geometry unit tests
+        run: |
+          node --check scripts/nyc-dumbo-live-warehouses-browser-qa.mjs
+          node --test tests/nyc-dumbo-corner-warehouses.test.mjs
+      - name: Install Chromium WebGL2 software fallback
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start actual PATROL static server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-dumbo-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Count rendered facades and capture four ground/low-flight PNGs
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-dumbo-live-warehouses-browser-qa.mjs
+      - name: Upload browser report and real warehouse screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-live-warehouse-webgl
+          path: artifacts/nyc-dumbo-warehouses/
+          retention-days: 7
+          if-no-files-found: ignore
