@@ -3029,7 +3029,8 @@ const CENTRAL_PARK_SITES=[
         horizon=mix(horizon,vec3(0.48,0.33,0.35),uAtmosphere.y*0.58);
         vec3 nightFill=uTwilight?vec3(0.57,0.54,0.61):uManhattanView?vec3(0.40,0.43,0.52):vec3(0.25,0.32,0.45);
         vec3 shaded=material*light*mix(nightFill,vec3(1.0),uAtmosphere.x)+windowLight;
-        if(uDcSurface>=0 || (vHarborSurface>=3.5 && vHarborSurface<5.5)){
+        if(uDcSurface>=0 || (vHarborSurface>=3.5 && vHarborSurface<5.5) ||
+           (uAlaskaMesh && vHarborSurface>14.5 && vHarborSurface<16.5)){
           vec3 halfRay=normalize(uSun+normalize(toEye));
           float gloss=pow(max(dot(n,halfRay),0.0),mix(86.0,11.0,surfaceRoughness));
           shaded+=vec3(.88,.90,.94)*gloss*(.025+.19*(1.0-surfaceRoughness))*direct*uAtmosphere.x;
