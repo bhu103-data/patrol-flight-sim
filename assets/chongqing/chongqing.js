@@ -6,6 +6,7 @@ import { buildChongqingDetails } from './details.js';
 import { buildChongqingLandmarks } from './landmarks.js';
 import { buildChongqingStreetlife } from './streetlife.js';
 import { buildChongqingWetStreets } from './wetstreets.js';
+import { buildChongqingRiverlife } from './riverlife.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
@@ -417,32 +418,7 @@ for(let i=1;i<=3;i++){
   cylinderBetween(p,new THREE.Vector3(p.x,p.y-4,p.z),.4,M.rail);
 }
 
-// River passenger boats: tapered curved hulls and glazed passenger cabins,
-// rather than simple rectangular white boxes.
-const boatPlan=new THREE.Shape();
-boatPlan.moveTo(-17,-5.3);boatPlan.lineTo(10.2,-5.3);
-boatPlan.quadraticCurveTo(18,-4.8,20,0);
-boatPlan.quadraticCurveTo(18,4.8,10.2,5.3);
-boatPlan.lineTo(-17,5.3);boatPlan.quadraticCurveTo(-20,0,-17,-5.3);
-const boatGeometry=new THREE.ExtrudeGeometry(boatPlan,{depth:3.3,steps:1,bevelEnabled:true,bevelThickness:.6,bevelSize:.5,bevelSegments:2,curveSegments:5});
-boatGeometry.rotateX(Math.PI/2);
-const deckMaterial=new THREE.MeshStandardMaterial({color:0x555f66,metalness:.48,roughness:.49});
-for(let i=0;i<6;i++){
-  const x=-800+i*280,z=riverCenter(x),y=1.1;
-  const hull=new THREE.Mesh(boatGeometry,deckMaterial);
-  hull.position.set(x,y+1.9,z);scene.add(hull);
-  box(x-2,y+3.7,z,23,.55,8.4,M.stone);
-  box(x-2,y+6.4,z,20,4.4,7,M.glass);
-  box(x-2,y+8.9,z,21,.65,8.6,M.stone);
-  box(x+3,y+10,z,11,1.8,6,M.glass);
-  for(let w=0;w<7;w++){
-    const wx=x-11+w*3.1;
-    box(wx,y+6.9,z+3.58,2.0,2.1,.12,M.window);
-    box(wx,y+6.9,z-3.58,2.0,2.1,.12,M.window);
-  }
-  box(x-16,y+7,z,.4,5,.5,M.rail);
-  ball(x-16,y+9.5,z,.43,M.gold);
-}
+// Dynamic river sightseeing ships are built and advanced by riverlife.js.
 // Irregular subtropical street trees. No repeated conical/cartoony canopy.
 // Shared instanced branches, bark, and three differently shaped foliage crowns.
 const treeLeafMaterial=new THREE.MeshStandardMaterial({
@@ -523,6 +499,7 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter });
+const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
@@ -566,6 +543,7 @@ function applyQuality(){
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  riverBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
 }
@@ -999,6 +977,7 @@ function frame(){
   waterUniforms.uTime.value=time;
   streetBuild.update(dt,state.pos);
   wetStreetBuild.update(dt);
+  riverBuild.update(dt);
   // Move the directional shadow camera with the avatar, limited to ~290m square.
   // Coarse world-space snapping keeps the shadow image from crawling on wet stone.
   moon.target.position.set(
@@ -1036,7 +1015,8 @@ function frame(){
         '\nPixel ratio '+renderRatio.toFixed(2)+' / '+qualityMode+
         '\nIndexed buildings '+obstacleIndex.obstacleCount+
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
-        '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips;
+        '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips+
+        '\nJialing River ferries '+riverBuild.stats.boats;
     }
   }
 }
