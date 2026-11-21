@@ -99,6 +99,14 @@ try{
  check(warnings.length===0,'WebGL console errors: '+warnings.join('; '));
  const c=shots.find(x=>x.file==='candidate-dusk.png').pixels;
  const b=shots.find(x=>x.file==='baseline-dusk.png').pixels;
+ // A high-contrast window or sun halo may pass a nonblank check; compare
+ // actual same-camera baseline exposure and sky warmth as hard gates.
+ check(c.clippedFraction<=Math.min(.04,b.clippedFraction+.005),
+  'Golden-hour clipping regression: '+JSON.stringify({baseline:b,candidate:c}));
+ const baselineWarm=b.upperMeanRGB[0]-b.upperMeanRGB[2];
+ const candidateWarm=c.upperMeanRGB[0]-c.upperMeanRGB[2];
+ check(candidateWarm>=baselineWarm+8.0,
+  'Warm sky not sufficiently different from baseline: '+JSON.stringify({baseline:b,candidate:c}));
  report={passed:true,shots,skyMeanDeltaRGB:c.upperMeanRGB.map((v,i)=>
   +(v-b.upperMeanRGB[i]).toFixed(2)),
   limitations:'SwiftShader capture, not hardware GPU performance or AAA proof',

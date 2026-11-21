@@ -30,7 +30,9 @@ test('dusk horizon is altitude-graded, sunward and weather-bounded',()=>{
  assert.match(world,/float roseBlend=0\.62\*sqrt\(max\(golden,0\.0\)\)\*horizonBand\*\(1\.0-sunCore\)/);
  assert.match(world,/horizon=mix\(horizon,peach,roseBlend\)/);
  assert.match(world,/float haloGain=mix\(0\.40,0\.18,goldenHourWeight\(\)\)/);
- assert.match(world,/solarTint=mix\(solarTint,vec3\(1\.0,0\.97,0\.88\),golden\*0\.62\)/);
+ assert.match(world,/solarTint=mix\(solarTint,vec3\(1\.0,0\.97,0\.88\),/);
+ assert.match(world,/smoothstep\(0\.06,0\.43,goldenHourWeight\(\)\)/);
+ assert.match(world,/\+0\.024\*goldenHourWeight\(\)/);
 });
 test('low-angle reflection retains existing GGX/facet LOD and is capped',()=>{
  assert.match(world,/float goldenGlint=goldenHourWeight\(\)/);
@@ -61,4 +63,12 @@ test('solar core suppresses peach bloom while horizon stays warm',()=>{
  assert.ok(halo<.40&&halo>.18);
  assert.ok(.62*Math.sqrt(w)*(1-solarCore(.999))<.00001);
  assert.ok(.62*Math.sqrt(w)*(1-solarCore(.60))>.25);
+});
+
+test('golden-hour browser accepts only warm non-clipped same-camera imagery',()=>{
+ const browser=readFileSync(new URL('../scripts/nyc-golden-hour-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(browser,/c\.clippedFraction<=Math\.min\(\.04,b\.clippedFraction\+\.005\)/);
+ assert.match(browser,/candidateWarm>=baselineWarm\+8\.0/);
+ const yellowBefore=0.018,roundedIvory=yellowBefore+.024*envelope(.155,.37,true);
+ assert.ok(roundedIvory>yellowBefore&&roundedIvory<.04);
 });
