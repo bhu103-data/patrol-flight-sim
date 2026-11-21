@@ -1,10 +1,10 @@
-// PATROL_NYC_STREET_FURNITURE_V11 — native WebGL2 street realism; retains V10.
+// PATROL_NYC_ROAD_MARKINGS_V12 — material and markings upgrade retaining V11.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -15,7 +15,9 @@ export function buildNycStreetNetwork({
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
     skippedWater:0,skippedLOD:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
-    accessibleCorners:0,skippedBuildings:0};
+    accessibleCorners:0,skippedBuildings:0,
+    bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
+    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -172,6 +174,30 @@ export function buildNycStreetNetwork({
     }else return;
     stats.streetFurniture++;
   }
+  // PATROL_NYC_ROAD_MARKINGS_V12 — orient road paint to the slanted avenue
+  // tangent instead of placing axis-aligned white rectangles.
+  function orientedRect(x,z,w,length,tangent,color,y=markY){
+    const mag=Math.hypot(tangent[0],tangent[1])||1;
+    const f=[tangent[0]/mag,tangent[1]/mag],n=[f[1],-f[0]];
+    const at=(u,v)=>[x+n[0]*u+f[0]*v,y,z+n[1]*u+f[1]*v];
+    addQuad(at(-w*.5,-length*.5),at(w*.5,-length*.5),
+      at(w*.5,length*.5),at(-w*.5,length*.5),color);
+  }
+  const mag=Math.hypot(grid.tilt,1);
+  const ave=[grid.tilt/mag,1/mag],cross=[ave[1],-ave[0]];
+  function bikeIcon(x,z,side){
+    // Small white bike lane stencil, visible from aircraft and street level.
+    const pos=(u,v)=>[x+cross[0]*(side*2.45+u)+ave[0]*v,
+      markY+.028,z+cross[1]*(side*2.45+u)+ave[1]*v];
+    for(const dv of [-.40,.43])for(let k=0;k<10;k++){
+      const a=k*2*Math.PI/10,b=(k+1)*2*Math.PI/10,r=.20;
+      ribbon(pos(Math.sin(a)*r,dv+Math.cos(a)*r),
+        pos(Math.sin(b)*r,dv+Math.cos(b)*r),.052,[.84,.86,.81]);
+    }
+    for(const [a,b] of [[[0,-.40],[.15,0]],[[.15,0],[0,.43]],[[0,.43],[0,-.40]]])
+      ribbon(pos(...a),pos(...b),.046,[.87,.87,.83]);
+    stats.bikeSymbols++;
+  }
   function rect(x,z,w,d,color,y=roadY){
     addQuad([x-w/2,y,z-d/2],[x+w/2,y,z-d/2],
       [x+w/2,y,z+d/2],[x-w/2,y,z+d/2],color);
@@ -183,7 +209,35 @@ export function buildNycStreetNetwork({
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
+    const dx=b[0]-a[0],dz=b[1]-a[1],
+      normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
+    // Only selected game corridors receive red bus and green bike lanes;
+    // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
+    const greenBike=kind==='avenue' && (i===1||i===-3) &&
+      mid[1]>-390 && mid[1]<135;
+    const redBus=kind==='avenue' && (i===-1||i===3) &&
+      mid[1]>-270 && mid[1]<145;
+    if(greenBike){
+      const side=1,lane=shift(a,b,side*(half-.67));
+      slab(lane[0],lane[1],1.15,[.13,.33,.28],roadY+.015);
+      const separator=shift(a,b,side*(half-1.30));
+      slab(separator[0],separator[1],.066,paint,markY+.008);
+      if(j%3===0 && distance>16)bikeIcon(mid[0],mid[1],side);
+      stats.bikeLaneSegments++;
+    }
+    if(redBus){
+      const side=-1,lane=shift(a,b,side*(half-1.05));
+      slab(lane[0],lane[1],1.65,[.49,.17,.16],roadY+.016);
+      const separator=shift(a,b,side*(half-2.00));
+      slab(separator[0],separator[1],.076,paint,markY+.008);
+      if(pavementText && j%4===0 && stats.busLaneSegments<14){
+        const p=[mid[0]+cross[0]*side*(half-.96),markY+.026,
+          mid[1]+cross[1]*side*(half-.96)];
+        pavementText('BUS',p,1.28,.54,paint);
+      }
+      stats.busLaneSegments++;
+    }
     // Independent stone sidewalks, raised curb faces and drainage channels.
     // They sit OUTSIDE the asphalt: no two large overlapping quads.
     for(const side of [-1,1]){
@@ -198,6 +252,16 @@ export function buildNycStreetNetwork({
         point(c[1][0],c[1][1],roadY),
         point(c[1][0],c[1][1],roadY+.128),
         point(c[0][0],c[0][1],roadY+.128),granite);
+      // Concrete saw-cut lines break the unrealistic uninterrupted sidewalk.
+      if(detailBand(...mid)>=3 && hash(i,j,71)>.39){
+        for(let along=6.2;along<distance-1.5;along+=8.9){
+          const t=along/distance,x=a[0]+dx*t,z=a[1]+dz*t,
+            offs=side*(half+.53);
+          orientedRect(x+normal[0]*offs,z+normal[1]*offs,1.34,.025,
+            [dx,dz],[.39,.40,.38],paveY+.004);
+          stats.sidewalkJoints++;
+        }
+      }
     }
     const lines=kind==='avenue'?2:1;
     for(let along=4;along<distance-1.5;along+=7.4){
