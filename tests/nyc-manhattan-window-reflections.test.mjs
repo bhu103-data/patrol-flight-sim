@@ -10,7 +10,8 @@ assert.ok(a>0&&b>a,'NYC anonymous-window shader exists');
 const src=html.slice(a,b);
 
 test('window reflections only affect generic Manhattan building pane surface 5',()=>{
- assert.ok(src.includes('PATROL_NYC_ANON_WINDOW_REFLECTION_V1'));
+ assert.ok(html.slice(Math.max(0,a-360),b).includes('PATROL_NYC_ANON_WINDOW_REFLECTION_V1'),
+   'the source marker must annotate the reflection shader declaration');
  for(const gate of ['!uManhattanView','!uCityFacade','!uSmooth',
    'uNyStreetQuality<1.5','vHarborSurface<4.5',
    'vHarborSurface>5.5','abs(n.y)>.35'])
