@@ -40,7 +40,11 @@
     if(!isChongqing && flight.map==='manhattan'){
       if(flight.playing)window.PatrolSpaceBridge?.suspendForOrbit?.();
       import(nyModuleUrl).then(module=>module.enter(flight)).catch(error=>{
+        // If the embedded module could not be loaded, restore the suspended
+        // Manhattan simulation instead of trapping the pilot in a paused scene.
+        if(flight.playing)window.PatrolSpaceBridge?.resumeFromOrbit?.();
         jumping=false;
+        lastExitAt=performance.now(); // Avoid a retry storm at the altitude gate.
         console.error('Manhattan universe could not start:',error);
         button.title='Cosmos failed to load; check network or WebGL';
       });
