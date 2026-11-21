@@ -79,6 +79,38 @@ export function makeChongqingTowerProfile(style){
 }
 // Survey a full 5x5 terrain patch before placing a hillside tower. A center
 // height alone can float an entire high-rise across a 30m Chongqing cliff.
+// Four hard-edged aluminum rails form a REAL opening, not a solid dark
+// rectangle behind glass. One shared geometry draws every scenic window
+// through an instanced batch; none of the distant tower shells are expanded.
+export function makeChongqingWindowFrameGeometry(THREE){
+ const vertices=[],indices=[],edge=.085;
+ const rails=[
+   [0,(1-edge)*.5,1,edge,1],
+   [0,-(1-edge)*.5,1,edge,1],
+   [-(1-edge)*.5,0,edge,1-2*edge,1],
+   [(1-edge)*.5,0,edge,1-2*edge,1]
+ ];
+ const faces=[[0,3,2,1],[4,5,6,7],[0,1,5,4],
+   [3,7,6,2],[0,4,7,3],[1,2,6,5]];
+ for(const [cx,cy,w,h,d] of rails){
+   const pts=[
+     [cx-w*.5,cy-h*.5,-d*.5],[cx+w*.5,cy-h*.5,-d*.5],
+     [cx+w*.5,cy+h*.5,-d*.5],[cx-w*.5,cy+h*.5,-d*.5],
+     [cx-w*.5,cy-h*.5,d*.5],[cx+w*.5,cy-h*.5,d*.5],
+     [cx+w*.5,cy+h*.5,d*.5],[cx-w*.5,cy+h*.5,d*.5]
+   ];
+   for(const face of faces){
+     const first=vertices.length/3;
+     for(const corner of face)vertices.push(...pts[corner]);
+     indices.push(first,first+1,first+2,first,first+2,first+3);
+   }
+ }
+ const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+ geometry.setIndex(indices);geometry.computeVertexNormals();
+ return geometry;
+}
+
 export function surveyChongqingBuildingPad({x,z,w,d,ground,riverDist,maxGrade=10}){
  if(![x,z,w,d,maxGrade].every(Number.isFinite)||w<=0||d<=0||
     typeof ground!=='function'||typeof riverDist!=='function')return null;
@@ -145,7 +177,8 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
  const awningMat=new THREE.MeshStandardMaterial({
    color:0x48565a,metalness:.15,roughness:.7
  });
- const facadeFrames=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
+ const facadeFrames=new THREE.InstancedMesh(
+   makeChongqingWindowFrameGeometry(THREE),facadeFrameMat,facadeCap);
  const facadeGlazing=new THREE.InstancedMesh(
    new THREE.PlaneGeometry(1,1),facadeGlassMat,facadeCap);
  const facadeMullions=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
@@ -255,9 +288,11 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
        const paneHeight=Math.min(2.45,Math.max(1.35,h/rows*.31));
        const front=z+face*dz*envelope.depth*.5;
        const id=stats.facadePanels++;
-       set(facadeFrames,id,xx,yy,front+face*.125,
-         paneWidth+.27,paneHeight+.32,.12);
-       set(facadeGlazing,id,xx,yy,front+face*.198,
+       // Metal reveal surrounds a true opening; glazing is recessed
+       // behind its front face instead of sitting over a painted box.
+       set(facadeFrames,id,xx,yy,front+face*.205,
+         paneWidth+.27,paneHeight+.32,.16);
+       set(facadeGlazing,id,xx,yy,front+face*.153,
          paneWidth,paneHeight,1,face>0?0:Math.PI);
        set(facadeMullions,id,xx,yy,front+face*.245,
          .065,paneHeight+.05,.085);
