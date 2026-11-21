@@ -191,6 +191,9 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     });
     return height;
   }
+  function isAboard(x,z,y){
+    return eachDeck(x,z,(_state,centerY)=>Math.abs(y-centerY)<.55);
+  }
   function deckDrift(x,z,y){
     drift.dx=0;drift.dz=0;
     eachDeck(x,z,(state,centerY)=>{
@@ -211,7 +214,7 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     }
   }
   return {
-    update,setQuality,deckSurface,deckDrift,
+    update,setQuality,deckSurface,deckDrift,isAboard,
     stats:{boats:boatStates.length,deckLevels:2,visibleDeckRailSections:boatStates.length*4},
     snapshot(){return boatStates.map(s=>({x:s.x,y:s.y,z:s.z,heading:s.heading}))}
   };
