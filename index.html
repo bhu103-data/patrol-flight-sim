@@ -11390,8 +11390,14 @@ const CENTRAL_PARK_SITES=[
       gearDown=grounded;
       armorLandingMode=false;
       brakes=false;
+      // Explicit Alaska-only inspection viewpoint for glacier face art QA.
+      // Normal free flight and existing mission spawns remain unchanged.
+      const alaskaGlacierView=selectedMap.alaska && !runway &&
+        new URLSearchParams(location.search).get('alaskaView')==='glacier';
       Object.assign(plane, {
         pos: runway ? [runway.x,sampleTerrainHeight(runway.x,runway.z)+GEAR_CLEARANCE,runway.z]
+          : alaskaGlacierView
+            ? [105,Math.min(CEILING-8,Math.max(44,sampleGroundHeight(105,245)+18)),245]
           : (selectedMap.alaska && terrainOptions.alaskaDEM
               ? [selectedMap.spawn[0],
                  Math.max(selectedMap.spawn[1],

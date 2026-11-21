@@ -30,7 +30,12 @@ test('Alaska detail draws one bounded, finite scene batch',()=>{
   assert.ok(stats.crevasses>=15,'multiple glacier fissures');
   assert.ok(stats.iceFloes>=25,'irregular floes along the fjord');
   assert.ok(stats.rockBands>=1,'terrain-clamped geological exposure');
-  assert.ok(points.length<105000,'bounded terrain-aware forestry GPU budget');
+  assert.equal(stats.seracs,28,'broad glacier front avoids repetitive ice-pillar fence');
+  assert.equal(stats.iceStrata,62,'sparse uneven glacier strata without repeated stripes');
+  assert.ok(stats.branchlets>=80&&stats.branchlets<=850,
+    'irregular bounded conifer branchlets make near-field trees less conical');
+  assert.ok(stats.talus>=0&&stats.talus<=110,'terrain-filtered rock scree stays bounded');
+  assert.ok(points.length<116000,'bounded terrain-aware forestry and calving GPU budget');
   assert.ok(stats.conifers>=180&&stats.conifers<=940,'dense but bounded Alaska forest');
 });
 
