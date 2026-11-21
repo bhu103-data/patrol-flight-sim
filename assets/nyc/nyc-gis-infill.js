@@ -92,7 +92,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
-    shopfrontFaces=0;
+    shopfrontFaces=0,shopfrontQuads=0;
   const sourceFids=new Set();
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
@@ -222,7 +222,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           const panel=(u,v,y0,y1,color,surface,d=.051)=>{
             addQuad(p(u,y0,d),p(v,y0,d),p(v,y1,d),p(u,y1,d),
               color,surface);
-            storefrontQuads++;
+            shopfrontQuads++;
           };
           for(let bay=0;bay<count;bay++){
             const left=u0+(u1-u0)*(bay+.055)/count;
@@ -325,6 +325,6 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   return {inputRecords:asset.features.length,sourceBuildings:buildings,
     infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
-    shopfrontFaces,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
+    shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
 }
