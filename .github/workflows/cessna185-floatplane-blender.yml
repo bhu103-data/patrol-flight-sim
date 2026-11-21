@@ -43,6 +43,8 @@ jobs:
             --output assets/aircraft/cessna185-floats.glb
           test -s assets/aircraft/cessna185-floats.glb
           test "$(stat -c%s assets/aircraft/cessna185-floats.glb)" -lt 2000000
+          test -s assets/aircraft/cessna185-floats.blend
+          test "$(stat -c%s assets/aircraft/cessna185-floats.blend)" -lt 8000000
       - name: Validate triangles and physical dimensions
         shell: bash
         run: |
@@ -57,11 +59,13 @@ jobs:
           if(count!==details.triangles)throw new Error('Triangle count mismatch');
           console.log('Metric Blender aircraft:',details);
           NODE
-      - name: Attach Blender-generated asset
+      - name: Attach Blender-generated GLB and editable .blend source
         uses: actions/upload-artifact@v4
         with:
-          name: cessna185-floatplane-blender-glb
-          path: assets/aircraft/cessna185-floats.glb
+          name: cessna185-floatplane-blender-source
+          path: |
+            assets/aircraft/cessna185-floats.glb
+            assets/aircraft/cessna185-floats.blend
           if-no-files-found: error
           retention-days: 30
       - name: Publish small Blender GLB to game assets on main
