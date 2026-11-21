@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
-const game=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const game=readFileSync(new URL('../index.html',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const dem=JSON.parse(readFileSync(
   new URL('../assets/alaska/tracy-arm-3dep.json',import.meta.url),'utf8'));
 const heights=Buffer.from(dem.heightsBase64,'base64');
