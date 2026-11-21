@@ -40,20 +40,30 @@ jobs:
           console.log(validateScenarioGLB(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength)));
           NODE
       - name: Commit preview-only model without activating game
+        shell: bash
         run: |
           set -euo pipefail
           cp assets/chongqing/generated/hongyadong-study.glb /tmp/hongyadong-study.glb
-          git fetch origin main
-          git checkout -B main origin/main
-          mkdir -p assets/chongqing/generated
-          cp /tmp/hongyadong-study.glb assets/chongqing/generated/hongyadong-study.glb
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/chongqing/generated/hongyadong-study.glb
-          if git diff --cached --quiet; then
-            echo "Verified artifact already present."
-          else
+          for attempt in {1..15}; do
+            # Another PATROL workflow may commit while this model is validated.
+            # Apply only the approved GLB to the latest main, never force push.
+            git fetch origin main
+            git checkout -B main origin/main
+            mkdir -p assets/chongqing/generated
+            cp /tmp/hongyadong-study.glb assets/chongqing/generated/hongyadong-study.glb
+            git add assets/chongqing/generated/hongyadong-study.glb
+            if git diff --cached --quiet; then
+              echo "The verified GLB is already present."
+              exit 0
+            fi
             git commit -m "Publish staggered three-wing Hongyadong Bayu architectural GLB preview"
-            git push origin HEAD:main
-          fi
-          echo "Production manifest remains disabled by default."
+            if git push origin HEAD:main; then
+              echo "Published reviewed GLB on attempt $attempt."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Cannot publish without force after 15 non-destructive retries." >&2
+          exit 1
