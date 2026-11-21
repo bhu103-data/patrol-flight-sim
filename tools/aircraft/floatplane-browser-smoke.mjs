@@ -68,11 +68,20 @@ async function testMap(map,exercise){
         throw Error('Floatplane has no positive water taxi speed: '+taxi);
       await page.screenshot({path:'artifacts/floatplane-'+map+'-taxi.png'});
       await page.keyboard.down('w');
-      await page.waitForFunction(()=>{
-        const label=document.querySelector('#gearStatus')?.textContent||'';
-        return label.includes('WATER LANDING')||
-          !document.querySelector('#crashOverlay')?.hidden;
-      },null,{timeout:10000});
+      // Software SwiftShader can render at only a few frames per second.
+      // PATROL intentionally caps per-frame dt, so 3s of simulated power-up
+      // may require much longer wall-clock time in headless Chromium.
+      try{
+        await page.waitForFunction(()=>{
+          const label=document.querySelector('#gearStatus')?.textContent||'';
+          return label.includes('WATER LANDING')||
+            !document.querySelector('#crashOverlay')?.hidden;
+        },null,{timeout:65000});
+      }catch(error){
+        const label=await page.locator('#gearStatus').textContent();
+        await page.screenshot({path:'artifacts/floatplane-'+map+'-takeoff-timeout.png'});
+        throw Error('C185 rotate timeout (last HUD '+label+'): '+error.message);
+      }
       await page.keyboard.up('w');
       await page.keyboard.up('Shift');
       const after=(await page.locator('#gearStatus').textContent())||'';
