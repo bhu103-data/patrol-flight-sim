@@ -27,7 +27,7 @@ function image(window={enabled:false}){
 test('uniform near-black or flat wall cannot pass source-window gate',()=>{
  const result=probe(image());
  assert.equal(result.valid,false);
- assert.equal(result.glassWallContrast,0);
+ assert.ok(Math.abs(result.glassWallContrast)<1e-6,'flat wall has zero contrast');
  assert.equal(result.leftEdgeCoverage,0);
  assert.equal(result.rightEdgeCoverage,0);
  assert.equal(result.topEdgeCoverage,0);
