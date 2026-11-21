@@ -118,6 +118,16 @@ try{
   check(Math.hypot(...signalView.map((v,i)=>v-dayView[i]))<3,
     'The daytime signal screenshot drifted away from its night camera');
   await capture('03d-signalized-street-day');
+  // Low-quality keeps moving traffic accessible on software GPUs; inspect
+  // the SAME daylight lens/cornice view in full high detail once, then
+  // revert before the flight ascent to preserve the old smoke budget.
+  await page.locator('#qualityBtn').click(); // low -> auto
+  await page.locator('#qualityBtn').click(); // auto -> high
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .renderMetrics.quality==='high','QA failed to enable high-detail facades');
+  await page.waitForTimeout(2800);
+  await capture('03e-signalized-street-high-detail');
+  await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
