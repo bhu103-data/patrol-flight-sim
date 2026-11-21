@@ -70,3 +70,16 @@ test('Brooklyn PBR tags do not impersonate surveyed NYC footprint source IDs',()
   assert.match(html,/vHarborSurface==13\.0/);
   assert.match(html,/12\/13\/14 mark \*procedural Brooklyn\*/);
 });
+
+test('historic warehouse arches appear only inside Brooklyn LOD3 without extra box towers',()=>{
+  // A grid cell whose stable facade seed selects the original brick arch family.
+  const lot=[310.68,-280.5,9,19,13.82,.41,false];
+  const medium=build(lot,2),close=build(lot,3);
+  assert.ok(close.beams>=medium.beams+48,
+    'first upper warehouse windows gain curved masonry arches');
+  assert.equal(close.boxes.length,medium.boxes.length,
+    'curved masonry uses batched beams, not more opaque cuboids');
+  assert.ok(close.quads>medium.quads);
+  const far=build(lot,1);
+  assert.equal(far.beams,0,'no distant industrial arch allocations');
+});
