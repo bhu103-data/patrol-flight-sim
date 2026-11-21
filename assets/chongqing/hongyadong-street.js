@@ -76,7 +76,7 @@ export function buildHongyadongStreetPrototype({THREE,scene,ground,riverCenter,p
     // Edge bands follow opposite sides of the 12 m boardwalk, not its center.
     // Keep them inside the surface footprint and above the existing collision geometry.
     addBoxStrip(THREE,group,curb,path,1.1,.18,.15,5.35),
-    addBoxStrip(THREE,group,wall,path,1.35,.16,-.4,-5.25),
+    addBoxStrip(THREE,group,wall,path,1.35,.16,-.05,-5.25),
     addBoxStrip(THREE,group,dryAsphalt,dry,4,.025,.03),
     addBoxStrip(THREE,group,wetAsphalt,wet,4,.025,.035),
     addBoxStrip(THREE,group,dryAsphalt,dry2,4,.025,.03)];
