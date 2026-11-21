@@ -60,8 +60,8 @@ test('NY Central Park camera button and all 8 views preserve flight',()=>{
 test('the four original Lake boats have watertight-looking tapered 3D hulls',()=>{
   const lakeWater=12.2+2.83,panels=[],stems=[],paddles=[];
   const isHull=rgb=>Array.isArray(rgb)&&
-    (rgb.join(',')==='.42,.28,.2'||rgb.join(',')==='.29,.34,.36');
-  const isPaddle=rgb=>Array.isArray(rgb)&&rgb.join(',')==='.57,.43,.28';
+    (rgb.join(',')==='0.42,0.28,0.2'||rgb.join(',')==='0.29,0.34,0.36');
+  const isPaddle=rgb=>Array.isArray(rgb)&&rgb.join(',')==='0.57,0.43,0.28';
   const capture=(out,points)=>out.push(...points);
   const stats=context.am({
     grid,quality:'high',waterY:12.2,
