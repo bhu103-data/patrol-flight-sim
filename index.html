@@ -3826,11 +3826,30 @@ const CENTRAL_PARK_SITES=[
       for(const eye of [-0.30,0.30])box(eye,24.93,-0.735,0.29,0.106,0.081,[0.18,0.38,0.34]);
       for(let j=-3;j<=3;j++)box(j*0.21,25.64,-0.94+Math.abs(j)*0.053,0.12,0.18,0.055,[0.19,0.37,0.33]);
       stack([[25.5,0.83,0.83],[25.9,1.05,1.05]],shade,14);
+      // Seven *solid*, evenly spaced copper crown rays. The former seven
+      // paper-thin triangles had neither sidewalls nor a stable silhouette
+      // when the pilot circled the island. Tapered triangular prisms form a
+      // closed exterior without adding separate draw calls or changing the
+      // landmark's navigation bounds.
       for (let i=0;i<7;i++) {
-        const angle = Math.PI * 0.95 * (i/6 - 0.5) * 2;
-        const x = Math.sin(angle), z = -Math.cos(angle);
-        addTri([x*0.82-z*0.15,25.85,z*0.82+x*0.15],
-          [x*1.62,27.04,z*1.62],[x*0.82+z*0.15,25.85,z*0.82-x*0.15],patina);
+        const angle=2*Math.PI*i/7-Math.PI/2;
+        const rx=Math.sin(angle),rz=-Math.cos(angle);
+        // Tangent-width runs around the crown; radial depth gives real
+        // facets that catch different light from opposite viewing angles.
+        const point=(radius,y,tangent,depth)=>[
+          rx*(radius+depth)-rz*tangent,y,
+          rz*(radius+depth)+rx*tangent];
+        const frontL=point(.86,25.85,-.145,.066),
+          frontR=point(.86,25.85,.145,.066),
+          rearL=point(.86,25.85,-.145,-.066),
+          rearR=point(.86,25.85,.145,-.066),
+          frontTip=point(1.72,27.12,0,.035),
+          rearTip=point(1.72,27.12,0,-.035);
+        addTri(frontL,frontTip,frontR,patina);
+        addTri(rearR,rearTip,rearL,shade);
+        addQuad(frontL,rearL,rearTip,frontTip,[.24,.51,.43]);
+        addQuad(frontTip,rearTip,rearR,frontR,[.27,.55,.45]);
+        addQuad(frontL,frontR,rearR,rearL,shade);
       }
       // Raised torch arm, sleeve and torch flame.
       stack([[21.55,0.83,0.77,-1.34],[23.45,0.69,0.66,-2.65,-0.15],
