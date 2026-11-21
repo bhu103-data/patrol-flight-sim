@@ -94,11 +94,12 @@ test('Vegas comparative captures isolate files by QA tag', async()=>{
    readFile(new URL('../scripts/vegas-compare-qa.mjs',import.meta.url),'utf8'),
    readFile(new URL('../.github/workflows/vegas-ridge-matched-baseline.yml',import.meta.url),'utf8')
  ]);
- assert.match(script,/const output='artifacts\\/vegas\\/'\\+qaTag/);
- assert.match(workflow,/PATROL_QA_TAG: candidate/);
- assert.match(workflow,/PATROL_QA_TAG: baseline-6d50bfd/);
- assert.match(compare,/read\\('candidate'\\)/);
- assert.match(compare,/read\\('baseline-6d50bfd'\\)/);
- assert.match(matched,/mv artifacts\\/vegas\\/baseline-6d50bfd artifacts\\/vegas-baseline/);
- assert.match(matched,/mv artifacts\\/vegas\\/candidate artifacts\\/vegas-current/);
+ assert.ok(script.includes("const output='artifacts/vegas/'+qaTag"),
+   'source must use per-tag output directory instead of overwriting previous capture');
+ assert.ok(workflow.includes('PATROL_QA_TAG: candidate'));
+ assert.ok(workflow.includes('PATROL_QA_TAG: baseline-6d50bfd'));
+ assert.ok(compare.includes("read('candidate')"));
+ assert.ok(compare.includes("read('baseline-6d50bfd')"));
+ assert.ok(matched.includes('mv artifacts/vegas/baseline-6d50bfd artifacts/vegas-baseline'));
+ assert.ok(matched.includes('mv artifacts/vegas/candidate artifacts/vegas-current'));
 });
