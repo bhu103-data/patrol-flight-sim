@@ -69,3 +69,13 @@ test('Alaska southern open water is rejected when it leads into boundary assist'
       'water takeoff corridor must end before boundary auto-turn');
   }
 });
+
+test('non-Alaska water launch checks its exact 94-unit runway endpoint',()=>{
+  // The dense six-unit sweep reaches 90m, not 94m, unless the endpoint
+  // is explicitly tested. Avoid choosing a lane ending on this narrow bank.
+  const water=(x,z)=>!(Math.abs(x)<.0001&&Math.abs(z-94)<.0001);
+  const site=choose({spawn:[0,40,0]},800,800,130,water,[],()=>[0,0,0])();
+  assert.ok(site,'an alternate, unobstructed heading is available');
+  assert.notDeepEqual(site,[0,0,0],
+    'water at 90m does not make a shore at 94m a safe runway');
+});
