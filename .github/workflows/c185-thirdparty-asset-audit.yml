@@ -4,6 +4,7 @@ on:
     branches: [review/c185-thirdparty-float-source-audit-20261121]
     paths:
       - 'tools/aircraft/audit-third-party-c185.mjs'
+      - 'tools/aircraft/thirdparty-browser-review.mjs'
       - '.github/workflows/c185-thirdparty-asset-audit.yml'
       - 'docs/C185_THIRDPARTY_FLOATPLANES.md'
   workflow_dispatch:
@@ -12,12 +13,12 @@ permissions:
   contents: read
 concurrency:
   group: patrol-c185-thirdparty-audit-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify-c185-source-rights-and-binary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
