@@ -114,6 +114,28 @@ test('physical balcony and all six timber posts are correctly grounded',()=>{
   }
 });
 
+test('ACTUAL published Chongqing cliff terraces ground every pillar above dry terrain',async()=>{
+  const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
+    game.indexOf('const worldGeometry='));
+  assert.ok(terrain.includes('function ground(x,z)'));
+  const real=new Function('clamp',terrain+';return {ground,riverDist,riverCenter};')(
+    (v,min,max)=>Math.max(min,Math.min(max,v)));
+  const objects=[],obstacles=[];
+  const market=buildChongqingMarketFronts({
+    THREE,scene:{add(x){objects.push(x)}},...real,obstacles
+  });
+  assert.equal(market.stats.sites,3,'all three hero shops stay on dry ground');
+  assert.equal(obstacles.filter(o=>o.marketGalleryPost).length,6);
+  for(const post of obstacles.filter(o=>o.marketGalleryPost)){
+    assert.ok(real.ground(post.x,post.z)>0&&real.riverDist(post.x,post.z)>8);
+    assert.ok(Math.abs(post.base-real.ground(post.x,post.z)+.05)<.001);
+    assert.ok(post.top-post.base>1.0,'no hill-clipped pillar or floating support');
+    const carriage=real.riverCenter(post.x)+355+14*Math.sin(post.x/115+2);
+    assert.ok(Math.abs(post.z-carriage)>14,'no column in main hillside traffic lane');
+  }
+});
+
 test('invalid flooded or unbuildable pads must render no gallery or collider',()=>{
   const {objects,obstacles,result}=generated(()=>-1);
   assert.equal(result.stats.sites,0);
