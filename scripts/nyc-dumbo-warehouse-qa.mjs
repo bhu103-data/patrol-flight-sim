@@ -15,9 +15,9 @@ const cameraSpecs=[
 ];
 const viewInsertion=[
  // Camera centers are GETTERS: the real accepted parcel, not a guessed lot.
- "{name:'DUMBO A · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.x??285},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.z??-330},height:2.1,bearing:140,radius:17,rise:2.0,detail:'QA-only street-facing original and brick arch'}",
+ "{name:'DUMBO A · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.x??285},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.z??-330},height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only street-facing original and brick arch'}",
  "{name:'DUMBO A · Low Flight QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.x??285},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.z??-330},height:18,bearing:152,radius:28,rise:8,detail:'QA-only overhead roofline and voids'}",
- "{name:'DUMBO B · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.x??372},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.z??-285},height:2.1,bearing:48,radius:17,rise:2.0,detail:'QA-only second warehouse street-facing'}",
+ "{name:'DUMBO B · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.x??372},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.z??-285},height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only second warehouse street-facing'}",
  "{name:'DUMBO B · Low Flight QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.x??372},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.z??-285},height:18,bearing:65,radius:28,rise:8,detail:'QA-only second roofline and corners'}"
 ].join(',\n')+',\n';
 const results={version:'DUMBO_WAREHOUSE_REAL_PARCEL_QA_V1',
@@ -87,6 +87,14 @@ async function captureVariant(variant){
    " globalThis.__PATROL_DUMBO_QA__={sites,parcelCount:parcels.length};\n"+
    "    }\n";
   html=html.slice(0,atSites)+instrumentation+html.slice(atSites);
+  // Report the ACTUAL scenic eye: a roof-collision clamp may raise a
+  // supposed street-level view several floors above the sidewalk.
+  const heightLine='const height=Math.max(ground+view.height+view.rise*lerp(1.2,0.68,zoom),navigationSurface(x,z)+3);';
+  if(html.split(heightLine).length!==2)throw Error('Scene camera height anchor changed');
+  html=html.replace(heightLine,heightLine+"\n    if(view.name?.startsWith('DUMBO ') && globalThis.__PATROL_DUMBO_QA__)"+
+   "globalThis.__PATROL_DUMBO_QA__.lastCamera={label:view.name,eye:[x,height,z],"+
+   "ground,groundAtEye:sampleTerrainHeight(x,z),"+
+   "navigationHeight:navigationSurface(x,z),target:[view.x,ground+view.height,view.z]};");
   if(variant==='fallback'){
    const marker='const cornerWarehouse=warehouseStyles.has(lot);';
    if(html.split(marker).length!==2)throw Error('Warehouse rollback anchor changed');
@@ -141,6 +149,18 @@ async function captureVariant(variant){
    });
    if(!info.webgl||info.error!==0||info.label!==cam.name)
     throw Error('Camera/WebGL invalid '+JSON.stringify(info));
+   const actualCamera=await page.evaluate(()=>globalThis.__PATROL_DUMBO_QA__?.lastCamera);
+   if(!actualCamera||actualCamera.label!==cam.name||
+      !actualCamera.eye.every(Number.isFinite)||
+      !Number.isFinite(actualCamera.groundAtEye))
+    throw Error('Missing actual 3D QA eye '+JSON.stringify(actualCamera));
+   // An actual pedestrian cannot be twenty units above the ground after
+   // the scenic eye snaps on top of a neighboring roof.
+   if(cam.name.includes('Street') &&
+     actualCamera.eye[1]-actualCamera.groundAtEye>7.5)
+    throw Error('Street camera elevated onto rooftop, not pedestrian level: '+
+     JSON.stringify(actualCamera));
+   info.actualCamera=actualCamera;
    const name=String(i).padStart(2,'0')+'-'+variant+'.png';
    await page.evaluate(()=>document.body.classList.add('dumbo-qa-pixels'));
    let bytes;
