@@ -129,10 +129,12 @@ def run(output):
     float_mat=material("anodized float skin",(.48,.55,.59),.65,.31)
     black=material("propeller and rubber",(.075,.085,.10),.22,.46)
     red=material("safety marking",(.77,.24,.17),.09,.48)
+    green=material("starboard position light",(.12,.66,.32),.08,.28)
+    marker=material("etched seals and access panels",(.22,.28,.31),.12,.43)
     loft("Skywagon elliptical riveted fuselage",[
         (-3.69,.065,.075,.09),(-2.82,.37,.35,.04),(-1.35,.65,.71,.12),
         (.48,.72,.72,.13),(1.65,.58,.58,.10),(2.75,.40,.39,.07),
-        (3.68,.11,.12,.035),(3.98,.035,.045,.02)],white,16)
+        (3.68,.11,.12,.035),(3.98,.035,.045,.02)],white,24)
     for side in (-1,1):
         wing("High wing 35ft10in "+str(side),side,silver)
         float_hull("Edo-style float "+str(side),side,float_mat)
@@ -144,15 +146,47 @@ def run(output):
         box("float longitudinal chine "+str(side),(side*1.27,-1.37,.2),(.03,.035,4.35),silver)
         box("empennage "+str(side),(side*1.17,.38,-3.02),(1.98,.082,.74),silver)
         box("cockpit glazing "+str(side),(side*.67,.32,.46),(.045,.55,1.72),glass)
-        box("red wingtip marking "+str(side),(side*5.34,1.13,-.19),(.19,.07,.85),red)
-    # Straight fixed vertical fin, rudder, and glazing panels.
-    box("vertical stabilizer",(0,1.11,-3.23),(.10,1.85,1.05),silver)
-    box("rudder accent",(0,1.47,-3.60),(.12,.77,.18),navy)
+        box("wingtip enamel "+str(side),(side*5.34,1.13,-.19),(.19,.07,.85),green if side>0 else red)
+        box("navigation lamp "+str(side),(side*5.435,1.155,.12),(.045,.075,.12),green if side>0 else red)
+        # Separate thin flaps and aileron hinge breaks remain within the
+        # manufacturer wingspan, and avoid huge featureless wing rectangles.
+        box("inboard flap hinge "+str(side),(side*2.03,.959,-.77),(2.12,.030,.15),marker)
+        box("outboard aileron hinge "+str(side),(side*4.21,1.11,-.47),(2.06,.025,.16),marker)
+    # Skywagon shaped swept fin, not an architectural box. The extreme
+    # aft point is the measured -3.755m length envelope.
+    mesh("Skywagon shaped swept fin",[
+        (-.055,.42,-2.70),(.055,.42,-2.70),
+        (-.055,.45,-3.755),(.055,.45,-3.755),
+        (-.050,2.035,-3.37),(.050,2.035,-3.37),
+        (-.050,1.84,-3.755),(.050,1.84,-3.755)
+    ],[(0,4,6,2),(1,3,7,5),(0,1,5,4),
+       (2,6,7,3),(4,5,7,6),(0,2,3,1)],silver)
+    box("rudder trailing edge",(0,1.18,-3.725),(.10,1.21,.051),navy)
     box("windscreen",(0,.53,1.31),(1.08,.59,.065),glass)
     box("front cowling stripe",(0,.19,2.94),(1.03,.115,.58),navy)
     for side in (-1,1):
         box("fuselage side blue stripe "+str(side),(side*.66,.03,-.38),(.052,.10,3.9),navy)
         beam("float cross brace "+str(side),(side*.48,-.70,0),(side*1.27,-.63,0),.055,silver)
+        # Flush body glazing and slim rubber-frame door seals. The game
+        # renderer currently uses solid shading, not real refractive glass.
+        box("rear side glazing "+str(side),(side*.62,.36,-.82),(.055,.40,.70),glass)
+        box("rear quarter glazing "+str(side),(side*.52,.30,-1.58),(.05,.30,.39),glass)
+        box("cockpit door lower seal "+str(side),(side*.714,-.20,.45),(.022,.026,1.55),marker)
+        box("cockpit door aft seal "+str(side),(side*.675,.06,-.40),(.026,.94,.032),marker)
+        box("flush door latch "+str(side),(side*.725,-.21,.91),(.033,.065,.16),black)
+        # Continuous float skins, individual access plates and aft water
+        # rudders read clearly during a slow taxi without new textures.
+        for station in (-1.75,-.15,1.35):
+            box("float upper inspection hatch "+str(side)+" "+str(station),
+                (side*1.27,-.585,station),(.43,.015,.53),marker)
+        box("aft float water rudder "+str(side),
+            (side*1.27,-1.47,-2.54),(.055,.18,.27),marker)
+        beam("forward float reinforcement "+str(side),
+             (side*.89,-.16,1.13),(side*1.27,-.70,1.73),.047,silver)
+        for index in range(11):
+            z=-2.10+index*.40
+            box("float rivet "+str(side)+" "+str(index),
+                (side*1.67,-1.10,z),(.026,.024,.027),silver)
     # Total aircraft length includes the forward spinner AND the aft fin.
     # With the fin aft at -3.755m, spinner reaches +4.055m: 7.810m overall.
     beam("propeller vertical blade",(0,.07,3.95),(0,1.15,3.95),.09,black)
