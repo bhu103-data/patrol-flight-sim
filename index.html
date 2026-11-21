@@ -12658,29 +12658,25 @@ const CENTRAL_PARK_SITES=[
        Math.abs(z-(lz+4.6))<10.5)return false;
     return true;
   }
-  // Floating water is not an empty landing zone while a moving harbor
-  // vessel occupies it. Reject touchdown and taxi over real-sized,
-  // direction-aware hull bounds with pontoon and wing-tip margin.
-  function clearOfMovingShips(x,z){
-    // Legacy isolated unit fixtures omit these live-traffic globals.
-    if(typeof boats==='undefined'||typeof sceneryPose!=='function'||
-       typeof sceneryTime==='undefined')return true;
-    for(const ship of boats){
-      if(!ship||!Number.isFinite(ship.halfLength)||
-         !Number.isFinite(ship.halfWidth))continue;
-      const [bx,bz,heading]=sceneryPose(ship,sceneryTime);
-      if(![bx,bz,heading].every(Number.isFinite))continue;
-      const dx=x-bx,dz=z-bz;
-      if(Math.hypot(dx,dz)>ship.halfLength+ship.halfWidth+7)continue;
-      const fx=Math.sin(heading),fz=Math.cos(heading);
-      const along=dx*fx+dz*fz,across=dx*fz-dz*fx;
-      if(Math.abs(along)<ship.halfLength+4.4 &&
-         Math.abs(across)<ship.halfWidth+4.4)return false;
-    }
-    return true;
-  }
   function usableFloatWater(x,z,yaw=plane.yaw){
-    if(!clearOfMovingShips(x,z))return false;
+    // Water taxi and touchdown share the moving-vessel clearance gate.
+    // Keep this check inside the exported game function: collision tests
+    // also execute the same function independently of the scene closure.
+    if(typeof boats!=='undefined'&&typeof sceneryPose==='function'&&
+       typeof sceneryTime!=='undefined'){
+      for(const ship of boats){
+        if(!ship||!Number.isFinite(ship.halfLength)||
+           !Number.isFinite(ship.halfWidth))continue;
+        const [bx,bz,heading]=sceneryPose(ship,sceneryTime);
+        if(![bx,bz,heading].every(Number.isFinite))continue;
+        const dx=x-bx,dz=z-bz;
+        if(Math.hypot(dx,dz)>ship.halfLength+ship.halfWidth+7)continue;
+        const fx=Math.sin(heading),fz=Math.cos(heading);
+        const along=dx*fx+dz*fz,across=dx*fz-dz*fx;
+        if(Math.abs(along)<ship.halfLength+4.4 &&
+           Math.abs(across)<ship.halfWidth+4.4)return false;
+      }
+    }
     // Audit the entire twin-pontoon water contact envelope, not just its
     // center and four corners. Thin shore fingers can hide between the old
     // nine test points, leading to stranded or partly beached floatplanes.
