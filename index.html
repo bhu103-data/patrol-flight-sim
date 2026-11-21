@@ -12710,11 +12710,20 @@ const CENTRAL_PARK_SITES=[
         const [bx,bz,heading]=sceneryPose(ship,sceneryTime);
         if(![bx,bz,heading].every(Number.isFinite))continue;
         const dx=x-bx,dz=z-bz;
-        if(Math.hypot(dx,dz)>ship.halfLength+ship.halfWidth+7)continue;
+        // Use the dimensioned C185's 7.8105 m length and 10.922 m span.
+        // The wing-and-float envelope rotates relative to the vessel.
+        const halfLength=3.90525,halfSpan=5.461,buffer=.60;
+        const maxReach=Math.hypot(ship.halfLength,ship.halfWidth)+
+          Math.hypot(halfLength,halfSpan)+buffer;
+        if(Math.hypot(dx,dz)>maxReach)continue;
         const fx=Math.sin(heading),fz=Math.cos(heading);
         const along=dx*fx+dz*fz,across=dx*fz-dz*fx;
-        if(Math.abs(along)<ship.halfLength+4.4 &&
-           Math.abs(across)<ship.halfWidth+4.4)return false;
+        const parallel=Math.abs(Math.cos(yaw-heading));
+        const perpendicular=Math.abs(Math.sin(yaw-heading));
+        const marginAlong=halfLength*parallel+halfSpan*perpendicular+buffer;
+        const marginAcross=halfLength*perpendicular+halfSpan*parallel+buffer;
+        if(Math.abs(along)<ship.halfLength+marginAlong &&
+           Math.abs(across)<ship.halfWidth+marginAcross)return false;
       }
     }
     // Audit the entire twin-pontoon water contact envelope, not just its
