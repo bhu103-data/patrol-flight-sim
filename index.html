@@ -2214,7 +2214,11 @@ const CENTRAL_PARK_SITES=[
                 vec2 texSlope=normalRough.rg*2.0-1.0;
                 float microLight=clamp(.87+dot(texSlope,uSun.xz)*.18,.69,1.08);
                 photo*=microLight;
-                albedo=mix(albedo,photo,clamp(photoAmount*.78,0.0,.84));
+                // Brightness-matched forest grain: albedo stays coherent
+                // across the 95–425 unit LOD transition, while rock/snow
+                // retain their stronger photographic color contribution.
+                float colorStrength=mix(.19,.78,1.0-forestWeight);
+                albedo=mix(albedo,photo,clamp(photoAmount*colorStrength,0.0,.84));
                 float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
                                   mix(30.0,95.0,roughness));
                 albedo+=vec3(.15,.22,.25)*sparkle*(1.0-roughness)*photoAmount*.065;
