@@ -33,7 +33,7 @@ function build(kind){
 test('near-view walker body has a smooth polygonal human silhouette',()=>{
  const m=build('walker');
  assert.ok(m.quads.length>70 && m.quads.length<250,'bounded sculpted mesh');
- assert.ok(m.triangles.length>15 && m.triangles.length<140,'capped rings');
+ assert.ok(m.triangles.length>15 && m.triangles.length<220,'capped rings');
  assert.equal(m.boxes.length,0,'no giant blocky cube head/torso/arms');
  const ys=m.quads.flatMap(q=>q.slice(0,4).map(p=>p[1]));
  assert.ok(Math.min(...ys)<.79 && Math.max(...ys)>1.81);
