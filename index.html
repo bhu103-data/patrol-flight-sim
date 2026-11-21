@@ -13135,7 +13135,7 @@ const CENTRAL_PARK_SITES=[
   function drawHullWash(drawMesh,boat,x,z,front,right){
     if(Math.hypot(x-camPos[0],z-camPos[2])>226)return;
     const width=boat.halfWidth,length=boat.halfLength;
-    const lift=(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
+    const lift=(boat.washScale??1)*(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
     const transform=mat4FromBasis([x,WATER_H+0.027,z],right.map(v=>v*width),
       [0,lift,0],front.map(v=>v*length));
     drawMesh(bowWaveMeshes.water,transform);
@@ -13144,9 +13144,9 @@ const CENTRAL_PARK_SITES=[
       const t=(sceneryTime*(0.72+0.14*i)+boat.phase+i*0.27)%1;
       const across=side*width*(0.67+t*0.70);
       const along=length*(0.83-i*0.16-t*0.30);
-      const p=[x+right[0]*across+front[0]*along,WATER_H+0.24+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
+      const p=[x+right[0]*across+front[0]*along,WATER_H+0.24*(boat.washScale??1)+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
         z+right[2]*across+front[2]*along];
-      if(t>0.075&&t<0.87)drawMesh(bowWaveMeshes.spray,mat4FromBasis(p,right,worldUp,front,1.0-t*0.58));
+      if(t>0.075&&t<0.87)drawMesh(bowWaveMeshes.spray,mat4FromBasis(p,right,worldUp,front,(boat.washScale??1)*(1.0-t*0.58)));
     }
   }
 
@@ -13612,27 +13612,46 @@ const CENTRAL_PARK_SITES=[
     const floor=sampleGroundHeight(x,z);
     if(floatplane && !crash){
       if(waterborne){
-        if(!usableFloatWater(x,z,plane.yaw)){
-          waterborne=false;
-          finishFlight([x,WATER_H+.20,z],'Float hit shoreline',false);
-        }else{
-          // Simulated pontoon buoyancy: stable center height and small heave.
+        if(usableFloatWater(x,z,plane.yaw)){
+          // Small load-dependent heave; the hull remains buoyant.
           plane.pos[1]=WATER_H+FLOAT_CLEARANCE+
             .024*Math.sin(sceneryTime*2.3+plane.speed*.28);
-          plane.pitch=plane.bank=plane.rollAnim=0;
+        }else if(usableFloatWater(prevPos[0],prevPos[2],prevYaw)){
+          // Last clear footprint is still safe: stop before the obstruction.
+          plane.pos=[prevPos[0],WATER_H+FLOAT_CLEARANCE,prevPos[2]];
+          plane.yaw=prevYaw;
+          plane.speed=0;
+          plane.afterburner=false;
+          brakes=true;
+        }else{
+          // A moving vessel can occupy both the new and previous footprint.
+          // Keep genuine collisions; do not roll back into a ship or dock.
+          waterborne=false;
+          finishFlight([x,WATER_H+FLOAT_CLEARANCE,z],'Float hit shoreline or obstruction',false);
         }
+        plane.pitch=plane.bank=plane.rollAnim=0;
       }else if(!floatRotate && y<=WATER_H+FLOAT_CLEARANCE &&
                 floor<=WATER_H+.06){
         const sink=(y-prevPos[1])/Math.max(dt,1e-4);
-        const smooth=usableFloatWater(x,z,plane.yaw) &&
-          sink>=-7.8 && plane.speed<=24.5 &&
-          plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
-        if(smooth){
+        if(usableFloatWater(x,z,plane.yaw)){
+          const smooth=sink>=-7.8 && plane.speed<=24.5 &&
+            plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
           waterborne=true;
           plane.pos[1]=WATER_H+FLOAT_CLEARANCE;
           plane.pitch=plane.bank=plane.rollAnim=0;
+          plane.afterburner=false;
+          if(!smooth){
+            // Assisted touchdown: the floats shed speed and throw spray,
+            // instead of replacing the airplane with a submerged wreck.
+            plane.speed=Math.min(9,plane.speed*.55);
+            explosions.push({pos:[x,WATER_H+.03,z],age:0,maxAge:.65,isWater:true});
+          }
         }else{
-          finishFlight([x,WATER_H+.2,z],'Hard water landing',true);
+          // Not a valid landing footprint: skim above the water and keep
+          // the swept solid-object collision tests active on the same path.
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+.16;
+          plane.pitch=Math.max(0,plane.pitch);
+          plane.bank*=.55;
         }
       }
     }
@@ -14231,10 +14250,17 @@ const CENTRAL_PARK_SITES=[
     drawMapScenery(drawMeshWithOutline);
     drawSphereShow(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
-    if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5)
-      drawHullWash(drawMeshWithOutline,
-        {halfWidth:1.27,halfLength:3.05,phase:0},
-        plane.pos[0],plane.pos[2],basis.fwd,basis.right);
+    if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5){
+      // Both float chines generate wash. A boat-sized wake at the fuselage
+      // center hid the two contact points and produced oversized spray.
+      const washScale=clamp(plane.speed/16,.18,.74);
+      for(const side of [-1,1]){
+        const offset=side*1.27;
+        drawHullWash(drawMeshWithOutline,{halfWidth:.42,halfLength:2.65,
+          phase:side<0?.37:0,washScale},plane.pos[0]+basis.right[0]*offset,
+          plane.pos[2]+basis.right[2]*offset,basis.fwd,basis.right);
+      }
+    }
     drawCivilAirTraffic(drawMeshWithOutline);
     drawSkylineRescue(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
@@ -14243,7 +14269,8 @@ const CENTRAL_PARK_SITES=[
 
     if (!scenicViewActive && !crash && viewIdx !== 1 &&
         !(harborArtInspection&&selectedMap.alaska)) {
-      const planeScale = viewIdx === 2 ? 1.45 : 1.0;
+      // Camera zoom must not enlarge the floats below their physics waterline.
+      const planeScale = viewIdx === 2 && selectedAircraft!=='seaplane' ? 1.45 : 1.0;
       const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
 
