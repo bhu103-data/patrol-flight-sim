@@ -1,0 +1,59 @@
+name: PATROL golden-hour sky and sea WebGL2 QA
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'scripts/nyc-golden-hour-browser-smoke.mjs'
+      - 'tests/tidewater-golden-hour.test.mjs'
+      - '.github/workflows/nyc-golden-hour-webgl.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: patrol-golden-hour-webgl
+  cancel-in-progress: false
+jobs:
+  golden-hour:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned before branch
+        uses: actions/checkout@v4
+        with:
+          ref: b834524cc818ea138248bcf2b1be79cd91c74c86
+          path: golden-hour-baseline
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regression golden hour envelope
+        run: node --test tests/tidewater-golden-hour.test.mjs
+      - name: Install Chromium software WebGL2 and pngjs
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve candidate and pinned baseline
+        run: |
+          python3 -m http.server 8891 --bind 127.0.0.1 >/tmp/patrol-golden-candidate.log 2>&1 &
+          python3 -m http.server 8892 --bind 127.0.0.1 --directory golden-hour-baseline >/tmp/patrol-golden-base.log 2>&1 &
+          for port in 8891 8892; do
+            for i in {1..30}; do
+              if curl -fsS "http://127.0.0.1:$port/index.html" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl --fail --silent --show-error "http://127.0.0.1:$port/index.html" >/dev/null
+          done
+      - name: Capture matching harbor noon dusk night and pinned dusk
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8891
+          PATROL_BASELINE_URL: http://127.0.0.1:8892
+        run: node scripts/nyc-golden-hour-browser-smoke.mjs
+        timeout-minutes: 13
+      - name: Upload evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-golden-hour-webgl2
+          path: artifacts/nyc-golden-hour/
+          retention-days: 7
+          if-no-files-found: warn
