@@ -109,3 +109,18 @@ The traditional roof geometry was rebuilt: each of the 11 floor levels has 3 *re
 Performance/robustness: the default local material atlas stays present until the optional CC0 photo finishes loading; a failed HTTPS request leaves the local fallback intact. This adds **two optional remote image requests**, so older statements that Chongqing uses only six bundled material images describe the earlier version, not this one. A new regression suite `tests/chongqing-detail.test.mjs` validates 33 curved roof instances, actual surface curvature, window lattice visibility and instance capacity; three checks passed in the isolated JavaScript runner.
 
 These changes use licensed real photographic *textures* and original detailed *geometry*, not a georeferenced high-poly scan of actual Chongqing buildings. Real browser visual inspection and a frame-rate benchmark remain outstanding.
+
+
+## Chongqing city streets, organic trees and local shadows — 20 November 2026
+
+The latest hero corridor now has a self-contained `assets/chongqing/streetlife.js` module that adds **10 animated cars**, including **5 yellow urban taxis** with a black-and-white check belt and roof lamps. Cars use a custom curved/chamfered six-meter sedan shell, translucent tinted windows, physically rounded wheels, metal hubs, headlights and tail lamps. Their speed follows the riverbank/terrace streets, and a pilot at street level cannot walk directly through nearby cars.
+
+The city road layer adds **312 centerline stripe instances**, **312 curb sections** and **108 stylized street lamps** as a small number of draw batches. The nearest passing car may receive two dynamically aimed short-range SpotLights; headlights are disabled for distant/high-altitude pilots and in Battery Saver mode. The original road network stays unchanged.
+
+**Source for the city taxi paint scheme:** Chongqing Municipal Transportation Commission's legal guidance ([2024 explanatory text, section on taxi livery](https://jtj.cq.gov.cn/zwgk_240/zfxxgkml/zcjd/wzjd/202405/P020240511544854567390.pdf)) identifies lemon-yellow central Chongqing taxi bodies and a black/white checker waistline. Our vehicles are newly authored geometry; no automobile manufacturer's protected logo or third-party car mesh was imported. The original provider names of texture source assets are not rendered in the game HUD.
+
+Old repeated conical trees have been replaced by broadleaf-like ellipsoid/icosahedral crowns, variably sized foliage clusters, branches and trunks, all in three instanced render groups. Distribution avoids major roads, landmark visibility and the hotpot starting area.
+
+Lighting is upgraded to a player-following **single 1024² soft directional shadow map** with a roughly 290-unit-wide local shadow area. The pilot, near-field roofs, tower silhouettes and cars cast shadows; the existing ground, stone, bridges and road meshes receive selected shadows. Only **High** graphics enables background tree crown shadow casting. **Battery Saver** disables the directional shadow pass and some ornamental traffic detail, to protect weak GPUs.
+
+Run `node --test tests/chongqing-streetlife.test.mjs` and `node --test tests/chongqing-vegetation.test.mjs` for the new tests, in addition to the previous geometry, interaction and PBR tests. The corresponding mock-JavaScript checks passed: five traffic/batching checks and four tree/shadow-budget checks. **Real browser graphics, authoritative 1:1 geographic correspondence, and actual FPS remain unverified**, so this is still a compact artistic simulation, not a photogrammetric digital twin.
