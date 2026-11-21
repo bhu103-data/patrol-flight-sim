@@ -59,14 +59,15 @@ test('survey-backed ridge mesh truly replaces synthetic heights',async()=>{
  const payload=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
  const measured=decodeVegasRidgeDEM(payload);
  const original=scene(),survey=scene(measured);
- assert.equal(survey.triangles.length,original.triangles.length);
- const ridgePeaks=triangles=>triangles.flatMap(face=>
-   [face.a,face.b,face.c].filter(p=>Math.abs(p[0])===811).map(p=>p[1]));
- const peaksOriginal=ridgePeaks(original.triangles);
- const peaksSurvey=ridgePeaks(survey.triangles);
- assert.equal(peaksOriginal.length,peaksSurvey.length);
- assert.ok(peaksSurvey.some((y,i)=>Math.abs(y-peaksOriginal[i])>8),
-   'real 3DEP values must affect actual rendered mesh vertices');
+ assert.equal(original.stats.mountainTriangles,768);
+ assert.equal(survey.stats.mountainTriangles,1536);
+ assert.equal(survey.stats.triangles,1554);
+ assert.notEqual(survey.triangles.length,original.triangles.length,
+   'verified 2D DEM must replace four-band 1D ridge silhouette');
+ const actualHeights=survey.triangles.flatMap(face=>
+   [face.a,face.b,face.c].map(p=>p[1]));
+ assert.ok(Math.max(...actualHeights)-Math.min(...actualHeights)>40,
+   'survey DEM mesh must preserve measured mountain relief');
  assert.ok(survey.triangles.every(face=>[face.a,face.b,face.c].every(p=>
    p.every(Number.isFinite))),'no invalid game vertices');
 });
