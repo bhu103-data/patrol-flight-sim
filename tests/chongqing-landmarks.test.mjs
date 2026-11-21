@@ -166,3 +166,22 @@ test('Liziba station uses original textured PBR facade even in low graphics mode
     Math.abs(o.z-monument.liziba.z)<=20).length,4,
     'Monorail opening and all collision volumes stay unchanged');
 });
+
+test('LiZiba translucent concourse exposes monorail without opaque side slab',()=>{
+  const {monument,meshes,obstacles}=setup();
+  const walls=meshes.filter(item=>item instanceof Mesh&&
+    item.material?.transparent===true&&item.material?.color===0x8aa6b3);
+  assert.equal(walls.length,2,'two transparent river-facing station sides');
+  assert.ok(walls.every(w=>w.material.opacity===.34&&w.material.depthWrite===false));
+  const frame=meshes.find(item=>item instanceof InstancedMesh&&item.capacity===120&&
+    item.material?.color===0x8198a6);
+  assert.ok(frame,'shared physical steel mullion batch');
+  assert.equal(frame.count,30);
+  assert.equal(frame.written,30,'all structural members set their instance transforms');
+  monument.setQuality('low');
+  assert.ok(walls.every(w=>w.visible!==false),'saving GPU resources must not reintroduce opaque wall');
+  assert.notEqual(frame.visible,false,'station frames stay visible in low graphics mode');
+  assert.equal(obstacles.filter(o=>Math.abs(o.x-monument.liziba.x)<1&&
+    Math.abs(o.z-monument.liziba.z)<=20).length,4,'unchanged portal collision volumes');
+  assert.doesNotMatch(code,/solid\(station\.x,railY\+2\.9,station\.z\+side\*18,frameLength,16\.3,4,concrete\)/);
+});
