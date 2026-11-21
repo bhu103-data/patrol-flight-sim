@@ -73,17 +73,25 @@ jobs:
           assert old['passed'] and new['passed']
           assert old['camera']==new['camera']
           assert old['resolution']==new['resolution']
+          assert len(old['shots'])==len(new['shots'])==5
           print('FIXED MANHATTAN CAMERA:', old['camera'], old['resolution'])
           print('WEATHER / SEASON / ZOOM:', old['weather'],old['season'],old['zoom'])
           for before,after in zip(old['shots'],new['shots']):
               assert before['name']==after['name']
               assert before['state']['clock']==after['state']['clock']
+              assert before['state']['weather']==after['state']['weather']
               assert before['state']['status']==after['state']['status']
               diffs={key:round(after['metrics'][key]-before['metrics'][key],5)
                   for key in ['meanLuma','p90p10Contrast','clippedChannelFraction',
                               'nearBlackFraction']}
+              roi_delta={key:round(after['metrics']['regionMeanLuma'][key]-
+                   before['metrics']['regionMeanLuma'][key],3)
+                   for key in before['metrics']['regionMeanLuma']}
               print(before['name'], 'before=',before['metrics'],
-                    'after=',after['metrics'],'delta=',diffs)
+                    'after=',after['metrics'],'delta=',diffs,'regionDelta=',roi_delta)
+              if before['name'] in ('noon','midnight'):
+                  assert abs(diffs['meanLuma'])<1.5, \
+                      'NYC fog patch changed daytime or midnight exposure unexpectedly'
           (root/'comparison.json').write_text(json.dumps({
               'camera':old['camera'],'conditions':{'season':'Summer','weather':'Clear',
               'zoom':'42','angle':'0'},'baseline':old['version'],'patch':new['version'],
@@ -91,7 +99,7 @@ jobs:
                 'before':a['metrics'],'after':b['metrics']} for a,b in
                 zip(old['shots'],new['shots'])]},indent=2))
           PY
-      - name: Upload eight screenshots, camera state and measurable contrast
+      - name: Upload ten screenshots, camera state and measurable contrast
         if: always()
         uses: actions/upload-artifact@v4
         with:
