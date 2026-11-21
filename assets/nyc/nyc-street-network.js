@@ -13,7 +13,7 @@ export function buildNycStreetNetwork({
   const roadY=streetY+.086,markY=streetY+.117,paveY=streetY+.154;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
-    skippedWater:0,skippedLOD:0,streetFurniture:0,
+    skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
     accessibleCorners:0,skippedBuildings:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
@@ -37,6 +37,13 @@ export function buildNycStreetNetwork({
     return x>l-9&&x<r+9&&z>s-8&&z<n+8;
   };
   function permitted(x,z){
+    // Never paint a city grid through the park. Transverse drives are built
+    // by central-park.js instead, with paths aligned to the park itself.
+    const u=x-grid.tilt*z-grid.offset;
+    if(Math.abs(u)<grid.parkHalfWidth+1.7 &&
+       Math.abs(z-grid.parkCenter)<grid.parkHalfLength+1.7){
+      stats.skippedPark++;return false;
+    }
     if(inTimes(x,z)||detailBand(x,z)<2){stats.skippedLOD++;return false;}
     if(terrainAt(x,z)<waterY+1.55){stats.skippedWater++;return false;}
     return true;
@@ -297,7 +304,7 @@ export function buildNycStreetNetwork({
   // Unified surface-road generation. Positions align with the EXISTING
   // Manhattan building parcel basis (24 x 33 compressed game units).
   const segmentMap=new Set();
-  for(let i=-10;i<=8;i++)for(let j=-17;j<=9;j++){
+  for(let i=-10;i<=8;i++)for(let j=-17;j<=12;j++){
     const a=[avenueX(i,j*grid.blockLength),j*grid.blockLength],
       b=[avenueX(i,(j+1)*grid.blockLength),(j+1)*grid.blockLength],
       key='a'+i+':'+j;
@@ -305,7 +312,7 @@ export function buildNycStreetNetwork({
     segmentMap.add(key);
     streetSegment(a,b,'avenue',i,j);
   }
-  for(let j=-16;j<=9;j++)for(let i=-10;i<=7;i++){
+  for(let j=-16;j<=12;j++)for(let i=-10;i<=7;i++){
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
