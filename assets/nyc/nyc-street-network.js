@@ -77,7 +77,7 @@ export function buildNycStreetNetwork({
     const normal=[dz/length,-dx/length],along=[dx/length,dz/length];
     const d=width*.5+1.18;
     const x=mid[0]+normal[0]*side*d,z=mid[1]+normal[1]*side*d;
-    if(!siteClear(x,z,.54))return;
+    if(!siteClear(x,z,2.35))return;
     const base=streetY+.18,frame=[.27,.31,.34],
       aluminum=[.62,.67,.69],glass=[.19,.33,.40],
       green=[.18,.38,.30],navy=[.12,.23,.42];
@@ -523,12 +523,12 @@ export function buildNycStreetNetwork({
   // pedestrian plaza; no guesswork on actual permit/vendor coordinates.
   // Times Square vendors only stand on exposed, dry pedestrian paving.
   for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]]){
-    if(siteClear(x,z,1.05))hotDogCart(x,z,v);
+    if(siteClear(x,z,2.35))hotDogCart(x,z,v);
   }
   // Downtown commercial corridor: two hand-placed pedestrian corners,
   // skipping any place that is flooded or inside the building heightfield.
   for(const [x,z,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
-    if(detailBand(x,z)>=2 && siteClear(x,z,1.05) && !nearOld(x,z,3.1))
+    if(detailBand(x,z)>=2 && siteClear(x,z,2.35) && !nearOld(x,z,3.1))
       hotDogCart(x,z,k);
   }
   return stats;
