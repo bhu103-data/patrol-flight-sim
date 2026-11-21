@@ -56,3 +56,20 @@ test('noon, midnight and non-Manhattan shaders keep their original result',()=>{
   assert.match(world,/float fogAmt=1\.0-exp\(-dist\*\(0\.0008\+0\.009\*uAtmosphere\.w\)\)/,
     'world terrain fog and other worlds are unchanged');
 });
+
+test('fixed Manhattan camera captures the true summer horizon in addition to UI dusk',async()=>{
+  const script=await readFile(new URL('../scripts/nyc-time-visibility-browser.mjs',import.meta.url),'utf8');
+  assert.match(script,/name:'noon',value:'12'/);
+  assert.match(script,/name:'dusk',value:'18\\.5'/);
+  assert.match(script,/name:'solar-dusk',value:'19\\.5'/);
+  assert.match(script,/name:'midnight',value:'0'/);
+  assert.match(script,/o\\.value='19\\.5'/,'test-only time option does not touch game UI');
+  const lat=41*Math.PI/180,declination=22*Math.PI/180;
+  const elevation=hour=>Math.asin(Math.sin(lat)*Math.sin(declination)+
+    Math.cos(lat)*Math.cos(declination)*Math.cos((hour-12)*Math.PI/12));
+  assert.ok(elevation(18.5)*180/Math.PI>8,'18:30 is still sunlit in summer');
+  assert.ok(elevation(19.5)*180/Math.PI<0,'19:30 reaches the actual sun horizon');
+  const sunY=Math.sin(elevation(19.5));
+  const twilight=Math.max(0,Math.min(1,1-Math.abs(sunY+.04)/.31));
+  assert.ok(twilight>.9,'horizon capture exercises the strongest dusk-haze blending');
+});
