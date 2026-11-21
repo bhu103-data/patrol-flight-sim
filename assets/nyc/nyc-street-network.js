@@ -307,10 +307,10 @@ export function buildNycStreetNetwork({
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
-  function signal(x,z,phase=0){
+  function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;
     // NYC yellow traffic signal heads and dark pedestrian walk/countdown box.
-    box(x,base+2.05,z,.115,4.10,.115,iron);
+    box(x,base+2.52,z,.115,5.04,.115,iron);
     box(x,base+4.08,z,.20,.14,.20,iron);
     beam([x,base+3.93,z],[x-.96,base+3.93,z],.075,steel);
     box(x-.96,base+3.59,z,.36,.84,.35,signalYellow);
@@ -320,26 +320,68 @@ export function buildNycStreetNetwork({
       const [delta,active]=lights[k];
       const bright=k===(phase%3);
       const rgb=bright?active:active.map(v=>v*.26);
-      box(x-.96,base+3.59+delta,z+.224,.175,.17,.028,rgb);
+      const px=x-.96,py=base+3.59+delta,pz=z+.226;
+      // Octagonal glass/lens geometry reads round rather than a square box
+      // at close camera distances; inner light and metallic edge are separate.
+      for(let segment=0;segment<10;segment++){
+        const a=segment*Math.PI/5,b=(segment+1)*Math.PI/5;
+        const ring=(ang,r,zLift)=>[px+Math.cos(ang)*r,
+          py+Math.sin(ang)*r,pz+zLift];
+        addQuad(ring(a,.108,-.019),ring(b,.108,-.019),
+          ring(b,.080,.001),ring(a,.080,.001),[.13,.15,.17]);
+        addQuad(ring(a,.078,.002),ring(b,.078,.002),
+          ring(b,.024,.004),ring(a,.024,.004),rgb);
+      }
       box(x-.96,base+3.59+delta,z+.184,.25,.04,.12,iron);
     }
     box(x,base+2.48,z+.13,.37,.58,.26,iron);
     box(x,base+2.53,z+.278,.25,.40,.028,
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
+    // NYC DOT green street-name blades and ONE WAY wayfinding; labels are
+    // simulated in the compressed game grid, not official surveyed signs.
+    if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
+      const named=j===-1?'W 42 ST':j===0?'W 44 ST':
+        j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
+      box(x,base+4.65,z+.025,1.62,.32,.12,[.055,.31,.22]);
+      box(x,base+4.65,z+.093,1.46,.245,.022,[.09,.41,.31]);
+      lettering(named,[x,base+4.65,z+.111],1.34,.19,[.90,.94,.88]);
+      stats.streetNamePlates++;
+    }
     stats.signals++;
   }
   function crosswalk(x,z,i,j){
     const s=grid.blockWidth;
     // Opposing ladder crosswalks plus recessed stop bars.
     for(const side of [-1,1]){
-      const zz=z+side*3.75;
+      // Avenue crosses this junction on a slight diagonal. All ladder bars
+      // and stop bars follow that road bearing, avoiding the previous
+      // axis-aligned, visibly pasted-on road markings.
+      const c=[x+ave[0]*side*3.75,z+ave[1]*side*3.75];
       for(let k=-3;k<=3;k++){
-        const xk=x+k*.77;
-        rect(xk,zz,.47,1.30,paint,markY+.006);
+        orientedRect(c[0]+cross[0]*k*.77,
+          c[1]+cross[1]*k*.77,.47,1.30,ave,paint,markY+.006);
         stats.crosswalks++;
       }
-      rect(x,z+side*5.0,s*.32,.10,paint,markY+.004);
+      orientedRect(x+ave[0]*side*5,z+ave[1]*side*5,
+        s*.32,.10,ave,paint,markY+.004);
+      // Second pedestrian crossing, across the numbered east-west side street
+      // where the narrow side-road corridor is present.
+      if(hash(i,j,31)>.30){
+        for(let k=-3;k<=3;k++){
+          orientedRect(x+side*4.20,z+k*.73,
+            .46,1.21,[1,0],paint,markY+.009);
+          stats.crosswalks++;
+        }
+      }
+    }
+    // Rare edge hatching and corner protection, not repeated at every block.
+    if(hash(i,j,72)>.77){
+      for(const side of [-1,1])for(let k=0;k<3;k++){
+        orientedRect(x+side*(4.80+k*.39),z+side*4.92,
+          .085,1.0,[.64,side*.76],paint,markY+.009);
+        stats.intersectionHatching++;
+      }
     }
     // Sewer chamber and slab-joint at the crosswalk nose.
     if((i+j)%3===0){
@@ -350,7 +392,9 @@ export function buildNycStreetNetwork({
     }
     const cornerX=x+4.48,cornerZ=z+4.55;
     if(hash(i,j,3)>.40 && siteClear(cornerX,cornerZ,.30)){
-      signal(cornerX,cornerZ,(Math.abs(i)+j+30)%3);
+      // Alternating red and green visual state, rather than random yellow
+      // at most corners. Still static, not a vehicle control simulation.
+      signal(cornerX,cornerZ,(Math.abs(i+j)%2)?2:0,i,j);
       stats.intersections++;
     }
     // Pedestrian tactile curb ramp pads; restricted to featured intersections.
