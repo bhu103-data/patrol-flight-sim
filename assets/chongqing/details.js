@@ -124,6 +124,32 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       put('carved',x,y+2.25,front+.4,4.5,.38,.65);
       if(j%3===0)put('window',x,y+3.3,front+.29,2.1,1.15,.15);
     }
+    // River-facing frontage matters most: Hongyadong is primarily photographed
+    // from the Jialing River (negative z), not the inland side of the hillside.
+    const waterfront=z-12.2;
+    put('carved',hongX,y+1.85,waterfront-4.7,w+7,.75,10.6);
+    put('amber',hongX,y+9.55,waterfront-6.5,w+8,.22,.42);
+    put('timber',hongX,y+6.5,waterfront-6.9,w+7,.48,.57);
+    for(let j=0;j<sections;j++){
+      const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
+      put('timber',x,y+5.2,waterfront-1.3,1.3,9.2,1.0);
+      put('window',x,y+5.6,waterfront-2.1,4.0,5.6,.18);
+      put('carved',x,y+2.8,waterfront-2.5,4.8,.39,.7);
+      put('carved',x,y+8.9,waterfront-3.1,5.6,.5,.8);
+      put('timber',x,y+3.65,waterfront-7.2,.38,3.7,.45);
+      if(j%2===0){
+        lantern(x,y+8.0,waterfront-5.6,1.05);
+        beam('timber',[x,y+9,waterfront-1],[x,y+7.8,waterfront-4.9],.32);
+      }
+    }
+    // Layers of timber balcony rails, with a believable opening at the midpoint.
+    for(let j=0;j<sections;j++){
+      if(j===Math.floor(sections/2))continue;
+      const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
+      put('carved',x,y+4.25,waterfront-7.5,(w-8)/sections-.35,.35,.38);
+      put('timber',x,y+2.1,waterfront-7.45,.3,2.2,.42);
+    }
+    put('amber',hongX,y+10.52,z-18,w+8,.19,.38);
     // Cantilever posts and infill balcony balustrades.
     for(let j=0;j<=sections;j++){
       const x=hongX-w/2+4+j*(w-8)/sections;
@@ -310,6 +336,34 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     }
     if(roofRank%3===0){
       for(let row=1;row<5;row++)put('blue',x+b.w/2+.18,y-row*8,z,.13,1.5,b.d*.66);
+    }
+  }
+
+  // Close-range modern facades have floor slabs, recessed glass and metal mullions;
+  // distant city blocks retain simple geometry to respect the GPU budget.
+  let facadeBlocks=0;
+  for(const b of obstacles){
+    if(facadeBlocks>=26)break;
+    if(Math.hypot(b.x-175,b.z-210)>490||!Number.isFinite(b.base))continue;
+    if((b.top-b.base)<38||b.w<17||b.d<16)continue;
+    facadeBlocks++;
+    const floors=Math.min(18,Math.floor((b.top-b.base)/7.4));
+    for(let floor=1;floor<floors;floor++){
+      const y=b.base+floor*(b.top-b.base)/floors;
+      for(const face of [-1,1]){
+        const front=b.z+face*(b.d/2+.24);
+        put('stone',b.x,y,front,b.w+.22,.43,.38);
+        // Dark glazing sits behind its mullions; alternate lit and dark floors.
+        if(floor%4!==0){
+          put('window',b.x,y+2.7,front+face*.18,b.w*.78,4.65,.14);
+          for(let c=-2;c<=2;c++){
+            put('rail',b.x+c*(b.w*.135),y+2.8,front+face*.28,.14,4.8,.18);
+          }
+        }
+      }
+    }
+    for(const side of [-1,1]){
+      put('rail',b.x+side*(b.w/2+.28),b.base+(b.top-b.base)/2,b.z+b.d/2+.4,.3,b.top-b.base,.35);
     }
   }
 
