@@ -411,6 +411,8 @@
     [-140,-611,50,78],    // Liberty Island
     [-124,-603,103,180],  // Harbor entry and Liberty sight corridor
     [82,-342,78,118],     // Brooklyn Bridge and waterfront
+    [285,-330,105,186],   // Brooklyn bridgehead / DUMBO streets and lots
+    [372,-285,86,162],   // Brooklyn inland blocks beyond bridge approach
     [62,103,64,122],    // Central Park South / 59th Street
     [79,206,65,123],    // The Lake, Bethesda & Great Lawn
     [105,305,67,128],   // Upper Reservoir / Harlem Meer
@@ -11236,7 +11238,11 @@ const CENTRAL_PARK_SITES=[
         if(!response.ok)throw new Error('HTTP '+response.status);
         const snapshot=await response.json();
         if(snapshot.schema!=='patrol-nyc-oti-footprints-v1'||
-           !Array.isArray(snapshot.footprints)||snapshot.footprints.length>90)
+           !Array.isArray(snapshot.footprints)||snapshot.footprints.length>200||
+           !snapshot.footprints.every(row=>Array.isArray(row)&&row.length>=7&&
+             Number.isFinite(row[1])&&Number.isFinite(row[2])&&
+             Number.isFinite(row[3])&&Number.isFinite(row[4])&&
+             Number.isFinite(row[5])&&Array.isArray(row[6])))
           throw new Error('Unrecognized NYC footprint snapshot');
         selectedMap.city.officialFootprints=snapshot.footprints;
       }catch(error){
