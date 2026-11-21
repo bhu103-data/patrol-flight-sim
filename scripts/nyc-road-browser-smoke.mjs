@@ -402,7 +402,42 @@ try{
   check(far.chunks.every(c=>c.lod===0),
    'Far camera retains too many detailed road chunks: '+JSON.stringify(far));
   await capture('14-dumbo-road-far-rain.png');
-  petalwakeQa={near,wet,mid,far,temporal,lodSweep,
+  let jointTraffic=null;
+  if(process.env.PATROL_NYC_JOINT_QA==='1'){
+   // This runs the actual #88 spawned taxi + sedan alongside #100 rails
+   // and #102 LOD in the same WebGL scene without changing simulation time.
+   await page.locator('#hotelTarget').selectOption(
+    {label:'Brooklyn Bridge · Deck View'});
+   await page.locator('#hotelZoom').evaluate(el=>{
+    el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
+   });
+   await page.waitForTimeout(1400);
+   const vehicleFrame=async()=>{
+    const c=await page.evaluate(()=>window.__patrolNycRoadLodQa?.()?.bridgeCars);
+    check(c?.length===2,'#88 taxi/sedan absent from combined NYC scene: '+JSON.stringify(c));
+    check(c.every(v=>v.routePoints>=5&&['sedan','taxi'].includes(v.kind)&&
+     [v.pose.x,v.pose.y,v.pose.z,v.pose.yaw].every(Number.isFinite)),
+      'Invalid #88 joint traffic pose: '+JSON.stringify(c));
+    check(c.every(v=>v.pose.onBridge||(!v.lot&&v.terrain>13.0)),
+     'Bridgehead car clips building or water on street: '+JSON.stringify(c));
+    return c;
+   };
+   const first=await vehicleFrame();
+   await capture('15-bridgehead-joint-traffic-early.png');
+   const second=await vehicleFrame();
+   await capture('16-bridgehead-joint-traffic-later.png');
+   const third=await vehicleFrame();
+   const displacements=first.map((car,i)=>Number(Math.hypot(
+    car.pose.x-third[i].pose.x,car.pose.z-third[i].pose.z).toFixed(2)));
+   check(displacements.some(d=>d>.8),
+    'Joint bridgehead traffic is not moving in the live WebGL scene: '+
+     JSON.stringify(displacements));
+   jointTraffic={first,second,third,displacements,shots:[
+    '15-bridgehead-joint-traffic-early.png',
+    '16-bridgehead-joint-traffic-later.png']};
+   console.log('[PATROL QA] Joint PR 88+100+102 bridge cars',JSON.stringify(jointTraffic));
+  }
+  petalwakeQa={near,wet,mid,far,temporal,lodSweep,jointTraffic,
    cadence:{dry:dryCadence,wet:wetCadence,mid:midCadence}};
   await page.evaluate(()=>{
    const el=document.getElementById('skyWeather');

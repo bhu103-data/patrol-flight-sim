@@ -4977,8 +4977,110 @@ const CENTRAL_PARK_SITES=[
       yaw:Math.atan2(b[0]-a[0],b[1]-a[1])};
   }
 
+  // Bridgehead connector uses authored street anchors; never a shortcut.
+  // Road topology stays the authored CITY_STREETS geometry. The only
+  // modifications are safe, inset terminal turning points for these cars.
+  function makeBrooklynBridgeheadCarRoute(streets,bridge,terrainAt,lotAt,waterY){
+    const bridgeLine=streets[0],head=bridgeLine?.at(-1);
+    const reach=bridge.halfLength+bridge.ramp;
+    if(!head||Math.abs(head[0]-(bridge.x+reach))>.01||
+       Math.abs(head[1]-bridge.z)>.01)return null;
+    const branch=streets.find(path=>path!==bridgeLine&&path.length>2&&
+      path[0][0]===head[0]&&path[0][1]===head[1]&&
+      path[1][0]>head[0]);
+    if(!branch)return null;
+    const points=bridgeLine.map(p=>[p[0],p[1]]);
+    // Keep the same authored-road full-width shore and lot clipping rule.
+    for(let i=1;i<branch.length&&i<=3;i++){
+      const a=branch[i-1],b=branch[i];
+      const segments=clipAuthoredNycStreet(a,b,terrainAt,lotAt,waterY);
+      if(segments.length!==1)break;
+      const [start,end]=segments[0];
+      if(Math.hypot(start[0]-a[0],start[1]-a[1])>.1||
+         Math.hypot(end[0]-b[0],end[1]-b[1])>.1)break;
+      points.push([b[0],b[1]]);
+    }
+    if(points.length<=bridgeLine.length)return null;
+    const inset=8,first=points[0],second=points[1];
+    const firstLength=Math.hypot(second[0]-first[0],second[1]-first[1]);
+    const end=points.at(-1),before=points.at(-2);
+    const lastLength=Math.hypot(end[0]-before[0],end[1]-before[1]);
+    if(firstLength<inset*2||lastLength<inset*2)return null;
+    points[0]=first.map((v,i)=>v+(second[i]-v)*inset/firstLength);
+    const turnCenter=end.map((v,i)=>v+(before[i]-v)*inset/lastLength);
+    points[points.length-1]=turnCenter;
+    // A continuous U-turn has radius 1.07 and stays inside the tested
+    // 12.1-unit street corridor. Test its entire swept vehicle footprint,
+    // not merely the center point, before enabling the connector.
+    const radius=1.07,vehicleEnvelope=2.45;
+    for(const sampleRadius of [0,radius,radius+vehicleEnvelope])
+      for(let k=0;k<24;k++){
+        const angle=k*Math.PI/12;
+        const x=turnCenter[0]+sampleRadius*Math.cos(angle);
+        const z=turnCenter[1]+sampleRadius*Math.sin(angle);
+        if(terrainAt(x,z)<=waterY+.68||lotAt(x,z))return null;
+      }
+    return makeTrafficRoute(points);
+  }
+
+  function bridgeheadTrafficPose(actor,time){
+    const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
+    const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
+    const phase=((time*pace+offset)%period+period)%period;
+    const first=route.points[0],last=route.points.at(-1);
+    const tangent=(a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],m=Math.hypot(dx,dz)||1;
+      return [dx/m,dz/m];
+    };
+    const onArc=(center,u,theta,atStart)=>{
+      const normal=[u[1],-u[0]],c=Math.cos(theta),si=Math.sin(theta);
+      const sign=atStart?-1:1;
+      const x=center[0]+sign*rad*(normal[0]*c+u[0]*si);
+      const z=center[1]+sign*rad*(normal[1]*c+u[1]*si);
+      const vx=sign*(u[0]*c-normal[0]*si);
+      const vz=sign*(u[1]*c-normal[1]*si);
+      const onBridge=atStart;
+      return {x,z,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+        yaw:Math.atan2(vx,vz),onBridge,turning:true};
+    };
+    if(phase>=route.total&&phase<route.total+turnLength)
+      return onArc(last,tangent(route.points.at(-2),last),
+        (phase-route.total)/rad,false);
+    if(phase>=2*route.total+turnLength)
+      return onArc(first,tangent(first,route.points[1]),
+        (phase-2*route.total-turnLength)/rad,true);
+    const forward=phase<route.total;
+    const distance=forward?phase:2*route.total+turnLength-phase;
+    const direction=forward?1:-1;
+    const i=Math.max(1,route.lengths.findIndex((at,index)=>
+      index>0&&at>=distance));
+    const a=route.points[i-1],b=route.points[i];
+    const fraction=(distance-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
+    let [ux,uz]=tangent(a,b);
+    // Smooth bridgehead bends' heading and lane offset across a 4-unit
+    // approach on either side; preserve the original centerline geometry.
+    for(let j=Math.max(1,i-1);j<=Math.min(route.points.length-2,i);j++){
+      const delta=distance-route.lengths[j],blend=4;
+      if(Math.abs(delta)>blend)continue;
+      const before=tangent(route.points[j-1],route.points[j]);
+      const after=tangent(route.points[j],route.points[j+1]);
+      const t=(delta+blend)/(2*blend),weight=t*t*(3-2*t);
+      const bx=before[0]*(1-weight)+after[0]*weight;
+      const bz=before[1]*(1-weight)+after[1]*weight;
+      const len=Math.hypot(bx,bz)||1;
+      ux=bx/len;uz=bz/len;break;
+    }
+    const yaw=Math.atan2(ux*direction,uz*direction);
+    const x=a[0]+(b[0]-a[0])*fraction+Math.cos(yaw)*rad;
+    const z=a[1]+(b[1]-a[1])*fraction-Math.sin(yaw)*rad;
+    const onBridge=i<=actor.bridgeSegmentCount;
+    return {x,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+      z,yaw,onBridge};
+  }
+
   function trafficPose(actor,time) {
     if(actor.parked)return actor.parked;
+    if(actor.bridgehead)return bridgeheadTrafficPose(actor,time);
     const {route,pace,offset,kind}=actor;
     const cycle=(time*pace+offset)%(actor.vegas||actor.oneWay?route.total:2*route.total);
     const direction=cycle<route.total?1:-1;
@@ -4987,15 +5089,18 @@ const CENTRAL_PARK_SITES=[
     const a=route.points[i-1],b=route.points[i];
     const fraction=(distance-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
     const yaw=Math.atan2((b[0]-a[0])*direction,(b[1]-a[1])*direction);
+    // Only the bridge segment has elevated deck height.
+    const onBridge=!!actor.bridgehead&&i<=actor.bridgeSegmentCount;
     const lateral=kind==='walker'?(actor.laneOffset??4.60):
-      actor.expressway?(actor.laneOffset??1.65):actor.vegas?VEGAS_FAST_LANE:actor.bridge?1.07:1.76;
+      actor.expressway?(actor.laneOffset??1.65):actor.vegas?VEGAS_FAST_LANE:
+      (actor.bridge||actor.bridgehead)?1.07:1.76;
     const x=lerp(a[0],b[0],fraction)+Math.cos(yaw)*lateral;
     const z=lerp(a[1],b[1],fraction)-Math.sin(yaw)*lateral;
     const y=actor.expressway?lerp(a[2],b[2],fraction)+0.055:
       actor.vegas?sampleTerrainHeight(x,z)+0.30:
       actor.dc?WATER_H+2.56:
-      actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
-    return {x,y,z,yaw};
+      (actor.bridge||onBridge)?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
+    return {x,y,z,yaw,onBridge};
   }
 
   function prepareCityTraffic() {
@@ -5016,6 +5121,15 @@ const CENTRAL_PARK_SITES=[
       const reach=bridge.halfLength+bridge.ramp;
       for(const side of [-1,1]) for(let x=bridge.x-reach;x<bridge.x+reach;x+=12) {
         railSections.push({start:x,end:Math.min(x+12,bridge.x+reach),side,broken:false});
+      }
+      const connector=makeBrooklynBridgeheadCarRoute(CITY_STREETS,bridge,
+        sampleTerrainHeight,cityLotAt,WATER_H);
+      // Existing bidirectional route movement provides a safe turnaround.
+      if(connector)for(let j=0;j<2;j++){
+        cityTraffic.push({kind:j?'sedan':'taxi',bridgehead:true,
+          bridgeSegmentCount:CITY_STREETS[0].length-1,
+          route:connector,offset:connector.total*(.18+j*.46),
+          pace:5.0+j*.6,livery:j});
       }
       for (const [i,street] of CITY_STREETS.slice(0,3).entries()) {
         const route=makeTrafficRoute(street);
@@ -5544,7 +5658,8 @@ const CENTRAL_PARK_SITES=[
         }
         continue;
       }
-      const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
+      const pose=actor.wreck || trafficPose(actor,sceneryTime);
+      const {x,y,z,yaw}=pose;
       const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
       if (distanceSq>455*455) continue;
       // PATROL_NYC_TRAFFIC_WATERLINE_V2: traffic must obey the same
@@ -5553,7 +5668,8 @@ const CENTRAL_PARK_SITES=[
       // a car through a warehouse. The raised bridge and expressway are
       // intentional exceptions (the terrain/parcel below is not their deck).
       // Wrecks remain governed by crash physics.
-      if(selectedMap.city && !actor.bridge && !actor.expressway &&
+      if(selectedMap.city && !actor.bridge &&
+         !(actor.bridgehead&&pose.onBridge) && !actor.expressway &&
          !actor.wreck &&
          (sampleTerrainHeight(x,z)<=WATER_H+.08 || cityLotAt(x,z)))continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
@@ -7637,6 +7753,16 @@ const CENTRAL_PARK_SITES=[
             if(new URLSearchParams(location.search).has('nycRoadQa')){
               window.__patrolNycRoadLodQa=()=>({
                 camera:[...camPos],
+                // Read-only live PR #88 vehicle states. Only available
+                // on the opted-in ?nycRoadQa=1 route; no time mutation.
+                bridgeCars:cityTraffic.filter(actor=>actor.bridgehead).map(actor=>{
+                  const pose=trafficPose(actor,sceneryTime);
+                  return {kind:actor.kind,pace:actor.pace,routePoints:actor.route.points.length,
+                    pose:{x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,
+                      onBridge:!!pose.onBridge,turning:!!pose.turning},
+                    terrain:sampleTerrainHeight(pose.x,pose.z),
+                    lot:!pose.onBridge&&!!cityLotAt(pose.x,pose.z)};
+                }),
                 wetness:nyStreetWetness,
                 chunks:nycRoadDetailChunks.map(chunk=>({
                   id:chunk.id,
