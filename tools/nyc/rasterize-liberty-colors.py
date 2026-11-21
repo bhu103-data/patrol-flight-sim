@@ -79,6 +79,19 @@ for index, (src, dst, material_index) in enumerate(zip(uv_src, uv_atlas, ids)):
     v0 = 1 - v1 - v2
     inside = (v0 >= -0.000001) & (v1 >= -0.000001) & (v2 >= -0.000001)
     if not np.any(inside):
+        # Smart-project produces thousands of sub-pixel UV islands. They still
+        # appear on the rendered mesh, so at least the nearest atlas texel
+        # must receive a source-colored sample rather than remaining black.
+        at = np.mean(dst, axis=0)
+        uv = np.mean(src, axis=0)
+        tex_h, tex_w = texture.shape[:2]
+        px = int(np.floor(np.mod(uv[0], 1) * (tex_w - 1)))
+        py = int(np.floor((1 - np.mod(uv[1], 1)) * (tex_h - 1)))
+        tx = int(np.clip(round(at[0] * (W - 1)), 0, W - 1))
+        ty = int(np.clip(round((1 - at[1]) * (H - 1)), 0, H - 1))
+        canvas[ty, tx] = texture[py, px]
+        painted[ty, tx] = True
+        triangles_with_coverage += 1
         continue
     triangles_with_coverage += 1
     source_u = v0[inside] * src[0, 0] + v1[inside] * src[1, 0] + v2[inside] * src[2, 0]
@@ -94,8 +107,12 @@ coverage = float(np.mean(painted))
 if coverage < 0.08 or triangles_with_coverage < 1000:
     raise RuntimeError(f"Insufficient UV atlas coverage: {coverage:.3%}; triangles {triangles_with_coverage}")
 # Dilate non-island pixels for stable linear filtering at UV seams.
-for _ in range(3):
-    for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+# Nearest-neighbor source-color expansion. Without this, raster pixels miss
+# sub-pixel islands and the native renderer samples black texture values.
+# Expand from near pixels first; jumping larger distances only fills remaining
+# unoccupied padding and keeps local original material colors dominant.
+for radius in (1, 1, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
+    for dy, dx in ((0, -radius), (0, radius), (-radius, 0), (radius, 0)):
         sy0, sy1 = max(0, -dy), min(H, H - dy)
         sx0, sx1 = max(0, -dx), min(W, W - dx)
         dy0, dy1 = sy0 + dy, sy1 + dy
@@ -104,11 +121,16 @@ for _ in range(3):
         canvas[dy0:dy1, dx0:dx1][update] = canvas[sy0:sy1, sx0:sx1][update]
         painted[dy0:dy1, dx0:dx1][update] = True
 
+if float(np.mean(painted)) < 0.999:
+    raise RuntimeError("CPU color extension left uncovered texels")
+
 destination.parent.mkdir(parents=True, exist_ok=True)
 Image.fromarray(canvas).save(destination, "PNG", optimize=True)
 mean = canvas[painted].mean(axis=0).tolist()
 report = {"uvTriangles":len(uv_src),"coloredTriangles":triangles_with_coverage,
-          "atlasCoverageBeforePadding":coverage,"meanPaintedRGB":mean,
+          "atlasCoverageBeforePadding":coverage,
+          "atlasCoverageAfterPadding":float(np.mean(painted)),
+          "meanPaintedRGB":mean,
           "atlasBytes":destination.stat().st_size}
 print("PATROL_LIBERTY_CPU_ATLAS " + json.dumps(report))
 if destination.stat().st_size > 4194304 or max(mean) < 20:
