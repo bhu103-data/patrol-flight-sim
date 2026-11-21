@@ -71,9 +71,23 @@ try{
  check(bridge.webgl&&bridge.graphicsError===0,
    'Brooklyn Bridge view lost WebGL: '+JSON.stringify(bridge));
  await page.screenshot({path:out+'/02-brooklyn-bridgehead.png',fullPage:true});
+ // Also inspect the residential/warehouse blocks. The bridge deck camera
+ // fills most of the frame with cables and cannot assess street facades.
+ await page.locator('#hotelTarget').selectOption({label:'DUMBO · Warehouse Blocks'});
+ await page.waitForTimeout(1800);
+ const dumbo=await page.evaluate(()=>{
+   const target=document.getElementById('hotelTarget');
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   return {camera:target?.options[target.selectedIndex]?.textContent,
+     webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
+   dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
+ await page.screenshot({path:out+'/03-dumbo-warehouse.png',fullPage:true});
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,
-   screenshots:['00-harbor.png','01-city-loaded.png','02-brooklyn-bridgehead.png'],warnings};
+ result={passed:true,state,bridge,dumbo,
+   screenshots:['00-harbor.png','01-city-loaded.png',
+     '02-brooklyn-bridgehead.png','03-dumbo-warehouse.png'],warnings};
 }catch(e){
  result={passed:false,error:e.stack||String(e),errors,warnings};
  try{await page.screenshot({path:out+'/FAILED.png',fullPage:true});}catch{}
