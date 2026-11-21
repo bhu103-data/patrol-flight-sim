@@ -86,3 +86,8 @@ Additional regression tests: `node --test tests/chongqing-detail.test.mjs` and `
 ### More realistic Chongqing night streets
 
 `assets/chongqing/streetlife.js` adds 10 moving cars (5 yellow Chongqing-style taxis), realistic road markings, curbs, 108 streetlights and nearby aimed vehicle headlights. Distant conical trees were replaced with varied broadleaf clusters and branches; the active area has a localized soft shadow system, which can be disabled with Low graphics. Texture license records remain in [CHONGQING_LICENSES.md](CHONGQING_LICENSES.md). No source-provider names are placed in the game UI. Further regression checks: `node --test tests/chongqing-streetlife.test.mjs` and `node --test tests/chongqing-vegetation.test.mjs`.
+
+
+### Chongqing wet-street update
+
+Wet asphalt now features 192 custom-shaped local puddles and 102 subtle light-reflection strips in two GPU-friendly batches. A pedestrian zebra crossing near the hotpot district has 2 operating traffic signals; westbound cars stop on red and continue on green. Low graphics mode hides extra wet-road layers. Both the effects and street furniture are locally authored, with no provider branding. Regressions: `node --test tests/chongqing-wetstreets.test.mjs`, `node --test tests/chongqing-streetlife.test.mjs`. These effects are approximations rather than actual screen-space / ray-traced urban reflections or a 1:1 georeferenced road.
