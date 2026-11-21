@@ -53,7 +53,7 @@ test('no new lot files, collision rules, roads or flying controls',()=>{
 test('solid cornices stay within the official-footprint batch budget and face outward',()=>{
  let totalQuads=0;
  for(const lot of source.footprints)totalQuads+=build(lot).quads.length;
- assert.equal(totalQuads,8894,'OTI physical doors and one recessed second-storey window');
+ assert.equal(totalQuads,8894,'source window 119028 replaces overlapping facade details');
  assert.ok(totalQuads<9000,'original OTI facade batch budget');
  const outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
  // Both valid NYC polygon winding directions must keep cap normals correct.
@@ -116,22 +116,22 @@ test('entrance center is truly cut from original wall and glazing faces outside 
 });
 
 test('pedestrian scenic camera is anchored to an actual OTI doorway source edge',()=>{
- const lot=source.footprints.find(lot=>lot[0]===119028);
+ const lot=source.footprints.find(lot=>lot[0]===65190);
  assert.ok(lot,'OTI source doorway parcel exists');
- const ring=lot[6],a=ring[12],b=ring[(12+1)%ring.length];
+ const ring=lot[6],a=ring[11],b=ring[(11+1)%ring.length];
  assert.ok(a&&b,'inspected source edge exists');
  const midpoint=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
- assert.ok(Math.abs(midpoint[0]+102.88)<.02);
- assert.ok(Math.abs(midpoint[1]+487.14)<.02);
- assert.match(html,/name:'Lower Manhattan · Street Entrance',x:-102\.88,z:-487\.14,height:3\.50/);
- assert.match(html,/bearing:201\.7,radius:5\.6,rise:\.55/);
+ assert.ok(Math.abs(midpoint[0]+146.335)<.02);
+ assert.ok(Math.abs(midpoint[1]+475.815)<.02);
+ assert.match(html,/name:'Lower Manhattan · Street Entrance',x:-146\.335,z:-475\.815,height:2\.10/);
+ assert.match(html,/bearing:293\.92,radius:24\.0,rise:1\.30/);
  // Scenic zoom 68 now places the camera close to the original OTI edge,
  // not 9+ units down the generic urban canyon. Never enter an OTI polygon.
- const zoom=.68,distance=5.6*(1.24+(.56-1.24)*zoom);
- const angle=201.7*Math.PI/180;
+ const zoom=.68,distance=24.0*(1.24+(.56-1.24)*zoom);
+ const angle=293.92*Math.PI/180;
  const eye=[midpoint[0]+distance*Math.sin(angle),
             midpoint[1]+distance*Math.cos(angle)];
- assert.ok(distance>3&&distance<5,'near view remains outside source wall');
+ assert.ok(distance>17&&distance<20,'harbor-side near view remains in open frontage corridor');
  const inside=(p,poly)=>{
   let value=false;
   for(let i=0,j=poly.length-1;i<poly.length;j=i++){
@@ -144,4 +144,18 @@ test('pedestrian scenic camera is anchored to an actual OTI doorway source edge'
  };
  assert.ok(!source.footprints.some(l=>inside(eye,l[6])),
    'source-aligned camera must remain outside all existing OTI buildings');
+});
+
+
+test('street entrance camera bearing faces source polygon outward',()=>{
+ const lot=source.footprints.find(l=>l[0]===65190),polygon=lot[6];
+ const area=polygon.reduce((v,a,i)=>{
+  const b=polygon[(i+1)%polygon.length];
+  return v+a[0]*b[1]-a[1]*b[0];
+ },0);
+ const a=polygon[11],b=polygon[12],dx=b[0]-a[0],dz=b[1]-a[1];
+ const len=Math.hypot(dx,dz),sign=Math.sign(area);
+ const normal=[sign*dz/len,-sign*dx/len];
+ const actual=(Math.atan2(normal[0],normal[1])*180/Math.PI+360)%360;
+ assert.ok(Math.abs(actual-293.92)<.1,'camera faces the entry wall from outside');
 });
