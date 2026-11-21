@@ -44,46 +44,54 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     }
   }
 
-  // Dimensional calving face: narrow ice towers, fractured rock-blue walls,
-  // sediment layers and irregular overhangs rather than a flat turquoise quad.
-  // Follow the SAME glacier-front control curve used by the main terrain mesh.
-  // The front looks toward south (-Z) down the flight route.
-  for(let i=0;i<42;i++){
-    const start=i/42*19.25+.32,end=(i+1)/42*19.25+.32;
+  // A continuous, *irregular* calving face rather than a fence of identical
+  // spikes. 28 broad panels follow the original glacier tongue boundary.
+  // Slower coherent top undulation + scattered rare overhangs avoid repetition.
+  // The survey-derived terrain remains unmodified; ice is cosmetic only.
+  const seracCount=28;
+  for(let i=0;i<seracCount;i++){
+    const start=i/seracCount*19.25+.32,end=(i+1)/seracCount*19.25+.32;
     const L=glacierPoint(start,0),R=glacierPoint(end,0);
-    const jitter=hash(283+i*37),jitter2=hash(94+i*71);
-    const baseY=waterY-.28,topL=Math.max(waterY+2,L[1]+.3+2.2*jitter);
-    const topR=Math.max(waterY+2,R[1]+.3+2.1*jitter2);
-    const forward=.70+.32*hash(i*49+12);
+    const j=hash(i*17+71),q=hash(i*59+3);
+    const coherent=.58*Math.sin(i*.51)+.31*Math.sin(i*.19+.4);
+    const topL=Math.max(waterY+1.3,L[1]+.10+coherent*.56+j*.58);
+    const topR=Math.max(waterY+1.3,R[1]+.10+coherent*.54+q*.55);
+    const forward=.68+.84*hash(i*31+1);
     const zL=L[2]-forward,zR=R[2]-forward;
-    const stripe=i%7===0;
-    const dark= stripe?[.12,.30,.38]:[.32+.13*jitter,.56+.13*jitter,.65+.11*jitter];
-    const lit=[.51+.12*jitter,.73+.08*jitter,.81+.06*jitter];
-    const shadow=[.13+.08*jitter,.31+.06*jitter,.40+.07*jitter];
-    const a=[L[0],baseY,zL],b=[R[0],baseY,zR],
-      c=[R[0],topR,zR],d=[L[0],topL,zL];
-    addQuad(a,b,c,d,dark);
-    // Eroded, uneven lip produces a real oblique ice face and roof silhouette.
-    const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.85+1.7*jitter,
-      (zL+zR)*.5+1.9+.4*jitter2];
-    addTri(d,c,roof,lit);
-    addTri([L[0],topL,zL+1.08],d,roof,shadow);
-    for(let band=1;band<=3;band++){
-      const t=band/4,uneven=(hash(i*167+band*23)-.5)*.38;
-      const hL=baseY+(topL-baseY)*t+uneven;
-      const hR=baseY+(topR-baseY)*t-uneven*.5;
-      const col=band===1?[.25,.46,.55]:band===2?[.43,.65,.70]:[.56,.76,.79];
-      addQuad([L[0],hL,zL-.065],[R[0],hR,zR-.065],
-        [R[0],hR+.075,zR-.067],[L[0],hL+.075,zL-.067],col);
+    const deepFracture=i%9===3;
+    const muted=deepFracture?[.11,.30,.36]:
+      [.26+.065*j,.49+.065*j,.57+.055*j];
+    const light=[.49+.075*j,.68+.085*j,.76+.055*j];
+    const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
+    const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
+          c=[R[0],topR,zR],d=[L[0],topL,zL];
+    addQuad(a,b,c,d,muted);
+    // Not every section has a rooftop. Rare undercut, broad sloping crowns
+    // create realistic ice mass shapes instead of same-height vertical teeth.
+    if(i%4===1 || i%9===7){
+      const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.28+.52*j,
+        (zL+zR)*.5+1.45+.8*q];
+      addTri(d,c,roof,light);
+      if(i%3===1)addTri([L[0],topL,zL+1.0],d,roof,undercut);
+    }
+    // Subtle sediment/ice layering in non-uniform elevation bands.
+    // A few sections have a third band; most have only two.
+    const bands=i%5===0?3:2;
+    for(let band=1;band<=bands;band++){
+      const t=(band+.2*hash(i*67+band*13))/(bands+1);
+      const jitter=(hash(i*23+band*71)-.5)*.27;
+      const hL=waterY-.23+(topL-waterY+.23)*t+jitter;
+      const hR=waterY-.23+(topR-waterY+.23)*t-jitter*.53;
+      const color=band===1?[.28,.45,.51]:band===2?[.38,.56,.61]:[.50,.68,.71];
+      addQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
+        [R[0],hR+.06,zR-.067],[L[0],hL+.06,zL-.067],color);
       stats.iceStrata++;
     }
     if(i%6===2){
-      // Blue undercut and vertical fracture shadow; no false collision surface.
-      const width=Math.max(.12,(R[0]-L[0])*.27);
-      const xc=L[0]+(R[0]-L[0])*(.25+.34*jitter2);
-      const z=(zL+zR)*.5-.13;
-      addQuad([xc,baseY+.15,z],[xc+width,baseY+.15,z],
-        [xc+width,Math.min(topL,topR)*.91,z],
+      const width=Math.max(.14,(R[0]-L[0])*.23);
+      const xc=L[0]+(R[0]-L[0])*(.25+.33*q),z=(zL+zR)*.5-.10;
+      addQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
+        [xc+width,Math.min(topL,topR)*.85,z],
         [xc,Math.min(topL,topR)*.96,z],[.075,.20,.27]);
     }
     stats.seracs++;
@@ -170,7 +178,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     }
     if(Math.hypot(x,z)>765 || Math.hypot(x-151,z+525)<78 ||
        Math.hypot(x+19,z+667)<38 || Math.hypot(x+155,z+610)<28 ||
-       z>390&&Math.abs(x-130)<95)continue;
+       z>423&&Math.abs(x-130)<71)continue;
     const y=terrainAt(x,z);
     if(y<waterY+1.5||y>waterY+26)continue;
     const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
