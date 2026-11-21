@@ -5596,6 +5596,11 @@
           beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
           ribbon:(a,b,w,col)=>pushRoadStrip(detail.addQuad,a,b,w,col),
           terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+          // PATROL_NYC_STREET_FURNITURE_V11: five-point lot clearance.
+          // This keeps shelters, vendors, signals and tree beds outside the
+          // existing building collision volumes when the terrain is ready.
+          isClear:(x,z,r=.5)=>[[0,0],[-r,-r],[-r,r],[r,-r],[r,r]]
+            .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
           detailBand:nycDetailBand,grid:MANHATTAN_GRID,
           streetY:STREET_Y,waterY:WATER_H,
           timesBounds:TIMES_SQUARE.bounds,
