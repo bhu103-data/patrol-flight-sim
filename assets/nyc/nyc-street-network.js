@@ -219,12 +219,13 @@ export function buildNycStreetNetwork({
     if(length<1e-6)return false;
     const nx=-dz/length,nz=dx/length;
     const margin=width*.5+1.32;
-    const steps=Math.max(1,Math.ceil(length/2.6));
+    const steps=Math.max(1,Math.ceil(length/1.8));
     for(let step=0;step<=steps;step++){
       const t=step/steps,x=a[0]+dx*t,z=a[1]+dz*t;
       for(const across of [-1,-.73,-.39,0,.39,.73,1]){
         // A footprint lookup is cheap via the game's spatial lot index.
-        if(!isClear(x+nx*margin*across,z+nz*margin*across,.10))
+        // A conservative .95-unit square probe closes gaps between samples.
+        if(!isClear(x+nx*margin*across,z+nz*margin*across,.95))
           return false;
       }
     }
