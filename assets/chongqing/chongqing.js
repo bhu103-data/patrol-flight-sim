@@ -1385,7 +1385,8 @@ function frame(){
   }
 }
 window.PatrolSpaceBridge={getState:()=>({
-  map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
+  map:'chongqing',aircraft:seaplaneMode?'seaplane':'fighter',
+  avatarMode:seaplaneMode?'cessna185':'legacy-hotpot-pilot',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
   position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
 })};

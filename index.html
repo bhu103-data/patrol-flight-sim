@@ -216,8 +216,6 @@
           <legend>Aircraft</legend>
           <label><input type="radio" name="aircraft" value="fighter" checked>Viper Jet<small>Fast boost, balanced handling</small></label>
           <label><input type="radio" name="aircraft" value="seaplane">Cessna 185 Floatplane<small>US-built Skywagon · two pontoons · water taxi, takeoff and landing on every map</small></label>
-          <label><input type="radio" name="aircraft" value="saucer">UFO<small>Tight turns, steady pitch</small></label>
-          <label><input type="radio" name="aircraft" value="jetpack">Mark 42 Armor<small>Repulsor flight, landing mode and twin lasers</small></label>
         </fieldset>
       </div>
       <label class="runway-choice" id="runwayChoice" hidden><input id="runwayStart" type="checkbox" name="runwayStart">Start on the runway</label>
@@ -868,8 +866,6 @@ const CENTRAL_PARK_SITES=[
     // Model is authored at metric scale; flight speeds are game units/sec.
     seaplane: { name: 'Cessna 185 Floatplane', cruise: 19.2, boost: 25.5,
       turn: 0.93, pitchResponse: 2.05, maxPitch: 0.45 },
-    saucer: { name: 'UFO', cruise: 20, boost: 34, turn: 2.3, pitchResponse: 4.0, maxPitch: 0.55 },
-    jetpack: { name: 'Mark 42 Armor', cruise: 14, boost: 24, turn: 1.9, pitchResponse: 5.2, maxPitch: 1.02 }
   };
   let selectedAircraft = 'fighter';
 
@@ -3751,11 +3747,9 @@ const CENTRAL_PARK_SITES=[
     return upload();
   }
 
-  const ironManMeshes=buildJetpackMesh();
+  // Archived prototypes remain as source functions, but create NO live GPU meshes.
   const aircraftMeshes = {
     fighter: buildFighterMesh(),
-    saucer: buildSaucerMesh(),
-    jetpack: ironManMeshes.body,
     seaplane: buildCessna185FloatMesh()
   };
   // The optional real Blender GLB hot-swaps the meter-scale fallback, never
@@ -12456,7 +12450,7 @@ const CENTRAL_PARK_SITES=[
       const aircraft=new FormData(flightSetup).get('aircraft');
       // Chongqing has a separate renderer but keeps the SAME launcher craft.
       const query=new URLSearchParams({time,aircraft:
-        aircraft==='seaplane'?'seaplane':aircraft||'jetpack'});
+        aircraft==='seaplane'?'seaplane':'fighter'});
       if(quality==='0')query.set('quality','low');
       window.location.assign('./chongqing.html?'+query);
       return;
@@ -12495,7 +12489,9 @@ const CENTRAL_PARK_SITES=[
     fastFrames = slowFrames = 0;
     resizeTargets();
     const mode=settings.get('flightMode');
-    selectedAircraft = settings.get('aircraft');
+    // Only the two permitted player aircraft may reach the flight runtime.
+    // Archived/menu-injected/unknown values fall back safely to the Viper.
+    selectedAircraft = settings.get('aircraft')==='seaplane'?'seaplane':'fighter';
     if(selectedAircraft==='seaplane')prepareFloatplaneAsset();
     const waterStartRequested=selectedAircraft==='seaplane' && settings.has('waterStart');
     const runway = selectedAircraft==='fighter' && settings.has('runwayStart') ? selectedMap.runwayStart : null;
