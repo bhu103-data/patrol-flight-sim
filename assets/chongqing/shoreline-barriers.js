@@ -3,12 +3,12 @@
  * Procedural original art; no new texture downloads or unlicensed street scans.
  * Scene input is the actual river-clipped road ends, not invented map points.
  */
-export function buildChongqingShorelineBarriers({THREE,scene,ends=[]}){
-  if(!THREE||!scene||typeof scene.add!=='function'||!Array.isArray(ends))
+export function buildChongqingShorelineBarriers({THREE,scene,ground,ends=[]}){
+  if(!THREE||!scene||typeof scene.add!=='function'||typeof ground!=='function'||!Array.isArray(ends))
     throw new TypeError('Invalid Chongqing shoreline barrier scene');
   const valid=ends.filter(e=>e&&[e.point?.x,e.point?.y,e.point?.z,
     e.tangent?.[0],e.tangent?.[1],e.width,e.intoRoad].every(Number.isFinite)&&
-    e.width>=3&&Math.hypot(...e.tangent)>.01&&Math.abs(e.intoRoad)===1);
+    e.width>=3&&Math.hypot(e.tangent[0],e.tangent[1])>.01&&Math.abs(e.intoRoad)===1);
   // There are six end guards for three tributary crossings. Cap accidental
   // future additions at 24 without allocating a draw per individual post.
   const sites=valid.slice(0,24);
@@ -58,7 +58,13 @@ export function buildChongqingShorelineBarriers({THREE,scene,ends=[]}){
     for(let i=0;i<5;i++){
       const across=(i-2)*(end.width/4);
       const px=x+nx*across,pz=z+nz*across;
-      place(posts,px,y+.08,pz,0,1,2.25,1);
+      // The road is 1.6 units above the base terrain. Anchor every post
+      // 0.2 units INTO its own surveyed hillside, rather than leaving
+      // a visible 0.5-unit gap beneath all the steel uprights.
+      const bed=ground(px,pz);
+      const base=Number.isFinite(bed)&&bed>0?bed:y-1.6;
+      const top=y+1.18,postHeight=Math.max(1.7,top-base+.2);
+      place(posts,px,top-postHeight*.5,pz,0,1,postHeight,1);
       const mesh=i%2===0?reflRed:reflWhite;
       place(mesh,px,y+.96,pz,yaw,Math.min(1.25,end.width/5),.19,.175);
     }
