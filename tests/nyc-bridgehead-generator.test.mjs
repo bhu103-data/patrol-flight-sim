@@ -69,6 +69,17 @@ test('generated bridgehead buildings do not intrude into authored road corridors
     assert.equal(crosses(lot,5.85),false,
       'road overlap at '+lot[0].toFixed(1)+', '+lot[1].toFixed(1));
 });
+test('gapfill buildings do not overlap neighboring parcels',()=>{
+  for(const lot of fills)for(const neighbor of brooklyn){
+    if(lot===neighbor)continue;
+    const overlapX=Math.abs(lot[0]-neighbor[0])<
+      (lot[2]+neighbor[2])*.5+1.25;
+    const overlapZ=Math.abs(lot[1]-neighbor[1])<
+      (lot[3]+neighbor[3])*.5+1.25;
+    assert.equal(overlapX&&overlapZ,false,
+      'building overlap near '+lot[0].toFixed(1)+', '+lot[1].toFixed(1));
+  }
+});
 test('gapfill buildings keep away from runway and railway guard bands',()=>{
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   for(const lot of fills){
