@@ -2784,19 +2784,27 @@ const CENTRAL_PARK_SITES=[
         // blocks. Derivative-width mortar lines fade before aliasing, and
         // remain entirely on surface 12 (no OTI/Times Square or Alaska bleed).
         if(vHarborSurface>11.5 && vHarborSurface<12.5){
-          vec2 brick=vec2(dot(vWorld,t)*1.36,vWorld.y*2.68);
+          // PATROL_DUMBO_BRICK_REAL_SCALE_V2: roughly 22cm long by 8.6cm
+          // high brick modules, not the old giant 74cm x 37cm cubes.
+          // Distant bricks become a continuous clay surface at subpixel LOD.
+          vec2 brick=vec2(dot(vWorld,t)*4.60,vWorld.y*11.60);
+          float texel=max(fwidth(brick.x),fwidth(brick.y));
+          float brickVisible=1.0-smoothstep(.30,.92,texel);
           float course=floor(brick.y);
           brick.x+=mod(course,2.0)*.5;
           vec2 cell=fract(brick);
           vec2 edge=min(cell,1.0-cell);
-          vec2 aa=max(fwidth(brick)*1.25,vec2(.003));
-          float vertical=1.0-smoothstep(.022,.054+aa.x,edge.x);
-          float horizontal=1.0-smoothstep(.025,.054+aa.y,edge.y);
-          float mortar=max(vertical,horizontal);
+          vec2 aa=max(fwidth(brick)*.92,vec2(.003));
+          float vertical=1.0-smoothstep(.036,.077+aa.x,edge.x);
+          float horizontal=1.0-smoothstep(.044,.086+aa.y,edge.y);
+          float mortar=max(vertical,horizontal)*brickVisible;
           float fired=nyStreetNoise(vec2(floor(brick.x),course)*.73+
             vec2(13.2,5.7));
-          albedo*=1.0+nearDetail*(fired-.5)*.15;
-          albedo=mix(albedo,albedo*.61,mortar*nearDetail*.76);
+          float pores=nyStreetNoise(vec2(dot(vWorld,t)*22.0,
+            vWorld.y*19.0)+vec2(2.9,6.4));
+          albedo*=1.0+nearDetail*brickVisible*
+            ((fired-.5)*.13+(pores-.5)*.07);
+          albedo=mix(albedo,albedo*.61,mortar*nearDetail*.67);
           roughness=mix(roughness,.85,mortar*nearDetail*.45);
         }
       }else if(materialClass<1.5){
