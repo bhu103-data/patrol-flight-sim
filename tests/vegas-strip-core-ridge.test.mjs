@@ -44,5 +44,7 @@ test('flush Strip surface repairs have no physical colliders or textures',()=>{
    p[0]>=-44&&p[0]<=-26&&p[2]>=-210&&p[2]<=-120)));
  assert.match(html,/buildVegasRoads\(box,lamp,addQuad\);\s*\/\/ Geometry is batched/);
  assert.match(html,/buildVegasCoreRidgeSample\(geometry\)/);
+ assert.match(html,/buildVegasStrip\(\{box,lamp,cylinder,solidAt,place,addTri:solid\.addTri,addQuad:solid\.addQuad/,
+   'real Vegas map builder must pass triangulation callback');
  assert.doesNotMatch(sampleSource,/solidAt\(|fetch\(|import\(/);
 });
