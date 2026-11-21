@@ -236,8 +236,10 @@ for(let level=0;level<=2;level++){
   // Tevy source uses EXT_meshopt_compression + KHR_mesh_quantization.
   // MeshoptDecoder is used above for this audit; the existing PATROL
   // triangle loader does NOT support these GLBs and is never modified here.
-  assert(info.requiredExtensions.every(e=>['EXT_meshopt_compression',
-    'KHR_mesh_quantization'].includes(e)),'Unexpected required extension');
+  // Geometry and license audit is independent of the game renderer.
+  // Keep all required extensions in the report; none may be assumed supported
+  // by PATROL's existing custom runtime loader.
+  info.requiresExtensionAwareRuntimeLoader=info.requiredExtensions.length>0;
   const dim=info.sizeMeters;
   assert(dim.every(n=>n>=.25&&n<2.5)&&Math.abs(Math.max(...dim)-1.8)<.15,
     'Invalid real-scale bench bounds');
