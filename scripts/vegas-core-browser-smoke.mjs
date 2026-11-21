@@ -5,7 +5,7 @@ import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const output='artifacts/vegas';await mkdir(output,{recursive:true});
-const errors=[],screenshots=[],shots=[],startupSnapshots=[];
+const errors=[],screenshots=[],shots=[],startupSnapshots=[],scenicSnapshots=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -15,7 +15,7 @@ const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFa
 page.on('pageerror',e=>errors.push(e.message));
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
-let result={status:'failed',errors,screenshots,shots};
+let result={status:'failed',errors,screenshots,shots,scenicSnapshots};
 try {
  const navStarted=Date.now();
  const response=await page.goto(base+'/index.html?graphics=compat',{waitUntil:'domcontentloaded',timeout:60000});
@@ -48,6 +48,26 @@ try {
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
+ // Capture the actual runtime selector state before Playwright starts a 30s
+ // selectOption retry. A source-code string does not prove a live option.
+ const scenicSnapshot=await page.evaluate(()=>{
+  const mapInput=document.querySelector('input[name="flightMap"]:checked');
+  const select=document.getElementById('hotelTarget');
+  const setup=document.getElementById('flightSetup');
+  return {
+   selectedMapInput:mapInput?.value,
+   submittedMap:setup?new FormData(setup).get('flightMap'):null,
+   destination:document.getElementById('loadDestination')?.textContent,
+   options:[...select.options].map(opt=>opt.textContent),
+   scenicOpen:!document.getElementById('hotelViews')?.hidden
+  };
+ });
+ scenicSnapshots.push(scenicSnapshot);
+ assert(scenicSnapshot.selectedMapInput==='vegas' &&
+   scenicSnapshot.submittedMap==='vegas',
+   'Vegas map selection was lost: '+JSON.stringify(scenicSnapshot));
+ assert(scenicSnapshot.options.includes('Strip Street View'),
+   'Expected Vegas scenic camera is not in live menu: '+JSON.stringify(scenicSnapshot));
  await page.locator('#hotelTarget').selectOption({label:'Strip Street View'});
  await page.locator('#hotelAngle').evaluate(el=>{
   el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
@@ -100,12 +120,12 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',loadMs,errors,screenshots,shots,startupSnapshots,
+ result={status:'passed',loadMs,errors,screenshots,shots,startupSnapshots,scenicSnapshots,
    frameSampling,incrementalGeometry:{triangles:234,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
- result={...result,status:'failed',errors,startupSnapshots};
+ result={...result,status:'failed',errors,startupSnapshots,scenicSnapshots};
  process.exitCode=1;
 }finally{
  await writeFile(output+'/vegas-core-report.json',JSON.stringify(result,null,2));
