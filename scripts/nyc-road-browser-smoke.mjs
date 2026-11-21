@@ -48,8 +48,32 @@ try{
  await page.screenshot({path:out+'/00-harbor.png',fullPage:true});
  await page.waitForTimeout(3500);
  await page.screenshot({path:out+'/01-city-loaded.png',fullPage:true});
+ // The previous smoke test photographed only the spawn harbor. Explicitly
+ // visit the Brooklyn Bridge camera so bridgehead, nearby parcels and road
+ // clipping are visible in CI artifacts rather than being inferred from code.
+ const bridgeShortcut=page.locator('#bridgeShortcutButton');
+ check(await bridgeShortcut.isVisible(),'Brooklyn Bridge camera button missing');
+ await bridgeShortcut.click();
+ await page.waitForFunction(()=>{
+   const panel=document.getElementById('hotelViews');
+   const target=document.getElementById('hotelTarget');
+   return panel&&!panel.hidden&&
+     target?.options[target.selectedIndex]?.textContent==='Brooklyn Bridge · Deck View';
+ },null,{timeout:12000});
+ await page.waitForTimeout(1800);
+ const bridge=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const target=document.getElementById('hotelTarget');
+   return {camera:target?.options[target.selectedIndex]?.textContent,
+     webgl:Boolean(gl&&!gl.isContextLost()),
+     graphicsError:gl?.getError()??null};
+ });
+ check(bridge.webgl&&bridge.graphicsError===0,
+   'Brooklyn Bridge view lost WebGL: '+JSON.stringify(bridge));
+ await page.screenshot({path:out+'/02-brooklyn-bridgehead.png',fullPage:true});
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,screenshots:['00-harbor.png','01-city-loaded.png'],warnings};
+ result={passed:true,state,bridge,
+   screenshots:['00-harbor.png','01-city-loaded.png','02-brooklyn-bridgehead.png'],warnings};
 }catch(e){
  result={passed:false,error:e.stack||String(e),errors,warnings};
  try{await page.screenshot({path:out+'/FAILED.png',fullPage:true});}catch{}
