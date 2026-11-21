@@ -131,7 +131,18 @@ try{
   await page.waitForFunction(expected=>
     document.getElementById('skyStatus')?.textContent?.trim()===expected,
     expectedStatus,{timeout:90000,polling:250});
-  await page.waitForTimeout(850);
+  // The environment status is a CPU-side acknowledgement, not evidence that
+  // the new sky/fog uniforms have made it into a rendered WebGL frame. A fixed
+  // 850 ms sleep could still capture the prior frame under slow SwiftShader.
+  // Fence two animation frames so both baseline and patch capture a fully
+  // rendered environment state, without changing simulation/game source.
+  await page.evaluate(()=>new Promise((resolve,reject)=>{
+   const watchdog=setTimeout(()=>
+     reject(Error('No two browser paint frames after environment update')),90000);
+   requestAnimationFrame(()=>requestAnimationFrame(()=>{
+     clearTimeout(watchdog);resolve();
+   }));
+  }));
   const state=await page.evaluate(()=>{
    const el=document.getElementById('glCanvas'),gl=el?.getContext('webgl2');
    return {map:document.querySelector('input[name="flightMap"]:checked')?.value,
