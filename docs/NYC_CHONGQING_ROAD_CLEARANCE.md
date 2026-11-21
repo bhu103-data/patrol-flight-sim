@@ -14,6 +14,7 @@ Chongqing street centerlines, black/white taxi markings, curb geometry, yellow t
 
 ## Testing
 
+- `node --test tests/chongqing-road-scene.test.mjs`: combines the actual Chongqing background towers, Hongyadong, Raffles City and Liziba geometry builders, then checks **every final clipped asphalt segment against all of their registered 3D building collision bounds**, including elevation and roof separation. Three tests passed under a complete mocked scene: no accidental road/structure overlap, no exhausted GPU instance buffers, and reproducible scene density.
 - `node --test tests/chongqing-road-clearance.test.mjs`: exact swept segment/box tests, clipping, elevated underpasses, coherent six-road layouts and actual procedural tower placement. A fixed-seed run produced **210 city background towers with zero road/bridge/other-tower footprint collisions**.
 - `node --test tests/chongqing-street-occupancy.test.mjs`: deliberate obstructing buildings; validates taxis, crossing relocation, lamps, road paint, puddles and lamp reflection patches.
 - `node --test tests/nyc-road-clearance.test.mjs`: Manhattan gridded asphalt, sidewalk, crosswalk, expressway/ramp and city parcel protection, using the real module and controlled fixtures including a narrow wall placed between former samples.
