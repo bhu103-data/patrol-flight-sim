@@ -536,7 +536,7 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 // Separate bounded street-market sample, clear of PR #93's corner shop.
 // Include the suspended gallery slab/posts in the SAME spatial index used
 // by pilot, roads and vehicle traffic before that index is constructed.
-const marketFronts=buildChongqingMarketFronts({THREE,scene,ground,riverDist,obstacles});
+const marketFronts=buildChongqingMarketFronts({THREE,scene,ground,riverDist,obstacles,pbr});
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Static building/landmark collision registration is now complete. Build one
