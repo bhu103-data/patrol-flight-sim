@@ -4859,10 +4859,24 @@ const CENTRAL_PARK_SITES=[
       parcels.length-safeParcels.length,'removed from',parcels.length);
     cityLots=safeParcels;
     lotIndex.clear();
+    // Index every spatial cell touched by the full municipal footprint.
+    // Center-only indexing misses corners of long walls during road clearance.
     for (const lot of safeParcels){
-      const key=lotKey(lot[0],lot[1]),bucket=lotIndex.get(key);
-      if(bucket)bucket.push(lot);
-      else lotIndex.set(key,[lot]);
+      const [x,z,w,d]=lot;
+      const corners=[
+        [x-w/2,z-d/2],[x+w/2,z-d/2],
+        [x-w/2,z+d/2],[x+w/2,z+d/2]
+      ];
+      const ix=corners.map(([cx,cz])=>Math.floor(
+        (cx-MANHATTAN_GRID.tilt*cz-MANHATTAN_GRID.offset)/
+        MANHATTAN_GRID.blockWidth));
+      const iz=corners.map(([,cz])=>Math.floor(cz/MANHATTAN_GRID.blockLength));
+      for(let row=Math.min(...iz);row<=Math.max(...iz);row++)
+        for(let col=Math.min(...ix);col<=Math.max(...ix);col++){
+          const key=row*256+col,bucket=lotIndex.get(key);
+          if(bucket)bucket.push(lot);
+          else lotIndex.set(key,[lot]);
+        }
     }
     for (const entry of fallingBuildings) disposeSceneMesh(entry.mesh);
     fallingBuildings=[];
