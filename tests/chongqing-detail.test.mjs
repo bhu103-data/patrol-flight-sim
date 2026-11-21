@@ -39,10 +39,20 @@ class InstancedMesh {
   constructor(geometry,material,capacity){
     this.geometry=geometry;this.material=material;this.capacity=capacity;
     this.count=0;this.frustumCulled=true;this.visible=true;this.written=0;
-    this.instanceMatrix={setUsage(){},needsUpdate:false};
+    this.instanceMatrix={setUsage(){},needsUpdate:false,array:new Float32Array(capacity*16)};
   }
-  setMatrixAt(i){assert.ok(i<this.capacity,'instance buffer overflow');this.written++}
+  setMatrixAt(i,matrix){
+    assert.ok(i<this.capacity,'instance buffer overflow');this.written++;
+    const values=this.instanceMatrix.array,offset=i*16;
+    if(matrix?.elements)values.set(matrix.elements,offset);
+    else {values[offset]=i+1;values[offset+5]=1;values[offset+10]=1;values[offset+15]=1;}
+  }
   computeBoundingSphere(){}
+}
+class Matrix4 {
+  constructor(){this.elements=new Float32Array(16)}
+  makeScale(x,y,z){this.elements[0]=x;this.elements[5]=y;
+    this.elements[10]=z;this.elements[15]=1;return this}
 }
 class Color {constructor(){this.r=.3;this.g=.4;this.b=.6}set(){return this}}
 class Light {constructor(){this.position=new Vec()}}
@@ -51,7 +61,7 @@ const THREE={
   CylinderGeometry:Geometry,IcosahedronGeometry:Geometry,
   Float32BufferAttribute:Attribute,MeshStandardMaterial:Material,MeshBasicMaterial:Material,
   PointsMaterial:Material,InstancedMesh,Object3D,Vector3:Vec,Color,PointLight:Light,
-  Points:class {},DoubleSide:2,StaticDrawUsage:1,AdditiveBlending:2
+  Points:class {},Matrix4,DoubleSide:2,StaticDrawUsage:1,AdditiveBlending:2
 };
 const pbr={
   wood:new Material({kind:'wood'}),carvedWood:new Material({kind:'woodCarving'}),
@@ -101,4 +111,23 @@ test('all instanced pools retain valid counts and no overflow',()=>{
     assert.ok(mesh.count<=mesh.capacity,'count <= capacity');
     assert.ok(mesh.written<=mesh.capacity,'all matrices fit');
   }
+});
+
+test('Scenario swap hides only Hongyadong instances and restores exact original matrices',()=>{
+  const {out,meshes}=construct();
+  assert.equal(out.hongyadongReplacementCounts.curvedRoofs,33);
+  assert.equal(out.hongyadongReplacementCounts.bridge,0,
+    'existing Qiansimen bridge must never be hidden');
+  assert.ok(out.hongyadongReplacementCounts.timber>0);
+  const timber=meshes.find(m=>m instanceof InstancedMesh&&m.capacity===3600);
+  const bridge=meshes.find(m=>m instanceof InstancedMesh&&m.capacity===850);
+  assert.ok(timber&&bridge);
+  const oldTimber=timber.instanceMatrix.array.slice();
+  const oldBridge=bridge.instanceMatrix.array.slice();
+  out.setHongyadongReplacement(true);
+  assert.notDeepEqual(timber.instanceMatrix.array,oldTimber);
+  assert.deepEqual(bridge.instanceMatrix.array,oldBridge);
+  out.setHongyadongReplacement(false);
+  assert.deepEqual(timber.instanceMatrix.array,oldTimber);
+  assert.deepEqual(bridge.instanceMatrix.array,oldBridge);
 });
