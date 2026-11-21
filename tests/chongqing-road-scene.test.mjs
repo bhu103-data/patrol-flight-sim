@@ -8,7 +8,7 @@ import {readFile} from 'node:fs/promises';
 const read=async path=>readFile(new URL(path,import.meta.url),'utf8');
 const toUrl=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const roadSource=await read('../assets/chongqing/road-clearance.js');
-const {chongqingTerraceRoads,clipRoadToFreeSegments,crossesFootprint,isRoadPassableAtElevation}=await import(toUrl(roadSource));
+const {chongqingTerraceRoads,clipRoadToFreeSegments,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
 const urbanSrc=(await read('../assets/chongqing/urban-architecture.js'))
   .replace("from './road-clearance.js'",'from '+JSON.stringify(toUrl(roadSource)));
 const {createChongqingUrbanArchitecture}=await import(toUrl(urbanSrc));
@@ -123,8 +123,8 @@ test('complete Chongqing road network is kept without passing through any buildi
       const a=path[i-1],b=path[i];
       for(const building of obstacles){
         if(isRoadPassableAtElevation(a,b,building))continue;
-        assert.equal(crossesFootprint(a,b,building,width*.5,.55),false,
-          'actual roadway crosses a finished static building');
+        assert.equal(crossesRoadVolume(a,b,building,width*.5,.55),false,
+          'actual road surface must not penetrate a static building in 3D');
         checked++;
       }
     }
@@ -147,5 +147,14 @@ test('clipping is deterministic and does not accidentally empty the city',()=>{
   assert.equal(a.paths.length,b.paths.length);
   assert.equal(a.stats.clipped,b.stats.clipped);
   assert.ok(a.paths.length>=6);
+});
+test('sloped riverside road passes under raised volume but rejects true building collision',()=>{
+  const a={x:186.66666666666674,z:285.94341853810994,y:124.26855229174254};
+  const b={x:213.33333333333326,z:284.9475248827785,y:116.84346280131302};
+  const raised={x:212,z:297,w:20,d:16,base:124.93075748156431,top:141.0307574815643};
+  assert.equal(crossesFootprint(a,b,raised,5.75,.55),true,'2D outlines overlap');
+  assert.equal(isRoadPassableAtElevation(a,b,raised),false,'whole-segment test falsely flags road');
+  assert.equal(crossesRoadVolume(a,b,raised,5.75,.55),false,'actual crossing descends safely beneath raised structure');
+  assert.equal(crossesRoadVolume({...a,y:133},{...b,y:133},raised,5.75,.55),true,'road through the same occupied volume is blocked');
 });
 process.on('exit',()=>{globalThis.document=oldDoc});
