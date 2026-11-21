@@ -1,0 +1,27 @@
+name: Alaska WebGL source checks
+
+on:
+  pull_request:
+    paths:
+      - 'assets/alaska/**'
+      - 'tests/alaska-fjords.test.mjs'
+      - 'index.html'
+      - '.github/workflows/alaska-source.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/alaska/**'
+      - 'tests/alaska-fjords.test.mjs'
+      - 'index.html'
+
+jobs:
+  alaska-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Alaska-only geometry and map lifecycle
+        run: node --test tests/alaska-fjords.test.mjs

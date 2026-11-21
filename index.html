@@ -1445,42 +1445,40 @@
       return 1.0-smoothstep(0.30,0.95,area);
     }
 
-    // Northern curtains: slow waves plus local brightening that travels
-    // along individual folds instead of flashing the entire sky.
+    // Alaska-only coherent auroral curtains: advected folds, not a flashing panel.
     vec3 alaskaAurora(vec3 rd) {
-      float night=1.0-smoothstep(-0.23,-0.13,uSun.y);
-      float visibility=night*(1.0-smoothstep(0.18,0.91,uAtmosphere.z))
-                       *(1.0-smoothstep(0.12,0.86,uAtmosphere.w));
-      if(visibility<0.005 || rd.y<0.065 || rd.z<0.08)return vec3(0.0);
+      float night=1.0-smoothstep(-0.22,-0.11,uSun.y);
+      float visibility=night*(1.0-smoothstep(0.22,0.91,uAtmosphere.z))
+                      *(1.0-smoothstep(0.10,0.83,uAtmosphere.w));
+      if(visibility<0.005 || rd.y<0.055)return vec3(0.0);
       float az=atan(rd.x,rd.z);
       float el=asin(clamp(rd.y,0.0,1.0));
-      float t=uTime;
-      vec3 glow=vec3(0.0);
+      vec3 light=vec3(0.0);
       for(int i=0;i<3;i++){
         float layer=float(i);
-        float a=az+layer*0.53;
-        float phase=a*5.8-t*(0.24+layer*0.05);
-        float edge=0.225+layer*0.118+0.042*sin(phase)
-                   +0.022*sin(a*13.0+t*0.29)+0.009*sin(a*29.0-t*0.51);
+        float a=az+layer*0.41;
+        float drift=vnoise(vec2(a*2.6+layer*13.7,uTime*0.025))-.5;
+        float fine=vnoise(vec2(a*10.1-layer*11.3,uTime*0.049))-.5;
+        float fold=sin(a*11.4-uTime*(0.17+layer*.025)+fine*4.3);
+        float edge=0.20+layer*0.105+drift*0.085+fold*0.036;
         float above=el-edge;
-        float height=0.102+0.036*sin(a*9.5-t*0.38)+0.029*sin(a*4.0+t*0.21);
-        float veil=smoothstep(-0.010,0.013,above)
-                   *(1.0-smoothstep(0.016,height,above));
-        float rim=exp(-abs(above-0.009)*59.0)*0.25;
-        float thread=0.57+0.24*sin(a*61.0+sin(phase)*2.1-t*1.16)
-                         +0.13*sin(a*109.0-t*1.79);
-        float flicker=0.50+0.50*sin(a*17.0-t*3.8+sin(a*31.0+t*0.49));
-        float pulse=0.55+0.45*flicker*flicker;
-        float sides=1.0-smoothstep(0.45,1.07,abs(az+0.10-layer*0.13));
-        vec3 color=mix(vec3(0.086,0.78,0.47),vec3(0.43,0.25,0.79),
-                       smoothstep(0.030,height,above)*(0.68+layer*0.12));
-        glow+=color*(veil*thread+rim)*pulse*sides*(0.70-layer*0.15);
+        float height=.13+.026*sin(a*4.3+uTime*.05+layer);
+        float curtain=smoothstep(-.015,.011,above)
+                     *(1.0-smoothstep(height*.58,height,above));
+        float threads=.60+.24*sin(a*58.0+fine*6.3-uTime*.56)
+                           +.16*sin(a*117.0+fold*2.0+uTime*.21);
+        float bright=.67+.33*smoothstep(-.15,.65,fine+fold*.36);
+        float rim=exp(-abs(above-.008)*53.0)*.23;
+        float bounds=1.0-smoothstep(.47,1.25,abs(az+.07-layer*.11));
+        vec3 green=vec3(.085,.72,.35);
+        vec3 violet=vec3(.34,.21,.62);
+        vec3 hue=mix(green,violet,smoothstep(.02,height*.92,above)*(.57+layer*.09));
+        light+=hue*(curtain*max(.18,threads)+rim)*bright*bounds*(.88-layer*.16);
       }
-      return glow*visibility;
+      return light*visibility*smoothstep(.055,.18,rd.y);
     }
 
-
-    vec3 getSky(vec3 rd) {
+        vec3 getSky(vec3 rd) {
       float up=clamp(rd.y,0.0,1.0);
       float sunAmt=max(dot(rd,sunDirection()),0.0);
       float day=uAtmosphere.x, twilight=uAtmosphere.y, cloud=uAtmosphere.z;
@@ -1878,15 +1876,33 @@
             albedo=mix(bank,lawn,smoothstep(0.15,2.4,alt));
           }
           if (uAlaska) {
-            float grain = vnoise(p.xz * 0.19);
-            vec3 spruce = mix(vec3(0.12,0.24,0.20),vec3(0.33,0.46,0.32),grain);
-            vec3 rock = mix(vec3(0.32,0.38,0.43),vec3(0.53,0.58,0.61),grain);
-            vec3 snow = mix(vec3(0.64,0.78,0.84),vec3(0.94,0.96,0.98),grain);
-            float frost = smoothstep(24.0,39.0,alt + 5.0*(grain - 0.5));
-            albedo = mix(spruce,rock,max(smoothstep(9.0,17.0,alt),smoothstep(0.18,0.4,slope)));
-            albedo = mix(albedo,snow,frost * (1.0-smoothstep(0.46,0.79,slope)));
+            // Alpine vegetation, sedimentary slate, wind-loaded snow and
+            // blue glacial ice at independent spatial scales (Alaska only).
+            float macro=vnoise(p.xz*.036);
+            float grain=vnoise(p.xz*.23);
+            float fleck=vnoise(p.xz*1.10);
+            float bedding=.5+.5*sin(alt*.87+macro*5.8);
+            vec3 spruce=mix(vec3(.11,.20,.16),vec3(.29,.38,.28),grain*.62+macro*.38);
+            vec3 slate=mix(vec3(.23,.29,.33),vec3(.53,.57,.59),grain*.54+bedding*.46);
+            slate*=.89+.20*fleck;
+            float exposed=max(smoothstep(10.0,23.0,alt),
+                              smoothstep(.15,.43,slope));
+            albedo=mix(spruce,slate,exposed);
+            float wind=smoothstep(.32,.80,macro*.55+grain*.45);
+            float frost=smoothstep(17.0,34.0,alt+(macro-.5)*11.0)
+                  *(1.0-smoothstep(.29,.62,slope));
+            vec3 snowpack=mix(vec3(.70,.80,.84),vec3(.94,.96,.97),grain*.55+fleck*.45);
+            albedo=mix(albedo,snowpack,clamp(frost*(.84+.16*wind),0.0,1.0));
+            // Flight-scale glacier extent; never presented as surveyed GIS.
+            float iceAxis=-34.0+21.0*sin(clamp((p.z-449.0)/148.0,0.0,1.0)*3.9);
+            float glacier=1.0-smoothstep(63.0,92.0,abs(p.x-iceAxis));
+            glacier*=smoothstep(422.0,460.0,p.z)
+                      *(1.0-smoothstep(590.0,647.0,p.z));
+            float iceVein=vnoise(p.xz*.49+vec2(grain*2.0,-macro*1.8));
+            vec3 ice=mix(vec3(.24,.53,.62),vec3(.72,.86,.89),.31+.63*iceVein);
+            albedo=mix(albedo,ice,glacier*.82);
           }
-          if (uManhattan) {
+                    if (uManhattan) {
             float crossIsland = p.x - (${MANHATTAN_GRID.tilt} * p.z + ${MANHATTAN_GRID.offset.toFixed(1)});
             vec2 blocks = vec2(crossIsland, p.z) / vec2(${MANHATTAN_GRID.blockWidth.toFixed(1)}, ${MANHATTAN_GRID.blockLength.toFixed(1)});
             float block = hash12(floor(blocks));
@@ -1920,7 +1936,7 @@
 
           // Seasonal vegetation and snow cover use a smooth terrain mask.
           float textured=vnoise(p.xz*0.028);
-          if(!uVegas && !uManhattan){
+          if(!uVegas && !uManhattan && !uAlaska){
             float growth=smoothstep(0.2,0.55,n.y)*smoothstep(0.8,4.0,alt)*(1.0-smoothstep(16.0,35.0,alt));
             albedo=mix(albedo,vec3(0.27+textured*0.17,0.44+textured*0.15,0.22),growth*uClimate.x*0.74);
             albedo=mix(albedo,vec3(0.70+textured*0.1,0.35+textured*0.18,0.19),growth*uClimate.y*0.63);
@@ -5568,6 +5584,7 @@
   }
 
   let mapScenery=null;
+  let alaskaDetailMesh=null;
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
@@ -5640,6 +5657,8 @@
   }
 
   function createMapScenery() {
+    disposeSceneMesh(alaskaDetailMesh);
+    alaskaDetailMesh=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
     disposeSceneMesh(nycGisMesh);
@@ -5660,6 +5679,23 @@
     sceneryObjects=[];
     sceneryMovers=[];
     const solid=createTriangleMesh(), lights=createTriangleMesh();
+    // Optional Alaska-only detail. Epoch guard prevents map-switch GPU leaks.
+    if(selectedMap.alaska && !graphicsCompat && smoothScenery()){
+      import('./assets/alaska/alaska-fjord-detail.js')
+        .then(({buildAlaskaFjordDetail})=>{
+          if(!selectedMap.alaska || heroEpoch!==nycHeroEpoch || gl.isContextLost())return;
+          const detail=createTriangleMesh();
+          const stats=buildAlaskaFjordDetail({
+            addTri:detail.addTri,addQuad:detail.addQuad,
+            terrainAt:(x,z)=>sampleTerrainHeight(x,z),waterY:WATER_H
+          });
+          const uploaded=detail.upload();
+          if(!selectedMap.alaska || heroEpoch!==nycHeroEpoch || gl.isContextLost())
+            disposeSceneMesh(uploaded);
+          else{alaskaDetailMesh=uploaded;console.info('[PATROL] Alaska fjord detail',stats);}
+        })
+        .catch(error=>console.warn('[PATROL] Alaska detail fallback:',error));
+    }
     // PATROL_NYC_STREETS_V10: city-only streets and street-level props.
     // Static geometry in its own draw batch, no WebGPU or second renderer.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
@@ -8323,6 +8359,7 @@
   function drawMapScenery(drawMesh) {
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
+    if(selectedMap.alaska && alaskaDetailMesh?.count)drawMesh(alaskaDetailMesh,identity);
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
