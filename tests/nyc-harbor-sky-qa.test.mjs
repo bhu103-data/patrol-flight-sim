@@ -63,6 +63,10 @@ test('full ten-view tour inspects OTI facades in daylight before bridge zoom',as
   const lastTimes=script.indexOf("const timesViews=");
   assert.ok(city>=0&&harbor>city&&resume>harbor&&bridge>resume&&lastTimes>harbor,
     'harbor view must be early; restore original flight before bridge shortcut');
+  assert.match(script,/PATROL_NYC_QA_DAYLIGHT_LOCK_V1/,
+    'retain the other agent’s new noon/clear-weather lock for all ten cameras');
+  assert.match(script,/\['skyTime','12'\]/,
+    'ten-camera tour remains on the verified noon lighting preset');
   assert.match(script,/el\.value='42'/,
     'harbor camera zoom must match the independently verified one-view camera');
   assert.match(script,/facadeView\.zoom==='42'/,
