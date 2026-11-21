@@ -22,6 +22,20 @@ fs.mkdirSync(out,{recursive:true});
   required,network:responses};
  try{
   const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  await page.addInitScript(()=>{
+   // Count the actual GPU draw calls for the three audited GLBs.
+   // Successful HTTP requests alone cannot prove that imported meshes
+   // replaced the old simplified landmark geometry on screen.
+   window.__patrolLandmarkDraws=Object.create(null);
+   const realDraw=WebGL2RenderingContext.prototype.drawArrays;
+   const approved=new Set([22064*3,8988*3,7412*3]);
+   WebGL2RenderingContext.prototype.drawArrays=function(mode,first,count){
+    if(mode===this.TRIANGLES&&first===0&&approved.has(count))
+     window.__patrolLandmarkDraws[count]=
+      (window.__patrolLandmarkDraws[count]||0)+1;
+    return realDraw.call(this,mode,first,count);
+   };
+  });
   if(forceDirect)await page.addInitScript(()=>{
    // Simulate a missing offscreen compositor, not a lost WebGL2 context.
    // The game must still fetch and render its reviewed, textured landmark GLBs.
@@ -77,7 +91,8 @@ fs.mkdirSync(out,{recursive:true});
    return {webgl2:!!gl,contextLost:gl?.isContextLost(),
     canvas:[canvas?.width,canvas?.height],
     playing:info.playing,map:info.map,
-    forceDirectApplied:Boolean(window.__patrolForcedDirect)};
+    forceDirectApplied:Boolean(window.__patrolForcedDirect),
+    modelDrawCalls:window.__patrolLandmarkDraws||{}};
   });
   report.messages=messages.slice(-25);
   report.configured=configured;
@@ -87,6 +102,12 @@ fs.mkdirSync(out,{recursive:true});
   assert.equal(report.state.playing,true);
   assert.equal(report.state.webgl2,true);
   assert.equal(report.state.contextLost,false);
+  for(const [name,triangles] of Object.entries({
+   trade:22064,empire:8988,chrysler:7412
+  })){
+   assert.ok(report.state.modelDrawCalls[triangles*3]>0,
+    name+' was downloaded but did not draw its approved GLB geometry');
+  }
   if(forceDirect)assert.equal(report.state.forceDirectApplied,true,
    'the browser must actually run the compositor-fallback path');
   await page.screenshot({path:path.join(out,'manhattan-three-glbs'+suffix+'.png'),
