@@ -31,6 +31,16 @@ test('visual mesh generates true walls, roof triangles, bounded window details a
  assert.ok(stats.roofTriangles>=4);
  assert.ok(quads.some(q=>q.at(-1)===7));
  assert.ok(tris.every(t=>t.at(-1)===8&&t.slice(0,3).every(p=>p.every(Number.isFinite))));
+ // +Y faces must survive the engine's WebGL backface culling.
+ assert.ok(tris.every(t=>{
+  const [a,b,c]=t,ux=b[0]-a[0],uz=b[2]-a[2],vx=c[0]-a[0],vz=c[2]-a[2];
+  return uz*vx-ux*vz>0;
+ }));
+ assert.ok(quads.filter(q=>q.at(-1)===6).every(q=>{
+  const [a,b,c]=q;
+  const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],v=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+  return Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])>1e-7;
+ }));
  assert.ok(stats.facadeQuads<=2800);
  assert.equal(stats.visualOnly,true);
 });
