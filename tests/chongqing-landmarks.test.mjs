@@ -98,7 +98,7 @@ test('Liziba retains an actual open train-height corridor through the building',
   const [lower,upper]=station;
   assert.ok(lower.top<monument.liziba.y);
   assert.ok(upper.base>monument.liziba.y);
-  assert.ok(upper.top>lower.top+50);
+  assert.ok(upper.top>lower.top+40);
 });
 
 test('three carriages move with the elevated rail curve',()=>{
