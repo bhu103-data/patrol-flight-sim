@@ -4,6 +4,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
 import { SpatialObstacleIndex } from './spatial.js';
+import { createChongqingPBR } from './pbr.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -16,8 +17,8 @@ const clamp = THREE.MathUtils.clamp;
 const TAU = Math.PI * 2;
 const clock = new THREE.Clock();
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#1b2745');
-scene.fog = new THREE.FogExp2(0x26344d, 0.00066);
+scene.background = new THREE.Color('#121c2a');
+scene.fog = new THREE.FogExp2(0x253345, 0.00072);
 
 let renderer;
 try {
@@ -30,28 +31,29 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.32;
+renderer.toneMappingExposure = 1.36;
 
 const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.15, 4000);
-const hemi = new THREE.HemisphereLight(0x94b5ff, 0x5a3c30, 2.0);
+const hemi = new THREE.HemisphereLight(0x879ec1, 0x534b48, 1.18);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xffcb9b, 2.1);
+const moon = new THREE.DirectionalLight(0xc3d0e8, 1.03);
 moon.position.set(-280,520,-420);
 scene.add(moon);
-const glow = new THREE.PointLight(0xffa044, 145, 230, 2);
+const glow = new THREE.PointLight(0xffbd76, 170, 235, 2);
 glow.position.set(160,105,125);
 scene.add(glow);
 
+const pbr=createChongqingPBR(THREE);
 function mat(color, roughness=0.85, emissive=0x000000, intensity=0) {
   return new THREE.MeshStandardMaterial({color,roughness,metalness:0.06,emissive,emissiveIntensity:intensity});
 }
 const M = {
-  granite:mat('#526477'), stone:mat('#a6a9a5'), concrete:mat('#596273'),
+  granite:pbr.cutStone, stone:pbr.stone, concrete:pbr.concrete,
   copper:mat('#946046',0.46), gold:mat('#ffc47a',0.35,0xcc7234,0.42),
-  glass:mat('#2e5369',0.23,0x1a4058,0.35), beam:mat('#693a37'),
-  roof:mat('#6d2930'), red:mat('#db503a',0.52,0x8c1e13,0.25),
-  road:mat('#383e4a'), rail:mat('#9da9b2',0.35),
-  window:new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}),
+  glass:pbr.glass, beam:mat('#654941',.75),
+  roof:pbr.roof, red:mat('#ae2932',0.43,0x651318,0.28),
+  road:pbr.asphalt, rail:mat('#a5adb4',0.37),
+  window:pbr.window,
   white:new THREE.MeshBasicMaterial({color:0xffd998}),
   dark:mat('#22263b'), skin:mat('#e1a97e'), coat:mat('#e4c18b'),
   scarf:mat('#c13c32'), pants:mat('#433a47'), boot:mat('#2e292c'),
@@ -96,7 +98,7 @@ function ground(x,z) {
 }
 
 const worldGeometry=new THREE.BufferGeometry();
-const positions=[],colors=[],indexes=[];
+const positions=[],colors=[],indexes=[],uvs=[];
 const color=new THREE.Color();
 const gx=128,gz=102;
 for(let iz=0;iz<=gz;iz++){
@@ -104,6 +106,7 @@ for(let iz=0;iz<=gz;iz++){
   for(let ix=0;ix<=gx;ix++){
     const x=-990+1980*ix/gx, y=ground(x,z);
     positions.push(x,y,z);
+    uvs.push(x/16,z/16);
     const n=clamp((y-9)/145,0,1);
     color.setHSL(0.25-0.12*n,0.13+0.06*n,0.28+0.1*(1-n));
     if(y<0)color.setRGB(0.09,0.22,0.26);
@@ -117,8 +120,10 @@ for(let z=0;z<gz;z++)for(let x=0;x<gx;x++){
 worldGeometry.setIndex(indexes);
 worldGeometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
 worldGeometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+worldGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
 worldGeometry.computeVertexNormals();
-scene.add(new THREE.Mesh(worldGeometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.96,side:THREE.DoubleSide})));
+const groundMaterial=pbr.stone.clone();groundMaterial.vertexColors=true;groundMaterial.side=THREE.DoubleSide;
+scene.add(new THREE.Mesh(worldGeometry,groundMaterial));
 
 const waterUniforms={uTime:{value:0}};
 const waterMaterial=new THREE.ShaderMaterial({
@@ -158,14 +163,14 @@ riverStrip();riverStrip(false);
 
 // Buildings use instancing: over 300 varied towers with thousands of cheap emissive windows.
 const buildingBase=new THREE.BoxGeometry(1,1,1);
-const towerMesh=new THREE.InstancedMesh(buildingBase,mat('#ffffff',0.77),360);
+const towerMesh=new THREE.InstancedMesh(buildingBase,M.concrete,360);
 towerMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
 const windowMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),M.window,17000);
 windowMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
 const dummy=new THREE.Object3D(), tempColor=new THREE.Color();
 const obstacles=[];
 let towerCount=0,windowCount=0;
-const hues=['#4c5a66','#657b83','#4a4c60','#776c70','#54606c','#8b8581','#46566a'];
+const hues=['#b4b9bf','#96a5af','#9a9ba5','#b1a6a3','#85949f','#b2aea7','#8b9cab'];
 function tower(x,z,w,d,h,k) {
   const base=ground(x,z);
   dummy.position.set(x,base+h/2,z);dummy.rotation.set(0,0,0);dummy.scale.set(w,h,d);
@@ -210,17 +215,21 @@ scene.add(towerMesh,windowMesh);
 
 // Roads are swept strips following terraces, not an infinite grid.
 function road(points,width,material=M.road){
-  const verts=[],ind=[];
+  const verts=[],ind=[],roadUV=[];
+  let accumulated=0;
   for(let i=0;i<points.length;i++){
     const p=points[i],prev=points[Math.max(0,i-1)],next=points[Math.min(points.length-1,i+1)];
     const dx=next.x-prev.x,dz=next.z-prev.z,inv=1/(Math.hypot(dx,dz)||1);
     const ax=-dz*inv*width/2,az=dx*inv*width/2;
+    if(i>0)accumulated+=Math.hypot(p.x-prev.x,p.z-prev.z);
     verts.push(p.x-ax,p.y,p.z-az,p.x+ax,p.y,p.z+az);
+    roadUV.push(0,accumulated/8,width/8,accumulated/8);
     if(i<points.length-1){const j=i*2;ind.push(j,j+1,j+2,j+1,j+3,j+2);}
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(roadUV,2));
   g.setIndex(ind);g.computeVertexNormals();
-  const o=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:material.color,side:THREE.DoubleSide,roughness:0.9}));
+  const o=new THREE.Mesh(g,material);
   scene.add(o);return o;
 }
 for(const side of [-1,1])for(let l=0;l<3;l++){
@@ -236,7 +245,7 @@ function bridge(x,style=0){
   const y=59+style*13;
   box(x,y,-1,17,2.4,335,M.road);
   box(x-9,y+1.2,-1,1,1,335,M.rail);box(x+9,y+1.2,-1,1,1,335,M.rail);
-  // The red Qiansimen arch/truss is detailed by the additive hero-zone module.
+  // Qiansimen's real single-pylon cable system and red deck truss are detailed in details.js.
   if(style!==0)for(const z of [-83,83]){
     const top=y+52;
     for(const ox of [-10,10])box(x+ox,(top+y-13)/2,z,4,top-y+13,4,M.stone);
@@ -338,7 +347,7 @@ scene.add(trees,stems);
 
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
-const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles });
+const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 
@@ -455,7 +464,7 @@ joystick.addEventListener('pointerdown',e=>{
 joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
 joystick.addEventListener('pointerup',stopJoystick);
 joystick.addEventListener('pointercancel',stopJoystick);
-let viewYaw=0,viewPitch=.25,camDistance=14,dragging=false,mouseX=0,mouseY=0,toastUntil=0;
+let viewYaw=-.72,viewPitch=.25,camDistance=14,dragging=false,mouseX=0,mouseY=0,toastUntil=0;
 const temp=new THREE.Vector3();
 const cameraAim=new THREE.Vector3();
 function message(value,seconds=2.6){
