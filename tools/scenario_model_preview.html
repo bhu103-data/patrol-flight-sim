@@ -41,6 +41,7 @@ a{color:#7cbdef}@media(max-width:740px){.layout{grid-template-columns:1fr}}
 <button id="sample" type="button">Load existing Liberty GLB sample</button>
 <button id="tradeSample" type="button">Preview generated One World Trade Center GLB</button>
 <button id="empireSample" type="button">Preview generated Empire State Building GLB</button>
+<button id="chryslerSample" type="button">Preview generated Chrysler Building GLB</button>
 <button id="capture" type="button" disabled>Save review screenshot (PNG)</button>
 <div><label for="angle">Model rotation: <output id="angleText">0°</output></label>
 <input id="angle" type="range" min="-180" max="180" step="1" value="0"></div>
@@ -238,6 +239,15 @@ async function loadEmpire(){
   await loadBuffer(await response.arrayBuffer(),'Original Empire State Building');
  }catch(error){status(false,error.message);console.error(error)}
 }
+async function loadChrysler(){
+ status(null,'Fetching original authored Chrysler Building GLB');
+ try{
+  landmark.value='chrysler';
+  const response=await fetch('../assets/nyc/scenario/chrysler.glb',{cache:'no-store'});
+  if(!response.ok)throw Error('Chrysler GLB HTTP '+response.status);
+  await loadBuffer(await response.arrayBuffer(),'Original Chrysler Building');
+ }catch(error){status(false,error.message);console.error(error)}
+}
 async function init(){
  if(!gl)throw Error('WebGL2 unavailable');
  const res=await fetch('../assets/nyc/scenario-manifest.json');
@@ -260,6 +270,7 @@ async function init(){
  $('#sample').addEventListener('click',loadSample);
  $('#tradeSample').addEventListener('click',loadTrade);
  $('#empireSample').addEventListener('click',loadEmpire);
+ $('#chryslerSample').addEventListener('click',loadChrysler);
  file.addEventListener('change',async()=>{
   const entry=file.files?.[0];
   if(!entry)return;
@@ -305,7 +316,8 @@ async function init(){
  });
  window.addEventListener('beforeunload',()=>release(mesh),{once:true});
  const chosen=new URLSearchParams(location.search).get('asset');
- if(chosen==='empire')await loadEmpire();
+ if(chosen==='chrysler')await loadChrysler();
+ else if(chosen==='empire')await loadEmpire();
  else if(chosen==='trade')await loadTrade();
  else await loadSample();
 }
