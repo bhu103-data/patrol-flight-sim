@@ -35,7 +35,8 @@ test('ten NYC cameras include near-field building facades and nonblank PNG check
  assert.match(script,/PNG\.sync\.read\(bytes\)/);
  assert.match(script,/stats\.colorBins>32/);
  assert.match(script,/stats\.nearBlackFraction<\.97/);
- assert.ok(script.includes('result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings}'));
+ assert.match(script,/result=\{passed:true,state,bridge,dumbo,liberty,(?:petalwakeQa,)?\s*screenshots,pixels,controlPixels,captureTimings,warnings\}/,
+  'real browser report retains all verified cameras and optional road QA');
  assert.ok(script.includes("page.locator('#glCanvas').screenshot"));
  assert.ok(script.includes('body.patrol-qa-scene-only * {visibility:hidden !important;}'));
  assert.ok(script.includes('body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'));
