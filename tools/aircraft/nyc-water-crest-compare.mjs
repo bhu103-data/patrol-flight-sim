@@ -44,8 +44,18 @@ const inject=html=>html.replace(camera,`
   };
 `+bridge).replace(clock,'gl.uniform1f(uWorld.time, 20.0);')
     .replace(aircraftClock,'plane.yaw,20.0,');
-const sourceBefore=inject(src.replace(modern,old)),sourceAfter=inject(src);
-const origin=new URL(url).origin,report={cameraTime:20,frames:[],errors:[],note:'Test-only fixed shader time, not a runtime setting'};
+const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
+const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
+const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
+if(seaDetailAB&&src.split(detailEnabled).length!==2)
+  throw Error('Missing reversible NYC sea detail marker');
+const sourceBefore=inject(seaDetailAB
+  ?src.replace(detailEnabled,detailDisabled):src.replace(modern,old));
+const sourceAfter=inject(src);
+const origin=new URL(url).origin,report={
+  mode:seaDetailAB?'sea-detail':'crest',
+  cameraTime:20,frames:[],errors:[],
+  note:'Test-only fixed shader time, not a runtime setting'};
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
@@ -83,9 +93,23 @@ try{
       if(!responses.includes(200)||errors.length)
         throw Error('GLB/console failure: '+JSON.stringify({responses,errors}));
       await page.evaluate(()=>document.body.classList.add('crest-only'));
-      const file=root+'/nyc-water-crest-'+version+'.png';
+      const file=root+'/nyc-water-'+report.mode+'-'+version+'.png';
       await page.locator('#glCanvas').screenshot({path:file,animations:'disabled',timeout:90000});
-      report.frames.push({version,file,stage,state,modelHttp:responses});
+      // Actual RAF pacing, not elapsed screenshot time and not GPU timestamp.
+      const intervals=await page.evaluate(async()=>{
+        const out=[];let previous;
+        for(let i=0;i<17;i++){
+          const t=await new Promise(ok=>requestAnimationFrame(ok));
+          if(previous!==undefined)out.push(t-previous);
+          previous=t;
+        }
+        return out;
+      });
+      const sorted=[...intervals].sort((a,b)=>a-b);
+      report.frames.push({version,file,stage,state,modelHttp:responses,
+        rafP50ms:sorted[Math.floor(sorted.length*.5)],
+        rafP95ms:sorted[Math.floor(sorted.length*.95)],
+        rafSamples:intervals.length,gpuFrameMs:null});
       report.errors.push(...errors);
     }finally{await page.close();}
   }
@@ -98,7 +122,8 @@ try{
   report.passed=true;
 }catch(e){report.passed=false;report.failure=String(e.stack||e);process.exitCode=1;}
 finally{
-  writeFileSync(root+'/nyc-water-crest-comparison.json',JSON.stringify(report,null,2));
+  writeFileSync(root+'/nyc-water-'+report.mode+'-comparison.json',
+    JSON.stringify(report,null,2));
   await browser.close();
 }
 console.log(JSON.stringify(report,null,2));
