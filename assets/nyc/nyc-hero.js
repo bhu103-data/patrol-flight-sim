@@ -326,6 +326,21 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
     // Inland connection is anchored before the coastline and extends over
     // water. The cap retains the same number of fixed-size deck segments.
     const root=edge-side*1.6,tip=edge+side*length,top=waterY+1.18;
+    // A one-dimensional bank query alone can bridge a shallow inlet or end
+    // on a dry promontory. The entire landing edge must be on solid ground,
+    // while the outer half of the deck must stand over open water. Check all
+    // three longitudinal strips, including the actual lateral deck corners.
+    const transverse=[-width*.5,0,width*.5];
+    if(transverse.some(dz=>terrain(root,z+dz)<=waterY+1.15))continue;
+    let openWater=true;
+    for(const advance of [.45,.72,1]){
+      const deckX=edge+side*length*advance;
+      for(const dz of transverse){
+        if(terrain(deckX,z+dz)>waterY+.55){openWater=false;break;}
+      }
+      if(!openWater)break;
+    }
+    if(!openWater)continue;
     const landY=Math.min(waterY+2.75,terrain(root,z)+.07);
     const panelCount=Math.max(3,Math.ceil(length/2.2));
     const lengthX=tip-root;
