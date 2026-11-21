@@ -106,6 +106,8 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   roofMaterial.needsUpdate=true;
   const curvedRoofs=new THREE.InstancedMesh(traditionalRoofGeometry(),roofMaterial,96);
   curvedRoofs.count=0;
+  curvedRoofs.castShadow=true;
+  curvedRoofs.receiveShadow=true;
   curvedRoofs.instanceMatrix.setUsage(THREE.StaticDrawUsage);
   scene.add(curvedRoofs);
   function roof(x,y,z,width,height,depth){
