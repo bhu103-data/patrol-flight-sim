@@ -117,6 +117,52 @@ export function createChongqingPBR(THREE){
     texture.anisotropy=anisotropy;
     return texture;
   }
+  // Rocky subtropical embankment: slate, weathered grit, tiny moss pockets.
+  // A procedural tiled slope is more plausible than covering every hill in
+  // the photographic concrete-wall image meant for man-made building facades.
+  function makeSlopeAtlas(){
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=512;
+    const ctx=canvas.getContext('2d');
+    let seed=128385;
+    const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+    ctx.fillStyle='#696e68';ctx.fillRect(0,0,512,512);
+    // Broad uneven strata and broken shale outlines.
+    for(let n=0;n<2500;n++){
+      const x=rand()*512,y=rand()*512;
+      const w=7+rand()*83,h=.5+rand()*6;
+      const shade=rand();
+      ctx.fillStyle=shade<.38?'rgba(25,30,29,.14)':
+        shade<.75?'rgba(202,197,171,.13)':'rgba(90,99,88,.24)';
+      ctx.fillRect(x,y,w,h);
+      if(x+w>512)ctx.fillRect(x-512,y,w,h);
+    }
+    // Diffuse moss/soil stains occur in clustered patches, not uniform green noise.
+    for(let c=0;c<190;c++){
+      const cx=rand()*512,cy=rand()*512,r=9+rand()*27;
+      for(let j=0;j<14;j++){
+        const x=(cx+(rand()-.5)*r*2+512)%512,y=(cy+(rand()-.5)*r*2+512)%512;
+        const w=1+rand()*16,h=1+rand()*4;
+        ctx.fillStyle=rand()>.6?'rgba(48,72,55,.19)':'rgba(68,79,61,.12)';
+        ctx.fillRect(x,y,w,h);
+      }
+    }
+    // Layered fine abrasion for a matte natural rock response.
+    for(let n=0;n<5000;n++){
+      const x=rand()*512,y=rand()*512;
+      ctx.fillStyle=rand()>.5?'rgba(218,217,197,.10)':'rgba(16,26,27,.12)';
+      ctx.fillRect(x,y,.5+rand()*2.5,.5+rand()*2);
+    }
+    const texture=new THREE.CanvasTexture(canvas);
+    texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+    texture.colorSpace=THREE.SRGBColorSpace;
+    texture.anisotropy=anisotropy;
+    return texture;
+  }
+  const slopeTexture=makeSlopeAtlas();
+  const hillsideMat=new THREE.MeshStandardMaterial({
+    map:slopeTexture,bumpMap:slopeTexture,bumpScale:.08,
+    color:0xc0c5c0,roughness:.98,metalness:0,vertexColors:true,side:THREE.DoubleSide
+  });
   const tileTexture=makeAtlas('tile');
   const cutStoneTexture=makeAtlas('stone');
   const windowTexture=makeAtlas('window');
@@ -191,6 +237,6 @@ export function createChongqingPBR(THREE){
   return {
     concrete:concreteMat,stone:stoneMat,asphalt:asphaltMat,roof:roofMat,
     cutStone:carvedStoneMat,glass:glassMat,window:nightWindowMat,
-    curtainWall:curtainWallMat,glassPane:glassPaneMat
+    curtainWall:curtainWallMat,glassPane:glassPaneMat,hillside:hillsideMat
   };
 }
