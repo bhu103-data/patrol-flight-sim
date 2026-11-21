@@ -1,0 +1,11 @@
+{
+  "asset": "liberty-3dystopia-1k.glb",
+  "source_url": "https://sketchfab.com/3d-models/statue-of-liberty-04a8e7b1ba9142ba8cebc6108cd5bb97",
+  "author": "3Dystopia (@Dystopia)",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "download_variant": "GLB converted format, 1K textures",
+  "download_size_bytes": 5147688,
+  "review_status": "enabled-for-review-branch",
+  "review_note": "Paris Luxembourg Garden bronze replica; imported at the user's explicit request. Keep the source note visible and compare against the NYC reference before merge."
+}
