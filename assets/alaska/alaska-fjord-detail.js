@@ -108,11 +108,17 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const north= i<56 ? 250+h*195 : -600+h*215;
     const east= i<56 ? 28+j*152 : 38+j*137;
     const radius=1.35+3.9*hash(i*19+3);
-    if(terrainAt(east,north)>waterY+.12 ||
-       terrainAt(east+radius,north)>waterY+.12 ||
-       terrainAt(east-radius,north)>waterY+.12 ||
-       terrainAt(east,north+radius)>waterY+.12 ||
-       terrainAt(east,north-radius)>waterY+.12) continue;
+    // Check the whole floe footprint against the surveyed coast, including
+    // diagonal banks. Four cardinal samples alone let ice intersect narrow
+    // diagonal spits even while its center was on navigable water.
+    let whollyAfloat=terrainAt(east,north)<=waterY+.12;
+    for(let edge=0;edge<8 && whollyAfloat;edge++){
+      const angle=edge*Math.PI/4;
+      if(terrainAt(east+Math.cos(angle)*radius,
+                   north+Math.sin(angle)*radius)>waterY+.12)
+        whollyAfloat=false;
+    }
+    if(!whollyAfloat)continue;
     const corners=7+i%3;
     const y=waterY+.035,thick=.15+.27*hash(i*29+5);
     const top=[.69+.10*j,.85+.08*j,.90+.06*j];
