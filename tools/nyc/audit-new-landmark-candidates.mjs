@@ -63,7 +63,7 @@ function parseGLB(data){
     nodeNames:nodeNames.slice(0,80),
     sceneRoots:roots,
     gltfGenerator:json.asset.generator||null,
-    noAuthoredLODs:!(nodeNames.some(x=>/\\bLOD\\d\\b/i.test(x))||
+    noAuthoredLODs:!(nodeNames.some(x=>/lod[0-9]/i.test(x))||
       (json.extensionsUsed||[]).includes('MSFT_lod')),
     sourceMeshDimensionsNotCertified:true
   };
@@ -84,7 +84,7 @@ for(const candidate of sketchfabCandidates){
   const response=JSON.parse(doc);
   const m=response.metadata||{};
   const lic=m.license||{};
-  const officialBy=lic.slug==='by'&&/creativecommons.org\\/licenses\\/by\\/4\\.0/.test(lic.url||'');
+  const officialBy=lic.slug==='by'&&(lic.url||'').includes('/licenses/by/4.0');
   const author=m.user?.username||null;
   results.push({
     name:candidate.name,subject:candidate.subject,
@@ -142,7 +142,7 @@ const summary={
   caveat:'License claims are from creators; check third-party texture authors and model accuracy before redistributing.'
 };
 await writeFile(dir+'/new-nyc-landmark-candidate-verdict.json',
-  JSON.stringify(summary,null,2)+'\\n');
+  JSON.stringify(summary,null,2)+String.fromCharCode(10));
 console.log(JSON.stringify({
   baseline:summary.baselineSHA,
   sketchfab:results.map(x=>({name:x.name,author:x.author,license:x.license,
