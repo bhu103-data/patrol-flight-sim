@@ -12573,22 +12573,26 @@ const CENTRAL_PARK_SITES=[
     return true;
   }
   function usableFloatWater(x,z,yaw=plane.yaw){
-    if(selectedMap.city && !clearOfNycHeroDocks(x,z))return false;
-    // Nine samples cover the LENGTH and both FLOATS, not just center.
-    // A water touchdown on an island, shallow coast or pier is not valid.
+    // Audit the entire twin-pontoon water contact envelope, not just its
+    // center and four corners. Thin shore fingers can hide between the old
+    // nine test points, leading to stranded or partly beached floatplanes.
     const fx=Math.sin(yaw),fz=Math.cos(yaw),sx=fz,sz=-fx;
-    for(const along of [-3.05,0,3.05])for(const across of [-1.85,0,1.85]){
-      const px=x+fx*along+sx*across,pz=z+fz*along+sz*across;
-      if(sampleTerrainHeight(px,pz)>WATER_H+.06 ||
-         cityLotAt(px,pz)||sceneryObstacle(px,pz))return false;
-      if(selectedMap.alaska && alaskaObstacles.some(o=>
-        Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
-    }
+    for(const along of [-3.05,-1.525,0,1.525,3.05])
+      for(const across of [-1.85,-.925,0,.925,1.85]){
+        const px=x+fx*along+sx*across,pz=z+fz*along+sz*across;
+        // Check wing/pontoon clearance against actual authored harbor docks
+        // at every sampled contact point; center-only checks miss dock edges.
+        if(selectedMap.city && !clearOfNycHeroDocks(px,pz))return false;
+        if(sampleTerrainHeight(px,pz)>WATER_H+.06 ||
+           cityLotAt(px,pz)||sceneryObstacle(px,pz))return false;
+        if(selectedMap.alaska && alaskaObstacles.some(o=>
+          Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
+      }
     return true;
   }
   function findFloatWaterStart(){
     // Deterministic, bounded search over measured shorelines / actual city lots.
-    // The nine-point pontoon footprint gate is shared with landing checks.
+    // The dense pontoon footprint gate is shared with landing checks.
     // Keep clear of moving ships at the moment the plane is placed.
     const start=selectedMap.spawn||[0,40,0];
     const limit=(selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)-18;
