@@ -1,0 +1,66 @@
+{
+  "schema": "patrol-active-aircraft-v1",
+  "note": "Documentation/audit inventory; live runtime registry and launcher are in index.html. No JSON loader was added.",
+  "baseline": "codex/patrol-integration-20261121 @ 6d50bfda4b2d3837e550751ede49b200b140bc72",
+  "active": [
+    {
+      "id": "fighter",
+      "name": "Viper Jet",
+      "identity": "original fictional aircraft, NOT an F-15/F-22/real manufacturer type",
+      "origin": "PATROL procedural geometry",
+      "license": "self-authored project source; see repository license and authorship",
+      "runtime": "index.html::buildFighterMesh",
+      "materials": "embedded RGB surface colors; no external PBR textures",
+      "modelState": "active"
+    },
+    {
+      "id": "seaplane",
+      "name": "Cessna 185 Floatplane",
+      "identity": "C185-inspired, Blender-authored non-CAD game model with two pontoons",
+      "origin": "PATROL original Blender asset",
+      "license": "self-authored project source; verify any downstream distribution against repository author license",
+      "runtime": "assets/aircraft/cessna185-floats.glb",
+      "authoring": "assets/aircraft/cessna185-floats.blend",
+      "source": "tools/blender/cessna185_floatplane.py",
+      "fallback": "index.html::buildCessna185FloatMesh",
+      "modelState": "active"
+    }
+  ],
+  "archived": [
+    {
+      "id": "saucer",
+      "name": "UFO",
+      "sourceBackup": "index.html::buildSaucerMesh",
+      "reason": "not part of two-aircraft fleet; radio, registry and eager GPU construction removed",
+      "playable": false
+    },
+    {
+      "id": "jetpack",
+      "name": "Mark 42 Armor",
+      "sourceBackup": "index.html::buildJetpackMesh",
+      "reason": "not part of two-aircraft fleet; radio, registry and eager GPU construction removed",
+      "playable": false
+    }
+  ],
+  "crossMapException": "Chongqing legacy hotpot-pilot avatar gameplay is not a selectable extra aircraft. Flight bridge metadata maps this existing scene mode to fighter but visually it is not the Viper mesh; must not claim two identical airframes across maps.",
+  "thirdPartyCandidate": {
+    "status": "NOT_ACTIVATED; source+license, WebGL and browser PBR tests required before adoption",
+    "name": "Stealth Fighter v1",
+    "creator": "tevy (individual artist not separately named)",
+    "source": "https://tevy.dev/models/stealth-fighter",
+    "license": "CC0 1.0 publisher declaration",
+    "modelType": "original fictional single-seat stealth jet, NOT exact existing Viper geometry",
+    "pinnedOriginals": [
+      "https://tevy.dev/models/stealth-fighter/v1/lod0.glb",
+      "https://tevy.dev/models/stealth-fighter/v1/lod1.glb",
+      "https://tevy.dev/models/stealth-fighter/v1/lod2.glb"
+    ]
+  },
+  "noChangesTo": [
+    "main",
+    "codex/patrol-integration-20261121",
+    "flight physics",
+    "water collision",
+    "C185 Blender and GLB bytes"
+  ]
+}
