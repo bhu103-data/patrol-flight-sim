@@ -50,4 +50,8 @@ The DC map loads its material atlases in the background when a flight starts. Th
 
 The world is built to fit the game's flight area. The Times Square layout references the Broadway pedestrian plazas and Father Duffy Square. [Times Square Alliance](https://www.timessquarenyc.org/business-community/planning-an-event)
 
+## Chongqing research and permissions
+
+Research reference: [Chongqing browser experience](https://lab.ytdeepsea.com/games/chongqing/) and its [credits page](https://lab.ytdeepsea.com/games/chongqing/credits.html), checked 2026-11-20. The credits identify Poly Haven assets as CC0, Blender Studio Human Base Meshes as CC0, selected Wikimedia references as CC BY/CC BY-SA, Hunyuan3D-2 under its Community License, and generated facade/train textures as CC BY-SA 4.0. This project reuses none of the reference site's code or downloaded media; the Chongqing scene is newly authored from public place concepts and original procedural geometry. See [CHONGQING_LICENSES.md](CHONGQING_LICENSES.md) for the provenance record.
+
 
