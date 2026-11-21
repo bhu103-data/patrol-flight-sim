@@ -45,6 +45,28 @@ export class SpatialObstacleIndex {
     );
   }
 
+  // Prevent upward flight through the underside of elevated structures such as
+  // the Crystal skybridge, monorail station upper floors and pedestrian bridges.
+  // Ordinary buildings start at ground level; their side collisions still apply.
+  // Player's head extends ~1.05 world units above the center.
+  ceilingSurface(x,z,previousY,nextY,headClearance=1.1){
+    if(nextY<=previousY)return Infinity;
+    let ceiling=Infinity;
+    this.eachNear(x,z,.78,b=>{
+      if(!Number.isFinite(b.base))return false;
+      if(Math.abs(x-b.x)>=b.w*.5+.78 ||
+         Math.abs(z-b.z)>=b.d*.5+.78)return false;
+      const underside=b.base-headClearance;
+      // Only arrest an ascent that crosses the bottom of a volume from below.
+      // Do not pull down a player already inside or above a structure.
+      if(previousY<=underside+.07 &&
+         nextY>=underside-.06 &&
+         underside<ceiling)ceiling=underside;
+      return false;
+    });
+    return ceiling;
+  }
+
   // Only accept a rooftop when descending to it from above. Never teleport
   // a player up through a building from the street underneath it.
   landingSurface(x,z,previousY,nextY,groundY,clearance=2.35){
