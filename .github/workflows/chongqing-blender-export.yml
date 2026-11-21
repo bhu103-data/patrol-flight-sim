@@ -1,0 +1,60 @@
+name: Build Chongqing Blender review asset
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/chongqing-blender-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export-hongyadong:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch official Blender 5.2.1 and verify published checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PACKAGE=blender-5.2.1-linux-x64.tar.xz
+          export SOURCE=https://download.blender.org/release/Blender5.2
+          curl -fL --retry 3 --connect-timeout 20 --max-time 420 -o "$PACKAGE" "$SOURCE/$PACKAGE"
+          curl -fL --retry 3 --connect-timeout 20 --max-time 45 -o blender.sha256 "$SOURCE/blender-5.2.1.sha256"
+          grep -F "$PACKAGE" blender.sha256 | sha256sum --check
+          tar -xf "$PACKAGE"
+          ./blender-5.2.1-linux-x64/blender --version | head -n 2
+
+      - name: Export original eleven-level Hongyadong study via real Blender
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./blender-5.2.1-linux-x64/blender -b --python-exit-code 1 \
+            --python tools/blender/chongqing_scenario_author.py -- \
+            --output assets/chongqing/generated/hongyadong-study.glb
+          test -s assets/chongqing/generated/hongyadong-study.glb
+          sha256sum assets/chongqing/generated/hongyadong-study.glb
+
+      - name: Validate GLB with the real PATROL browser gate
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const src=readFileSync('assets/chongqing/scenario-assets.js','utf8');
+          const gate=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+          const file=readFileSync('assets/chongqing/generated/hongyadong-study.glb');
+          const arrayBuffer=file.buffer.slice(file.byteOffset,file.byteOffset+file.byteLength);
+          const audit=gate.validateScenarioGLB(arrayBuffer);
+          console.log('AUDITED GLB:',audit);
+          NODE
+
+      - name: Save review-only asset (not deployed to PATROL)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hongyadong-blender-glb-review
+          path: assets/chongqing/generated/hongyadong-study.glb
+          retention-days: 30
+          if-no-files-found: error
