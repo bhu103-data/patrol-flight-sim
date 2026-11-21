@@ -448,37 +448,67 @@ export function buildNycStreetNetwork({
   }
   function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;
-    // NYC yellow traffic signal heads and dark pedestrian walk/countdown box.
+    // Align the physical signal head and its circular lens normals to the
+    // slanted avenue bearing. Axis-aligned X/Z cubes looked sideways relative
+    // to Manhattan traffic and made the lights look like rectangular stickers.
+    const sideways=cross,forward=ave;
+    const hx=x-sideways[0]*.96,hz=z-sideways[1]*.96;
+    const at=(u,v,depth)=>[
+      hx+sideways[0]*u+forward[0]*depth,
+      base+3.59+v,
+      hz+sideways[1]*u+forward[1]*depth
+    ];
     box(x,base+2.52,z,.115,5.04,.115,iron);
     box(x,base+4.08,z,.20,.14,.20,iron);
-    beam([x,base+3.93,z],[x-.96,base+3.93,z],.075,steel);
-    box(x-.96,base+3.59,z,.36,.84,.35,signalYellow);
-    box(x-.96,base+3.59,z+.194,.265,.75,.045,iron);
-    const lights=[[.26,[.72,.12,.11]],[.0,[.67,.50,.12]],[-.26,[.15,.60,.28]]];
+    beam([x,base+3.93,z],[hx,base+3.93,hz],.075,steel);
+    // A real 3D yellow metal shell with dark recessed frontal glazing,
+    // rather than an unrotated rectangular housing. This is all baked into
+    // the existing street draw batch, with no additional draw calls.
+    const housingFront=.19,housingBack=-.18;
+    const q=(u0,v0,u1,v1,d0,d1,color)=>addQuad(
+      at(u0,v0,d0),at(u1,v0,d1),at(u1,v1,d1),at(u0,v1,d0),color);
+    q(-.18,-.42,.18,.42,housingBack,housingBack,signalYellow);
+    q(-.18,-.42,.18,.42,housingFront,housingFront,iron);
+    for(const side of [-1,1]){
+      const u=side*.18;
+      addQuad(at(u,-.42,housingBack),at(u,-.42,housingFront),
+        at(u,.42,housingFront),at(u,.42,housingBack),signalYellow);
+    }
+    for(const v of [-.42,.42])
+      addQuad(at(-.18,v,housingBack),at(.18,v,housingBack),
+        at(.18,v,housingFront),at(-.18,v,housingFront),signalYellow);
+    const lights=[[.26,[.72,.12,.11]],[0,[.67,.50,.12]],[-.26,[.15,.60,.28]]];
     for(let k=0;k<lights.length;k++){
-      const [delta,active]=lights[k];
-      const bright=k===(phase%3);
-      const rgb=bright?active:active.map(v=>v*.26);
-      const px=x-.96,py=base+3.59+delta,pz=z+.226;
-      // Octagonal glass/lens geometry reads round rather than a square box
-      // at close camera distances; inner light and metallic edge are separate.
+      const [delta,active]=lights[k],bright=k===(phase%3);
+      const rgb=bright?active:active.map(value=>value*.26);
+      // Each octagonal 3D lens has a metal bevel and colored inner glass.
+      // Rotating local UV basis also rotates its outward-facing surface.
+      const ring=(angle,r,depth)=>at(Math.cos(angle)*r,
+        delta+Math.sin(angle)*r,depth);
       for(let segment=0;segment<10;segment++){
         const a=segment*Math.PI/5,b=(segment+1)*Math.PI/5;
-        const ring=(ang,r,zLift)=>[px+Math.cos(ang)*r,
-          py+Math.sin(ang)*r,pz+zLift];
-        addQuad(ring(a,.108,-.019),ring(b,.108,-.019),
-          ring(b,.080,.001),ring(a,.080,.001),[.13,.15,.17]);
-        addQuad(ring(a,.078,.002),ring(b,.078,.002),
-          ring(b,.024,.004),ring(a,.024,.004),rgb);
+        addQuad(ring(a,.108,.199),ring(b,.108,.199),
+          ring(b,.080,.211),ring(a,.080,.211),[.13,.15,.17]);
+        addQuad(ring(a,.078,.214),ring(b,.078,.214),
+          ring(b,.024,.224),ring(a,.024,.224),rgb);
       }
-      box(x-.96,base+3.59+delta,z+.184,.25,.04,.12,iron);
+      // Shallow weather hoods throw real silhouette rather than flat decal.
+      addQuad(at(-.135,delta+.14,.193),at(.135,delta+.14,.193),
+        at(.135,delta+.14,.35),at(-.135,delta+.14,.35),iron);
     }
-    box(x,base+2.48,z+.13,.37,.58,.26,iron);
-    box(x,base+2.53,z+.278,.25,.40,.028,
+    // A matching pedestrian head on the same pole faces the same road axis.
+    const ped=(u,v,depth)=>[
+      x+sideways[0]*u+forward[0]*depth,
+      base+2.48+v,
+      z+sideways[1]*u+forward[1]*depth
+    ];
+    addQuad(ped(-.19,-.30,.13),ped(.19,-.30,.13),
+      ped(.19,.30,.13),ped(-.19,.30,.13),iron);
+    addQuad(ped(-.13,-.20,.138),ped(.13,-.20,.138),
+      ped(.13,.20,.138),ped(-.13,.20,.138),
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
-    // NYC DOT green street-name blades and ONE WAY wayfinding; labels are
-    // simulated in the compressed game grid, not official surveyed signs.
+    // Retain the budgeted street blades and original readable labels.
     if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
       const named=j===-1?'W 42 ST':j===0?'W 44 ST':
         j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
