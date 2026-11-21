@@ -45,3 +45,9 @@ This project skill is a PATROL-specific adapter, not a bundled copy of the exten
 ## Output contract
 
 Report exactly which GLB file was generated, whether it is activated, GitHub commit, visual test status, and what remains unverified. No claim of AAA or survey accuracy without independent measurement.
+
+
+## Preview gate
+
+Before `--activate`, use [tools/scenario_model_preview.html](../../../tools/scenario_model_preview.html) on the GitHub Pages deployment to open the exported .glb **locally in the browser**, rotate it and record the polygon budget, footprint, Base Color atlas and review screenshot. A bundled Liberty GLB tests the previewer even without a live Scenario connection. Do not claim a real Scenario model has been reviewed unless its actual GLB was loaded and inspected.
+
