@@ -11757,8 +11757,10 @@
           nycRealismAssets?.models[mark.kind]:null;
         // The old 13K low-poly Empire GLB does not supersede the
         // more detailed Art Deco mesh. Imported models must earn the switch.
-        const photoModel=imported && imported.count>meshes.body.count*1.33
-          ?imported:null;
+        // Approved Blender exports have already passed their manifest gates;
+        // the legacy tiny GLB still needs the original detail check.
+        const photoModel=imported && (imported.source==='scenario' ||
+          imported.count>meshes.body.count*1.33) ? imported:null;
         const classId=({empire:1,liberty:2,chrysler:3,trade:4,flatiron:5,times:6})[mark.kind]||0;
         gl.uniform1i(uMesh.nySurfaceClass,classId);
         drawMeshWithOutline(photoModel||meshes.body,model,false,mark.kind==='flatiron');
