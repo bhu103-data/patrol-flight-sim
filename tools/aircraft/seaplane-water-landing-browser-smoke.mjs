@@ -117,9 +117,41 @@ try {
        !docked.hud?.includes('DOCKING BRAKE')||!docked.flight.playing)
       throw new Error(map+' failed docking brake/stop after touchdown: '+JSON.stringify(docked));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-docked.png',animations:'disabled'});
+    let nycTakeoff=null;
+    if(map==='manhattan'){
+      // Real keyboard-driven re-takeoff after hard water touchdown and docking.
+      // Do not call a physics helper or teleport the craft for this stage.
+      await page.keyboard.press('g'); // release docking brake
+      await page.keyboard.down('Shift'); // C185 water acceleration
+      await page.keyboard.down('w'); // rotate when on step
+      try{
+        await page.waitForFunction(()=>{
+          const q=window.PatrolSeaplaneSmoke.read();
+          const p=window.PatrolSpaceBridge?.getState?.();
+          return q.crashed || (!q.waterborne && !!p?.playing &&
+            q.speed>17.5 && q.altitude>14.5);
+        },null,{timeout:180000,polling:400});
+      }finally{
+        await page.keyboard.up('w');
+        await page.keyboard.up('Shift');
+      }
+      nycTakeoff=await page.evaluate(()=>({
+        status:document.querySelector('#gearStatus')?.textContent,
+        flight:window.PatrolSpaceBridge.getState(),
+        physics:window.PatrolSeaplaneSmoke.read(),
+        webglLost:document.querySelector('#glCanvas')?.getContext('webgl2')?.isContextLost()
+      }));
+      if(nycTakeoff.physics.crashed||nycTakeoff.physics.waterborne||
+         !nycTakeoff.flight.playing||nycTakeoff.physics.speed<=17.5||
+         nycTakeoff.physics.altitude<=14.5||nycTakeoff.webglLost)
+        throw new Error('NYC C185 failed real-keyboard water takeoff: '+
+          JSON.stringify(nycTakeoff));
+      await page.screenshot({path:'artifacts/cessna185-manhattan-water-liftoff.png',
+        animations:'disabled'});
+    }
     if(errors.length)throw new Error(map+' browser errors: '+JSON.stringify(errors.slice(0,8)));
     results.push({map,loadedBlenderGLB:true,initialWaterTaxi:true,
-      stagedApproach:staged,touchdown:after,docked,errors:[]});
+      stagedApproach:staged,touchdown:after,docked,nycTakeoff,errors:[]});
     await page.close();
   }
   console.log('PASS C185 genuine WebGL + real-physics water touchdown: '+JSON.stringify(results));
