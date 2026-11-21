@@ -84,3 +84,15 @@ test('historic warehouse arches appear only inside Brooklyn LOD3 without extra b
   const far=build(lot,1);
   assert.equal(far.beams,0,'no distant industrial arch allocations');
 });
+
+test('Brooklyn roof water tank has round wood sides and braced supports at LOD3',()=>{
+  const lot=[302.76,-313.5,9,19,13.82,.41,false];
+  const medium=build(lot,2),near=build(lot,3);
+  assert.ok(near.quads>=medium.quads+16,
+    'sixteen wooden curved tank staves must be batched');
+  assert.ok(near.beams>=medium.beams+40,
+    'metal hoops and roof-anchored steel braces must render');
+  assert.equal(near.boxes.length,medium.boxes.length,
+    'no additional oversized rooftop cuboids');
+  assert.equal(build(lot,1).beams,0,'remote skylines do not build roof tanks');
+});
