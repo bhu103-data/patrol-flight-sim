@@ -124,3 +124,16 @@ Old repeated conical trees have been replaced by broadleaf-like ellipsoid/icosah
 Lighting is upgraded to a player-following **single 1024² soft directional shadow map** with a roughly 290-unit-wide local shadow area. The pilot, near-field roofs, tower silhouettes and cars cast shadows; the existing ground, stone, bridges and road meshes receive selected shadows. Only **High** graphics enables background tree crown shadow casting. **Battery Saver** disables the directional shadow pass and some ornamental traffic detail, to protect weak GPUs.
 
 Run `node --test tests/chongqing-streetlife.test.mjs` and `node --test tests/chongqing-vegetation.test.mjs` for the new tests, in addition to the previous geometry, interaction and PBR tests. The corresponding mock-JavaScript checks passed: five traffic/batching checks and four tree/shadow-budget checks. **Real browser graphics, authoritative 1:1 geographic correspondence, and actual FPS remain unverified**, so this is still a compact artistic simulation, not a photogrammetric digital twin.
+
+
+## Damp asphalt and operational crossing — 20 November 2026
+
+A new no-download procedural module, `assets/chongqing/wetstreets.js`, adds **192 irregular wet-asphalt patches** and **102 faint roadside light reflection strips**. The patches share one slightly glossy physically based material; soft amber strips share one small locally generated alpha map. These **two batched meshes** follow the curved road centerlines and approximate road elevation instead of floating on a flat plane. This is low-cost artistic specular light, **not** real ray-traced reflections or a rainy weather simulation. In Battery Saver mode both optional layers are hidden.
+
+`assets/chongqing/streetlife.js` now also includes a **10-stripe pedestrian crossing** on the upper riverside road near the hotpot entrance and **two timed traffic signal heads**, with alternating red/green lens visibility. Westbound cars in that lane actually stop short of the crossing on red and resume during the next green interval; signal timing is not merely cosmetic. The crossing, lamps and posts use existing box instancing and are not branded or copied from protected game artwork.
+
+Safety/performance: the new road effect uses only two draw groups, a lightweight generated 64×128 texture and no additional network requests. The traffic signal uses a deterministic 36-second cycle (24 seconds green, 12 seconds red). Vehicle/state snapshots are available only when explicitly requested for tests, not allocated per animation frame.
+
+Tests: `node --test tests/chongqing-wetstreets.test.mjs` checks geometry indices, UVs, draw groups, material values and low-quality mode; `node --test tests/chongqing-streetlife.test.mjs` includes a 140-second traffic simulation confirming red-light stopping and subsequent green-light release. The wet road mock generated 192 puddles + 102 reflected lamp strips with valid indices; 7 traffic test cases passed. These are JavaScript-level tests; no browser-based WebGL image comparison or FPS benchmark has been performed.
+
+**Accuracy note:** This crossing is a fictional local gameplay improvement in a compressed Chongqing reconstruction. Do not mistake it for a surveyed crossing location, a genuine street-level photo, or a 1:1 asset replacement.
