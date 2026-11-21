@@ -48,6 +48,7 @@ const THREE={
   MeshBasicMaterial:Material,MeshStandardMaterial:Material,MeshPhysicalMaterial:Material,
   Color,Vector3:Vec,
   PointLight:class{constructor(){this.position=new Vec;this.visible=true}},
+  SpotLight:class{constructor(){this.position=new Vec;this.target={position:new Vec};this.visible=true}},
   DoubleSide:2,DynamicDrawUsage:2,StaticDrawUsage:1
 };
 function setup(){
@@ -61,6 +62,7 @@ test('active Chongqing street traffic has 10 distinct cars including yellow taxi
   const {traffic,objects}=setup();
   assert.equal(traffic.stats.vehicles,10);
   assert.equal(traffic.stats.taxis,5);
+  assert.equal(traffic.stats.movingHeadlights,2);
   assert.ok(traffic.stats.streetLamps>=50);
   assert.ok(traffic.stats.roadMarkings>200);
   assert.ok(objects.filter(x=>x instanceof InstancedMesh).length>=15);
@@ -88,6 +90,7 @@ test('battery mode removes decorative checker and hub detail, not actual car bod
   assert.ok(instanced.filter(x=>!x.visible).length>=3);
   traffic.setQuality('normal');
   assert.ok(instanced.every(x=>x.visible));
+  assert.equal(objects.filter(x=>x instanceof THREE.SpotLight).length,2);
 });
 test('painted car body, cabin glass, wheels and white-black checker are separate batches',()=>{
   const {objects}=setup();
