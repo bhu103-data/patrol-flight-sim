@@ -1357,6 +1357,9 @@ const CENTRAL_PARK_SITES=[
     out vec4 fragColor;
 
     uniform sampler2D uTerrain;
+    uniform sampler2D uAlaskaPhotoAlbedo;
+    uniform sampler2D uAlaskaPhotoNormalRough;
+    uniform bool uAlaskaPhotoReady;
     uniform bool uAlderValley;
     uniform bool uAlaska;
     uniform bool uVegas;
@@ -2006,6 +2009,31 @@ const CENTRAL_PARK_SITES=[
             float iceVein=vnoise(p.xz*.49+vec2(grain*2.0,-macro*1.8));
             vec3 ice=mix(vec3(.24,.53,.62),vec3(.72,.86,.89),.31+.63*iceVein);
             albedo=mix(albedo,ice,glacier*.82);
+            // Near-field CC0 photography: normal and roughness channels are
+            // sampled only for Alaska and within a short flight detail radius.
+            if(uAlaskaPhotoReady){
+              float closeDetail=1.0-smoothstep(105.0,255.0,hitDist);
+              float photoAmount=closeDetail*max(exposed*.78,frost*.90);
+              if(photoAmount>.018){
+                float snowTile=step(.51,frost);
+                vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
+                vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
+                vec2 tiled=fract(projected*.107);
+                vec2 packedUV=vec2((snowTile+.022+.956*tiled.x)*.5,
+                                   .022+.956*tiled.y);
+                float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
+                vec3 photo=textureLod(uAlaskaPhotoAlbedo,packedUV,lod).rgb;
+                vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,packedUV,lod);
+                float roughness=normalRough.a;
+                vec2 texSlope=normalRough.rg*2.0-1.0;
+                float microLight=clamp(.87+dot(texSlope,uSun.xz)*.18,.69,1.08);
+                photo*=microLight;
+                albedo=mix(albedo,photo,clamp(photoAmount*.88,0.0,.92));
+                float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
+                                  mix(30.0,95.0,roughness));
+                albedo+=vec3(.15,.22,.25)*sparkle*(1.0-roughness)*photoAmount*.065;
+              }
+            }
           }
                     if (uManhattan) {
             float crossIsland = p.x - (${MANHATTAN_GRID.tilt} * p.z + ${MANHATTAN_GRID.offset.toFixed(1)});
@@ -5884,6 +5912,57 @@ const CENTRAL_PARK_SITES=[
 
   let mapScenery=null;
   let alaskaDetailMesh=null;
+  let alaskaIceActors=[],alaskaIcePose=null;
+  let alaskaPhotoTextures=null,alaskaPhotoLoading=false,alaskaPhotoGeneration=0;
+  function disposeAlaskaPhotoTextures(){
+    alaskaPhotoGeneration++;
+    if(alaskaPhotoTextures){
+      gl.deleteTexture(alaskaPhotoTextures.albedo);
+      gl.deleteTexture(alaskaPhotoTextures.normalRough);
+      alaskaPhotoTextures=null;
+    }
+    alaskaPhotoLoading=false;
+  }
+  function loadAlaskaPhotoTextures(){
+    if(alaskaPhotoTextures||alaskaPhotoLoading||graphicsCompat||
+       !smoothScenery()||directRendering)return;
+    alaskaPhotoLoading=true;
+    const epoch=++alaskaPhotoGeneration;
+    const files=['alaska-photo-albedo.webp','alaska-photo-nrm-rough.webp'];
+    Promise.all(files.map(name=>new Promise((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error('Missing Alaska photo '+name));
+      img.src='./assets/alaska/'+name;
+    }))).then(images=>{
+      if(epoch!==alaskaPhotoGeneration||!selectedMap.alaska||gl.isContextLost())return;
+      const made=[];
+      try{
+        for(const img of images){
+          if(img.naturalWidth!==512||img.naturalHeight!==256)
+            throw new Error('Invalid Alaska PBR atlas dimensions');
+          const tex=gl.createTexture();
+          if(!tex)throw new Error('Alaska photo GPU allocation failed');
+          made.push(tex);
+          gl.bindTexture(gl.TEXTURE_2D,tex);
+          gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,img);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+          gl.generateMipmap(gl.TEXTURE_2D);
+        }
+        alaskaPhotoTextures={albedo:made[0],normalRough:made[1]};
+        console.info('[PATROL] Alaska CC0 photographic rock/snow PBR ready');
+      }catch(error){
+        for(const tex of made)gl.deleteTexture(tex);
+        console.warn('[PATROL] Alaska photo materials fallback:',error);
+      }finally{
+        gl.bindTexture(gl.TEXTURE_2D,null);
+      }
+    }).catch(error=>console.warn('[PATROL] Alaska procedural material fallback:',error))
+      .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
+  }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
@@ -5958,6 +6037,9 @@ const CENTRAL_PARK_SITES=[
   function createMapScenery() {
     disposeSceneMesh(alaskaDetailMesh);
     alaskaDetailMesh=null;
+    for(const actor of alaskaIceActors)disposeSceneMesh(actor.mesh);
+    alaskaIceActors=[];
+    alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
     disposeSceneMesh(nycGisMesh);
@@ -5995,6 +6077,26 @@ const CENTRAL_PARK_SITES=[
           else{alaskaDetailMesh=uploaded;console.info('[PATROL] Alaska fjord detail',stats);}
         })
         .catch(error=>console.warn('[PATROL] Alaska detail fallback:',error));
+    }
+    // Dynamic, terrain-aware Alaska ice. No wave/terrain collision changes.
+    if(selectedMap.alaska && !graphicsCompat && smoothScenery()){
+      import('./assets/alaska/alaska-ice-motion.js').then(({
+        createAlaskaIceActors,poseAlaskaIce
+      })=>{
+        if(!selectedMap.alaska||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+        const actors=createAlaskaIceActors({
+          makeMesh:createTriangleMesh,
+          terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+          waterY:WATER_H
+        });
+        if(!selectedMap.alaska||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
+          for(const actor of actors)disposeSceneMesh(actor.mesh);
+          return;
+        }
+        alaskaIceActors=actors;
+        alaskaIcePose=poseAlaskaIce;
+        console.info('[PATROL] Alaska shoreline-aware moving ice',actors.length);
+      }).catch(error=>console.warn('[PATROL] Alaska ice motion fallback:',error));
     }
     // PATROL_NYC_STREETS_V10: city-only streets and street-level props.
     // Static geometry in its own draw batch, no WebGPU or second renderer.
@@ -8676,6 +8778,15 @@ const CENTRAL_PARK_SITES=[
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
     if(selectedMap.alaska && alaskaDetailMesh?.count)drawMesh(alaskaDetailMesh,identity);
+    if(selectedMap.alaska && alaskaIcePose && alaskaIceActors.length){
+      for(const actor of alaskaIceActors){
+        const pose=alaskaIcePose(actor,sceneryTime,sampleTerrainHeight,WATER_H);
+        if(!pose.visible || Math.hypot(pose.x-camPos[0],pose.z-camPos[2])>255)continue;
+        const sy=Math.sin(pose.yaw),cy=Math.cos(pose.yaw);
+        drawMesh(actor.mesh,mat4FromBasis([pose.x,pose.y,pose.z],
+          [cy,0,-sy],[0,1,0],[sy,0,cy],1),false,false,false);
+      }
+    }
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
@@ -10731,6 +10842,8 @@ const CENTRAL_PARK_SITES=[
       return;
     }
     if(selectedMap.dc)loadDcTextures();
+    if(selectedMap.alaska)loadAlaskaPhotoTextures();
+    else disposeAlaskaPhotoTextures();
     document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
     resScale = smoothScenery()?cityScaleStart():startupScale;
     scaleCeiling = 1;
@@ -11057,6 +11170,9 @@ const CENTRAL_PARK_SITES=[
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
+    alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
+    alaskaPhotoNormalRough:gl.getUniformLocation(worldProg,'uAlaskaPhotoNormalRough'),
+    alaskaPhotoReady:gl.getUniformLocation(worldProg,'uAlaskaPhotoReady'),
     viewProj: gl.getUniformLocation(worldProg, 'uWorldViewProj'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
     camFwd: gl.getUniformLocation(worldProg, 'uCamFwd'),
@@ -12061,6 +12177,18 @@ const CENTRAL_PARK_SITES=[
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
     gl.uniform1i(uWorld.terrain, 0);
     gl.uniform1f(uWorld.terrainScale,terrainScaleFor(selectedMap));
+    const alaskaPhotoReady=Boolean(selectedMap.alaska&&alaskaPhotoTextures&&
+      smoothScenery()&&!graphicsCompat&&!directRendering);
+    gl.uniform1i(uWorld.alaskaPhotoReady,alaskaPhotoReady?1:0);
+    if(alaskaPhotoReady){
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.albedo);
+      gl.uniform1i(uWorld.alaskaPhotoAlbedo,1);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.normalRough);
+      gl.uniform1i(uWorld.alaskaPhotoNormalRough,3);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform3fv(uWorld.camPos, camPos);
     gl.uniform3fv(uWorld.camFwd, camFwd);
     gl.uniform3fv(uWorld.camRight, camRight);
