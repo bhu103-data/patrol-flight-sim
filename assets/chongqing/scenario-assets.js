@@ -4,7 +4,7 @@
 export const MAX_SCENARIO_BYTES = 8 * 1024 * 1024;
 export const MAX_SCENARIO_TRIANGLES = 25000;
 
-export function checkScenarioManifest(manifest, preview = false) {
+export function checkScenarioManifest(manifest, preview = false, forceOriginal = false) {
   if (!manifest || manifest.schema_version !== 1) throw Error('Unsupported Scenario manifest');
   const spec = manifest.hongyadong;
   if (!spec || typeof spec !== 'object' ||
@@ -22,7 +22,7 @@ export function checkScenarioManifest(manifest, preview = false) {
   if (spec.enabled && (typeof spec.license !== 'string' || !spec.license.trim())) {
     throw Error('Activating a public GLB requires a verified redistribution license');
   }
-  return {spec, shouldLoad: spec.enabled === true || preview};
+  return {spec, shouldLoad: !forceOriginal && (spec.enabled === true || preview)};
 }
 
 export function validateScenarioGLB(buffer) {
@@ -101,11 +101,13 @@ export function validateScenarioGLB(buffer) {
 export async function loadOptionalHongyadong({
   THREE, scene, detailBuild, search = '', fetcher = fetch, decodeModel
 }) {
-  const preview = new URLSearchParams(search).get('scenario') === 'hongyadong';
+  const sceneChoice = new URLSearchParams(search).get('scenario');
+  const preview = sceneChoice === 'hongyadong';
+  const forceOriginal = sceneChoice === 'original';
   const manifestResponse = await fetcher('./assets/chongqing/scenario-manifest.json');
   if (!manifestResponse.ok) throw Error('Scenario manifest unavailable');
   const manifest = await manifestResponse.json();
-  const {spec,shouldLoad} = checkScenarioManifest(manifest,preview);
+  const {spec,shouldLoad} = checkScenarioManifest(manifest,preview,forceOriginal);
   if (!shouldLoad) return {active:false,reason:'Not enabled; procedural scene retained'};
   const target = './assets/chongqing/' + spec.file;
   const response = await fetcher(target);
