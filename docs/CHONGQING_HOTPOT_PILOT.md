@@ -98,3 +98,14 @@ This pass addresses three specifically visible sources of the earlier low-poly/c
 **Hotpot storefront correction:** The restaurant now uses the adjacent uphill doorway grade as its floor reference. Exposed lower-side foundation piers and a local pavement platform connect it to the steep road; the `E` interaction checks both the actual doorway distance and vertical position so the player cannot eat through the building from a rooftop or high above it. The start remains near the hotpot shop.
 
 **Final integrity check for this pass:** all six Chongqing JavaScript modules parsed successfully; 11 existing landmark/spatial regression cases passed in the same JavaScript mock test harness, and 10 visual-structure assertions passed for local CC0 texture paths, glass and natural hillside materials, sky camera-follow, elevated-deck colliders and Raffles bindings. The three additional tests in `tests/chongqing-visual.test.mjs` are checked into GitHub for direct `node --test` execution. As before, there has not been a full real GPU screenshot/FPS test or a confirmed public GitHub Pages deployment from this environment.
+
+
+## Direct CC0 texture and actual curved roof upgrade — 20 November 2026
+
+The most visible Hongyadong foreground wood, railings and carved lattice bars now use Poly Haven **CC0 1K photographic wood** loaded directly from its verified CDN. The pitched roof material uses a **CC0 1K photographic clay tile** image. The game does not display third-party asset names on its HUD, buildings or shops. See the source ledger in [CHONGQING_LICENSES.md](../CHONGQING_LICENSES.md); CC0 does not require a visible attribution notice.
+
+The traditional roof geometry was rebuilt: each of the 11 floor levels has 3 *real curved pitched roof meshes* with raised eave corners, modeled UVs and a ridge line. All 33 roof modules are rendered in one InstancedMesh rather than dozens of angled cube slabs. Both landward and riverside windows now have real-depth timber grid frames, batched into one more InstancedMesh with the full lattice layer hidden in Low graphics mode.
+
+Performance/robustness: the default local material atlas stays present until the optional CC0 photo finishes loading; a failed HTTPS request leaves the local fallback intact. This adds **two optional remote image requests**, so older statements that Chongqing uses only six bundled material images describe the earlier version, not this one. A new regression suite `tests/chongqing-detail.test.mjs` validates 33 curved roof instances, actual surface curvature, window lattice visibility and instance capacity; three checks passed in the isolated JavaScript runner.
+
+These changes use licensed real photographic *textures* and original detailed *geometry*, not a georeferenced high-poly scan of actual Chongqing buildings. Real browser visual inspection and a frame-rate benchmark remain outstanding.
