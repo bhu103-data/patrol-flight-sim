@@ -65,7 +65,8 @@ test('low-quality Alaska keeps procedural fallback without runtime image fetch',
   assert.match(main,/disposeSceneMesh\(actor\.mesh\)/);
   assert.match(main,/alaskaIcePose\(actor,sceneryTime,sampleTerrainHeight,WATER_H\)/);
   assert.ok(main.includes('assets/alaska/alaska-ice-motion.js'));
-  assert.ok(main.includes('assets/alaska/alaska-photo-albedo.webp'));
+  assert.ok(main.includes('alaska-photo-albedo.webp'));
+  assert.ok(main.includes("img.src='./assets/alaska/'+name"));
 });
 test('two bounded, licensed photographic PBR source atlases are present',()=>{
   assert.equal(manifest.format,'patrol-alaska-pbr-atlas-v1');
