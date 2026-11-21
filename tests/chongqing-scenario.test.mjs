@@ -31,7 +31,7 @@ function fakeGLB({triangles=600,external=false,extensions=false}={}) {
   dv.setUint32(24+padded,0x004e4942,true);
   return output.buffer;
 }
-function makeHarness({enabled=false,preview=false,missing=false,badBounds=false,license='' }={}){
+function makeHarness({enabled=false,preview=false,original=false,missing=false,badBounds=false,license='' }={}){
   const requests=[],visited=[],removed=[],swaps=[];
   const data=manifest(enabled,license);
   const asset={isObject3D:true,
@@ -57,7 +57,7 @@ function makeHarness({enabled=false,preview=false,missing=false,badBounds=false,
   return {requests,visited,removed,swaps,asset,
     load:()=>loadOptionalHongyadong({
       THREE,scene,detailBuild,fetcher,decodeModel:async()=>({scene:asset}),
-      search:preview?'?scenario=hongyadong':''
+      search:original?'?scenario=original':(preview?'?scenario=hongyadong':'')
     })};
 }
 
@@ -80,6 +80,15 @@ test('production activation requires redistributable rights and same-origin rela
   good.hongyadong.file='generated/good.glb';
   good.hongyadong.scale=[1,0,1];
   assert.throws(()=>checkScenarioManifest(good),/transform/);
+});
+
+test('force-original query bypasses licensed default Blender GLB and keeps collision-safe original',async()=>{
+  const h=makeHarness({enabled:true,original:true,license:'Original Blender mesh and Poly Haven CC0'});
+  const result=await h.load();
+  assert.equal(result.active,false);
+  assert.deepEqual(h.swaps,[]);
+  assert.equal(h.requests.length,1,'original mode must not download the 3D GLB');
+  assert.equal(checkScenarioManifest(manifest(true,'CC0'),false,true).shouldLoad,false);
 });
 
 test('GLB validator accepts budgeted triangles and rejects untrusted data',()=>{
