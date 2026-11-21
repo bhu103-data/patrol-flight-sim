@@ -131,6 +131,14 @@ test('cinematic Chongqing uses PBR curved hotpot roof and grounded river-facing 
     'a varied roofline rather than identical continuous slabs');
   assert.match(bridge,/node\.castShadow=true/,
     'recessed eaves receive real shadow passes');
+  assert.doesNotMatch(detail,/\[\[-65,39\],\[210,52\],\[550,46\]\]/,
+    'remove static glowing roof cruise replicas that overlap physical moving ferries');
+  const riverlife=await readFile(new URL('../assets/chongqing/riverlife.js',import.meta.url),'utf8');
+  assert.match(riverlife,/function deckSurface\(x,z,previousY,nextY\)/,
+    'moving ferries retain working player landing surfaces');
+  assert.match(riverlife,/function hullGeometry\(length,width\)/,
+    'boats retain their physically tapered hulls');
+
   assert.equal(manifest.hongyadong.enabled,true,
     'reviewed CC0 Blender facade becomes the default while rollback remains available');
   assert.ok(manifest.hongyadong.license.includes('CC0'));
