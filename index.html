@@ -8347,9 +8347,21 @@ const CENTRAL_PARK_SITES=[
           // ALASKA_SAFE_ROAD_GATE_V1: clip road pieces intersecting water.
           // A strip must be dry across its full width, not just its center.
           if(selectedMap.alaska){
-            const mid=(j+.5)/segments;
-            const checks=[first,second,third,fourth,point(mid,1),point(mid,-1),point(mid,0)];
-            if(checks.some(p=>sampleTerrainHeight(p[0],p[2])<=WATER_H+.92))continue;
+            // A narrow tidal inlet can pass BETWEEN corner/midpoint samples.
+            // Survey quarter-length intervals across the entire road width,
+            // keeping only dry mesh pieces rather than deleting whole routes.
+            let flooded=false;
+            for(const fraction of [0,.25,.5,.75,1]){
+              const t=(j+fraction)/segments;
+              for(const side of [-1,0,1]){
+                const p=point(t,side);
+                if(sampleTerrainHeight(p[0],p[2])<=WATER_H+.92){
+                  flooded=true;break;
+                }
+              }
+              if(flooded)break;
+            }
+            if(flooded)continue;
           }
           addQuad(first,second,third,fourth,color);
         }
