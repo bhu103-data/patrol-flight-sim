@@ -11,7 +11,7 @@ Snapshot acquired on **2026-11-20**; the source dataset is updated periodically.
 
 ## Scope, fidelity and limitations
 
-- The JSON contains a **non-exhaustive subset of 60 buildings**, selected from the first 150 returned by a roof-height-ordered query inside a limited downtown WGS84 bounding rectangle.
+- The JSON contains a **non-exhaustive subset of 100 buildings**, including 40 further validated roof polygons selected from the first 175 returned by a roof-height-ordered query inside a limited downtown WGS84 bounding rectangle.
 - Exterior footprint polygon **shape topology** and building identifiers originate with the municipal dataset; the **positions and heights are transformed and compressed** into PATROL's fictional world. The output is **not** accurate real-world 1:1 geography, a survey-grade reconstruction, a photogrammetric capture or a complete GIS export.
 - The source's `HEIGHT_ROOF` is a height above ground, **in feet**. PATROL scales this field to game units, capped at 48 units; it is not an architectural height including spires.
 - The roof mesh ignores interior courtyards/holes, and some nearly collinear vertices can produce one fewer non-degenerate roof triangle while maintaining the same overall roof area.
@@ -22,7 +22,7 @@ Snapshot acquired on **2026-11-20**; the source dataset is updated periodically.
 
 The flight setup loads the **same-origin static JSON** before starting the terrain worker. If it fails, the existing procedural-city path remains available.
 
-During worker terrain generation, anonymous buildings overlapping the 60 municipal polygon footprints are omitted. The worker generates matching roof elevations; the main-thread collision lookup tests the polygon, not only its rectangular bound. Official building walls and triangular roofs are **batched into the existing city mesh**, without separate per-building draw calls. Both the static JSON and polygon window generation are geographically bounded.
+During worker terrain generation, anonymous buildings overlapping the 100 municipal polygon footprints are omitted. The worker generates matching roof elevations; the main-thread collision lookup tests the polygon, not only its rectangular bound. Official building walls and triangular roofs are **batched into the existing city mesh**, without separate per-building draw calls. Both the static JSON and polygon window generation are geographically bounded.
 
 ## Test
 
