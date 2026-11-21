@@ -4,6 +4,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
 import { buildChongqingLandmarks } from './landmarks.js';
+import { buildChongqingStreetlife } from './streetlife.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
@@ -444,6 +445,7 @@ scene.add(trees,stems);
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
+const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 // Raffles shopping podium is an obstacle, in addition to its individual towers.
@@ -465,6 +467,7 @@ function applyQuality(){
   renderer.setPixelRatio(renderRatio);
   detailBuild.setQuality(qualityMode==='low'?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
+  streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
 }
@@ -761,9 +764,9 @@ function move(dt){
   // Permit flight above the 350m Raffles towers and the existing 650m space transition.
   state.pos.y=clamp(py+state.vel.y*dt,-.25,725);
   // Resolve axes separately so the pilot can slide along facades instead of sticking.
-  if(!intersectsBuilding(nx,state.pos.y,pz))state.pos.x=nx;
+  if(!intersectsBuilding(nx,state.pos.y,pz)&&!streetBuild.nearby(nx,pz,state.pos.y,.7))state.pos.x=nx;
   else state.vel.x=0;
-  if(!intersectsBuilding(state.pos.x,state.pos.y,nz))state.pos.z=nz;
+  if(!intersectsBuilding(state.pos.x,state.pos.y,nz)&&!streetBuild.nearby(state.pos.x,nz,state.pos.y,.7))state.pos.z=nz;
   else state.vel.z=0;
   // Distinguish walkable roofs from solid walls; the water surface is also walkable.
   const floor=obstacleIndex.landingSurface(state.pos.x,state.pos.z,py,state.pos.y,
@@ -887,6 +890,7 @@ function frame(){
   if(document.hidden||graphicsLost)return;
   time+=dt;
   waterUniforms.uTime.value=time;
+  streetBuild.update(dt,state.pos);
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
@@ -914,7 +918,8 @@ function frame(){
       perfHud.textContent='FPS '+measuredFPS.toFixed(0)+' / Calls '+stats.calls+
         '\nTriangles '+stats.triangles.toLocaleString()+
         '\nPixel ratio '+renderRatio.toFixed(2)+' / '+qualityMode+
-        '\nIndexed buildings '+obstacleIndex.obstacleCount;
+        '\nIndexed buildings '+obstacleIndex.obstacleCount+
+        '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps';
     }
   }
 }
