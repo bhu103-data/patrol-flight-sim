@@ -1,0 +1,49 @@
+name: NYC One WTC WebGL visual integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/scenario_model_preview.html'
+      - 'tools/verify-trade-browser.mjs'
+      - 'assets/nyc/scenario/trade.glb'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/scenario-textures.js'
+      - 'assets/nyc/scenario-manifest.json'
+      - '.github/workflows/nyc-trade-webgl.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyc-trade-webgl
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless Chromium for real WebGL2 rendering
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start local same-origin game asset server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/patrol-http.log 2>&1 &
+          echo $! > /tmp/patrol-http.pid
+      - name: Render real original One World Trade Center GLB, sample GPU pixels and capture screenshot
+        run: node tools/verify-trade-browser.mjs
+      - name: Preserve visual evidence and test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-one-world-trade-center-webgl-audit
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
