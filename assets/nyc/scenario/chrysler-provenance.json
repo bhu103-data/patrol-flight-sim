@@ -1,0 +1,11 @@
+{
+  "asset": "chrysler",
+  "file": "chrysler.glb",
+  "generation": "Original authored geometric mesh and glass atlas (not Scenario AI)",
+  "triangles": 7412,
+  "bytes": 637020,
+  "height_meters": 319,
+  "design": "Masonry shaft, inset windows, steel friezes, concentric Art Deco crown and spire",
+  "license": "Original artwork authored for PATROL; redistribution permitted",
+  "limits": "Game-scale interpretation, not surveyed or photogrammetric 1:1 reconstruction"
+}
