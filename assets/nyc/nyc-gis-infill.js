@@ -4,7 +4,8 @@
 // Exact source FIDs + lon/lat are in times-square-footprints.json.
 // The calibrated X/Z scale is *not* 1:1 and cannot be presented as survey geometry.
 // Meshes are deliberately restricted to the old procedural Times Square hole.
-const EPS=1e-7,MIN_AREA=7.0,MAX_PIECES=110,MAX_WINDOW_TRIM_QUADS=240;
+const EPS=1e-7,MIN_AREA=7.0,MAX_PIECES=110,MAX_WINDOW_TRIM_QUADS=240,
+  MAX_SHOPFRONT_FACES=12;
 const crossingZ=[-40,-19,-2,14,31,50];
 function cross(a,b,c){return (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);}
 function signed(poly){return poly.reduce((s,a,i)=>{const b=poly[(i+1)%poly.length];return s+a[0]*b[1]-a[1]*b[0]},0)*.5;}
@@ -90,7 +91,8 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
-  let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0;
+  let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
+    shopfrontFaces=0;
   const sourceFids=new Set();
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
@@ -139,6 +141,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
       // Downward x-z winding creates upward +Y roofs and outward wall normals.
       const ring=signed(part)>0?part.slice().reverse():part;
       const top=ground+h;
+      let addedGroundShop=false;
       for(let k=0;k<ring.length;k++){
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
@@ -195,6 +198,58 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
               (t0+t1)*.5+.012/bays,ground+3.56,
               ground+4.89,.071,frame);
           }
+        }
+        // A handful of low-rise municipal footprints otherwise had no
+        // street-level glass at all: h<9 skipped the regular upper windows.
+        // Add one authored shopfront per clipped piece, with a sensible
+        // ground-accessible entry, narrow mullions and a transom. This is
+        // NOT a claim about a surveyed store or its tenant identity.
+        // Cap visible fronts and emit into the existing GIS mesh only.
+        if(rec.fid!==384606 && h>=5.7 && len>=5.5 &&
+            !addedGroundShop && shopfrontFaces<MAX_SHOPFRONT_FACES &&
+            (Math.imul(rec.fid,2654435761)>>>0)%3!==1){
+          const count=Math.min(4,Math.max(2,Math.floor(len/2.55)));
+          const span=Math.min(len-.60,count*2.4);
+          const u0=(1-span/len)*.5,u1=1-u0;
+          const entry=(Math.imul(rec.fid,2246822519)>>>0)%count;
+          const tone=(Math.imul(rec.fid,3266489917)>>>0)%3;
+          const glassColors=[
+            [.125,.205,.255],[.18,.245,.27],[.11,.17,.22]];
+          const glass=glassColors[tone];
+          const trim=wall.map(c=>Math.min(.82,c*.80+.055));
+          const p=(u,y,d=.051)=>[a[0]+(b[0]-a[0])*u+nx*d,
+            y,a[1]+(b[1]-a[1])*u+nz*d];
+          const panel=(u,v,y0,y1,color,surface,d=.051)=>{
+            addQuad(p(u,y0,d),p(v,y0,d),p(v,y1,d),p(u,y1,d),
+              color,surface);
+            storefrontQuads++;
+          };
+          for(let bay=0;bay<count;bay++){
+            const left=u0+(u1-u0)*(bay+.055)/count;
+            const right=u0+(u1-u0)*(bay+.945)/count;
+            const isDoor=bay===entry;
+            // Window kick plate is solid; the entry begins near pavement.
+            panel(left,right,ground+(isDoor?.12:.33),ground+1.69,
+              glass,7);
+            panel(left,right,ground+1.80,ground+2.04,
+              glass.map(c=>c*1.16),7);
+            panel(left,right,ground+1.70,ground+1.79,trim,6,.070);
+            const edge=.035/len;
+            panel(left-edge,left,ground+.12,ground+2.08,trim,6,.074);
+            panel(right,right+edge,ground+.12,ground+2.08,trim,6,.074);
+            if(isDoor){
+              const mid=(left+right)*.5;
+              panel(mid,mid+.018/len,ground+.12,ground+1.69,
+                trim,6,.077);
+              panel(mid+.06/len,mid+.12/len,ground+.85,
+                ground+.95,trim,6,.079);
+            }else{
+              panel(left,right,ground+.28,ground+.36,trim,6,.074);
+            }
+          }
+          panel(u0,u1,ground+2.09,ground+2.20,trim,6,.076);
+          shopfrontFaces++;
+          addedGroundShop=true;
         }
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
@@ -270,5 +325,6 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   return {inputRecords:asset.features.length,sourceBuildings:buildings,
     infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
+    shopfrontFaces,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
 }
