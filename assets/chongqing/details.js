@@ -100,8 +100,10 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     geometry.computeVertexNormals();
     return geometry;
   }
-  const roofMaterial=materials.terra.clone();
+  // Share the live PBR roof material so async CC0 photo loading updates curved roofs too.
+  const roofMaterial=materials.terra;
   roofMaterial.side=THREE.DoubleSide;
+  roofMaterial.needsUpdate=true;
   const curvedRoofs=new THREE.InstancedMesh(traditionalRoofGeometry(),roofMaterial,96);
   curvedRoofs.count=0;
   curvedRoofs.instanceMatrix.setUsage(THREE.StaticDrawUsage);
