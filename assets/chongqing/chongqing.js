@@ -11,7 +11,7 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
-import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,collectChongqingShorelineRoadEnds } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 
@@ -575,29 +575,23 @@ for(const plan of plannedRoads){
   // Tributary cuts come FIRST; only dry road sections may reach the
   // building-volume clipper, never the river surface or unsupported banks.
   const dryRoads=clipChongqingDryRoadSegments(points,plan.width,ground,riverDist);
-  // Existing roads must NOT keep going across the unbridged tributary.
-  // Install compact reflective guardrails at both dry ends of every cut.
-  for(let k=0;k<dryRoads.length-1;k++){
-    const left=dryRoads[k],right=dryRoads[k+1];
-    if(left.length>1){
-      const p=left.at(-1),q=left.at(-2);
-      shorelineRoadEnds.push({point:p,tangent:[p.x-q.x,p.z-q.z],
-        width:plan.width,intoRoad:-1});
-    }
-    if(right.length>1){
-      const p=right[0],q=right[1];
-      shorelineRoadEnds.push({point:p,tangent:[q.x-p.x,q.z-p.z],
-        width:plan.width,intoRoad:1});
-    }
-  }
+  // Building/skybridge clipping must happen BEFORE selecting the riverbank
+  // safety guard sites. Otherwise a guard can survive inside a building even
+  // when the road section it was supposed to protect no longer exists.
+  const finalDryRoads=[];
   for(const dry of dryRoads){
     const clear=clipRoadToFreeSegments(dry,plan.width,obstacles,.8,2.5);
-    for(const path of clear.paths){
-      if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+    const finalPaths=clear.paths.filter(path=>path.length>=2);
+    finalDryRoads.push(finalPaths);
+    for(const path of finalPaths){
+      road(path,plan.width);roadClearanceStats.paths++;
     }
     roadClearanceStats.clipped+=clear.stats.clippedSegments;
     roadClearanceStats.removedLength+=clear.stats.removedLength;
   }
+  // Only end guards belonging to surviving road fragments get geometry.
+  shorelineRoadEnds.push(...collectChongqingShorelineRoadEnds(
+    dryRoads,finalDryRoads,plan.width));
 }
 const shorelineSafety=buildChongqingShorelineBarriers({
   THREE,scene,ground,ends:shorelineRoadEnds
