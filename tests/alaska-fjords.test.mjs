@@ -74,3 +74,22 @@ test('detail is gated behind the Alaska map and map-switch lifetime',()=>{
   assert.match(script,/col%3===0 \? \[0\.34,0\.65,0\.76\] : \[0\.61,0\.80,0\.85\],12\)/);
   assert.match(script,/glacierPoint\(col\+1,row\+1\),glacierPoint\(col\+1,row\),ice,12\)/);
 });
+
+test('ice floes avoid diagonal coastline protrusions, not just four compass points',()=>{
+  const hash=n=>{const s=Math.sin(n*127.1+78.233)*43758.5453;
+    return s-Math.floor(s);};
+  // Reproduce the first deterministic floe's position and maximum radius.
+  const east=28+hash(37)*152,north=250+hash(17)*195;
+  const radius=1.35+3.9*hash(3);
+  const shoreX=east+radius*Math.SQRT1_2;
+  const shoreZ=north+radius*Math.SQRT1_2;
+  const run=terrainAt=>buildAlaskaFjordDetail({
+    addTri(){},addQuad(){},terrainAt,waterY:12.2
+  }).iceFloes;
+  const allWater=run(()=>11.7);
+  const diagonalShore=run((x,z)=>
+    Math.hypot(x-shoreX,z-shoreZ)<.18?20:11.7);
+  assert.equal(allWater,86,'baseline generates the complete bounded floe set');
+  assert.equal(diagonalShore,allWater-1,
+    'a diagonal land intrusion must prevent ice from intersecting its shore');
+});
