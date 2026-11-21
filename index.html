@@ -2545,6 +2545,7 @@
 
     uniform sampler2D uScene;
     uniform bool uSmooth;
+    uniform bool uFastPostFx;
     uniform bool uNeonGlow;
     uniform vec3 uWeatherVisual;
     uniform vec3 uPalette[36];
@@ -2637,17 +2638,19 @@
       vec3 col = texture(uScene, vUv).rgb;
       if (uSmooth) {
         vec2 texel = 1.0 / uRes;
-        vec3 smoothColor = smoothGeometryEdges(vUv,texel,col);
+        vec3 smoothColor = uFastPostFx ? col : smoothGeometryEdges(vUv,texel,col);
         if(uNeonGlow){
           // Lift dark street detail while preserving headroom on signs and the Sphere.
           smoothColor+=0.078*sqrt(max(smoothColor,vec3(0.0)))*(1.0-clamp(smoothColor,0.0,1.0));
-          vec2 stride=2.6*texel;
+          if(!uFastPostFx){
+            vec2 stride=2.6*texel;
           vec3 glow=emissiveAt(vUv+vec2(stride.x,0.0))+emissiveAt(vUv-vec2(stride.x,0.0))+
             emissiveAt(vUv+vec2(0.0,stride.y))+emissiveAt(vUv-vec2(0.0,stride.y));
           vec2 diagonal=5.1*texel;
           vec3 outer=emissiveAt(vUv+diagonal)+emissiveAt(vUv-diagonal)+
             emissiveAt(vUv+vec2(diagonal.x,-diagonal.y))+emissiveAt(vUv+vec2(-diagonal.x,diagonal.y));
           smoothColor+=glow*0.062+outer*0.035;
+          }
         }
         if(uNyCinema>0.5)smoothColor=mix(smoothColor,
           nyGrade(smoothColor,vUv),min(uNyCinema/3.0,1.0));
@@ -4260,9 +4263,11 @@
     buildStreetVehicle('walker',[0.72,0.44,0.51],[0.87,0.69,0.57])
   ];
 
-  function drawStreetWalker(drawMesh,body,{x,y,z,yaw,stride,scale=1}){
+  function drawStreetWalker(drawMesh,body,{x,y,z,yaw,stride,scale=1},animateLegs=true){
     const front=[Math.sin(yaw),0,Math.cos(yaw)],right=[front[2],0,-front[0]];
     drawMesh(body,mat4FromBasis([x,y,z],right,worldUp,front,scale));
+    // At a distance the two animated leg draw calls are smaller than a pixel.
+    if(!animateLegs)return;
     for(const side of [-1,1]){
       const angle=side*stride;
       const up=worldUp.map((v,i)=>v*Math.cos(angle)+front[i]*Math.sin(angle));
@@ -4280,22 +4285,24 @@
       if(actor.kind==='train'){
         for(let car=0;car<4;car++){
           const {x,y,z,yaw}=railPose(actor,sceneryTime*actor.pace+actor.offset-car*13.35);
-          if(Math.hypot(x-camPos[0],z-camPos[2])>455)continue;
+          const dx=x-camPos[0],dz=z-camPos[2];
+          if(dx*dx+dz*dz>455*455)continue;
           const forward=[Math.sin(yaw),0,Math.cos(yaw)];
           drawMesh(streetMeshes.train,mat4FromBasis([x,y,z],[forward[2],0,-forward[0]],worldUp,forward,1));
         }
         continue;
       }
       const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
-      if (Math.hypot(x-camPos[0],z-camPos[2])>455) continue;
+      const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
+      if (distanceSq>455*455) continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
       if(actor.kind==='walker'){
-        drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45});
+        drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45},distanceSq<130*130);
       } else {
         const front=[Math.sin(yaw),0,Math.cos(yaw)],right=[front[2],0,-front[0]];
         const model=mat4FromBasis([x,y,z],right,worldUp,front);
         drawMesh(actor.wreck?wreckedTaxiMesh:streetMeshes[actor.kind],model);
-        if(!actor.wreck && actor.kind==='taxi' && Math.hypot(x-camPos[0],z-camPos[2])<240){
+        if(!actor.wreck && actor.kind==='taxi' && distanceSq<240*240){
           drawMesh(taxiLamps,model,true);
         }
       }
@@ -5320,7 +5327,7 @@
   let mapLights=null;
   let timesSquareScreens=null;
   // PATROL_NYC_STATIC_LED_V5 — original, unique, static ad art.
-  let timesSquareFallback=null,nycLedAtlas=null,nycLedLoading=false,nycLedGeneration=0;
+  let timesSquareFallback=null,nycLedAtlas=null,nycLedGeneration=0;
   let sceneryPlaces=[];
   let sceneryObjects=[];
   let sceneryMovers=[];
@@ -5813,17 +5820,22 @@
       timesSquareScreens=screens.upload();
       timesSquareFallback=oldScreens.upload();
       const generation=nycLedGeneration;
-      if(!graphicsCompat&&!directRendering&&!nycLedLoading&&adPanels.length){
-        nycLedLoading=true;
+      if(!graphicsCompat&&!directRendering&&adPanels.length){
+        // Map switches invalidate pending imports. Each rebuild can schedule its
+        // own atlas; previous builds never block the newest art from loading.
         import('./assets/nyc/nyc-led.js')
-          .then(module=>module.createNycLedAtlas(gl,adPanels))
-          .then(texture=>{
-            if(!gl.isContextLost() && selectedMap.city && generation===nycLedGeneration)
-              nycLedAtlas=texture;
-            else if(texture&&!gl.isContextLost())gl.deleteTexture(texture);
+          .then(module=>{
+            if(gl.isContextLost()||!selectedMap.city||generation!==nycLedGeneration)return null;
+            return module.createNycLedAtlas(gl,adPanels);
           })
-          .catch(error=>console.warn('[PATROL] NYC LED fallback:',error))
-          .finally(()=>{nycLedLoading=false;});
+          .then(texture=>{
+            if(!texture)return;
+            if(!gl.isContextLost() && selectedMap.city && generation===nycLedGeneration){
+              if(nycLedAtlas)gl.deleteTexture(nycLedAtlas);
+              nycLedAtlas=texture;
+            }else if(!gl.isContextLost())gl.deleteTexture(texture);
+          })
+          .catch(error=>console.warn('[PATROL] NYC LED fallback:',error));
       }
       const dock=findScenerySite(200,-388,{footprint:10,range:55,avoid:(x,z)=>
         z>=-405 && z<=-359 ? ![13,22,32,46].some(offset=>sampleTerrainHeight(x-offset,z)<=WATER_H) : true});
@@ -7925,9 +7937,10 @@
         drawMesh(streetSignalMeshes[index],mat4FromBasis(actor.pos,[1,0,0],worldUp,[0,0,1]),true);
       } else if(actor.kind==='rideGuest'||actor.kind==='cityGuest'){
         const guest=neonRunGuestPose(actor,sceneryTime);
-        if(Math.hypot(guest.x-camPos[0],guest.z-camPos[2])<=180){
+        const dx=guest.x-camPos[0],dz=guest.z-camPos[2],distanceSq=dx*dx+dz*dz;
+        if(distanceSq<=180*180){
           const models=actor.officer?officerMeshes:rideGuestMeshes;
-          drawStreetWalker(drawMesh,models[actor.index%models.length],guest);
+          drawStreetWalker(drawMesh,models[actor.index%models.length],guest,distanceSq<130*130);
         }
       } else if(actor.kind==='marquee'){
         const phase=Math.floor(sceneryTime*7)%4;
@@ -8238,6 +8251,7 @@
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
   let directRendering = graphicsCompat, frameCheckPending = true;
+  let renderVerified = false;
   const frameSample = new Uint8Array(4);
 
   const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc || selectedMap.chongqing);
@@ -8256,10 +8270,14 @@
     fboH = Math.max(1, Math.round(targetHeight * scale));
     fboW = Math.max(1, Math.round(targetHeight * scale * aspect));
 
-    glCanvas.width = fboW;
-    glCanvas.height = fboH;
-    hudCanvas.width = Math.round(viewWidth * density);
-    hudCanvas.height = Math.round(viewHeight * density);
+    // Avoid backing-store reallocations when only the 3D scale changes.
+    // In particular, preserve the independent full-resolution 2D cockpit HUD.
+    if(glCanvas.width !== fboW) glCanvas.width = fboW;
+    if(glCanvas.height !== fboH) glCanvas.height = fboH;
+    const desiredHudW = Math.round(viewWidth * density);
+    const desiredHudH = Math.round(viewHeight * density);
+    if(hudCanvas.width !== desiredHudW) hudCanvas.width = desiredHudW;
+    if(hudCanvas.height !== desiredHudH) hudCanvas.height = desiredHudH;
     hudH = smoothScenery() ? Math.min(viewHeight, 720) : 340;
     hudW = Math.max(1, hudH * aspect);
     hudCtx.setTransform(hudCanvas.width/hudW,0,0,hudCanvas.height/hudH,0,0);
@@ -8268,7 +8286,9 @@
     if (sceneDepth) gl.deleteRenderbuffer(sceneDepth);
     if (sceneFbo) gl.deleteFramebuffer(sceneFbo);
     sceneTex=sceneDepth=sceneFbo=null;
-    frameCheckPending=true;
+    // Keep the expensive readPixels health check for startup and recovery,
+    // not each routine adaptive resolution adjustment.
+    if(!renderVerified)frameCheckPending=true;
     if(directRendering)return;
 
     gl.activeTexture(gl.TEXTURE0);
@@ -8293,6 +8313,8 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     if(!complete){
       directRendering=true;
+      renderVerified=false;
+      frameCheckPending=true;
       resizeTargets();
     }
   }
@@ -9992,6 +10014,8 @@
       mapPanel.hidden = false;
       cleanup(false);
       loadStep.textContent='Checking graphics…';
+      renderVerified=false;
+      frameCheckPending=true;
       flying = true;
       glCanvas.focus({ preventScroll: true });
       resetFlightEnvironment();
@@ -10174,6 +10198,7 @@
     weather:gl.getUniformLocation(ditherProg,'uWeatherVisual'),
     scene: gl.getUniformLocation(ditherProg, 'uScene'),
     smooth: gl.getUniformLocation(ditherProg, 'uSmooth'),
+    fastPostFx: gl.getUniformLocation(ditherProg, 'uFastPostFx'),
     neonGlow: gl.getUniformLocation(ditherProg,'uNeonGlow'),
     nyCinema:gl.getUniformLocation(ditherProg,'uNyCinema'),
     palette: gl.getUniformLocation(ditherProg, 'uPalette'),
@@ -10190,6 +10215,7 @@
   // Main Simulation & Render Loop
   let lastTime = null;
   let slowFrames = 0;
+  let lastScaleAdjustment = -Infinity;
   let trailAccum = 0;
 
   // Boats follow closed loops checked against the actual height field.
@@ -10892,13 +10918,17 @@
       const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
       fastFrames = rawDt < 0.023 ? fastFrames + 1 : 0;
       slowFrames = rawDt > 0.040 ? slowFrames + 1 : 0;
-      if (slowFrames >= 6 && resScale > sceneScaleFloor()) {
-        scaleCeiling = resScale = Math.max(sceneScaleFloor(), resScale - 0.10);
+      if (now - lastScaleAdjustment >= 1100 && slowFrames >= 6 && resScale > sceneScaleFloor()) {
+        // A transient slow frame must not permanently lower the maximum graphics quality.
+        // Let the fast-frame branch recover image resolution after conditions improve.
+        resScale = Math.max(sceneScaleFloor(), resScale - 0.10);
         fastFrames = slowFrames = 0;
+        lastScaleAdjustment = now;
         resizeTargets();
-      } else if (fastFrames >= 40 && resScale < limit) {
+      } else if (now - lastScaleAdjustment >= 1100 && fastFrames >= 40 && resScale < limit) {
         resScale = Math.min(limit, resScale + 0.10);
         fastFrames = slowFrames = 0;
+        lastScaleAdjustment = now;
         resizeTargets();
       }
     }
@@ -11327,6 +11357,8 @@
       gl.uniform3f(uDither.weather,...environment.precipitation,skyElapsed);
       gl.uniform1i(uDither.scene, 0);
       gl.uniform1i(uDither.smooth, smoothScenery());
+      // Retain weather and color grading at low resolution while skipping extra texture fetches.
+      gl.uniform1i(uDither.fastPostFx, resScale < 0.58);
       gl.uniform1i(uDither.neonGlow,Boolean(selectedMap.vegas||selectedMap.city));
       gl.uniform1f(uDither.nyCinema,selectedMap.city && !graphicsCompat ?
         Number(nyStreetQuality.value) : 0);
@@ -11340,6 +11372,7 @@
     if(frameCheckPending){
       if(checkRenderedFrame()){
         frameCheckPending=false;
+        renderVerified=true;
         loadOverlay.classList.add('done');
       }else if(!gl.isContextLost()){
         if(!directRendering){
