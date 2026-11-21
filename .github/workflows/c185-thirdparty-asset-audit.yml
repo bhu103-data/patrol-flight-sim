@@ -47,7 +47,8 @@ jobs:
           set -u
           for pair in \
             'innerscene-twin high-wing-4-seat-floatplane-twin-floats-8fde8873' \
-            'innerscene-amphibious high-wing-4-seat-on-amphibious-floats-4be93185'; do
+            'innerscene-amphibious high-wing-4-seat-on-amphibious-floats-4be93185' \
+            'innerscene-sixseat seaplane-floatplane-edd77cd2'; do
             set -- $pair
             id="$1"; slug="$2"
             curl -fLsS --max-time 45 \
@@ -90,7 +91,7 @@ jobs:
       - name: Stage independently verified CC0 originals for temporary GLTFLoader viewer
         run: |
           mkdir -p artifacts/c185-asset-review/viewer
-          for id in 3dassets-highwing 3dassets-lite innerscene-twin innerscene-amphibious; do
+          for id in 3dassets-highwing 3dassets-lite innerscene-twin innerscene-amphibious innerscene-sixseat; do
             test -s "/tmp/${id}.glb"
             cp "/tmp/${id}.glb" "artifacts/c185-asset-review/viewer/${id}.glb"
           done
