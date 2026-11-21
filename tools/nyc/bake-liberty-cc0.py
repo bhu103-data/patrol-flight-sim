@@ -67,6 +67,21 @@ bpy.ops.object.mode_set(mode='OBJECT')
 obj.data.uv_layers.active = atlas_uv
 atlas_uv.active_render = True
 
+# Reserve a separate 512x512 quadrant for EACH imported source material.
+# Packing all four together allowed the nearest-pixel filling step to spread
+# copper patina / gold into the stone base. Preserve explicit 3% padding.
+if len(obj.data.materials) != 4:
+    raise RuntimeError("Expected four original Innerscene material slots")
+for face in obj.data.polygons:
+    material_id = face.material_index
+    if not 0 <= material_id < 4:
+        raise RuntimeError("Invalid Innerscene material slot")
+    qx, qy = material_id % 2, material_id // 2
+    for loop_id in face.loop_indices:
+        coord = atlas_uv.data[loop_id].uv
+        coord[0] = (qx + 0.03 + 0.94 * coord[0]) * 0.5
+        coord[1] = (qy + 0.03 + 0.94 * coord[1]) * 0.5
+
 # Sample the original tiled UVs and the newly packed UVs on the actual
 # decimated triangles. Cycles DIFFUSE baking returned a black 1024px image in
 # earlier CI runs, so software-rasterize the *source* PNGs instead.
