@@ -1,0 +1,77 @@
+name: Audit freely redistributable streetlight candidate
+on:
+  push:
+    branches: ["review/chongqing-free-streetlamp-audit-*"]
+  pull_request:
+    paths:
+      - "assets/chongqing/street-lamp-review.js"
+      - "assets/chongqing/street-lamp-preview.js"
+      - "assets/chongqing/streetlife.js"
+      - "assets/chongqing/chongqing.js"
+      - "scripts/street-lamp-browser-review.mjs"
+      - "tests/chongqing-street-lamp-review.test.mjs"
+      - "scripts/audit-external-glb.mjs"
+      - ".github/workflows/asset-glb-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: asset-glb-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-source-glb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify no unreviewed asset is loaded into PATROL
+        run: node --test tests/chongqing-street-lamp-review.test.mjs
+      - name: Fetch free original source and provenance (no account, no paid services)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/streetlamp-review
+          curl --fail --location --retry 2 --max-time 60 --proto '=https' \
+            https://grab3d.com/dl/street-light/street-light.glb \
+            --output /tmp/patrol-review-street-light.glb
+          curl --fail --location --retry 2 --max-time 40 --proto '=https' \
+            https://grab3d.com/dl/street-light/manifest.json \
+            --output artifacts/streetlamp-review/source-manifest.json
+          curl --fail --location --retry 2 --max-time 40 --proto '=https' \
+            https://grab3d.com/dl/street-light/LICENSE.txt \
+            --output artifacts/streetlamp-review/source-LICENSE.txt
+          grep -Eiq 'CC0|Creative Commons Zero' artifacts/streetlamp-review/source-LICENSE.txt
+      - name: Inspect actual GLB triangles, textures, codec and SHA-256
+        run: |
+          node scripts/audit-external-glb.mjs \
+            /tmp/patrol-review-street-light.glb \
+            artifacts/streetlamp-review/source-manifest.json \
+            artifacts/streetlamp-review/glb-audit.json
+      - name: Install original GLB into temporary test server only
+        run: |
+          mkdir -p assets/chongqing/review
+          cp /tmp/patrol-review-street-light.glb assets/chongqing/review/street-light.glb
+      - name: Install free headless Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start isolated local map server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-streetlamp-server.log 2>&1 &
+          sleep 3
+          curl --fail --silent http://127.0.0.1:8765/chongqing.html >/dev/null
+      - name: Capture same-camera street, low-altitude and battery WebGL evidence
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/street-lamp-browser-review.mjs
+      - name: Retain evidence only, NOT automatic installation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streetlamp-provenance-audit
+          path: artifacts/streetlamp-review/
+          retention-days: 7
+          if-no-files-found: ignore
