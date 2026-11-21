@@ -6,10 +6,15 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_TEST_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const out='artifacts/aircraft-two-choice-review';
 await mkdir(out,{recursive:true});
-const browser=await chromium.launch({headless:true,args:[
-  '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-dev-shm-usage','--disable-gpu-sandbox'
-]});
+// Set PATROL_WEBGL_NATIVE=1 on the user's own Windows PC to test installed
+// Chrome with real GPU (no SwiftShader). The default stays reproducible CI.
+const nativeMode=process.env.PATROL_WEBGL_NATIVE==='1';
+const browser=await chromium.launch(nativeMode
+  ?{headless:false,channel:'chrome',args:['--enable-webgl']}
+  :{headless:true,args:[
+    '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader','--disable-dev-shm-usage','--disable-gpu-sandbox'
+  ]});
 const results=[];
 function inspectPNG(data){
  const png=PNG.sync.read(data),counts=new Map();
@@ -81,10 +86,18 @@ try{
        glLost:document.getElementById('glCanvas')?.getContext('webgl2')?.isContextLost(),
        menuError:document.getElementById('menuError')?.hidden?null:
          document.getElementById('menuError')?.textContent,
-       crashVisible:!document.getElementById('crashOverlay')?.hidden
+       crashVisible:!document.getElementById('crashOverlay')?.hidden,
+       gpuRenderer:(()=>{
+         const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+         const ext=gl?.getExtension('WEBGL_debug_renderer_info');
+         return gl?(ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):
+           gl.getParameter(gl.RENDERER)):null;
+       })()
      }));
      if(state.glLost||state.menuError||state.crashVisible||state.flight?.aircraft!==craft)
        throw Error('Invalid real flight '+JSON.stringify(state));
+     if(nativeMode&&/swiftshader|llvmpipe|software/i.test(state.gpuRenderer||''))
+       throw Error('Native Chrome fell back to software WebGL: '+state.gpuRenderer);
      const path=out+'/actual-game-nyc-'+craft+'-webgl2.png';
      const png=await page.locator('#glCanvas').screenshot({path,timeout:60000});
      const pixels=inspectPNG(png);
@@ -93,14 +106,16 @@ try{
        throw Error('Blank/dark or low-information gameplay screenshot '+JSON.stringify(pixels));
      if(errors.length)throw Error('Page/console exceptions: '+errors.join('\n'));
      results.push({craft,pass:true,options,webgl2:true,shot:path,pixels,
-       sourceGLBfetches:fetches,flight:state.flight,renderer:'SwiftShader software WebGL2, NOT local Windows GPU'});
+       sourceGLBfetches:fetches,flight:state.flight,renderer:nativeMode?'Installed Chrome requested, inspect gpuRenderer':'SwiftShader software WebGL2, NOT local Windows GPU',gpuRenderer:state.gpuRenderer});
    }catch(error){results.push({craft,pass:false,error:String(error),errors,logs:logs.slice(-15)});}
    finally{await page.close()}
  }
 }finally{await browser.close()}
 const report={runtimeOnlyTwo:results.every(r=>r.pass),checkedAt:new Date().toISOString(),
- realWindowsChrome:false,
- environment:'Ubuntu GitHub Actions headless Chromium SwiftShader WebGL2; actual game, not user Windows machine',
+ localNativeChromeRequested:nativeMode,
+ realWindowsChromeVerified:nativeMode&&process.platform==='win32'&&results.every(r=>r.pass),
+ environment:nativeMode?'Installed Chrome, host OS '+process.platform+'; inspect renderer for true GPU':
+   'Ubuntu GitHub Actions headless Chromium SwiftShader WebGL2; actual game, not user Windows machine',
  screenshots:results.map(r=>r.shot).filter(Boolean),results};
 await writeFile(out+'/active-two-aircraft-browser-report.json',JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report,null,2));
