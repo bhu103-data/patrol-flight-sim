@@ -1,5 +1,29 @@
 # Alaska Fjords — open-source research and implementation record
 
+## 2026-11-20/21 — Near-field ice optics and irregular multi-whorl spruce
+
+Alaska's existing WebGL2 raymarch material now features an inexpensive,
+**Alaska-only** glacier microdetail shader close to the aircraft (<245 game
+units). It mixes coherent longitudinal blue ice flow, rare compression
+fractures, slightly darkened lamina and weak grazing-angle blue specular
+response. The light-scattering term is an artistic approximation, **not**
+physical subsurface scattering, real photon tracing or captured glacier ice
+measurements. The existing CC0 Poly Haven snow photo is reused at low strength
+for wind-packed snow micrograin, so the download and mipmap budget does not
+grow. Beyond the near-field threshold, the existing simpler glacier albedo
+remains. The measured USGS topography, terrain collision and physics are
+unchanged.
+
+The Alaska-only scenery batch now builds five or six asymmetric conifer
+branch whorls per tree (instead of three repeated triangular layers), using
+uneven radii, draped branch ends, fine partial needle fans and sparse
+elevation-dependent snow. This is still lightweight authored geometry; it
+is *not* an imported high-polygon scanned Sitka spruce model. Static tests
+assert finite coordinates, explicit tree/ice bounds and map isolation.
+Chromium SwiftShader WebGL2 browser tests validate normal and glacier-facing
+flight captures. We do not claim native GPU FPS or AAA photorealism.
+
+
 ## 2026-11-20/21 — Near-field glacier relief and forest silhouette pass
 
 The existing Alaska-only `alaska-fjord-detail.js` GPU batch now creates a
