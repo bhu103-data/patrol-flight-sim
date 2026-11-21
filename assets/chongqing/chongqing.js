@@ -9,6 +9,7 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
+import { previewChongqingScenarioAssets } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -494,6 +495,11 @@ const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
+// PATROL_CQ_SCENARIO_PREVIEW_V2: non-blocking, reviewed GLBs only, disabled
+// by default. This preview does not displace original collision/model assets.
+previewChongqingScenarioAssets({THREE,scene,ground})
+  .then(summary=>{if(summary.mode==='preview')console.info('[PATROL] Scenario GLB',summary);})
+  .catch(error=>console.warn('[PATROL] Scenario preview unavailable',error));
 // Raffles shopping podium is an obstacle, in addition to its individual towers.
 
 
