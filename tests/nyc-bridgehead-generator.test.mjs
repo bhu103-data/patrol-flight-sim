@@ -120,13 +120,13 @@ test('gapfill buildings do not overlap neighboring parcels',()=>{
       'building overlap near '+lot[0].toFixed(1)+', '+lot[1].toFixed(1));
   }
 });
-test('gapfill buildings keep away from runway and railway guard bands',()=>{
+test('gapfill buildings keep away from real runway and enabled railway guard bands',()=>{
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   for(const lot of fills){
     const [x,z,w,d]=lot,track=city.railway,runway=city.runway;
     const dist=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
-    assert.ok(Math.abs(dist-track.radius)>=4+Math.hypot(w,d)*.43,
-      'rail corridor clear');
+    if(track.enabled)assert.ok(Math.abs(dist-track.radius)>=4+Math.hypot(w,d)*.43,
+      'only an explicitly enabled legacy rail corridor reserves land');
     assert.equal(Math.abs(x-runway.x)<runway.halfLength+w/2+5 &&
       Math.abs(z-runway.z)<runway.halfWidth+d/2+5,false,
     'runway clear');
