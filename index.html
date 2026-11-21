@@ -13770,7 +13770,8 @@ const CENTRAL_PARK_SITES=[
       // It must not be misclassified as an airborne impact on the static
       // WATER_H collision plane. Land, docks, ships and the swept footprint
       // keep their existing checks below and in advanceFlight().
-      const validFloatWaterline=selectedAircraft==='seaplane' && waterborne &&
+      const validFloatWaterline=selectedMap.city &&
+        selectedAircraft==='seaplane' && waterborne &&
         surface<=WATER_H+0.04;
       if (y <= surface + 0.58 && !validFloatWaterline) {
         const water = surface <= WATER_H + 0.04;
