@@ -5088,6 +5088,48 @@ const CENTRAL_PARK_SITES=[
       }
       for(const vent of [-4.6,-1.5,1.5,4.6])
         box(0,3.075,vent,.72,.11,.96,[.33,.39,.42]);
+    } else if(kind==='walker') {
+      // PATROL_NYC_PEDESTRIAN_SILHOUETTE_V1: near-field body volumes follow
+      // shoulder, waist, arm, neck and skull contours. Meshes are created
+      // once, batched in the existing vehicle renderer (no extra draw calls).
+      // No oversized cube head or rectangular Minecraft-style torso.
+      const sides=12;
+      const point=(ring,i)=>{
+        const [y,cx,cz,rx,rz]=ring,a=i*Math.PI*2/sides;
+        return [cx+Math.cos(a)*rx,y,cz+Math.sin(a)*rz];
+      };
+      const loft=(rings,color)=>{
+        for(let j=0;j<rings.length-1;j++)
+          for(let i=0;i<sides;i++)
+            addQuad(point(rings[j],i),point(rings[j],i+1),
+              point(rings[j+1],i+1),point(rings[j+1],i),color);
+        for(let i=0;i<sides;i++){
+          addTri([rings[0][1],rings[0][0],rings[0][2]],
+            point(rings[0],i+1),point(rings[0],i),color);
+          const top=rings.at(-1);
+          addTri([top[1],top[0],top[2]],
+            point(top,i),point(top,i+1),color);
+        }
+      };
+      const shade=clothing.map(v=>Math.max(.07,v*.72));
+      loft([[.78,0,0,.18,.13],[.93,0,0,.20,.15],
+        [1.14,0,.015,.23,.165],[1.36,0,.01,.265,.155],
+        [1.46,0,.01,.15,.12]],clothing);
+      loft([[1.44,0,.018,.075,.077],[1.54,0,.02,.077,.077]],skin);
+      loft([[1.51,0,.035,.075,.075],[1.56,0,.035,.13,.115],
+        [1.70,0,.035,.143,.130],[1.77,0,.035,.119,.111],
+        [1.81,0,.035,.035,.035]],skin);
+      // Hair covers the cranium without cartoon facial decals.
+      loft([[1.72,0,.023,.130,.121],[1.77,0,.023,.126,.115],
+        [1.83,0,.023,.026,.026]],shade);
+      for(const side of [-1,1]){
+        loft([[1.39,side*.243,.015,.095,.095],
+          [1.22,side*.30,.030,.079,.082],
+          [1.01,side*.344,.053,.058,.065]],clothing);
+        loft([[1.01,side*.344,.053,.058,.064],
+          [.91,side*.351,.063,.052,.050],
+          [.885,side*.353,.065,.032,.033]],skin);
+      }
     } else {
       box(0,1.12,0,0.48,0.65,0.29,clothing);
       box(0,1.63,0.035,0.27,0.33,0.26,skin);
@@ -5242,8 +5284,19 @@ const CENTRAL_PARK_SITES=[
     return mesh.upload();
   })();
   const walkerLeg=(()=>{
-    const {addQuad,upload}=createTriangleMesh();
-    addModelBox(addQuad,0,-0.39,0,0.18,0.78,0.22,[0.24,0.26,0.31]);
+    const {addQuad,addTri,upload}=createTriangleMesh();
+    // Tapered trousers and a formed sole, instead of one upright leg cube.
+    const n=10,cloth=[.24,.26,.31],shoe=[.10,.13,.15];
+    const at=(y,rx,rz,k)=>[Math.cos(k*Math.PI*2/n)*rx,
+      y,Math.sin(k*Math.PI*2/n)*rz];
+    for(let k=0;k<n;k++){
+      addQuad(at(-.02,.115,.135,k),at(-.02,.115,.135,k+1),
+        at(-.69,.085,.105,k+1),at(-.69,.085,.105,k),cloth);
+      addQuad(at(-.69,.085,.105,k),at(-.69,.085,.105,k+1),
+        at(-.77,.104,.18,k+1),at(-.77,.104,.18,k),shoe);
+      addTri([0,-.77,0],at(-.77,.104,.18,k+1),
+        at(-.77,.104,.18,k),shoe);
+    }
     return upload();
   })();
 
