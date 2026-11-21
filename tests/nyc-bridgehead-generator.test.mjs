@@ -53,13 +53,11 @@ const terrain=[...generateTerrain({
 assert.ok(terrain,'generator finished without errors');
 const brooklyn=terrain.parcels.filter(lot=>
   lot[0]>210&&lot[0]<435&&lot[1]>-415&&lot[1]<-195);
-const fills=brooklyn.filter(lot=>
-  lot[2]>=8.5&&lot[2]<=10.5&&lot[3]>=14&&lot[3]<=17&&
-  lot[4]>=9.6&&lot[4]<=15.5);
+const fills=brooklyn.filter(lot=>lot[8]==='bridgehead-gapfill');
 test('Brooklyn Bridge district contains bounded additional building footprints',()=>{
   assert.equal(snapshot.footprints.length,100);
   assert.ok(brooklyn.length>=25,'bridgehead should contain substantial buildings');
-  assert.ok(fills.length>=8,'small vacant blocks should be filled');
+  assert.ok(fills.length>=10,'small vacant blocks should be filled');
   assert.equal(terrain.height.length,64*64);
 });
 test('generated bridgehead buildings do not intrude into authored road corridors',()=>{
@@ -68,6 +66,21 @@ test('generated bridgehead buildings do not intrude into authored road corridors
   for(const lot of brooklyn)
     assert.equal(crosses(lot,5.85),false,
       'road overlap at '+lot[0].toFixed(1)+', '+lot[1].toFixed(1));
+});
+test('gapfills preserve the compact grid streets and adjoining sidewalks',()=>{
+  const tiltMag=Math.hypot(1,city.tilt);
+  for(const [x,z,w,d] of fills){
+    const u=(x-city.tilt*z-city.offset)/city.blockWidth;
+    const v=z/city.blockLength;
+    const fu=u-Math.floor(u),fv=v-Math.floor(v);
+    const avenueSpace=Math.min(fu,1-fu)*city.blockWidth/tiltMag;
+    const avenueExtent=(w+Math.abs(city.tilt)*d)*.5/tiltMag;
+    const crossSpace=Math.min(fv,1-fv)*city.blockLength;
+    assert.ok(avenueSpace>=avenueExtent+4.65-1e-6,
+      'avenue and sidewalk clear');
+    assert.ok(crossSpace>=d*.5+4.35-1e-6,
+      'cross street and sidewalk clear');
+  }
 });
 test('gapfill buildings do not overlap neighboring parcels',()=>{
   for(const lot of fills)for(const neighbor of brooklyn){
