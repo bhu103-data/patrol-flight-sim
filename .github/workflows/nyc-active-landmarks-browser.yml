@@ -7,6 +7,7 @@ on:
       - 'tools/verify-nyc-active-landmarks.cjs'
       - 'assets/nyc/scenario-manifest.json'
       - 'assets/nyc/nyc-realism.js'
+      - 'tests/nyc-procedural-landmark-rollback.test.mjs'
       - '.github/workflows/nyc-active-landmarks-browser.yml'
   workflow_dispatch:
 
@@ -26,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate NYC procedural-vs-imported landmark rollback
+        run: node --test tests/nyc-procedural-landmark-rollback.test.mjs
       - name: Install isolated Chromium with WebGL2 SwiftShader
         run: |
           mkdir -p /tmp/patrol-browser
