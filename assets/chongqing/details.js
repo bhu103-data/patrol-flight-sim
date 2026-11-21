@@ -570,22 +570,11 @@ put('paving',sx,sy+.36,sz+31.3,72,.7,14);
   leafMesh.instanceMatrix.needsUpdate=true;barkMesh.instanceMatrix.needsUpdate=true;
   scene.add(leafMesh,barkMesh);
 
-  // Illuminated river cruises: glass saloons, tiered decks and individual cabin windows.
-  for(const [x,length] of [[-65,39],[210,52],[550,46]]){
-    const z=riverCenter(x);
-    put('stone',x,-.35,z,length,3.3,12.8);
-    put('window',x,4.6,z+6.6,length*.73,6,.2);
-    put('window',x,4.6,z-6.6,length*.73,6,.2);
-    put('stone',x,8.4,z,length*.83,1.7,11);
-    put('window',x,10.7,z+4.4,length*.53,3.4,.2);
-    put('amber',x,12.85,z,length*.7,.3,11.8);
-    for(let col=0;col<9;col++){
-      const wx=x-length*.35+col*(length*.7)/8;
-      put('timber',wx,5,z+6.8,.3,5,.3);
-      put('amber',wx,8.8,z+6.8,.7,.34,.4);
-      put('window',wx,10.5,z+4.65,1.4,1.8,.21);
-    }
-  }
+  // PATROL realistic ferry pipeline uses riverlife.js exclusively.
+  // Delete the three obsolete, stationary box-built "cruise ships" that had
+  // overbright amber roof rectangles and overlapped moving navigable ferries.
+  // The moving ferries retain detailed hulls, glass saloons, decks, railings,
+  // water wakes and rideable landing surfaces. No decorative duplicates.
 
   // Water glints are instanced transparent strips. No real-time reflection render target.
   const glints=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),
