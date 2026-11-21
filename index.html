@@ -5810,6 +5810,45 @@ const CENTRAL_PARK_SITES=[
         a[0]+dx*t+normal[0]*offset,yy,
         a[1]+dz*t+normal[1]*offset
       ];
+      // PATROL_NYC_TIMES_OFFICIAL_GROUND_SHOPS_V1: actual 13 Times Square
+      // address polygons enter this function at detailBand=4, ground ~15.
+      // Their upper windows start 2.9 units up; ground floors were solid
+      // opaque walls in the street camera. Add tightly bounded authored
+      // shop glazing on a small subset of the EXISTING polygon edges.
+      // FID outline and collision remain authoritative; no guessed parcels
+      // or separate WebGL draw calls. These are visual facades, not a
+      // surveyed window/retail census.
+      const timesGroundShop=detailBand===4 && y>14 && y<18 &&
+        x>-45 && x<65 && z>-100 && z<75 && h>12 && length>=2.6 &&
+        (i%2===0 || length>5.2);
+      if(timesGroundShop){
+        const shopBays=Math.min(3,Math.max(1,Math.floor(length/3.8)));
+        const base=y+.43,top=Math.min(y+2.43,roofY-.40);
+        const metal=isGlass?[.28,.34,.38]:[.39,.40,.39];
+        const recess=[.11,.15,.18];
+        for(let bay=0;bay<shopBays;bay++){
+          const left=(bay+.15)/shopBays,right=(bay+.85)/shopBays;
+          const tint=(i*7+bay*11)%5===0?[.18,.32,.37]:glass;
+          face(at(left,base,.068),at(right,base,.068),
+            at(right,top,.068),at(left,top,.068),tint,10);
+          // Genuine depth: dark jamb returns and a lit metal surround,
+          // protruding at most .132 outside an approved building outline.
+          face(at(left,base,.07),at(left,base,.125),
+            at(left,top,.125),at(left,top,.07),recess,9);
+          face(at(right,base,.125),at(right,base,.07),
+            at(right,top,.07),at(right,top,.125),recess,9);
+          face(at(left,top-.070,.132),at(right,top-.070,.132),
+            at(right,top+.035,.132),at(left,top+.035,.132),metal,9);
+          face(at(left,base-.064,.132),at(right,base-.064,.132),
+            at(right,base+.028,.132),at(left,base+.028,.132),metal,9);
+          if((bay+i)%2===0){
+            const mid=(left+right)*.5;
+            face(at(mid-.007,base,.132),at(mid+.007,base,.132),
+              at(mid+.007,top,.132),at(mid-.007,top,.132),metal,9);
+          }
+          windows++;
+        }
+      }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
       const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
       for(let floor=0;floor<floors;floor++){
