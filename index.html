@@ -3987,9 +3987,44 @@ const CENTRAL_PARK_SITES=[
           // tapered municipal footprint, rather than being buried in walls.
           const face=side*7.12,mid=base+height/2;
           box(0,base,face,8.08,height+0.12,0.42,frame);
+          // PATROL_ONE_TIMES_CAMPAIGN_ART_V17: retain the same eight
+          // uniquely numbered campaign IDs, but put the edition on a small
+          // frame label instead of printing a debug-looking number across
+          // the main LED creative. Original static abstract artwork stays
+          // local to the landmark and requires no copyrighted photo assets.
+          const edition=caption.match(/\d+$/)?.[0]||'';
+          const headline=caption.slice(0,caption.length-edition.length).trim();
+          const serial=Number(edition)||0;
           light(0,mid,face+side*0.243,7.67,height-0.28,0.062,tint);
-          addVegasLettering(lights.addQuad,caption,(u,v)=>[-side*u,mid+v,face+side*0.310],
-            7.22,Math.min(height*0.36,1.36),[0.94,0.93,0.86]);
+          // Spatially varied color ramp with unique per-edition phase,
+          // rather than a single flat green/blue/magenta box.
+          for(let stripe=0;stripe<22;stripe++){
+            const u=(stripe+.5)/22;
+            const phase=serial*.6180339887+(side+2)*1.73;
+            const wave=.81+.18*Math.sin(u*6.3+phase)+
+              .10*Math.cos(u*13.7+phase*.37);
+            const gradient=tint.map((v,ch)=>Math.max(.08,Math.min(.94,
+              v*wave+(ch===stripe%3?.035:.0))));
+            light((u-.5)*7.66,mid,face+side*.292,
+              7.66/22+.006,height-.31,.014,gradient);
+          }
+          // Thin architectural light ribbons break the billboard silhouette
+          // like an art-directed commercial; each board shifts its motif.
+          const accent=tint.map(v=>Math.min(.94,.49+v*.54));
+          const ribbonPhase=(serial%13)*.17;
+          for(let ray=0;ray<6;ray++){
+            const rx=1.70+ray*.23+.16*Math.sin(ribbonPhase+ray);
+            const ry=mid-height*.28+ray*height*.11;
+            light(rx,ry,face+side*.332,.12,height*.24,.018,accent);
+          }
+          addVegasLettering(lights.addQuad,headline,
+            (u,v)=>[-side*u,mid+v,face+side*.391],
+            7.22,Math.min(height*.36,1.36),[.96,.94,.85]);
+          // Serial remains available to audit nonrepetition, but at the
+          // size and position of a real production/edition identifier.
+          addVegasLettering(lights.addQuad,edition,
+            (u,v)=>[-side*(u+2.47),mid-height*.39+v,face+side*.397],
+            1.47,.19,[.66,.78,.81]);
           light(0,base+0.25,face+side*0.284,7.68,0.064,0.045,[0.91,0.84,0.69]);
           for(let i=0;i<6;i++){
             light((i-2.5)*1.19,base+0.63,face+side*0.286,0.93,0.035,0.045,[0.62,0.70,0.75]);
