@@ -7,20 +7,20 @@ const source=await fromFile('../assets/nyc/nyc-street-network.js');
 const {buildNycStreetNetwork}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 
 function city(isClear){
-  const slabs=[],signalObjects=[];
+  const slabs=[],signalObjects=[],quads=[];
   const grid={
     blockWidth:24,blockLength:33,tilt:.24,offset:30,
     parkHalfWidth:43,parkHalfLength:150,parkCenter:10000
   };
   const stats=buildNycStreetNetwork({
-    addQuad(){},addTri(){},box(...params){signalObjects.push(params)},
+    addQuad(...params){quads.push(params)},addTri(){},box(...params){signalObjects.push(params)},
     beam(){},ribbon(a,b,width,color){slabs.push({a,b,width,color})},
     terrainAt:()=>100,detailBand:()=>3,
     grid,streetY:20,waterY:0,timesBounds:[900,1000,900,1000],
     existingStreets:[],isClear,
     lettering(){},pavementText(){}
   });
-  return {stats,slabs,signalObjects,grid};
+  return {stats,slabs,signalObjects,quads,grid};
 }
 test('Manhattan grid still has roads when lots are clear',()=>{
   const {stats,slabs}=city(()=>true);
@@ -78,4 +78,19 @@ test('main NYC lot filter protects street routes in visual and collision data',a
   assert.equal(policy([383,-350,12,15]),true,'ramp clears obstructing buildings');
   assert.ok(html.includes('cityLots=safeParcels;'));
   assert.ok(html.includes('for (const lot of safeParcels)'));
+});
+
+test('Brooklyn bridgehead has pedestrian markings without building conflicts',()=>{
+  const clear=city(()=>true);
+  const bx=10*clear.grid.blockWidth+clear.grid.tilt*(-330)+clear.grid.offset;
+  const painted=quads=>quads.filter(q=>q.length>=5 &&
+    Array.isArray(q[4]) && q[4][0]>.80 &&
+    q.slice(0,4).every(p=>Array.isArray(p)&&Math.abs(p[0]-bx)<13&&Math.abs(p[2]+330)<13));
+  assert.ok(painted(clear.quads).length>0,'Brooklyn streets require visible crosswalk paint');
+  const obstacle={x:bx,z:-330,w:14,d:14};
+  const occupied=city((x,z,r=0)=>Math.abs(x-obstacle.x)>obstacle.w*.5+r||
+    Math.abs(z-obstacle.z)>obstacle.d*.5+r);
+  assert.equal(painted(occupied.quads).length,0,
+    'building at Brooklyn junction must suppress crossing paint');
+  assert.ok(occupied.stats.skippedRoadFootprints>0);
 });
