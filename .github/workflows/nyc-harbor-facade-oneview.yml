@@ -1,0 +1,47 @@
+name: NYC Lower Manhattan OTI one-view WebGL check
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/nyc-harbor-facade-browser-smoke.mjs'
+      - '.github/workflows/nyc-harbor-facade-oneview.yml'
+permissions:
+  contents: read
+concurrency:
+  group: nyc-harbor-oti-oneview-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  real-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install software-WebGL Chromium and PNG reader
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve the checked out game
+        run: |
+          python3 -m http.server 8899 --bind 127.0.0.1 >/tmp/patrol-nyc-oti-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8899/index.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture only Lower Manhattan harbor facade canvas
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8899
+        run: node scripts/nyc-harbor-facade-browser-smoke.mjs
+        timeout-minutes: 6
+      - name: Upload camera PNG and image diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-harbor-oti-oneview-webgl
+          path: artifacts/nyc-harbor-facade/
+          retention-days: 7
+          if-no-files-found: warn
