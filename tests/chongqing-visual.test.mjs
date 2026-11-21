@@ -37,16 +37,45 @@ const context=new Proxy({createLinearGradient(){return gradient}},{get(target,ke
 const oldDocument=globalThis.document;
 globalThis.document={createElement(){return {width:0,height:0,getContext(){return context}}}};
 
-test('six bundled and CC0 photographic texture URLs, no external asset request',async()=>{
+test('six local photographic surfaces plus two optional CC0 real wood/tile photos',async()=>{
   const {createChongqingPBR}=await loadModule('../assets/chongqing/pbr.js');
   requests.length=0;
   const pbr=createChongqingPBR(three);
-  assert.equal(requests.length,6);
-  assert.ok(requests.every(url=>url.startsWith('./assets/nyc/')&&url.endsWith('_1k.jpg')));
+  assert.equal(requests.length,8);
+  assert.ok(requests.slice(0,6).every(url=>url.startsWith('./assets/nyc/')&&url.endsWith('_1k.jpg')));
+  assert.ok(requests.slice(6).every(url=>url.startsWith('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/')));
+  assert.equal(pbr.cc0Status.attempted,2);
+  assert.equal(pbr.cc0Status.loaded,2);
+  assert.equal(pbr.cc0Status.failed,0);
+  assert.ok(pbr.wood.map,'CC0 timber has a texture');
+  assert.ok(pbr.carvedWood.map,'CC0 carved wood has a texture');
   assert.ok(pbr.curtainWall.map,'curtain-wall façade is textured');
   assert.ok(pbr.hillside.map,'the cliff is not plain concrete');
   assert.ok(pbr.glassPane,'physical single-pane material exists');
   assert.ok(pbr.roof.map,'ceramic roof tiles exist');
+});
+
+test('offline photo fallback retains local wooden beams and ceramic roof tiles',async()=>{
+  const {createChongqingPBR}=await loadModule('../assets/chongqing/pbr.js');
+  const offline={
+    ...three,
+    TextureLoader:class {
+      load(url,loaded,progress,failed) {
+        const tex=new FakeTexture();
+        if(url.startsWith('https://'))failed?.(new Error('network unreachable'));
+        else loaded?.(tex);
+        return tex;
+      }
+    }
+  };
+  const previous=console.warn;console.warn=()=>{};
+  let pbr;
+  try{pbr=createChongqingPBR(offline)}finally{console.warn=previous}
+  assert.equal(pbr.cc0Status.attempted,2);
+  assert.equal(pbr.cc0Status.failed,2);
+  assert.equal(pbr.cc0Status.loaded,0);
+  assert.ok(pbr.wood.map instanceof FakeTexture);
+  assert.ok(pbr.roof.map instanceof FakeTexture);
 });
 
 test('sky has humid glow and follows the camera without texture downloads',async()=>{
@@ -77,6 +106,8 @@ test('map material bindings and riverfront building placement remain wired',asyn
   assert.ok(source.includes('pbr.hillside.clone()'));
   assert.ok(source.includes('cliffX*cliffRamp*86'));
   assert.ok(detail.includes("obstacles.push({x,z,w:7,d:5.25"));
+  assert.ok(detail.includes('traditionalRoofGeometry()'));
+  assert.ok(detail.includes('curvedRoofs.computeBoundingSphere()'));
   assert.ok(landmark.includes('const sailGlass=(pbr?.curtainWall??glass).clone()'));
   assert.ok(source.includes('landmarkBuild.update(dt)'));
 });
