@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '22'
       - name: Local flight/float regression
-        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs
+        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs tests/nyc-tidewater-sky-atmosphere.test.mjs
       - name: Install software WebGL2 browser
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -40,6 +40,10 @@ jobs:
       - name: Tidewater-style NYC sea detail A/B at matched wave time
         env:
           PATROL_COMPARE_MODE: sea-detail
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: Tidewater-style NYC sunrise, solar disk and reflected sky A/B
+        env:
+          PATROL_COMPARE_MODE: sky-atmosphere
         run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
