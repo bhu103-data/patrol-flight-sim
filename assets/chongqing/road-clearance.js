@@ -111,6 +111,39 @@ export function roadReserveAtSite(site,segments,halfWidth=0,padding=0){
   }
   return false;
 }
+// Reconstruct the analytical terrace centerline between the 27-unit guide
+// points. Linear ribbons between those guides can cut through mountain grades
+// and leave large daylight gaps under moving traffic. This intentionally uses
+// the identical river/tier formula as both streetlife and chongqingTerraceRoads.
+// Bounded <=5.5-unit subdivision adds a few thousand triangles, not a new LOD.
+export function sampleChongqingTerraceSurface(plan,ground,riverCenter,
+  maxStep=5.5,roadLift=1.6){
+  if(!plan||!Array.isArray(plan.points)||plan.points.length<2||
+     !Number.isFinite(plan.side)||!Number.isFinite(plan.tier)||
+     typeof ground!=='function'||typeof riverCenter!=='function'||
+     !Number.isFinite(maxStep)||maxStep<=0||maxStep>30||
+     !Number.isFinite(roadLift))return [];
+  const roadZ=x=>riverCenter(x)+plan.side*
+    (145+plan.tier*105+14*Math.sin(x/115+plan.tier));
+  const result=[];
+  const put=x=>{
+    const z=roadZ(x),y=ground(x,z)+roadLift;
+    if(![x,y,z].every(Number.isFinite))
+      throw Error('Invalid Chongqing terrace surface height');
+    result.push({x,y,z});
+  };
+  put(plan.points[0].x);
+  for(let i=1;i<plan.points.length;i++){
+    const a=plan.points[i-1],b=plan.points[i];
+    const length=Math.hypot(b.x-a.x,b.z-a.z);
+    if(!Number.isFinite(length)||length<=0)
+      throw Error('Invalid Chongqing terrace guide segment');
+    const steps=Math.ceil(length/maxStep);
+    for(let n=1;n<=steps;n++)put(a.x+(b.x-a.x)*n/steps);
+  }
+  return result;
+}
+
 export function chongqingTerraceRoads(riverCenter){
   const paths=[];
   for(const side of [-1,1])for(let tier=0;tier<3;tier++){
