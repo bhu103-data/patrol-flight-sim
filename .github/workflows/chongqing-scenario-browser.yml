@@ -28,7 +28,7 @@ jobs:
           sleep 2
       - name: Verify the current 3.81 MB reviewed model (not a cached earlier GLB)
         run: |
-          echo "c9937f3fcce539b1d397e466bf214d03ac9bc636cec9b484d8ca6c98a24cecac  assets/chongqing/generated/hongyadong-study.glb" | sha256sum -c -
+          echo "f370dec62721dff86df8ee5123fd84c97b69e9cfa78be55df36a821830613c42  assets/chongqing/generated/hongyadong-study.glb" | sha256sum -c -
 
       - name: Check actual WebGL 2 asset preview and capture image
         shell: bash
@@ -69,7 +69,7 @@ jobs:
               await page.waitForTimeout(700);
               await page.screenshot({path:'artifacts/chongqing-scenario-clean.png'});
               console.log(JSON.stringify({report,logs:logs.slice(-25)},null,2));
-              if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/triangles:\s*15552.*images:\s*4/.test(t))) {
+              if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/triangles:\s*15996.*images:\s*4/.test(t))) {
                 throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
               }
             }finally{await browser.close()}
