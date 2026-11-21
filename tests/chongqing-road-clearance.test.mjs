@@ -25,6 +25,27 @@ test('street is preserved under an elevated bridge',()=>{
  const p=[{x:-40,y:5,z:0},{x:0,y:5,z:0},{x:40,y:5,z:0}];
  assert.equal(clipRoadToFreeSegments(p,8,[{x:0,z:0,w:18,d:18,base:70,top:95}]).paths.length,1);
 });
+test('sloped road stays intact when its crossing is below a hillside building',()=>{
+ const road=[{x:-100,y:0,z:0},{x:100,y:100,z:0}];
+ const highBuilding={x:-70,z:0,w:20,d:20,base:60,top:120};
+ const result=clipRoadToFreeSegments(road,8,[highBuilding],1);
+ assert.equal(result.paths.length,1);
+ assert.equal(result.stats.clippedSegments,0);
+});
+test('sloped road clips only where its local elevation reaches a building',()=>{
+ const road=[{x:-100,y:0,z:0},{x:100,y:100,z:0}];
+ const building={x:0,z:0,w:20,d:20,base:40,top:60};
+ const result=clipRoadToFreeSegments(road,8,[building],1);
+ assert.equal(result.paths.length,2);
+ assert.equal(result.stats.clippedSegments,1);
+});
+test('sloped road remains clear when the crossed building is entirely below it',()=>{
+ const road=[{x:-100,y:80,z:0},{x:100,y:100,z:0}];
+ const lowBuilding={x:0,z:0,w:20,d:20,base:0,top:55};
+ const result=clipRoadToFreeSegments(road,8,[lowBuilding],1);
+ assert.equal(result.paths.length,1);
+ assert.equal(result.stats.clippedSegments,0);
+});
 test('six canonical terrace paths and building reservations agree',()=>{
  const center=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
  const road=chongqingTerraceRoads(center);
