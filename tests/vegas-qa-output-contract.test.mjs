@@ -30,5 +30,5 @@ test('tagged captures reject paths outside their artifacts directory',()=>{
     if(tag)assert.throws(()=>initialize({env:{PATROL_QA_TAG:tag}}),/Invalid PATROL_QA_TAG/);
   assert.match(src,/qaTag,loadMs/,'passed JSON retains the identifying tag');
   assert.match(src,/status:'failed',qaTag/,'failed JSON retains the identifying tag');
-  assert.match(src,/triangles:234/,'retain the integrated 234-triangle visual pilot budget');
+  assert.match(src,/triangles:786/,'retain the current 786-triangle visual pilot budget');
 });

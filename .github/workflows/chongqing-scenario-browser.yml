@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: chongqing-pbr-browser
+  group: chongqing-pbr-browser-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -23,7 +23,7 @@ permissions:
 jobs:
   webgl-preview:
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - name: Install isolated Playwright browser (not a project dependency)
@@ -84,8 +84,11 @@ jobs:
               }
               // Explicit rollback: user must be able to switch to the legacy
               // facade without affecting bridge, river, vehicles or terrain.
+              // SwiftShader can starve DOMContentLoaded during a second heavyweight
+              // scene navigation. Commit proves an HTTP response; the explicit
+              // 'off' state below still proves actual rollback completed.
               await page.goto('http://127.0.0.1:8127/chongqing.html?scenario=original',
-                {waitUntil:'domcontentloaded',timeout:30000});
+                {waitUntil:'commit',timeout:75000});
               await page.waitForFunction(()=>
                 document.documentElement.dataset.scenarioHongyadong==='off',
                 null,{timeout:65000});
@@ -95,8 +98,10 @@ jobs:
               await page.screenshot({path:'artifacts/chongqing-original-clean.png'});
               // Production path itself (no scenario query) must now load the
               // licensed and browser-verified Blender facade by default.
+              // Keep the same bounded navigation and verify active production GLB
+              // through the 'ready' dataset gate, not document load latency.
               await page.goto('http://127.0.0.1:8127/chongqing.html',
-                {waitUntil:'domcontentloaded',timeout:30000});
+                {waitUntil:'commit',timeout:75000});
               await page.waitForFunction(()=>
                 document.documentElement.dataset.scenarioHongyadong==='ready',
                 null,{timeout:65000});
