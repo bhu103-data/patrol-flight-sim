@@ -8,7 +8,7 @@ import {readFile} from 'node:fs/promises';
 const read=async path=>readFile(new URL(path,import.meta.url),'utf8');
 const toUrl=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const roadSource=await read('../assets/chongqing/road-clearance.js');
-const {chongqingTerraceRoads,clipRoadToFreeSegments,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
+const {chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
 const urbanSrc=(await read('../assets/chongqing/urban-architecture.js'))
   .replace("from './road-clearance.js'",'from '+JSON.stringify(toUrl(roadSource)));
 const {createChongqingUrbanArchitecture}=await import(toUrl(urbanSrc));
@@ -103,7 +103,7 @@ function generate() {
     sign:(...args)=>signs.push(args),obstacles});
   const paths=[],stats={clipped:0,removed:0};
   for(const road of plans){
-    const pts=road.points.map(p=>({x:p.x,z:p.z,y:ground(p.x,p.z)+1.6}));
+    const pts=sampleChongqingTerraceSurface(road,ground,riverCenter);
     const trimmed=clipRoadToFreeSegments(pts,road.width,obstacles,.8,2.5);
     for(const path of trimmed.paths)paths.push({width:road.width,path});
     stats.clipped+=trimmed.stats.clippedSegments;
