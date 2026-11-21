@@ -13766,7 +13766,13 @@ const CENTRAL_PARK_SITES=[
       const pos = previous.map((value, j) => lerp(value, next[j], i / steps));
       const [x,y,z] = pos;
       const surface = sampleGroundHeight(x,z);
-      if (y <= surface + 0.58) {
+      // An already-waterborne C185 tracks a displaced wave crest/trough.
+      // It must not be misclassified as an airborne impact on the static
+      // WATER_H collision plane. Land, docks, ships and the swept footprint
+      // keep their existing checks below and in advanceFlight().
+      const validFloatWaterline=selectedAircraft==='seaplane' && waterborne &&
+        surface<=WATER_H+0.04;
+      if (y <= surface + 0.58 && !validFloatWaterline) {
         const water = surface <= WATER_H + 0.04;
         finishFlight([x,surface+0.1,z], water ? 'Water impact' : 'Terrain collision', water);
         return;

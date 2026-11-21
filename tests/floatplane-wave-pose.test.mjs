@@ -77,3 +77,22 @@ test('NYC float ocean floor retains actual depth below water collision plane',()
   assert.equal(f.sampleFloatOceanFloor(0,0),water,'other map fallback untouched');
   assert.match(html,/selectedMap,WATER_H,sampleFloatOceanFloor\)/);
 });
+
+test('only confirmed floating C185 avoids static waterline collision at wave trough',()=>{
+  const at=html.indexOf('  function checkFlightCollision(');
+  const a=html.indexOf('      const surface = sampleGroundHeight(x,z);',at);
+  const b=html.indexOf('      const vehicle=vehicleAt(',a);
+  assert.ok(at>0&&a>at&&b>a,'isolate real terrain collision gate');
+  const impact=new Function('x','y','z','selectedAircraft','waterborne',
+    'sampleGroundHeight','WATER_H','finishFlight',
+    html.slice(a,b)+'return false;');
+  const trial=({aircraft='seaplane',afloat=false,surface=12.2,y=12.55}={})=>{
+    const hits=[];
+    impact(0,y,0,aircraft,afloat,()=>surface,12.2,(...args)=>hits.push(args));
+    return hits;
+  };
+  assert.equal(trial({afloat:true}).length,0,'float on trough cannot crash on still-water plane');
+  assert.equal(trial({afloat:false}).length,1,'airborne C185 still collides with water');
+  assert.equal(trial({aircraft:'fighter',afloat:true}).length,1,'fighter cannot bypass impact');
+  assert.equal(trial({afloat:true,surface:13.4}).length,1,'shore and land remain solid');
+});
