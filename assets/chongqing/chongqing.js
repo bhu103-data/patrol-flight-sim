@@ -138,9 +138,15 @@ const waterMaterial=new THREE.ShaderMaterial({
     'void main(){vec3 n=normalize(vNormalW+vec3(.075*sin(vWorld.x*.095+uTime),0.,.065*cos(vWorld.z*.13-uTime)));',
     'float fresnel=pow(1.-max(dot(n,normalize(cameraPosition-vWorld)),0.),3.0);',
     'float wave=sin(vWorld.x*.17+uTime*2.)*cos(vWorld.z*.11-uTime)*.5+.5;',
-    'vec3 deep=vec3(.018,.12,.20), reflection=vec3(.24,.42,.60);',
-    'vec3 rgb=mix(deep,reflection,clamp(.19+fresnel*.82+wave*.13,0.,1.));',
-    'rgb+=vec3(.045,.023,.018)*pow(wave,7.);gl_FragColor=vec4(rgb,1.);}'
+    'vec3 deep=vec3(.013,.06,.088), reflection=vec3(.14,.22,.28);',
+    'vec3 rgb=mix(deep,reflection,clamp(.13+fresnel*.83+wave*.08,0.,1.));',
+    '// Moving ribbons approximate warm reflections from landmark windows and bridge.',
+    'float nearHong=exp(-pow((vWorld.x-155.)/110.,2.))*exp(-pow((vWorld.z-20.)/160.,2.));',
+    'float nearBridge=exp(-pow((vWorld.x-40.)/65.,2.))*exp(-pow((vWorld.z+8.)/170.,2.));',
+    'float ripple=.34+.66*pow(max(0.,sin(vWorld.x*.19+vWorld.z*.06+uTime*1.4)*sin(vWorld.z*.10-uTime*.76)),2.);',
+    'rgb+=vec3(1.0,.40,.10)*nearHong*ripple*.29;',
+    'rgb+=vec3(.8,.16,.09)*nearBridge*(.25+.75*ripple)*.24;',
+    'rgb+=vec3(.03,.03,.04)*pow(wave,7.);gl_FragColor=vec4(rgb,1.);}'
   ].join('\n')
 });
 function riverStrip(main=true){
@@ -278,7 +284,7 @@ function sign(text,x,y,z,w=44,h=11,ink='#ffe3a4',bg='#58202a'){
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));
   plane.position.set(x,y,z);scene.add(plane);return plane;
 }
-sign('洪崖洞',155,133,215,48,13);
+sign('洪崖洞',155,133,177,48,13);
 sign('千厮门大桥',40,82,40,40,10);
 sign('解放碑',-135,ground(-135,335)+64,347,28,8);
 
