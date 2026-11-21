@@ -39,7 +39,7 @@ If the extension shows a different port, replace 9876. Tokens rotate on Blender 
 
 1. Choose **One World Trade Center** (`trade`) as the first hero asset. The priority is its shape, glazing and roof silhouette, not cosmetic street details.
 2. In Scenario for Blender, create or refine the mesh with a distinct square podium, tapering eight-facet glass shaft and rotated-square top. Use licensed reference images only. Ask for a price quote before generation.
-3. Inspect the model in Blender Material Preview. Clean topology, merge unnecessary interior faces, verify normals, UVs and proportions. Add real material slots, then supply **COLOR_0 vertex colors** or baked vertex colors before exporting (the current PATROL loader consumes geometry, glTF baseColorFactor and COLOR_0; it does **not** yet render arbitrary embedded GLB PBR bitmap textures).
+3. Inspect the model in Blender Material Preview. Clean topology, merge unnecessary interior faces, verify normals, UVs and proportions. UV-unwrap the mesh and bake the visible **Base Color** material into **one embedded PNG/JPEG texture atlas** on TEXCOORD_0. The PATROL renderer now reads that atlas alongside geometry, glTF baseColorFactor and optional COLOR_0 vertex colors. Other untextured surfaces may use ordinary baseColorFactors. Multiple separate Base Color textures, UV transforms and normal/metallic/roughness bitmap channels are not yet supported.
 4. Move the finished asset to a Blender collection named `PATROL_EXPORT`. The object's horizontal center should be its own origin; PATROL scales it to the current gameplay height and positions it using the existing landmark transform. Do not flatten it to world coordinates, or overwrite source mesh transforms elsewhere.
 5. Save as `PATROL.blend` in the repository, or point `blender` at another absolute Blender file.
 
@@ -70,7 +70,7 @@ This updates `assets/nyc/scenario-manifest.json` with `enabled:true` and the lic
 | `flatiron` | Flatiron Building | 17 | 450 |
 | `times` | One Times Square | 35.6 | 500 |
 
-Each GLB is limited to **8 MiB and 25,000 triangles**; the runtime currently supports standard GLB 2.0 triangle meshes and embedded base-color factors/vertex colors. Keep a low-LOD version for distant flight in future asset work. Do not put API credentials, paid model download links, or unlicensed source imagery in Git.
+Each GLB is limited to **8 MiB and 25,000 triangles**; the runtime currently supports standard GLB 2.0 triangle meshes, embedded base-color factors, vertex colors and **one embedded Base Color PNG/JPEG atlas** (max 4 MiB embedded source, resized to 1024 px GPU). Normal/roughness/metalness bitmap rendering is not supported yet. Keep a low-LOD version for distant flight in future asset work. Do not put API credentials, paid model download links, or unlicensed source imagery in Git.
 
 ### Quality and rollback
 
