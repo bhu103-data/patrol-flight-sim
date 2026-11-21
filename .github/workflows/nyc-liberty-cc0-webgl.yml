@@ -5,6 +5,7 @@ on:
       - qa/nyc-liberty-cc0-glb-20261121
     paths:
       - "tools/nyc/bake-liberty-cc0.py"
+      - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
       - "scripts/nyc-liberty-static-webgl.mjs"
       - ".github/workflows/nyc-liberty-cc0-webgl.yml"
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - "tools/nyc/bake-liberty-cc0.py"
+      - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
       - "scripts/nyc-liberty-static-webgl.mjs"
       - ".github/workflows/nyc-liberty-cc0-webgl.yml"
@@ -29,7 +31,7 @@ jobs:
           node-version: "22"
       - name: Syntax checks and existing model preview regressions
         run: |
-          python3 -m py_compile tools/nyc/bake-liberty-cc0.py
+          python3 -m py_compile tools/nyc/bake-liberty-cc0.py tools/nyc/rasterize-liberty-colors.py
           node --check tools/nyc/check-liberty-glb.mjs
           node --check scripts/nyc-liberty-static-webgl.mjs
           node --test tests/scenario-model-preview.test.mjs tests/scenario-glb.test.mjs
