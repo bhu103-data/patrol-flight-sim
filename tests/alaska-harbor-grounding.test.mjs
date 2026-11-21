@@ -38,7 +38,7 @@ test('all six hillside houses occupy dry, non-overlapping terrain',()=>{
     const site=dryPad(x,z,w,d,126,3.9);
     assert.ok(site,'no house near '+x+','+z+' may float or disappear');
     const h=[];
-    for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
+    for(const ux of [-.5,-.25,0,.25,.5])for(const uz of [-.5,-.25,0,.25,.5])
       h.push(grid(site.x+ux*(w+.65),site.z+uz*(d+.65)));
     assert.ok(Math.min(...h)>13.2,'all cabin footprint samples must be dry');
     assert.ok(Math.max(...h)-Math.min(...h)<=3.9,'reject unbuildable cliff');
@@ -48,6 +48,16 @@ test('all six hillside houses occupy dry, non-overlapping terrain',()=>{
   assert.equal(obstacles.length,6);
   assert.match(game,/const floor=pad\.top\+0\.24/);
   assert.match(game,/base=sampleTerrainHeight\(sx,sz\)/);
+});
+
+test('narrow shoreline inlet beneath a cabin is rejected before building',()=>{
+  // The old 3x3 sampler missed the quarter-grid inlet entirely.
+  const offset=(10+.65)*.25;
+  const pocket=(x,z)=>Math.hypot(x-offset,z-offset)<.16?12.2:17;
+  const probe=new Function('sampleTerrainHeight','WATER_H','alaskaObstacles',
+    game.slice(start,end)+';return dryPad;')(pocket,12.2,[]);
+  assert.equal(probe(0,0,10,10,0,3.9),null,
+    'cabins require 25 dry support samples, not only corners/center');
 });
 
 test('lighthouse retains strict slope guard independent of houses',()=>{
