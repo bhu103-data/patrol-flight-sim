@@ -57,12 +57,26 @@ const fills=brooklyn.filter(lot=>lot[8]==='bridgehead-gapfill');
 test('Brooklyn Bridge district contains bounded additional building footprints',()=>{
   assert.equal(snapshot.footprints.length,100);
   assert.ok(brooklyn.length>=38,'compact DUMBO lots should restore more bridgehead blocks');
-  assert.ok(fills.length>=24,'short frontages admit safe additional infill lots');
+  // Disabling the fictitious railway lets generic parcels occupy former
+  // empty rail lots; therefore some secondary gapfills are no longer needed.
+  assert.ok(fills.length>=16,'retain safe infill around genuine road corridors');
   const footprintArea=brooklyn.reduce((area,lot)=>area+lot[2]*lot[3],0);
   assert.ok(footprintArea>=4500,
     'compact layouts increase occupied streetscape area without crossing roads');
   assert.equal(terrain.height.length,64*64);
 });
+test('modern Brooklyn reclaims empty parcels from the obsolete elevated rail loop',()=>{
+  assert.equal(city.railway.enabled,false,'modern DUMBO has no elevated loop');
+  const {west,east,z,radius}=city.railway;
+  const reclaimed=brooklyn.filter(([x,zz,w,d])=>{
+    const dx=Math.max(0,west-x,x-east);
+    const distance=Math.hypot(dx,zz-z);
+    return Math.abs(distance-radius)<4+Math.hypot(w,d)*.43;
+  });
+  assert.ok(reclaimed.length>=8,
+    'previous fake rail right-of-way now accommodates safe Brooklyn parcels');
+});
+
 test('synthetic NYC buildings preserve the local grid road and sidewalk corridors',()=>{
   const normalizer=Math.hypot(1,city.tilt);
   let checked=0;
