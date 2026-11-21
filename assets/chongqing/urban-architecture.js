@@ -377,6 +377,10 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      // Preserve full solid building envelopes in low mode; omit only the
      // small close-up trim batches that are not needed from a distant aircraft.
      facadeFrames.visible=!lowDetail;
+     // Glazing itself stays visible in economy mode; the LOD drops only
+     // close-up physical trim, never windows from the facade silhouette.
+     facadeGlazing.visible=true;
+     shopGlazing.visible=true;
      facadeMullions.visible=!lowDetail;
      facadeSills.visible=!lowDetail;
      shopAwnings.visible=!lowDetail;
