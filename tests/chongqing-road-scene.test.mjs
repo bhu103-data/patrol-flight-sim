@@ -8,7 +8,7 @@ import {readFile} from 'node:fs/promises';
 const read=async path=>readFile(new URL(path,import.meta.url),'utf8');
 const toUrl=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const roadSource=await read('../assets/chongqing/road-clearance.js');
-const {chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
+const {chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,crossesFootprint,isRoadPassableAtElevation,crossesRoadVolume}=await import(toUrl(roadSource));
 const urbanSrc=(await read('../assets/chongqing/urban-architecture.js'))
   .replace("from './road-clearance.js'",'from '+JSON.stringify(toUrl(roadSource)));
 const {createChongqingUrbanArchitecture}=await import(toUrl(urbanSrc));
@@ -104,10 +104,13 @@ function generate() {
   const paths=[],stats={clipped:0,removed:0};
   for(const road of plans){
     const pts=sampleChongqingTerraceSurface(road,ground,riverCenter);
-    const trimmed=clipRoadToFreeSegments(pts,road.width,obstacles,.8,2.5);
-    for(const path of trimmed.paths)paths.push({width:road.width,path});
-    stats.clipped+=trimmed.stats.clippedSegments;
-    stats.removed+=trimmed.stats.removedLength;
+    const drySections=clipChongqingDryRoadSegments(pts,road.width,ground,riverDist);
+    for(const section of drySections){
+      const trimmed=clipRoadToFreeSegments(section,road.width,obstacles,.8,2.5);
+      for(const path of trimmed.paths)paths.push({width:road.width,path});
+      stats.clipped+=trimmed.stats.clippedSegments;
+      stats.removed+=trimmed.stats.removedLength;
+    }
   }
   return {obstacles,paths,stats,urban,details,landmark,sceneObjects,ground,riverDist};
 }
