@@ -50,7 +50,8 @@ test('uses deck height only on bridge, street height after bridge and reverses',
   assert.ok(Math.abs(onStreet.y-(STREET_Y+.07))<1e-8);
   const forward=pose(actor,route.total-3),reverse=pose(actor,route.total+3);
   assert.equal(reverse.onBridge,false);
-  assert.ok(Math.abs(forward.x-reverse.x)<1e-8&&Math.abs(forward.z-reverse.z)<1e-8);
+  assert.ok(Math.abs(Math.hypot(forward.x-reverse.x,forward.z-reverse.z)-2.14)<1e-8,
+    'vehicle reverses into the opposite 1.07-unit offset lane');
   assert.ok(Math.abs(Math.cos(forward.yaw-reverse.yaw)+1)<1e-8,
     'heading should reverse for the return journey');
 });
