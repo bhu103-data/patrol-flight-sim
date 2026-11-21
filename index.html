@@ -215,6 +215,7 @@
         <fieldset>
           <legend>Aircraft</legend>
           <label><input type="radio" name="aircraft" value="fighter" checked>Viper Jet<small>Fast boost, balanced handling</small></label>
+          <label><input type="radio" name="aircraft" value="seaplane">Cessna 185 Floatplane<small>US-built Skywagon · two pontoons · water taxi, takeoff and landing on every map</small></label>
           <label><input type="radio" name="aircraft" value="saucer">UFO<small>Tight turns, steady pitch</small></label>
           <label><input type="radio" name="aircraft" value="jetpack">Mark 42 Armor<small>Repulsor flight, landing mode and twin lasers</small></label>
         </fieldset>
@@ -852,6 +853,10 @@ const CENTRAL_PARK_SITES=[
   let selectedMap = FLIGHT_MAPS.manhattan;
   const AIRCRAFT = {
     fighter: { name: 'Viper Jet', cruise: 23.5, boost: 42, turn: 1.45, pitchResponse: 3.4, maxPitch: 0.78 },
+    // Cessna 185 Skywagon: 35ft10in wingspan, 25ft7.5in airframe length.
+    // Model is authored at metric scale; flight speeds are game units/sec.
+    seaplane: { name: 'Cessna 185 Floatplane', cruise: 19.2, boost: 25.5,
+      turn: 0.93, pitchResponse: 2.05, maxPitch: 0.45 },
     saucer: { name: 'UFO', cruise: 20, boost: 34, turn: 2.3, pitchResponse: 4.0, maxPitch: 0.55 },
     jetpack: { name: 'Mark 42 Armor', cruise: 14, boost: 24, turn: 1.9, pitchResponse: 5.2, maxPitch: 1.02 }
   };
@@ -3339,12 +3344,101 @@ const CENTRAL_PARK_SITES=[
     return {body:body.upload(),lights:lights.upload()};
   }
 
+  // PATROL_CESSNA185_FLOATS_V1: physically dimensioned 1m/unit fallback.
+  // This built-in mesh is available even if the optional Blender GLB has
+  // not been baked yet or the user is offline. Non-CAD artistic approximation.
+  function buildCessna185FloatMesh(){
+    const {addQuad,addTri,upload}=createTriangleMesh();
+    const box=(...args)=>addModelBox(addQuad,...args);
+    const white=[.80,.83,.80],aluminum=[.63,.68,.71],blue=[.09,.21,.31],
+      glass=[.10,.23,.29],rubber=[.10,.11,.12],orange=[.84,.29,.16];
+    const station=[
+      [-3.69,.055,.08,.08],[-2.82,.37,.35,.04],[-1.35,.65,.71,.12],
+      [.48,.72,.72,.13],[1.65,.58,.58,.10],[2.75,.40,.39,.07],
+      [3.68,.11,.12,.035],[4.1205,.035,.045,.02]
+    ];
+    const face=(z,rx,ry,cy,i,N=12)=>{
+      const a=2*Math.PI*i/N;
+      return [rx*Math.cos(a),cy+ry*Math.sin(a),z];
+    };
+    for(let i=0;i<station.length-1;i++){
+      const a=station[i],b=station[i+1];
+      for(let k=0;k<12;k++){
+        addQuad(face(...a,k),face(...a,k+1),
+          face(...b,k+1),face(...b,k),i===3?aluminum:white,4);
+      }
+    }
+    // Profiled six-sided high wing reaching the genuine 10.922m span.
+    for(const side of [-1,1]){
+      const sections=[[.54,1.72,.69,.91],[2.60,1.48,.60,.99],[5.461,1.02,.29,1.12]];
+      const at=(s,k)=>{
+        const [span,chord,lead,y]=sections[s];
+        const profile=[[lead,.04],[lead-chord*.28,.11],[lead-chord,.025],
+          [lead-chord,-.055],[lead-chord*.28,-.074],[lead,-.055]];
+        return [side*span,y+profile[k][1],profile[k][0]];
+      };
+      for(let i=0;i<2;i++)for(let k=0;k<6;k++)
+        addQuad(at(i,k),at(i,(k+1)%6),at(i+1,(k+1)%6),
+          at(i+1,k),aluminum,4);
+      // Fuselage cabin glazing, spars, raised empennage and tip lights.
+      box(side*.67,.32,.46,.045,.55,1.72,glass,4);
+      box(side*.66,.03,-.38,.052,.10,3.9,blue,4);
+      box(side*1.17,.38,-3.02,1.98,.082,.74,aluminum,4);
+      box(side*5.34,1.13,-.19,.19,.07,.85,orange,4);
+      addRideBeam(addQuad,[side*.49,-.09,-.52],[side*3.30,1.02,-.20],.073,aluminum);
+      // Each pontoon is a faceted hull with tapered prow and step.
+      const floats=[[-2.83,.03,-1.13],[-2.48,.42,-1.10],
+        [-1.55,.51,-1.06],[-.35,.51,-1.03],[.15,.48,-1.00],
+        [1.40,.43,-1.02],[2.42,.32,-1.01],[3.02,.03,-.96]];
+      const ring=(row,index)=>{
+        const [z,w,cy]=floats[row];
+        const profile=[[-1,-.04],[-.72,-.37],[0,-.48],
+          [.72,-.37],[1,-.04],[.82,.42],[-.82,.42]];
+        return [side*1.27+w*profile[index][0],cy+profile[index][1],z];
+      };
+      for(let row=0;row<floats.length-1;row++)for(let k=0;k<7;k++)
+        addQuad(ring(row,k),ring(row,(k+1)%7),
+          ring(row+1,(k+1)%7),ring(row+1,k),aluminum,4);
+      for(const z of [-1.45,1.45])
+        addRideBeam(addQuad,[side*.95,-.16,z],[side*1.27,-.68,z],.068,aluminum);
+      box(side*1.27,-1.37,.2,.03,.035,4.35,white,4);
+    }
+    box(0,1.11,-3.23,.10,1.85,1.05,aluminum,4);
+    box(0,1.47,-3.60,.12,.77,.18,blue,4);
+    box(0,.53,1.31,1.08,.59,.065,glass,4);
+    box(0,.19,2.94,1.03,.115,.58,blue,4);
+    // Propeller is visible in front of the aircraft and not a jet exhaust.
+    addRideBeam(addQuad,[0,-1.01,4.12],[0,1.15,4.12],.09,rubber);
+    box(0,.07,4.24,.30,.30,.27,aluminum,4);
+    return upload();
+  }
+
   const ironManMeshes=buildJetpackMesh();
   const aircraftMeshes = {
     fighter: buildFighterMesh(),
     saucer: buildSaucerMesh(),
-    jetpack: ironManMeshes.body
+    jetpack: ironManMeshes.body,
+    seaplane: buildCessna185FloatMesh()
   };
+  // The optional real Blender GLB hot-swaps the meter-scale fallback, never
+  // gates launching. A single bounded mesh batch works on every PATROL map.
+  let floatplaneAssetReady=false,floatplaneAssetLoading=false;
+  function prepareFloatplaneAsset(){
+    if(floatplaneAssetReady||floatplaneAssetLoading||gl.isContextLost())return;
+    floatplaneAssetLoading=true;
+    import('./assets/aircraft/floatplane-glb.js')
+      .then(m=>m.loadFloatplaneGLB('./assets/aircraft/cessna185-floats.glb',createTriangleMesh))
+      .then(({mesh,metadata})=>{
+        if(gl.isContextLost()){disposeSceneMesh(mesh);return;}
+        const old=aircraftMeshes.seaplane;
+        aircraftMeshes.seaplane=mesh;
+        floatplaneAssetReady=true;
+        if(old)disposeSceneMesh(old);
+        console.info('[PATROL] Blender Cessna 185 loaded',metadata);
+      })
+      .catch(error=>console.info('[PATROL] Procedural C185 fallback:',error.message))
+      .finally(()=>{floatplaneAssetLoading=false;});
+  }
 
   // PATROL_NYC_FLATIRON_V9: based on the NPS National Register description.
   // Original bounded art: rounded prow, limestone podium, glazed terra cotta
@@ -11153,6 +11247,7 @@ const CENTRAL_PARK_SITES=[
     resizeTargets();
     const mode=settings.get('flightMode');
     selectedAircraft = settings.get('aircraft');
+    if(selectedAircraft==='seaplane')prepareFloatplaneAsset();
     const runway = selectedAircraft==='fighter' && settings.has('runwayStart') ? selectedMap.runwayStart : null;
     loading = true;
     startFlight.disabled = true;
