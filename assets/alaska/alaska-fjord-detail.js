@@ -89,11 +89,25 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // and slope determine placement, rather than repeating six tree clusters.
   // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
   stats.conifers=0;
-  for(let i=0;i<1380 && stats.conifers<270;i++){
-    const x=-735+hash(i*71+53)*1470;
-    const z=-735+hash(i*107+19)*1470;
-    if(Math.hypot(x,z)>750 || Math.hypot(x-151,z+525)<75 ||
-       Math.hypot(x+155,z+610)<28 || z>390&&Math.abs(x-130)<95)continue;
+  // Jittered shoreline corridors put visible forest where the pilot actually
+  // sees the Alaska landscape, while preserving a strict single-batch cap.
+  for(let i=0;i<4550 && stats.conifers<940;i++){
+    let x,z;
+    if(i<2500){
+      const col=i%50,row=Math.floor(i/50);
+      x=-390+col*8.25+(hash(i*113+8)-.5)*5.5;
+      z=-770+row*21.7+(hash(i*157+3)-.5)*11;
+    }else if(i<4050){
+      const n=i-2500,col=n%50,row=Math.floor(n/50);
+      x=130+col*8.3+(hash(i*113+8)-.5)*6;
+      z=-735+row*33.8+(hash(i*157+3)-.5)*16;
+    }else{
+      x=-735+hash(i*71+53)*1470;
+      z=-735+hash(i*107+19)*1470;
+    }
+    if(Math.hypot(x,z)>765 || Math.hypot(x-151,z+525)<78 ||
+       Math.hypot(x+19,z+667)<38 || Math.hypot(x+155,z+610)<28 ||
+       z>390&&Math.abs(x-130)<95)continue;
     const y=terrainAt(x,z);
     if(y<waterY+1.5||y>waterY+26)continue;
     const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
@@ -126,6 +140,19 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
                [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
                color);
       }
+    }
+    // Irregular understorey tufts, not repeated billboard trees. Vary by
+    // altitude and local measured slope; hide when collision ground differs.
+    if(i%4===0)for(let k=0;k<3;k++){
+      const theta=hash(i*43+k*19)*Math.PI*2;
+      const length=1.1+hash(i*59+k*31)*2.1;
+      const bx=x+Math.cos(theta)*length,bz=z+Math.sin(theta)*length;
+      const by=terrainAt(bx,bz);
+      if(Math.abs(by-y)>1.4 || by<waterY+1.3)continue;
+      const w=.25+.24*hash(i*67+k*23),h=.36+.49*hash(i*71+k*37);
+      const olive=[.09+.07*seed,.17+.08*seed,.11+.03*seed];
+      addTri([bx-w,by+.03,bz],[bx+w,by+.03,bz],[bx,by+h,bz],olive);
+      addTri([bx,by+.03,bz-w],[bx,by+.03,bz+w],[bx,by+h*.84,bz],olive);
     }
     stats.conifers++;
   }

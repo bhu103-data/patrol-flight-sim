@@ -6,6 +6,7 @@ on:
       - 'assets/alaska/**'
       - 'tests/alaska-fjords.test.mjs'
       - 'tests/alaska-usgs-dem.test.mjs'
+      - 'tests/alaska-photo-ice.test.mjs'
       - 'index.html'
       - '.github/workflows/alaska-source.yml'
   push:
@@ -13,6 +14,8 @@ on:
     paths:
       - 'assets/alaska/**'
       - 'tests/alaska-fjords.test.mjs'
+      - 'tests/alaska-usgs-dem.test.mjs'
+      - 'tests/alaska-photo-ice.test.mjs'
       - 'index.html'
 
 jobs:
@@ -25,4 +28,4 @@ jobs:
         with:
           node-version: '22'
       - name: Validate Alaska-only geometry and map lifecycle
-        run: node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs
+        run: node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs tests/alaska-photo-ice.test.mjs

@@ -1,0 +1,43 @@
+name: Bake Alaska CC0 photo materials
+
+on:
+  push:
+    branches: [feature/alaska-photopbr-calving-20261120]
+    paths:
+      - 'tools/alaska/build_photo_atlas.py'
+      - '.github/workflows/alaska-photo-atlas.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bake-photo-atlas:
+    if: github.repository == 'bhu103-data/patrol-flight-sim' && github.ref == 'refs/heads/feature/alaska-photopbr-calving-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check pillow
+      - name: Download CC0 photo PBR and build compact atlas
+        run: |
+          python tools/alaska/build_photo_atlas.py
+          python tools/alaska/build_photo_atlas.py --check
+      - name: Commit validated assets
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add assets/alaska/alaska-photo*
+          if git diff --cached --quiet; then
+            echo 'Photo atlases unchanged'
+          else
+            git commit -m 'data(alaska): add compact CC0 photographic snow and rock atlases'
+            git push origin HEAD:feature/alaska-photopbr-calving-20261120
+          fi

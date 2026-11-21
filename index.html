@@ -1376,6 +1376,9 @@ const CENTRAL_PARK_SITES=[
     out vec4 fragColor;
 
     uniform sampler2D uTerrain;
+    uniform sampler2D uAlaskaPhotoAlbedo;
+    uniform sampler2D uAlaskaPhotoNormalRough;
+    uniform bool uAlaskaPhotoReady;
     uniform bool uAlderValley;
     uniform bool uAlaska;
     uniform bool uVegas;
@@ -1531,7 +1534,7 @@ const CENTRAL_PARK_SITES=[
         vec4 p=OCEAN_PHASE[mode];
         height+=sin(dot(xz,p.xy)-p.z*uTime+p.w)*h*(mode<6?shore:edge);
       }
-      return oceanExposure(xz)*height;
+      return oceanExposure(xz)*height*(uAlaska?0.30:1.0);
     }
     // Determinant of the horizontal wave displacement Jacobian. Sum recent
     // upwind samples to approximate foam persistence without a feedback buffer.
@@ -1729,7 +1732,7 @@ const CENTRAL_PARK_SITES=[
 
         // Cloud shadow on ground/water
         vec2 cloudProj = p.xz + sunDirection().xz * ((cloudBase() - p.y) / max(sunDirection().y, 0.1));
-        float cShad = 1.0 - cloudDensity(cloudProj) * (uVegas?0.20:0.52);
+        float cShad = 1.0 - cloudDensity(cloudProj) * (uAlaska?0.21:uVegas?0.20:0.52);
 
         // Plane shadow on ground/water
         vec2 planeProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - p.y) / max(sunDirection().y, 0.1));
@@ -1746,7 +1749,9 @@ const CENTRAL_PARK_SITES=[
           float localDetail = 1.0 - smoothstep(0.18, 1.1, pixel);
           // Lower New York Harbor has more swell than the sheltered rivers.
           float harborExposure = uManhattan ? 1.0 - smoothstep(-560.0, -300.0, p.z) : 1.0;
-          float openWater = (uVegas || uAlderValley) ? 0.28 : mix(0.46, 1.0, harborExposure);
+          // Tracy Arm is a sheltered fjord, not an exposed deep-ocean swell.
+          float openWater = uAlaska ? 0.38 :
+            (uVegas || uAlderValley) ? 0.28 : mix(0.46, 1.0, harborExposure);
           float wind = mix(0.65, 1.25, uAtmosphere.z) * openWater;
           vec2 xz = p.xz;
           vec3 swell = oceanSpectrum(xz,pixel,openWater);
@@ -1767,6 +1772,14 @@ const CENTRAL_PARK_SITES=[
             chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
             ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
             slope=oceanExposure(xz)*gust*(swell.yz+chop.yz+ripple.yz*0.75);
+          }
+          if(uAlaska){
+            // Suppress artificial parallel bright-ocean wave bands in the
+            // narrow fjord while retaining small capillary ripples and Fresnel.
+            swell*=.57;
+            chop*=.51;
+            ripple*=.71;
+            slope*=.53;
           }
           vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
           vec3 shallow = uAlaska ? vec3(0.13,0.36,0.38) : vec3(0.10,0.45,0.42);
@@ -2025,6 +2038,48 @@ const CENTRAL_PARK_SITES=[
             float iceVein=vnoise(p.xz*.49+vec2(grain*2.0,-macro*1.8));
             vec3 ice=mix(vec3(.24,.53,.62),vec3(.72,.86,.89),.31+.63*iceVein);
             albedo=mix(albedo,ice,glacier*.82);
+            // Near-field CC0 photography: normal and roughness channels are
+            // sampled only for Alaska and within a short flight detail radius.
+            if(uAlaskaPhotoReady){
+              float closeDetail=1.0-smoothstep(105.0,255.0,hitDist);
+              float forestFloor=smoothstep(.85,3.2,alt)*
+                (1.0-smoothstep(11.0,23.0,alt))*
+                (1.0-smoothstep(.15,.39,slope));
+              // Soft soil-to-rock transitions avoid the hard circular terrain
+              // bands seen during actual WebGL flight screenshot review.
+              float forestWeight=smoothstep(.14,.72,forestFloor)*
+                (1.0-smoothstep(.28,.63,exposed))*
+                (1.0-smoothstep(.30,.65,frost));
+              float photoAmount=closeDetail*
+                max(max(exposed*.74,frost*.87),forestWeight*.47)*
+                (1.0-glacier*.88);
+              if(photoAmount>.018){
+                float snowTile=step(.51,frost);
+                float forestVariant=step(.54,vnoise(p.xz*.028));
+                vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
+                vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
+                vec2 tiled=fract(projected*.107);
+                vec2 groundUV=vec2((snowTile+.022+.956*tiled.x)*.25,
+                                   .022+.956*tiled.y);
+                vec2 forestUV=vec2((2.0+forestVariant+.022+.956*tiled.x)*.25,
+                                   .022+.956*tiled.y);
+                float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
+                vec3 alpinePhoto=textureLod(uAlaskaPhotoAlbedo,groundUV,lod).rgb;
+                vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
+                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.75,.91,.76),
+                               forestWeight);
+                vec2 normalUV=mix(groundUV,forestUV,step(.5,forestWeight));
+                vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,normalUV,lod);
+                float roughness=normalRough.a;
+                vec2 texSlope=normalRough.rg*2.0-1.0;
+                float microLight=clamp(.87+dot(texSlope,uSun.xz)*.18,.69,1.08);
+                photo*=microLight;
+                albedo=mix(albedo,photo,clamp(photoAmount*.78,0.0,.84));
+                float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
+                                  mix(30.0,95.0,roughness));
+                albedo+=vec3(.15,.22,.25)*sparkle*(1.0-roughness)*photoAmount*.065;
+              }
+            }
           }
                     if (uManhattan) {
             float crossIsland = p.x - (${MANHATTAN_GRID.tilt} * p.z + ${MANHATTAN_GRID.offset.toFixed(1)});
@@ -5453,7 +5508,10 @@ const CENTRAL_PARK_SITES=[
 
     // Trees are batched into one mesh, with clearance around the moose meadows.
     const alaska = selectedMap.alaska;
-    const patches = alaska ? [[-176,-430],[160,-330],[-185,-160],[166,12],[-142,205],[169,255]]
+    // Avoid obvious duplicate old conical trees when photographic Alaska
+    // forest geometry is available. Keep them in compatibility fallback.
+    const patches = alaska && !graphicsCompat ? [] : alaska
+      ? [[-176,-430],[160,-330],[-185,-160],[166,12],[-142,205],[169,255]]
       : [[79,160],[90,255]];
     for (const [cx,cz] of patches) for (let i=0;i<28;i++) {
       const x = cx+Math.sin(i*4.32+cz)*30;
@@ -5910,6 +5968,57 @@ const CENTRAL_PARK_SITES=[
 
   let mapScenery=null;
   let alaskaDetailMesh=null;
+  let alaskaIceActors=[],alaskaIcePose=null;
+  let alaskaPhotoTextures=null,alaskaPhotoLoading=false,alaskaPhotoGeneration=0;
+  function disposeAlaskaPhotoTextures(){
+    alaskaPhotoGeneration++;
+    if(alaskaPhotoTextures){
+      gl.deleteTexture(alaskaPhotoTextures.albedo);
+      gl.deleteTexture(alaskaPhotoTextures.normalRough);
+      alaskaPhotoTextures=null;
+    }
+    alaskaPhotoLoading=false;
+  }
+  function loadAlaskaPhotoTextures(){
+    if(alaskaPhotoTextures||alaskaPhotoLoading||graphicsCompat||
+       !smoothScenery()||directRendering)return;
+    alaskaPhotoLoading=true;
+    const epoch=++alaskaPhotoGeneration;
+    const files=['alaska-photo-albedo.webp','alaska-photo-nrm-rough.webp'];
+    Promise.all(files.map(name=>new Promise((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error('Missing Alaska photo '+name));
+      img.src='./assets/alaska/'+name;
+    }))).then(images=>{
+      if(epoch!==alaskaPhotoGeneration||!selectedMap.alaska||gl.isContextLost())return;
+      const made=[];
+      try{
+        for(const img of images){
+          if(img.naturalWidth!==1024||img.naturalHeight!==256)
+            throw new Error('Invalid Alaska PBR atlas dimensions');
+          const tex=gl.createTexture();
+          if(!tex)throw new Error('Alaska photo GPU allocation failed');
+          made.push(tex);
+          gl.bindTexture(gl.TEXTURE_2D,tex);
+          gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,img);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+          gl.generateMipmap(gl.TEXTURE_2D);
+        }
+        alaskaPhotoTextures={albedo:made[0],normalRough:made[1]};
+        console.info('[PATROL] Alaska CC0 photographic rock/snow PBR ready');
+      }catch(error){
+        for(const tex of made)gl.deleteTexture(tex);
+        console.warn('[PATROL] Alaska photo materials fallback:',error);
+      }finally{
+        gl.bindTexture(gl.TEXTURE_2D,null);
+      }
+    }).catch(error=>console.warn('[PATROL] Alaska procedural material fallback:',error))
+      .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
+  }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
@@ -5984,6 +6093,9 @@ const CENTRAL_PARK_SITES=[
   function createMapScenery() {
     disposeSceneMesh(alaskaDetailMesh);
     alaskaDetailMesh=null;
+    for(const actor of alaskaIceActors)disposeSceneMesh(actor.mesh);
+    alaskaIceActors=[];
+    alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
     disposeSceneMesh(nycGisMesh);
@@ -6021,6 +6133,26 @@ const CENTRAL_PARK_SITES=[
           else{alaskaDetailMesh=uploaded;console.info('[PATROL] Alaska fjord detail',stats);}
         })
         .catch(error=>console.warn('[PATROL] Alaska detail fallback:',error));
+    }
+    // Dynamic, terrain-aware Alaska ice. No wave/terrain collision changes.
+    if(selectedMap.alaska && !graphicsCompat && smoothScenery()){
+      import('./assets/alaska/alaska-ice-motion.js').then(({
+        createAlaskaIceActors,poseAlaskaIce
+      })=>{
+        if(!selectedMap.alaska||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+        const actors=createAlaskaIceActors({
+          makeMesh:createTriangleMesh,
+          terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+          waterY:WATER_H
+        });
+        if(!selectedMap.alaska||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
+          for(const actor of actors)disposeSceneMesh(actor.mesh);
+          return;
+        }
+        alaskaIceActors=actors;
+        alaskaIcePose=poseAlaskaIce;
+        console.info('[PATROL] Alaska shoreline-aware moving ice',actors.length);
+      }).catch(error=>console.warn('[PATROL] Alaska ice motion fallback:',error));
     }
     // PATROL_NYC_STREETS_V10: city-only streets and street-level props.
     // Static geometry in its own draw batch, no WebGPU or second renderer.
@@ -8753,6 +8885,15 @@ const CENTRAL_PARK_SITES=[
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
     if(selectedMap.alaska && alaskaDetailMesh?.count)drawMesh(alaskaDetailMesh,identity);
+    if(selectedMap.alaska && alaskaIcePose && alaskaIceActors.length){
+      for(const actor of alaskaIceActors){
+        const pose=alaskaIcePose(actor,sceneryTime,sampleTerrainHeight,WATER_H);
+        if(!pose.visible || Math.hypot(pose.x-camPos[0],pose.z-camPos[2])>255)continue;
+        const sy=Math.sin(pose.yaw),cy=Math.cos(pose.yaw);
+        drawMesh(actor.mesh,mat4FromBasis([pose.x,pose.y,pose.z],
+          [cy,0,-sy],[0,1,0],[sy,0,cy],1),false,false,false);
+      }
+    }
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
@@ -10862,6 +11003,8 @@ const CENTRAL_PARK_SITES=[
       return;
     }
     if(selectedMap.dc)loadDcTextures();
+    if(selectedMap.alaska)loadAlaskaPhotoTextures();
+    else disposeAlaskaPhotoTextures();
     document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
     resScale = smoothScenery()?cityScaleStart():startupScale;
     scaleCeiling = 1;
@@ -11188,6 +11331,9 @@ const CENTRAL_PARK_SITES=[
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
+    alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
+    alaskaPhotoNormalRough:gl.getUniformLocation(worldProg,'uAlaskaPhotoNormalRough'),
+    alaskaPhotoReady:gl.getUniformLocation(worldProg,'uAlaskaPhotoReady'),
     viewProj: gl.getUniformLocation(worldProg, 'uWorldViewProj'),
     camPos: gl.getUniformLocation(worldProg, 'uCamPos'),
     camFwd: gl.getUniformLocation(worldProg, 'uCamFwd'),
@@ -12192,6 +12338,18 @@ const CENTRAL_PARK_SITES=[
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
     gl.uniform1i(uWorld.terrain, 0);
     gl.uniform1f(uWorld.terrainScale,terrainScaleFor(selectedMap));
+    const alaskaPhotoReady=Boolean(selectedMap.alaska&&alaskaPhotoTextures&&
+      smoothScenery()&&!graphicsCompat&&!directRendering);
+    gl.uniform1i(uWorld.alaskaPhotoReady,alaskaPhotoReady?1:0);
+    if(alaskaPhotoReady){
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.albedo);
+      gl.uniform1i(uWorld.alaskaPhotoAlbedo,1);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.normalRough);
+      gl.uniform1i(uWorld.alaskaPhotoNormalRough,3);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform3fv(uWorld.camPos, camPos);
     gl.uniform3fv(uWorld.camFwd, camFwd);
     gl.uniform3fv(uWorld.camRight, camRight);
