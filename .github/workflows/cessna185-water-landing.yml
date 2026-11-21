@@ -7,6 +7,7 @@ on:
     paths:
       - 'tools/aircraft/seaplane-water-landing-browser-smoke.mjs'
       - '.github/workflows/cessna185-water-landing.yml'
+      - 'assets/aircraft/cessna185-floats.glb'
 
 permissions:
   contents: read
