@@ -8,11 +8,25 @@ const qaTag=process.env.PATROL_QA_TAG||'candidate';
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const ridgeLoadMessages=[];
-const browser=await chromium.launch({headless:true,args:[
- '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
- '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
- '--enable-unsafe-swiftshader'
-]});
+// Default remains CI SwiftShader; opt in to real installed Chrome locally with
+// PATROL_BROWSER_CHANNEL=chrome and PATROL_GRAPHICS_PROFILE=default (Windows).
+// 'chrome' is NOT proof of a discrete GPU: capture the reported GL renderer.
+const browserChannel=process.env.PATROL_BROWSER_CHANNEL||'playwright-swiftshader';
+const graphicsProfile=process.env.PATROL_GRAPHICS_PROFILE||'compat';
+if(!['playwright-swiftshader','chrome'].includes(browserChannel))
+ throw Error('Unsupported PATROL_BROWSER_CHANNEL: '+browserChannel);
+if(!['compat','default'].includes(graphicsProfile))
+ throw Error('Unsupported PATROL_GRAPHICS_PROFILE: '+graphicsProfile);
+const software=browserChannel==='playwright-swiftshader';
+const browser=await chromium.launch({
+ headless:process.env.PATROL_HEADFUL!=='1',
+ ...(software?{}:{channel:'chrome'}),
+ args:software?[
+  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
+  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+  '--enable-unsafe-swiftshader'
+ ]:[]
+});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',msg=>{
@@ -22,10 +36,10 @@ page.on('console',msg=>{
 });
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
-let result={status:'failed',qaTag,errors,screenshots,shots};
+let result={status:'failed',qaTag,browserChannel,graphicsProfile,errors,screenshots,shots};
 try {
  const navStarted=Date.now();
- const response=await page.goto(base+'/index.html?graphics=compat',{waitUntil:'domcontentloaded',timeout:60000});
+ const response=await page.goto(base+'/index.html'+(graphicsProfile==='compat'?'?graphics=compat':''),{waitUntil:'domcontentloaded',timeout:60000});
  assert(response?.ok(),'PATROL launcher request failed');
  await page.locator('input[name="flightMap"][value="vegas"]').check({force:true});
  await page.locator('#startFlight').click({force:true});
@@ -87,8 +101,11 @@ try {
    const telemetry=await page.evaluate(()=>{
     const canvas=document.getElementById('glCanvas');
     const gl=canvas?.getContext('webgl2');
+    const info=gl?.getExtension('WEBGL_debug_renderer_info');
     return {webgl2:Boolean(gl&&!gl.isContextLost()),error:gl?.getError(),
       canvasSize:[canvas?.width,canvas?.height],
+      renderer:info?gl.getParameter(info.UNMASKED_RENDERER_WEBGL):'unavailable',
+      vendor:info?gl.getParameter(info.UNMASKED_VENDOR_WEBGL):'unavailable',
       selected:document.querySelector('input[name="flightMap"]:checked')?.value,
       target:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
       zoom:document.getElementById('hotelZoom')?.value};
@@ -105,6 +122,44 @@ try {
    shots.push({shotName,...telemetry});
   }
  }
+ // Two distinct city-scale cameras face the western/eastern ridge wing.
+ // The existing street camera does not show the far mountains. These shots
+ // are an additional fixed-view evidence gate, not geodetic photo matching.
+ await page.locator('#skyTime').evaluate(el=>{
+  el.value='12';el.dispatchEvent(new Event('change',{bubbles:true}));
+ });
+ await page.locator('#skyWeather').evaluate(el=>{
+  el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
+ });
+ for(const [wing,site] of [['west','Bellagio'],['east','The Venetian']]){
+  await page.locator('#hotelTarget').selectOption({label:site});
+  await page.locator('#hotelAngle').evaluate(el=>{
+   el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('#hotelZoom').evaluate(el=>{
+   el.value='24';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(1500);
+  const telemetry=await page.evaluate(()=>{
+   const canvas=document.getElementById('glCanvas');
+   const gl=canvas?.getContext('webgl2');
+   return {webgl2:Boolean(gl&&!gl.isContextLost()),error:gl?.getError(),
+    target:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
+    selected:document.querySelector('input[name="flightMap"]:checked')?.value,
+    angle:document.getElementById('hotelAngle')?.value,
+    zoom:document.getElementById('hotelZoom')?.value};
+  });
+  assert(telemetry.webgl2&&telemetry.error===0,'Ridge view WebGL2/context error');
+  assert(telemetry.target===site&&telemetry.selected==='vegas'&&
+   telemetry.zoom==='24','Ridge scenic camera mismatch: '+JSON.stringify(telemetry));
+  const shotName='vegas-ridge-'+wing+'-noon.png';
+  await page.evaluate(()=>document.body.classList.add('vegas-qa-canvas'));
+  try{await page.locator('#glCanvas').screenshot({
+   path:output+'/'+shotName,timeout:60000,animations:'allow'
+  });}finally{await page.evaluate(()=>document.body.classList.remove('vegas-qa-canvas'));}
+  screenshots.push(shotName);
+  shots.push({shotName,wing,...telemetry});
+ }
  // Frame interval is a CPU/browser observational diagnostic, not GPU time.
  const frameSampling=await page.evaluate(()=>new Promise(resolve=>{
   let count=0,last=0,sum=0,max=0;
@@ -117,7 +172,7 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
+ result={status:'passed',qaTag,browserChannel,graphicsProfile,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
    frameSampling,incrementalGeometry:{triangles:qaTag==='candidate'?1554:0,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {

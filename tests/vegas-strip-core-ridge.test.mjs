@@ -88,3 +88,52 @@ test('real 2D foothills connect to desert grade and have upward-facing winding',
  }
  assert.ok(seam>=90);
 });
+
+test('2D USGS and fallback meshes have upward normals and grounded borders',async()=>{
+ const raw=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const measured=decodeVegasRidgeDEM(raw);
+ for(const [label,data,expected] of [['source-2d',measured,1536],['fallback',null,768]]){
+  const {stats,triangles,quads}=scene(data);
+  assert.equal(stats.mountainTriangles,expected);
+  assert.equal(triangles.length,expected);
+  assert.equal(quads.length,9);
+  let west=0,east=0,edges=0;
+  for(const [i,{a,b,c}] of triangles.entries()){
+   const ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+   assert.ok(ny>0,label+' downward/degenerate face '+i);
+   if(a[0]<0)west++;else east++;
+   for(const [x,y,z] of [a,b,c]){
+    if(Math.abs(x)!==686&&Math.abs(x)!==847)continue;
+    const terrain=13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7;
+    assert.ok(Math.abs(y-terrain)<1e-7,label+' floating skirt at '+x+','+z);
+    edges++;
+   }
+  }
+  assert.equal(west,expected/2);assert.equal(east,expected/2);
+  assert.ok(edges>150);
+ }
+});
+
+test('2D USGS western relief avoids 160-unit clamp plateau',async()=>{
+ const raw=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const measured=decodeVegasRidgeDEM(raw);
+ const {triangles}=scene(measured);
+ let maximum=0,plateau=0;
+ for(const {a,b,c} of triangles)for(const [x,y,z] of [a,b,c]){
+  if(x>=0||Math.abs(x)===686||Math.abs(x)===847)continue;
+  const base=13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7;
+  maximum=Math.max(maximum,y-base);
+  if(Math.abs(y-base-160)<1e-6)plateau++;
+ }
+ assert.ok(maximum>40&&maximum<160,'western ridge should have preserved relief without flat cap');
+ assert.equal(plateau,0);
+});
+
+test('Vegas browser QA supports installed Chrome and six matched scenes',async()=>{
+ const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(script,/const errors=\[\],screenshots=\[\],shots=\[\],startupSnapshots=\[\]/);
+ assert.match(script,/PATROL_BROWSER_CHANNEL/);
+ assert.match(script,/\['west','Bellagio'\]/);
+ assert.match(script,/\['east','The Venetian'\]/);
+ assert.match(script,/ridgeLoadMessages/);
+});
