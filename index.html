@@ -1154,7 +1154,7 @@ const CENTRAL_PARK_SITES=[
           for(const [du,dz] of options){
             // Shorten lots near a cross-street, maintaining full sidewalks.
             const length=Math.abs(dz)>1?
-              11.4+hash(ix,iz,449)*1.2:14+hash(ix,iz,449)*3;
+              9.0+hash(ix,iz,449)*1.2:11.0+hash(ix,iz,449)*3;
             // Maintain the grid cell used by the terrain heightfield lookup.
             const x=x0+du+city.tilt*dz,z=z0+dz;
             // Local NYC grid roads are generated separately from CITY_STREETS.

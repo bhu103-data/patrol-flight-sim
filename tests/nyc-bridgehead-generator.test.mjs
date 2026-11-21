@@ -56,8 +56,11 @@ const brooklyn=terrain.parcels.filter(lot=>
 const fills=brooklyn.filter(lot=>lot[8]==='bridgehead-gapfill');
 test('Brooklyn Bridge district contains bounded additional building footprints',()=>{
   assert.equal(snapshot.footprints.length,100);
-  assert.ok(brooklyn.length>=25,'bridgehead should contain substantial buildings');
-  assert.ok(fills.length>=10,'small vacant blocks should be filled');
+  assert.ok(brooklyn.length>=38,'compact DUMBO lots should restore more bridgehead blocks');
+  assert.ok(fills.length>=24,'short frontages admit safe additional infill lots');
+  const footprintArea=brooklyn.reduce((area,lot)=>area+lot[2]*lot[3],0);
+  assert.ok(footprintArea>=4500,
+    'compact layouts increase occupied streetscape area without crossing roads');
   assert.equal(terrain.height.length,64*64);
 });
 test('synthetic NYC buildings preserve the local grid road and sidewalk corridors',()=>{
