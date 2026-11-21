@@ -929,10 +929,12 @@ function scenicView(key){
   if(key==='Digit7'){
     const site=marketFronts.snapshot()[1]??marketFronts.snapshot()[0];
     if(site){
-      const cameraZ=site.z+24;
+      // Look diagonally uphill from the lower eastern terrace. A direct
+      // x=284 photo is dominated by an occluding mountain cliff.
+      const eyeX=site.x+31,eyeZ=site.z+35;
       destinations.Digit7={
         name:'山城商铺 · 木构廊道与坡屋顶',
-        pos:[site.x,ground(site.x,cameraZ)+4.8,cameraZ],
+        pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
         target:[site.x,site.base+13.5,site.z+1.4]
       };
     }
@@ -947,7 +949,7 @@ function scenicView(key){
   jumpQueued=false;
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
-  viewPitch=.23;
+  viewPitch=key==='Digit7'?-.28:.23;
   cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
