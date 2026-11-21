@@ -1,4 +1,22 @@
-import {createStreetFurnitureChunkBudget} from './petalwake-chunk-lod.js';
+// PATROL adapter of Petalwake town's MIT-licensed per-chunk selection idea.
+// Original: jjcm/petalwake src/world/town.js, Copyright (c) 2026 Jacob Miller.
+// Full MIT notice and adapter tests: assets/nyc/petalwake-chunk-lod.js.
+// Keep the small runtime budget local: old regression tools import this entire
+// file through a data: URL, which cannot resolve relative module specifiers.
+function createStreetFurnitureChunkBudget(){
+ const used=new Map();
+ const key=(x,z,bridge)=>`${bridge?'bridge':'city'}:${Math.floor(x/96)}:${Math.floor(z/99)}`;
+ return {
+  permits(x,z,detail,bridge){
+   if(!Number.isFinite(x)||!Number.isFinite(z)||
+      !Number.isFinite(detail)||detail<(bridge?2:3))return false;
+   return (used.get(key(x,z,bridge))||0)<(bridge?8:12);
+  },
+  record(x,z,bridge){
+   const k=key(x,z,bridge);used.set(k,(used.get(k)||0)+1);
+  }
+ };
+}
 // PATROL_NYC_ROAD_MARKINGS_V12 — material and markings upgrade retaining V11.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
