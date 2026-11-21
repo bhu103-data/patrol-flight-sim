@@ -7513,6 +7513,7 @@ const CENTRAL_PARK_SITES=[
     }
     nycRoadDetailChunks=[];
     nycRoadChunkLevel=null;
+    if(window.__patrolNycRoadLodQa)delete window.__patrolNycRoadLodQa;
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
@@ -7631,6 +7632,20 @@ const CENTRAL_PARK_SITES=[
             }
             nycRoadDetailChunks=chunks;
             nycRoadChunkLevel=selectNycRoadChunkLod;
+            // Read-only live camera/LOD telemetry is exposed ONLY on the
+            // opt-in QA URL. It is not a control and cannot alter physics.
+            if(new URLSearchParams(location.search).has('nycRoadQa')){
+              window.__patrolNycRoadLodQa=()=>({
+                camera:[...camPos],
+                wetness:nyStreetWetness,
+                chunks:nycRoadDetailChunks.map(chunk=>({
+                  id:chunk.id,
+                  lod:nycRoadChunkLevel(chunk.bounds,camPos),
+                  midTriangles:chunk.mid.count/3,
+                  nearTriangles:chunk.near.count/3
+                }))
+              });
+            }
             console.info('[PATROL] NYC Petalwake MIT road LOD chunks',chunks.length);
           }).catch(error=>console.warn('[PATROL] NYC road chunk LOD fallback:',error));
           cityTraffic=cityTraffic.filter(actor=>!actor.nycCurbside);
@@ -11189,6 +11204,16 @@ const CENTRAL_PARK_SITES=[
     // and block infill, rather than only the suspension bridge foreground.
     {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
       detail:'Inspect industrial brick facades, rooflines, road grid and street fixtures'},
+    // Opt-in QA only: compare identical 290/-363 street target at three
+    // camera distances without ever altering aircraft controls or collision.
+    ...(new URLSearchParams(location.search).has('nycRoadQa')?[
+      {name:'DUMBO Road QA · Near',x:290,z:-363,height:1.4,bearing:170,
+        radius:18,rise:3.1,detail:'Near road surface, utility grate and curb'},
+      {name:'DUMBO Road QA · Mid',x:290,z:-363,height:1.4,bearing:170,
+        radius:93,rise:10,detail:'Middle LOD at same target'},
+      {name:'DUMBO Road QA · Far',x:290,z:-363,height:1.4,bearing:170,
+        radius:220,rise:26,detail:'Far LOD at same target'}
+    ]:[]),
     {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,
       detail:'Different working piers, ferry dock, handrails and shoreline masonry'},
     // A dedicated view looks north toward the OTI financial-district
