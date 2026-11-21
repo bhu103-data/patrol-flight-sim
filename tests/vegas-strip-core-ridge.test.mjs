@@ -50,6 +50,17 @@ test('both refined Vegas ridge wings have upward-facing triangle normals',()=>{
  }
  assert.equal(west,384);assert.equal(east,384);
 });
+test('refined Vegas mountain skirts are terrain-attached, never floating',()=>{
+ const {triangles}=scene();
+ let edges=0;
+ for(const {a,b,c} of triangles)for(const [x,y,z] of [a,b,c]){
+  if(Math.abs(x)!==686&&Math.abs(x)!==847)continue;
+  const expected=13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7;
+  assert.ok(Math.abs(y-expected)<1e-7,`floating ridge edge x=${x}, z=${z}`);
+  edges++;
+ }
+ assert.ok(edges>=4*48,'both near and far edges are sampled for every section');
+});
 test('flush Strip surface repairs have no physical colliders or textures',()=>{
  const {quads}=scene();
  assert.ok(quads.every(q=>[q.a,q.b,q.c,q.d].every(p=>
