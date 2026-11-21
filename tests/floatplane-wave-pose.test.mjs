@@ -41,7 +41,7 @@ test('NYC waterborne physics uses the same four-pontoon spectrum and RAF clock a
   const b=html.indexOf(tail,a);
   assert.ok(a>0&&b>a,'waterborne buoyancy block must be active');
   const waterStep=new Function('selectedMap','x','z','plane','lastTime','WATER_H',
-    'FLOAT_CLEARANCE','sampleTerrainHeight','floatOceanPose','sceneryTime',
+    'FLOAT_CLEARANCE','sampleFloatOceanFloor','floatOceanPose','sceneryTime',
     html.slice(a,b+tail.length)+'return plane.pos[1];');
   const clock=17283.354,at=Math.fround(clock*.001),x=88,z=-602,yaw=.44;
   const city={city:true},plane={pos:[x,0,z],yaw,speed:8};
