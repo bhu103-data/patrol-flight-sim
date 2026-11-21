@@ -533,11 +533,25 @@ export function buildNycStreetNetwork({
     // Crossings are drawn independently of road strips, so they must also
     // reserve the full intersection box. Otherwise zebra paint and yellow
     // signal supports could still be rendered inside a corner building.
-    let freeIntersection=true;
-    for(const dx of [-5,-2.5,0,2.5,5])for(const dz of [-5,-2.5,0,2.5,5]){
-      if(!isClear(x+dx,z+dz,.45)){freeIntersection=false;break;}
+    let freeIntersection=true,wetIntersection=false;
+    // The zebra ladder and signal supports extend beyond the old 5-unit
+    // center grid. Inspect the entire corner envelope for shallow water
+    // and collision geometry before creating crossing paint.
+    for(const dx of [-7.5,-5,-2.5,0,2.5,5,7.5]){
+      for(const dz of [-7.5,-5,-2.5,0,2.5,5,7.5]){
+        const sx=x+dx,sz=z+dz;
+        if(terrainAt(sx,sz)<waterY+1.58){
+          freeIntersection=false;wetIntersection=true;break;
+        }
+        if(!isClear(sx,sz,.45)){freeIntersection=false;break;}
+      }
+      if(!freeIntersection)break;
     }
-    if(!freeIntersection){stats.skippedRoadFootprints++;continue;}
+    if(!freeIntersection){
+      if(wetIntersection)stats.skippedWater++;
+      else stats.skippedRoadFootprints++;
+      continue;
+    }
     crosswalk(x,z,i,j);
   }
   // Hot-dog sidewalk cart — visibly stainless steel with under-counter
