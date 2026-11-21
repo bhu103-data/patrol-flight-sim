@@ -104,3 +104,34 @@ test('NYC crest highlights are neutralized without modifying non-NYC shader',()=
   assert.match(html,/float oceanHeight\(vec2 xz, float depth, float pixel\)/,
     'physical ocean displacement remains unchanged');
 });
+test('NYC bent long-wave crest is deterministic, continuous and absent in Alaska',()=>{
+  const a=html.indexOf('  const NYC_CREST_BEND = ');
+  const b=html.indexOf('  const oceanVec4 =',a);
+  assert.ok(a>0&&b>a,'source-coupled waveform can be extracted for both profiles');
+  const c=html.indexOf('  const oceanBands =');
+  const source=html.slice(c,b);
+  const getHeight=new Function(source+'return floatOceanHeight;')();
+  const city={city:true},alaska={alaska:true};
+  const x=-84,z=-593,t=20,depth=9;
+  const actual=getHeight(x,z,t,depth,city);
+  const repeat=getHeight(x,z,t,depth,city);
+  assert.ok(Number.isFinite(actual));
+  assert.equal(actual,repeat,'no random terms in water/float contract');
+  const base=new Function(source.replace('const NYC_CREST_BEND = 0.70;',
+    'const NYC_CREST_BEND = 0.00;')+'return floatOceanHeight;')();
+  assert.ok(Math.abs(actual-base(x,z,t,depth,city))>.001,
+    'NYC long crest phase is visibly different from the linear baseline');
+  assert.equal(getHeight(x,z,t,depth,alaska),base(x,z,t,depth,alaska),
+    'Alaska and all non-NYC maps preserve their exact water phase');
+  const h=.01;
+  const dx=(getHeight(x+h,z,t,depth,city)-getHeight(x-h,z,t,depth,city))/(2*h);
+  const dz=(getHeight(x,z+h,t,depth,city)-getHeight(x,z-h,t,depth,city))/(2*h);
+  assert.ok(Number.isFinite(dx)&&Number.isFinite(dz));
+  assert.ok(Math.abs(getHeight(x+.02,z,t,depth,city)-actual)<.03,
+    'bent crest must be continuous for the float contact solver');
+  const A=.027*x+.018*z+.035*t,B=.009*x-.013*z-.020*t;
+  const dX=.70*(.027*Math.cos(A)*Math.sin(B)+.009*Math.sin(A)*Math.cos(B));
+  const dZ=.70*(.018*Math.cos(A)*Math.sin(B)-.013*Math.sin(A)*Math.cos(B));
+  assert.ok(Math.abs(dX)<.026&&Math.abs(dZ)<.023,
+    'bounded analytic phase gradient does not cause folded water');
+});

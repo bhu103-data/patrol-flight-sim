@@ -8,7 +8,6 @@ on:
       - 'tools/aircraft/nyc-ocean-wave-qa.mjs'
       - 'tests/nyc-tidewater-water-detail.test.mjs'
       - 'tools/aircraft/nyc-water-crest-compare.mjs'
-      - 'tools/aircraft/nyc-water-crest-compare.mjs'
       - '.github/workflows/nyc-c185-wave-qa.yml'
 permissions:
   contents: read
@@ -42,6 +41,10 @@ jobs:
       - name: Tidewater-style NYC sea detail A/B at matched wave time
         env:
           PATROL_COMPARE_MODE: sea-detail
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: NYC coherent long-crest phase bend A/B (render and buoyancy)
+        env:
+          PATROL_COMPARE_MODE: crest-warp
         run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()

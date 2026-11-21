@@ -47,3 +47,19 @@ test('graphics compat and NYC Basic bypass extra visual noise without touching w
   assert.match(html,/selectedMap\.city && !graphicsCompat &&/);
   assert.match(html,/nyStreetQuality\.value !== '1'/);
 });
+test('NYC long-crest bend uses exactly the same phase and gradient as shader',()=>{
+  assert.match(html,/const NYC_CREST_BEND = 0\.70;/);
+  assert.match(shader,/const float NYC_CREST_BEND = \$\{NYC_CREST_BEND\.toFixed\(2\)\};/);
+  assert.match(shader,/vec3 nycCrestBend\(vec2 xz,float t\)/);
+  assert.match(shader,/0\.027\*ca\*sb\+0\.009\*sa\*cb/);
+  assert.match(shader,/0\.018\*ca\*sb-0\.013\*sa\*cb/);
+  assert.match(shader,/cos\(phase\)\*\(p\.xy\+bent\.yz\)/);
+  assert.match(shader,/mode<6\?bend:0\.0/);
+  assert.match(html,/i<6\?bend:0/);
+});
+test('long-crest A/B disables CPU and GLSL together rather than changing only shader',()=>{
+  const tool=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(tool,/PATROL_COMPARE_MODE==='crest-warp'/);
+  assert.match(tool,/const NYC_CREST_BEND = 0\.00;/);
+  assert.match(tool,/src\.replace\(warpEnabled,warpDisabled\)/);
+});
