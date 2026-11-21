@@ -206,18 +206,17 @@ async function capture(name,{control=false}={}){
        JSON.stringify(stats.rightWall));
   }
   captureTimings[name]=Date.now()-started;
-  // All wide scene cameras retain the original >32-color-bin guard.
-  // The OTI zoom-68 single-wall close view has a *stronger source-targeted*
-  // aperture/edge-and-contrast check, instead of requiring varied scenery.
-  check(stats.width>=640&&stats.height>=360&&stats.nearBlackFraction<.97,
-   'Blank NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
+  // Preserve the same whole-canvas health requirement for EVERY view.
+  // A single high-contrast WINDOW passed the old ROI probe despite a known
+  // visually rejected doorway shot (run 44959287197). Do not let that probe
+  // substitute for city-scene diversity or claim physical doorway visibility.
+  check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
+   stats.nearBlackFraction<.97,
+   'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
   if(name==='12-oti-doorway-street.png'){
+   // Diagnostic only; the west-harbor doorway ROI must be inspected on the
+   // actual screenshot before defining any spatially grounded gate.
    stats.otiSourceWindow=otiSourceWindowProbe(image);
-   check(stats.otiSourceWindow.valid,
-    'Source-aligned OTI window not visibly distinguishable: '+JSON.stringify(stats));
-  }else{
-   check(stats.colorBins>32,
-    'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
   }
   // A diverse set of nearby windows and walls gave a false green check in
   // actual 44865972470. Harbor-facing OTI camera must ALSO see enough
@@ -316,7 +315,7 @@ try{
  await sampleFramePacing('11-oti-downtown-close');
  await capture('11-oti-downtown-close.png');
  // Unlike a rooftop scenic view, inspect the physical entrance at
- // OTI DOITT_ID 119028 edge 12 from a near-pedestrian viewpoint.
+ // OTI DOITT_ID 65190 edge 11 from a west-facing harbor-side viewpoint.
  await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Street Entrance'});
  await page.waitForTimeout(1700);
  const doorway=await page.evaluate(()=>{
