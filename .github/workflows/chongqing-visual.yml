@@ -8,7 +8,9 @@ on:
       - "chongqing.html"
       - "index.html"
       - "assets/nyc/nyc-street-network.js"
+      - "assets/nyc/nyc-led.js"
       - "tests/nyc-road-clearance.test.mjs"
+      - "tests/nyc-led-creative.test.mjs"
       - "assets/chongqing/**"
       - "tests/chongqing-*.test.mjs"
       - "scripts/chongqing-browser-smoke.mjs"
@@ -54,6 +56,8 @@ jobs:
         run: node scripts/chongqing-browser-smoke.mjs
       # NYC still fails the overall job if its road rules regress, but
       # Chongqing has already rendered and uploaded evidence by that point.
+      - name: Validate NYC LED creative diversity and canvas atlas
+        run: node --test tests/nyc-led-creative.test.mjs
       - name: Validate NYC road/building occupancy
         run: node --test tests/nyc-road-clearance.test.mjs
       - name: New York real-browser skyline and road check
