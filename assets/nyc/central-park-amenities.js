@@ -49,24 +49,104 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
   }
   stats.attractions++;
   // Loeb Boathouse: pitched roof, glass facade, veranda and rowing boats.
+  // Loeb Boathouse: source-referenced architectural massing, not a scan.
+  // Its long green metal roof, pale colonnade and striped waterside awning
+  // distinguish the actual 1950s building from generic gray-roof houses.
+  // Reference: centralparknyc.org/locations/central-park-boathouse and
+  // contemporary exterior photos (no third-party media imported).
   const hu=18,hz=157,hx=ex(hu,hz),hy=y(hu,hz);
+  const lakeRoof=[.27,.45,.37],roofSeam=[.37,.55,.46];
+  const whiteTrim=[.77,.76,.69],awningRed=[.53,.26,.25],
+    awningIvory=[.86,.80,.68],planter=[.27,.35,.30];
   box(hx,hy+1.27,hz,9.1,2.42,5.8,stone);
   for(const side of [-1,1]){
     const z=hz+side*3.03;
     addTri([hx-4.95,hy+2.48,z],[hx,hy+4.08,z],
-      [hx+4.95,hy+2.48,z],roof);
+      [hx+4.95,hy+2.48,z],lakeRoof);
   }
   addQuad([hx-4.95,hy+2.48,hz-3.03],
     [hx-4.95,hy+2.48,hz+3.03],
-    [hx,hy+4.08,hz+3.03],[hx,hy+4.08,hz-3.03],granite);
+    [hx,hy+4.08,hz+3.03],[hx,hy+4.08,hz-3.03],lakeRoof);
   addQuad([hx,hy+4.08,hz-3.03],[hx,hy+4.08,hz+3.03],
     [hx+4.95,hy+2.48,hz+3.03],
-    [hx+4.95,hy+2.48,hz-3.03],granite);
+    [hx+4.95,hy+2.48,hz-3.03],lakeRoof);
+  // Fascia and coping on both roof slopes are retained at low quality.
+  beam([hx,hy+4.12,hz-3.13],[hx,hy+4.12,hz+3.13],.060,roofSeam);
+  for(const side of [-1,1]){
+    const x=hx+side*4.95;
+    beam([x,hy+2.49,hz-3.07],[x,hy+2.49,hz+3.07],
+      .088,whiteTrim);
+  }
   for(let j=-3;j<=3;j++){
     const x=ex(hu+j*1.12,hz);
     box(x,hy+1.40,hz-2.95,.70,1.05,.09,glass);
     if(j%2===0)beam([x,hy,hz-4.05],
       [x,hy+2.40,hz-4.05],.070,bronze);
+  }
+  if(quality==='high'){
+    // Seven seams per roof slope keep the batched scene strictly below
+    // its inherited 250-beam budget (high: 246, low: 166).
+    // Longitudinal raised seams create actual parallax on the roof faces.
+    for(let i=0;i<7;i++){
+      const z=hz-2.64+i*.88;
+      for(const side of [-1,1])
+        beam([hx,hy+4.095,z],
+          [hx+side*4.95,hy+2.51,z],.023,roofSeam);
+    }
+    // The column arcade sits to the west (lake side) of the building.
+    // Require every exposed footprint corner to remain above the SAME
+    // irregular east-Lake mask used by the park paths and rowboats.
+    const eastLakeDry=(u,z)=>{
+      const dx=(u+14)/24,dz=(z-150)/16.2;
+      const a=Math.atan2(dz,dx);
+      return Math.hypot(dx,dz)/(1+.055*Math.sin(3*a+1.15)+
+        .025*Math.cos(7*a-1.15));
+    };
+    const outerU=hu-5.55,innerU=hu-4.65;
+    const terraceSafe=[outerU,innerU].every(u=>
+      [hz-2.74,hz+2.74].every(z=>eastLakeDry(u,z)>1.05));
+    if(terraceSafe){
+      // Pale stone terrace slab, upper entablature and six load-bearing
+      // visible pillars. Each foot samples its actual terrain position.
+      const terraceU=hu-4.95,deckY=y(terraceU,hz)+.15;
+      box(ex(terraceU,hz),deckY,hz,1.35,.20,5.45,whiteTrim);
+      const colU=hu-5.21;
+      for(let i=0;i<6;i++){
+        const z=hz-2.46+i*.984;
+        const x=ex(colU,z),foot=y(colU,z);
+        beam([x,foot+.15,z],[x,hy+2.43,z],.123,whiteTrim);
+        box(x,foot+.18,z,.31,.13,.33,whiteTrim);
+      }
+      const corniceX=ex(colU,hz);
+      beam([corniceX,hy+2.49,hz-2.70],
+        [corniceX,hy+2.49,hz+2.70],.14,whiteTrim);
+      // Canopy stripes are authored quad geometry; never download or
+      // reproduce a copyrighted photographic advertising texture.
+      for(let i=0;i<14;i++){
+        const z0=hz-2.74+i*5.48/14,z1=hz-2.74+(i+1)*5.48/14;
+        const panel=i%2?awningIvory:awningRed;
+        addQuad([ex(outerU,z0),hy+2.32,z0],
+          [ex(outerU,z1),hy+2.32,z1],
+          [ex(innerU,z1),hy+2.56,z1],
+          [ex(innerU,z0),hy+2.56,z0],panel);
+      }
+      // Glazed dining bays behind the colonnade, with visible divided
+      // frames, sill depth and a few restrained planter boxes.
+      for(let i=0;i<5;i++){
+        const z=hz-2.16+i*1.08,x=ex(hu-4.56,z);
+        box(x,hy+1.29,z,.070,1.55,.78,glass);
+        for(const edge of [-.41,.41])
+          beam([x-.04,hy+.55,z+edge],
+            [x-.04,hy+2.03,z+edge],.032,whiteTrim);
+        beam([x-.06,hy+1.24,z-.41],
+          [x-.06,hy+1.24,z+.41],.029,whiteTrim);
+      }
+      for(const z of [hz-1.8,hz,hz+1.8]){
+        const x=ex(hu-5.47,z),foot=y(hu-5.47,z);
+        box(x,foot+.22,z,.32,.20,.64,planter);
+        box(x,foot+.38,z,.27,.16,.57,grass);
+      }
+    }
   }
   const lakeWater=waterY+2.83;
   // Four actually volumetric, independently oriented lake rowboats.
@@ -173,6 +253,64 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
         beam([x-.88,base+h,z+.5],[x+.88,base+h,z+.5],.12,wood);
       stats.benches++;
     }
+  }
+
+  // East Lake / Loeb Boathouse: original seven-slat park settee.
+  // A deliberately single, game-scale near-view landmark, not a surveyed
+  // Conservancy bench or an imported CC0 candidate (see independent audit #98).
+  // Check all footprint corners against the SAME irregular Lake shore used
+  // by central-park.js, not just the dry center point.
+  const benchU=9,benchZ=163;
+  const lakeClearance=(u,z)=>{
+    const dx=(u+14)/24,dz=(z-150)/16.2;
+    const angle=Math.atan2(dz,dx);
+    const shore=1+.055*Math.sin(3*angle+1.15)+
+      .025*Math.cos(7*angle-1.15);
+    return Math.hypot(dx,dz)/shore;
+  };
+  const dryBench=[-0.58,0.58].every(du=>
+    [-0.95,0.95].every(dz=>
+      lakeClearance(benchU+du,benchZ+dz)>1.19));
+  if(quality==='high' && dryBench &&
+     Math.abs(benchU)+1<grid.parkHalfWidth){
+    const bx=ex(benchU,benchZ),bz=benchZ,by=y(benchU,benchZ);
+    const iron=[.15,.20,.18],plankA=[.37,.25,.17],plankB=[.39,.27,.18];
+    // Five independent seat slats, each fully three-dimensional with narrow
+    // gaps and subtle alternating weathered timber colors.
+    for(let slat=0;slat<5;slat++){
+      const u=benchU-.31+slat*.155;
+      box(ex(u,bz),by+.475,bz,.135,.065,1.80,
+        slat%2?plankB:plankA);
+    }
+    // Two broad back slats, behind the seat facing the lake (-x).
+    for(const [j,h] of [.69,.855].entries()){
+      box(ex(benchU+.475+j*.035,bz),by+h,bz,.075,.145,1.80,
+        j?plankA:plankB);
+    }
+    // Four feet land on individually sampled dry terrain heights.
+    // The curved cast-iron frame, arm rests and under-seat straps remain in
+    // the existing NYC batched mesh; no colliders or texture fetches.
+    for(const end of [-.76,.76]){
+      const z=bz+end;
+      for(const du of [-.29,.30]){
+        const u=benchU+du,x=ex(u,z),foot=y(u,z);
+        box(x,foot+.031,z,.16,.06,.19,iron);
+        beam([x,foot+.06,z],[x,by+.43,z],.052,iron);
+      }
+      beam([ex(benchU-.37,z),by+.425,z],
+        [ex(benchU+.34,z),by+.425,z],.065,iron);
+      beam([ex(benchU+.30,z),by+.42,z],
+        [ex(benchU+.55,z),by+.92,z],.055,iron);
+      beam([ex(benchU-.39,z),by+.65,z],
+        [ex(benchU+.37,z),by+.65,z],.042,iron);
+      beam([ex(benchU-.39,z),by+.65,z],
+        [ex(benchU-.30,z),by+.43,z],.038,iron);
+      // Visible bolt heads at seat-to-frame and backrest joints.
+      for(const h of [.48,.70,.86]){
+        box(ex(benchU+.40,z),by+h,z,.043,.043,.085,bronze);
+      }
+    }
+    stats.benches++;
   }
   return stats;
 }

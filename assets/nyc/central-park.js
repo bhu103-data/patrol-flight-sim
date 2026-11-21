@@ -281,6 +281,11 @@ export function buildCentralPark({
     if(PARK_WATERS.some(f=>normalizedWaterDistance(u,z,f)<1.28))continue;
     if(PARK_LAWNS.some(f=>
       Math.hypot((u-f.u)/f.rx,(z-f.z)/f.rz)<1.10))continue;
+    // Roof/tree overlap gate: the Loeb Boathouse is a real solid landmark
+    // at park-local u=18,z=157. Reserve room for canopy radii (including
+    // secondary offset crowns), awning and verandah; do not just avoid
+    // the trunk's point coordinate. Rejected candidates are retried below.
+    if(Math.abs(u-18)<8.2&&Math.abs(z-157)<6.5)continue;
     if((Math.abs(u)<4 && z>101 && z<137) ||
       (Math.abs(z-174)<3.5)||(Math.abs(z-215)<3.5) ||
       (Math.abs(z-280)<3.5))continue;
