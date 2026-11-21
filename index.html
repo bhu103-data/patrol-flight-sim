@@ -8968,6 +8968,8 @@ const CENTRAL_PARK_SITES=[
   // Remain on the original procedural flight-scale fallback when the data
   // is absent, malformed, incorrectly georeferenced or not yet published.
   let vegasMeasuredRidges=null;
+  let vegasMeasuredStrip=null;
+  let vegasMeasuredStripX=z=>VEGAS_BOULEVARD;
   function buildVegasCoreRidgeSample(geometry) {
     const {addTri,addQuad}=geometry;
     // Original, editable earth-toned silhouette geometry. The shape is
@@ -9054,9 +9056,11 @@ const CENTRAL_PARK_SITES=[
     // Small-scale parallel pavement joints and tonal repair strips along
     // the *existing* straight Strip between Harmon and Flamingo; flush
     // overlays create no new blocking collider or new vehicle route.
-    const roadX=VEGAS_BOULEVARD, asphalt=[.19,.20,.21],
-      joint=[.34,.33,.32];
+    const asphalt=[.19,.20,.21],joint=[.34,.33,.32];
     for(let z=-210;z<=-122;z+=11){
+      // The original asphalt/lane/collision remains unchanged. Only short
+      // flush repair joints track the measured Census TIGER curvature.
+      const roadX=vegasMeasuredStripX(z);
       const y=sampleTerrainHeight(roadX,z)+.332;
       const dark=(z%3===0)?joint:asphalt;
       addQuad([roadX-8.46,y,z],[roadX-8.46,y,z+.095],
@@ -12836,6 +12840,8 @@ const CENTRAL_PARK_SITES=[
     // USGS asset is vetted locally before it can change Vegas skyline.
     // Any failed download leaves the original fully flyable terrain.
     vegasMeasuredRidges=null;
+    vegasMeasuredStrip=null;
+    vegasMeasuredStripX=z=>VEGAS_BOULEVARD;
     if(selectedMap.vegas){
       try{
         const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
@@ -12844,6 +12850,16 @@ const CENTRAL_PARK_SITES=[
           vegasMeasuredRidges.source.rawGeoTiffSHA256);
       }catch(error){
         console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
+      }
+      try{
+        const {loadVegasTIGERCenterline,vegasMeasuredRoadX}=
+          await import('./assets/vegas/tiger-strip.js');
+        vegasMeasuredStrip=await loadVegasTIGERCenterline();
+        vegasMeasuredStripX=z=>vegasMeasuredRoadX(vegasMeasuredStrip,z);
+        console.info('[PATROL] Vegas Census TIGER measured Strip loaded',
+          vegasMeasuredStrip.source.archiveSHA256);
+      }catch(error){
+        console.warn('[PATROL] Vegas TIGER road visual fallback:',error);
       }
     }
     const terrainOptions={
