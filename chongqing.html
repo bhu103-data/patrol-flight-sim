@@ -25,9 +25,17 @@ kbd{font-family:inherit;border:1px solid #fff8;border-radius:4px;padding:1px 4px
 #back:hover{background:#75503b}
 #loading{position:absolute;inset:0;z-index:8;background:radial-gradient(circle at 50% 40%,#46516d,#101225 74%);display:grid;place-content:center;text-align:center}
 #loading h2{color:#ffe0ad}#loading p{color:#d0d8e6;font-size:13px}
-#mobile{display:none;position:absolute;left:16px;right:16px;bottom:90px;justify-content:space-between;z-index:5;pointer-events:none}
-#mobile button{pointer-events:auto;width:65px;height:55px;border:1px solid #f7c38aab;border-radius:13px;background:#29394bbd;color:#fff;font-weight:bold}
-@media(max-width:800px),(pointer:coarse){#map{width:108px;height:108px}#top{max-width:60vw}#top h1{font-size:18px}#quest{font-size:11px}#controls{display:none}#mobile{display:flex}#bottom{bottom:13px}#back{bottom:87px;padding:7px 10px}#hint{bottom:153px;font-size:12px}}
+#mobile{display:none;position:absolute;right:15px;bottom:86px;width:158px;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;z-index:5;pointer-events:none}
+#mobile button{pointer-events:auto;width:100%;height:47px;touch-action:none;border:1px solid #f7c38aab;border-radius:12px;background:#29394bdc;color:#fff;font-weight:bold;font-size:12px}
+@media(max-width:800px),(pointer:coarse){#map{width:108px;height:108px}#top{max-width:60vw}#top h1{font-size:18px}#quest{font-size:11px}#controls{display:none}#mobile{display:grid}#joystick{display:block}#bottom{bottom:13px}#back{bottom:242px;padding:7px 10px}#hint{bottom:255px;font-size:12px}#qualityBtn{top:135px}#perfHud{top:170px}}
+
+#joystick{display:none;position:absolute;left:15px;bottom:96px;width:116px;height:116px;z-index:5;touch-action:none;border:2px solid #f8cf959c;border-radius:50%;background:#1e364aa8;box-shadow:0 7px 20px #0007}
+#joystickKnob{position:absolute;left:50%;top:50%;width:45px;height:45px;margin:-22.5px;border-radius:50%;background:linear-gradient(135deg,#efb46b,#bf6545);border:2px solid #fff5d6;box-shadow:0 4px 15px #0006;pointer-events:none;transform:translate(0,0)}
+#qualityBtn{position:absolute;right:18px;top:185px;z-index:6;background:#1d3148cc;border:1px solid #efcc9d99;border-radius:8px;color:#fcebd9;padding:6px 10px;font:12px system-ui,sans-serif;cursor:pointer}
+#perfHud{position:absolute;right:18px;top:223px;z-index:6;padding:6px 9px;background:#112336e5;color:#c0f6d2;border-radius:7px;font:11px monospace;white-space:pre-line;pointer-events:none}
+#perfHud[hidden]{display:none}
+#joystick,#mobile button{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+@media(max-width:800px),(pointer:coarse){#qualityBtn{top:135px}#perfHud{top:170px}}
 </style>
 </head>
 <body>
@@ -35,12 +43,21 @@ kbd{font-family:inherit;border:1px solid #fff8;border-radius:4px;padding:1px 4px
 <div id="loading"><div><h2>🌶️ 重庆火锅飞行员</h2><p>正在生成山城、两江和洪崖洞…</p></div></div>
 <section id="top"><h1>CHONGQING · PILOT</h1><p>重庆山城自由探索 / Hotpot Jet Flight</p><div id="quest"><strong>探索重庆</strong><div id="questHong">□ 飞过洪崖洞</div><div id="questHotpot">□ 吃一次重庆火锅</div><div id="questBridge">□ 飞过跨江大桥</div></div></section>
 <canvas id="map" width="256" height="256" aria-label="小地图"></canvas>
+<button id="qualityBtn" type="button" aria-label="切换画质">画质：自动</button>
+<output id="perfHud" hidden aria-live="off"></output>
 <div id="hint">靠近火锅店按 E，解锁麻辣喷火推进 🌶️</div>
 <div id="toast" role="status"></div>
 <div id="controls"><kbd>W A S D</kbd> 移动 / 转向　<kbd>Shift</kbd> 奔跑或冲刺<br><kbd>Space</kbd> 超级跳 / 飞行上升　<kbd>Ctrl</kbd> 下降<br><kbd>F</kbd> 开关飞行　<kbd>E</kbd> 吃火锅　拖动鼠标转动镜头</div>
 <div id="bottom"><div id="meter"><span>🌶️ 麻辣推进</span><div class="track"><div id="meterFill"></div></div><span id="meterStatus">未激活</span></div></div>
-<div id="mobile"><button data-key="KeyE">火锅</button><button data-key="KeyF">飞行</button><button data-key="ShiftLeft">冲刺</button><button data-key="Space">跳 / 升</button></div>
+<div id="joystick" aria-label="移动摇杆" role="group"><div id="joystickKnob"></div></div>
+<div id="mobile"><button data-key="KeyE">🍲 火锅</button><button data-key="KeyF">✈ 飞行</button><button data-key="ShiftLeft">⚡ 冲刺</button><button data-key="Space">↑ 跳 / 升</button><button data-key="ControlLeft">↓ 下降</button></div>
 <a id="back" href="./index.html">← 返回 PATROL</a>
+<script>
+window.addEventListener('error', function(){
+  const loading=document.getElementById('loading');
+  if(loading&&!loading.hidden){const p=loading.querySelector('p');if(p)p.textContent='资源或图形加载失败。请检查网络、WebGL 和浏览器控制台后刷新。';}
+});
+</script>
 <script type="module" src="./assets/chongqing/chongqing.js"></script>
 </body>
 </html>
