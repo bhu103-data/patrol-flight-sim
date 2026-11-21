@@ -56,7 +56,7 @@ test('both municipal sources share PBR classes, not generic box shader',()=>{
   assert.match(html,/PATROL_NYC_GIS_PBR_V13/);
   assert.match(html,/float materialClass=mod\(floor\(vHarborSurface\+\.5\),3\.0\)/);
   assert.match(html,/nyOfficialGisPbr\(material,n,surfaceRoughness\)/);
-  assert.match(html,/vHarborSurface>11\.5\)return/);
+  assert.match(html,/vHarborSurface>14\.5\)return/);
   assert.match(html,/vHarborSurface==10\.0/);
   assert.match(html,/!realGlass &&\s*!\(vHarborSurface>8\.5 && vHarborSurface<11\.5\)/);
 });
