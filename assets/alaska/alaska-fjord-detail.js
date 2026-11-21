@@ -9,6 +9,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     throw new TypeError('Alaska detail requires mesh writers and terrain sampling');
   }
   const stats={crevasses:0,iceFloes:0,rockBands:0};
+  // All geometry is cosmetic, measured heights still come from terrainAt.
+  stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
   // Match the existing Glacier Head mesh in index.html. These cracks are a
@@ -40,6 +42,59 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
         [.73+.1*jitter,.88+.04*jitter,.92]);
       stats.crevasses++;
     }
+  }
+
+  // A continuous, *irregular* calving face rather than a fence of identical
+  // spikes. 28 broad panels follow the original glacier tongue boundary.
+  // Slower coherent top undulation + scattered rare overhangs avoid repetition.
+  // The survey-derived terrain remains unmodified; ice is cosmetic only.
+  const seracCount=28;
+  for(let i=0;i<seracCount;i++){
+    const start=i/seracCount*19.25+.32,end=(i+1)/seracCount*19.25+.32;
+    const L=glacierPoint(start,0),R=glacierPoint(end,0);
+    const j=hash(i*17+71),q=hash(i*59+3);
+    const coherent=.58*Math.sin(i*.51)+.31*Math.sin(i*.19+.4);
+    const topL=Math.max(waterY+1.3,L[1]+.10+coherent*.56+j*.58);
+    const topR=Math.max(waterY+1.3,R[1]+.10+coherent*.54+q*.55);
+    const forward=.68+.84*hash(i*31+1);
+    const zL=L[2]-forward,zR=R[2]-forward;
+    const deepFracture=i%9===3;
+    const muted=deepFracture?[.11,.30,.36]:
+      [.26+.065*j,.49+.065*j,.57+.055*j];
+    const light=[.49+.075*j,.68+.085*j,.76+.055*j];
+    const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
+    const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
+          c=[R[0],topR,zR],d=[L[0],topL,zL];
+    addQuad(a,b,c,d,muted);
+    // Not every section has a rooftop. Rare undercut, broad sloping crowns
+    // create realistic ice mass shapes instead of same-height vertical teeth.
+    if(i%4===1 || i%9===7){
+      const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.28+.52*j,
+        (zL+zR)*.5+1.45+.8*q];
+      addTri(d,c,roof,light);
+      if(i%3===1)addTri([L[0],topL,zL+1.0],d,roof,undercut);
+    }
+    // Subtle sediment/ice layering in non-uniform elevation bands.
+    // A few sections have a third band; most have only two.
+    const bands=i%5===0?3:2;
+    for(let band=1;band<=bands;band++){
+      const t=(band+.2*hash(i*67+band*13))/(bands+1);
+      const jitter=(hash(i*23+band*71)-.5)*.27;
+      const hL=waterY-.23+(topL-waterY+.23)*t+jitter;
+      const hR=waterY-.23+(topR-waterY+.23)*t-jitter*.53;
+      const color=band===1?[.28,.45,.51]:band===2?[.38,.56,.61]:[.50,.68,.71];
+      addQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
+        [R[0],hR+.06,zR-.067],[L[0],hL+.06,zL-.067],color);
+      stats.iceStrata++;
+    }
+    if(i%6===2){
+      const width=Math.max(.14,(R[0]-L[0])*.23);
+      const xc=L[0]+(R[0]-L[0])*(.25+.33*q),z=(zL+zR)*.5-.10;
+      addQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
+        [xc+width,Math.min(topL,topR)*.85,z],
+        [xc,Math.min(topL,topR)*.96,z],[.075,.20,.27]);
+    }
+    stats.seracs++;
   }
 
   // Fjord floes with irregular perimeter (not repeated cone-shaped icebergs).
@@ -84,6 +139,22 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     addQuad(a,b,cb,ca,i%3?[.36,.41,.43]:[.50,.53,.53]);
     stats.rockBands++;
   }
+  // Small talus fans at surveyed upland slopes, never invented giant cliffs.
+  // Irregular triangular stone faces catch glancing light at low altitude.
+  for(let i=0;i<110;i++){
+    const x=-375+hash(321+i*11)*720,z=-650+hash(82+i*17)*1060;
+    const ground=terrainAt(x,z),side=terrainAt(x+5,z+4);
+    if(ground<waterY+6||ground>waterY+42||
+       Math.abs(side-ground)<.32||Math.abs(side-ground)>10||
+       Math.hypot(x-130,z-450)<140)continue;
+    const extent=.55+hash(i*23+7)*1.5;
+    const color=i%3===0?[.39,.44,.46]:[.30+.08*hash(i),.36,.39];
+    const a=[x-extent,terrainAt(x-extent,z)+.05,z-extent*.5],
+          b=[x+extent,terrainAt(x+extent,z)+.05,z+extent*.45],
+          c=[x,ground+.22+extent*.48,z-.3*extent];
+    addTri(a,b,c,color);
+    stats.talus++;
+  }
   // Alaska coastal spruce/hemlock silhouettes: one batched draw call, no
   // cloned cuboids or unique textures. Geographically sampled ground altitude
   // and slope determine placement, rather than repeating six tree clusters.
@@ -107,7 +178,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     }
     if(Math.hypot(x,z)>765 || Math.hypot(x-151,z+525)<78 ||
        Math.hypot(x+19,z+667)<38 || Math.hypot(x+155,z+610)<28 ||
-       z>390&&Math.abs(x-130)<95)continue;
+       z>423&&Math.abs(x-130)<71)continue;
     const y=terrainAt(x,z);
     if(y<waterY+1.5||y>waterY+26)continue;
     const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
@@ -139,6 +210,20 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
                [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
                [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
                color);
+        // Fine asymmetric branchlet curtains improve nearby spruce shape
+        // with a bounded polygon budget. No repeated cone layers or billboards.
+        if(i%7===0 && layer<2 && j%2===0){
+          const a2=a+.22,b2=b-.16,twigY=start+treeH*.19;
+          const spread=radius*.77,topY=tip-treeH*.10;
+          const green=tone.map((v,k)=>Math.min(1,v*(k===1?1.18:.92)));
+          addTri(
+            [x+Math.cos(a2)*spread,start,z+Math.sin(a2)*spread],
+            [x+Math.cos(b2)*spread*.86,start+treeH*.04,z+Math.sin(b2)*spread*.86],
+            [x+Math.cos(a2+.1)*radius*.26,Math.max(twigY,topY),
+              z+Math.sin(a2+.1)*radius*.26],
+            green);
+          stats.branchlets++;
+        }
       }
     }
     // Irregular understorey tufts, not repeated billboard trees. Vary by

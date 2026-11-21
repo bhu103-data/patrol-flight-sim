@@ -53,11 +53,15 @@ test('main NYC lot filter protects street routes in visual and collision data',a
   assert.ok(start>0&&end>start);
   const functionBody=html.slice(start,end);
   const roads=[[[0,-90],[0,90]],[[100,0],[240,0]]];
-  const policy=new Function('CITY_STREETS',functionBody+';return nycParcelCrossesRoad;')(roads);
+  const expressway={points:[[350,-440,0],[350,-350,7.7]],ramp:[[360,-350,7.7],[390,-350,0]]};
+  const policy=new Function('CITY_STREETS','CITY_EXPRESSWAY',
+    functionBody+';return nycParcelCrossesRoad;')(roads,expressway);
   assert.equal(policy([0,12,12,15]),true);
   assert.equal(policy([11,12,12,15]),true,'sidewalk setback is protected');
   assert.equal(policy([47,45,12,15]),false);
   assert.equal(policy([150,0,12,15]),true);
+  assert.equal(policy([350,-420,12,15]),true,'expressway clears towers');
+  assert.equal(policy([383,-350,12,15]),true,'ramp clears obstructing buildings');
   assert.ok(html.includes('cityLots=safeParcels;'));
   assert.ok(html.includes('for (const lot of safeParcels)'));
 });

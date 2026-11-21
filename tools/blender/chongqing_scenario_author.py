@@ -204,95 +204,101 @@ def construct(floors):
     offsets = [0, -.3, 1, -.8, .9, .2, -1.1, .7, -.8, 0, 1.2]
     roof_levels = {0, 2, 3, 5, 7, 8, 10}
 
+    # Each floor is actually three staggered stilt-house pavilions.
+    # This breaks up the previous continuous 128 m-long, identical facades.
+    wing_depth_offsets = (-2.25, 1.15, -.65)
+    covered_wings = {
+        0:(0,1,2), 2:(0,2), 3:(1,), 5:(0,1,2),
+        7:(0,2), 8:(1,2), 10:(0,1,2)
+    }
+
     for floor in range(floors):
         height = floor * level_height
         cx, width = center_xs[floor % 11], widths[floor % 11]
         center_depth = -floor * 8.3 + offsets[floor % 11]
         depth = 22.5
-        front = center_depth + depth / 2 + .11
+        wing_span = width / 3
+        wing_width = wing_span - 1.75
+        wings = []
 
-        # Quiet matte stone mass with small, physically recessed shopfronts.
-        a.block(cx, center_depth, height+level_height/2, width, depth,
-                level_height-.15, mid["brick"])
-        a.block(cx, front+1.10, height+.28, width+2.5, 2.7, .56,
-                mid["concrete"])
-        a.block(cx, front+.72, height+level_height-.40,
-                width+1.0, 1.25, .28, mid["carving"])
+        for wing in range(3):
+            wx = cx + (wing-1)*wing_span
+            wy = center_depth + wing_depth_offsets[wing]
+            front = wy + depth/2 + .11
+            wings.append((wx,wy,front))
 
-        bay_count = 13 + floor % 3
-        bay = (width-7.5) / bay_count
-        for n in range(bay_count):
-            bx = cx - width/2 + 3.75 + (n+.5)*bay
-            # Deterministic varied room occupancy, never a uniform luminous
-            # checkerboard. Glass sits back from the timber mullions.
-            lit = (n*7 + floor*11 + n//3) % 13
-            window = ("window_warm" if lit in (0,2,5,7)
-                      else "window_soft" if lit in (3,9,11)
-                      else "window_dark")
-            a.block(bx, front+.035, height+4.55, bay-1.22,
-                    .14, 4.40, mid[window], 2.7)
-            a.block(bx, front+.20, height+4.55,
-                    .14, .23, 4.65, mid["timber"])
-            a.block(bx, front+.24, height+2.27,
-                    bay-.95, .27, .16, mid["carving"])
-            a.block(bx, front+.20, height+6.81,
-                    bay-.90, .28, .20, mid["timber"])
-            if n % 4 == 0:
-                # Occupied, load-bearing-looking timber posts beneath rooflets.
-                a.block(bx-bay/2-.13, front+1.65, height+5.01,
-                        .46, 3.5, 9.7, mid["timber"])
-            # Restrained period amber lamps; no saturated arcade neon fields.
-            if n % 5 == (floor//2) % 5 and floor in (0,2,5,8,10):
-                a.block(bx, front+1.95, height+7.45,
-                        .36, .42, .80, mid["lantern"])
+            # Small genuine separation between neighboring masonry volumes;
+            # photographic stone grain keeps the core from looking painted.
+            a.block(wx,wy,height+level_height/2,wing_width,depth,
+                    level_height-.15,mid["brick"])
+            a.block(wx,front+1.0,height+.28,wing_width+1.1,2.1,.46,
+                    mid["concrete"])
+            a.block(wx,front+.75,height+level_height-.52,
+                    wing_width+.5,1.25,.25,mid["carving"])
 
-        # Balcony with independent timber handrails and true gaps between
-        # uprights. Keep the slab shallow, preventing layer-cake silhouettes.
-        rail_front = front + 2.58
-        a.block(cx, rail_front, height+1.65, width+1.4,
-                .17, .17, mid["metal"])
-        for i in range(29):
-            rx = cx-width/2 + i*width/28
-            a.block(rx, rail_front, height+1.13,
-                    .105,.15,1.03,mid["carving"])
+            # Independent room bays, with real setbacks and timber mullions.
+            bay_count = 4 + ((wing+floor)%2)
+            bay = (wing_width-2.8)/bay_count
+            for n in range(bay_count):
+                bx = wx-wing_width/2+1.4+(n+.5)*bay
+                lit = (n*7+floor*11+wing*3)%13
+                mat_window = (
+                    "window_warm" if lit in (0,2,5,7) else
+                    "window_soft" if lit in (3,9,11) else "window_dark"
+                )
+                a.block(bx,front+.035,height+4.55,bay-1.05,
+                        .13,4.4,mid[mat_window],2.7)
+                a.block(bx,front+.21,height+4.55,.13,.23,4.65,mid["timber"])
+                a.block(bx,front+.24,height+2.27,bay-.73,.27,.16,
+                        mid["carving"])
+                a.block(bx,front+.20,height+6.81,bay-.70,.28,.20,
+                        mid["timber"])
+                if n==0 or (n+floor+wing)%4==0:
+                    a.block(bx-bay/2-.10,front+1.35,height+4.85,
+                            .42,2.9,9.5,mid["timber"])
+                if (n+floor+wing)%5==0 and floor in (0,2,5,8,10):
+                    a.block(bx,front+1.75,height+7.50,
+                            .30,.35,.70,mid["lantern"])
 
-        if floor in roof_levels:
-            # Roofs across varied bay spans rather than 3 equal, flat slabs
-            # on every level. Upturned corners follow traditional silhouette.
-            wing_count = 2 if floor in (3,7) else 3
-            for wing in range(wing_count):
-                wx = cx-width/2+(wing+.5)*width/wing_count
-                if wing_count == 3 and (wing+floor)%3 == 0:
-                    wx += 1.35
-                roof_w = width/wing_count * (.96 if wing%2 else 1.035)
-                roof_y = center_depth + (3.5 if wing%2 else 1.5)
-                roof_z = height+level_height-.15+(wing%2)*.43
-                a.roof(wx,roof_y,roof_z,roof_w,depth+3.3,
-                       2.05+(floor+wing)%3*.27,mid["terracotta"])
-                # Slim fascia, warm under-eave downlight, discrete braces.
-                a.block(wx, front+1.84, roof_z-.14,
-                        roof_w+.15,.33,.18,mid["timber"])
-                a.block(wx, front+1.94, roof_z-.28,
-                        roof_w*.79,.15,.09,mid["eave_light"])
-                for brace in (-.34,.34):
-                    a.block(wx+brace*roof_w,front+1.1,roof_z-.86,
-                            .35,1.65,1.45,mid["carving"])
-        else:
-            # The unsheltered shop terrace has small staggered pavilion roofs
-            # rather than a full-width roof line spanning the entire facade.
-            for wing in range(2):
-                wx=cx+(wing-.5)*width*.57
-                roof_z=height+level_height+.10
-                a.roof(wx,front-.75,roof_z,width*.25,11.5,1.75,
-                       mid["terracotta"])
-                a.block(wx,front+4.76,roof_z-.05,
-                        width*.25+.2,.34,.16,mid["timber"])
+            # Separate balcony rails: no full-width ribbon connecting the
+            # pavilion gaps and no opaque 3 m-thick toy balcony slab.
+            rail_y = front+2.52
+            a.block(wx,rail_y,height+1.64,wing_width+1.0,
+                    .15,.15,mid["metal"])
+            for j in range(9):
+                rx=wx-wing_width/2+j*wing_width/8
+                a.block(rx,rail_y,height+1.13,.10,.13,1.0,mid["carving"])
 
-        # A few stilts remain visible under the river-facing gallery.
-        for post in range(4):
-            px=cx-width/2+(post+.5)*width/4
-            a.block(px,front+2.22,height+3.05,
-                    .61,.63,5.7,mid["timber"])
+            # Real load path of stilt-house galleries, including support piers.
+            for post in (-.34,.34):
+                a.block(wx+post*wing_width,front+1.75,height+3.0,
+                        .60,.65,5.7,mid["timber"])
+
+        for wing in covered_wings.get(floor,()):
+            wx,wy,front=wings[wing]
+            roof_z=height+level_height-.22+(wing%2)*.38
+            roof_w=wing_width+3.1
+            a.roof(wx,wy+1.55,roof_z,roof_w,depth+2.4,
+                   2.30+((wing+floor)%3)*.35,mid["terracotta"])
+            # Fine lower carved eave, warm cove lighting, bracket supports.
+            a.block(wx,front+1.35,roof_z-.12,
+                    roof_w+.2,.28,.16,mid["timber"])
+            a.block(wx,front+1.43,roof_z-.27,
+                    roof_w*.72,.14,.09,mid["eave_light"])
+            for brace in (-.34,.34):
+                a.block(wx+brace*roof_w,front+.80,roof_z-.92,
+                        .35,1.35,1.50,mid["carving"])
+
+        # Uncovered floors remain stepped, open-air decks with a few
+        # asymmetrical shops instead of another full-size rooftop lid.
+        if floor not in covered_wings:
+            wing=(floor//2)%3
+            wx,wy,front=wings[wing]
+            roof_z=height+level_height+.08
+            a.roof(wx,front-1.0,roof_z,wing_width*.67,11.5,1.76,
+                   mid["terracotta"])
+            a.block(wx,front+4.62,roof_z-.04,wing_width*.68,.30,.15,
+                    mid["timber"])
 
     # Stone lower promenade ties this traditional facade to the embankment,
     # avoiding the appearance of a floating, low-poly cube.

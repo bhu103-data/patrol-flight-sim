@@ -22,14 +22,16 @@ const meter = document.getElementById('meterStatus');
 const minimap = document.getElementById('map');
 const mapCtx = minimap.getContext('2d');
 const clamp = THREE.MathUtils.clamp;
+// Aircraft choice comes from PATROL's global left-side launcher, not this map.
+const seaplaneMode=new URLSearchParams(location.search).get('aircraft')==='seaplane';
 const TAU = Math.PI * 2;
 const clock = new THREE.Clock();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#121c2a');
 scene.fog = new THREE.FogExp2(0x253345, 0.00072);
 
-// PATROL_CQ_ADAPTIVE_LIGHTING_V5: Low preset should not allocate the
-// hardware MSAA framebuffer (often costly on software WebGL browsers).
+// PATROL_CQ_ADAPTIVE_LIGHTING_V5: do not allocate the MSAA color buffer
+// in the battery preset; retain AA in normal/high display modes.
 const startupLowGpu=new URLSearchParams(location.search).get('quality')==='low';
 let renderer;
 try {
@@ -41,9 +43,7 @@ try {
   document.querySelector('#loading p').textContent = '无法启动 WebGL，请打开浏览器图形加速后重试。';
   throw error;
 }
-// Keep bootstrap framebuffer at 1x until scene-specific quality applies.
-// Otherwise high-DPI low-power devices allocate a redundant oversized
-// framebuffer before the adaptive budget is calculated.
+// Bootstrap at 1x; apply the true GPU budget after the city loads.
 renderer.setPixelRatio(1);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -325,10 +325,43 @@ const hotpot={x:285,z:225};
 const shopY=ground(hotpot.x,hotpot.z+28);
 // The entrance follows the graded upper street; rear foundation piers retain the lower slope.
 const hotpotDoor={x:hotpot.x,z:hotpot.z+34,y:shopY+2.7};
-box(hotpot.x,shopY+10,hotpot.z,72,20,50,M.beam);
-box(hotpot.x,shopY+21.8,hotpot.z,80,3,57,M.roof);
-box(hotpot.x,shopY+10,hotpot.z+25.4,68,13,1.4,M.gold);
-sign('重庆老火锅',hotpot.x,shopY+23.5,hotpot.z+28.8,52,12);
+// Photo-grained dark wooden facade, not a plain terracotta cube.
+box(hotpot.x,shopY+10,hotpot.z,72,20,50,pbr.wood);
+// A physically curved dark-tile roof replaces the floating, flat 80x3x57 slab.
+// Its top remains at/below the original collision top (shopY+23.3).
+{
+  const verts=[],uvs=[],indices=[],cols=8,rows=12;
+  for(let rz=0;rz<=rows;rz++){
+    const f=rz/rows,ez=Math.abs(f*2-1);
+    for(let cx=0;cx<=cols;cx++){
+      const u=cx/cols,edge=Math.abs(u*2-1);
+      const lift=2.12*(1-Math.pow(ez,1.5))+.28*Math.pow(edge,6)*Math.pow(ez,6);
+      verts.push((u-.5)*80,lift,(f-.5)*57.5);
+      uvs.push(u*3.2,f*2.4);
+    }
+  }
+  for(let rz=0;rz<rows;rz++)for(let cx=0;cx<cols;cx++){
+    const a=rz*(cols+1)+cx,b=a+1,c=a+cols+1,d=c+1;
+    indices.push(a,c,b,b,c,d);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setIndex(indices);
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geo.computeVertexNormals();
+  const roofMat=pbr.roof.clone();
+  roofMat.side=THREE.DoubleSide;
+  roofMat.roughness=.88;
+  roofMat.metalness=.02;
+  const roof=new THREE.Mesh(geo,roofMat);
+  roof.position.set(hotpot.x,shopY+20.65,hotpot.z);
+  roof.castShadow=true;roof.receiveShadow=true;scene.add(roof);
+  for(const side of [-1,1]){
+    box(hotpot.x,shopY+20.5,hotpot.z+side*28.9,81,.3,.35,pbr.carvedWood);
+  }
+}
+box(hotpot.x,shopY+10.3,hotpot.z+25.35,68,13,1.4,pbr.wood);
+sign('重庆老火锅',hotpot.x,shopY+22.9,hotpot.z+29.1,42,7.5,'#dbbb8f','#302822');
 const cauldron=box(278,shopY+4.5,hotpot.z+31,10,5,10,M.dark);
 ball(278,shopY+7.2,hotpot.z+31,5,M.red);
 const potLight=new THREE.PointLight(0xff693c,85,90,2);
@@ -649,6 +682,55 @@ avatar.rotation.order='YXZ';
 // every window/window-frame should not get its own costly shadow draw.
 avatar.traverse(mesh=>{if(mesh.isMesh)mesh.castShadow=true;});
 
+// CESSNA185_CHONGQING_SHARED_V1: the SAME Blender GLB chosen from PATROL's
+// launcher is loaded in this independent Three.js map; it is never a map-only
+// aircraft. A light fallback preserves playability until the bake publishes.
+const floatControl={speed:0,pitch:0,waterborne:true,sinkRate:0};
+let seaplaneRoot=null;
+if(seaplaneMode){
+  for(const child of avatar.children)child.visible=false;
+  seaplaneRoot=new THREE.Group();
+  seaplaneRoot.rotation.y=Math.PI; // PATROL aircraft use +Z forward.
+  avatar.add(seaplaneRoot);
+  const shellMat=new THREE.MeshStandardMaterial({color:0xdde1dd,metalness:.22,roughness:.48}),
+    floatMat=new THREE.MeshStandardMaterial({color:0xa8b7bf,metalness:.55,roughness:.35}),
+    windowMat=new THREE.MeshStandardMaterial({color:0x1f495d,metalness:.14,roughness:.20});
+  const fallback=new THREE.Group();
+  const fuselage=new THREE.Mesh(new THREE.SphereGeometry(1,18,12),shellMat);
+  fuselage.scale.set(.65,.64,3.78);fuselage.position.y=.10;fallback.add(fuselage);
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(10.922,.18,1.48),floatMat);
+  wing.position.set(0,.95,-.18);fallback.add(wing);
+  for(const side of [-1,1]){
+    const pontoon=new THREE.Mesh(new THREE.CapsuleGeometry(.49,4.81,7,12),floatMat);
+    pontoon.rotation.x=Math.PI/2;
+    pontoon.position.set(side*1.27,-1.02,.08);fallback.add(pontoon);
+    for(const z of [-1.45,1.45]){
+      const strut=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.87,8),floatMat);
+      strut.position.set(side*1.14,-.57,z);strut.rotation.z=side*.18;
+      fallback.add(strut);
+    }
+    const window=new THREE.Mesh(new THREE.BoxGeometry(.052,.55,1.7),windowMat);
+    window.position.set(side*.66,.30,.48);fallback.add(window);
+  }
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(2.68,.1,.76),shellMat);
+  tail.position.set(0,.46,-3.07);fallback.add(tail);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(.12,1.7,1.0),floatMat);
+  fin.position.set(0,1.08,-3.2);fallback.add(fin);
+  const prop=new THREE.Mesh(new THREE.BoxGeometry(.13,2.2,.08),windowMat);
+  prop.position.set(0,0,4.0);fallback.add(prop);
+  seaplaneRoot.add(fallback);
+  // Shared real Blender mesh, not a second independently modeled aircraft.
+  import('https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js')
+    .then(({GLTFLoader})=>new GLTFLoader().loadAsync('./assets/aircraft/cessna185-floats.glb'))
+    .then(gltf=>{
+      if(!seaplaneRoot||!gltf.scene)return;
+      fallback.visible=false;
+      seaplaneRoot.add(gltf.scene);
+      gltf.scene.traverse(node=>{if(node.isMesh)node.castShadow=true;});
+      console.info('[PATROL] Chongqing uses shared Blender Cessna 185');
+    }).catch(error=>console.info('[PATROL] Chongqing C185 fallback:',error.message));
+}
+
 const state={
   pos:new THREE.Vector3(285,ground(285,265)+2.7,265),
   vel:new THREE.Vector3(),heading:0,flying:false,onGround:true,
@@ -673,6 +755,17 @@ try {
     }
   }
 }catch(error){console.warn('Chongqing return state skipped:',error);}
+if(seaplaneMode){
+  const savedAirborne=state.flying&&state.pos.y>2;
+  if(!savedAirborne){
+    state.pos.set(-595,-2.40+1.61,riverCenter(-595));
+    state.heading=Math.PI/2;
+    state.vel.set(0,0,0);
+  }
+  floatControl.waterborne=!savedAirborne;
+  state.flying=savedAirborne;
+  state.onGround=false;
+}
 const keys=new Set();
 let jumpQueued=false;
 let touchForward=0,touchSideways=0;
@@ -708,6 +801,7 @@ function message(value,seconds=2.6){
   toastEl.textContent=value;toastEl.style.opacity='1';toastUntil=clock.getElapsedTime()+seconds;
 }
 function eatHotpot(){
+  if(seaplaneMode){message('请先返回人物模式体验重庆火锅');return;}
   if(Math.hypot(state.pos.x-hotpotDoor.x,state.pos.z-hotpotDoor.z)>27 ||
      Math.abs(state.pos.y-hotpotDoor.y)>14){
     message('走到重庆老火锅门口再按 E');return;
@@ -718,6 +812,10 @@ function eatHotpot(){
   message('🌶️ 火锅辣度爆表！屁股喷火推进已激活！',4);
 }
 function toggleFlight(){
+  if(seaplaneMode){
+    message('水上飞机：Shift 加油门 · W/Space 抬头 · S/Ctrl 下降 · A/D 转向 · B 减速');
+    return;
+  }
   state.flying=!state.flying;state.onGround=false;
   if(state.flying)state.vel.y=Math.max(9,state.vel.y);
   message(state.flying?'飞行模式开启！Shift 加速，Space 上升，Ctrl 下降':'关闭飞行，准备降落');
@@ -725,6 +823,7 @@ function toggleFlight(){
 // Optional viewpoint shortcuts let players visually inspect the distant landmarks
 // without waiting for a long flyover; they do not alter the world or quest progress.
 function scenicView(key){
+  if(seaplaneMode)return false; // No teleporting aircraft into terrain.
   const destinations={
     Digit1:{name:'洪崖洞临江夜景',pos:[155,132,-72],target:[155,112,168]},
     Digit2:{name:'朝天门来福士与水晶连廊',pos:[-355,302,-50],target:[-355,294,176]},
@@ -828,7 +927,97 @@ function updateFlames(dt){
 function intersectsBuilding(x,y,z){
   return obstacleIndex.collides(x,y,z);
 }
+// Independent Chongqing river branch follows the actual mesh's waterline.
+function floatWaterSite(x,z,heading){
+  const fx=Math.sin(heading),fz=-Math.cos(heading),
+    sx=-fz,sz=fx;
+  for(const along of [-3,0,3])for(const side of [-1.85,0,1.85]){
+    const px=x+fx*along+sx*side,pz=z+fz*along+sz*side;
+    // River width + bank setback; never float a 10.9m wing in city blocks.
+    if(riverDist(px,pz)>-8||ground(px,pz)>0)return false;
+    if(intersectsBuilding(px,0,pz))return false;
+  }
+  return true;
+}
+function moveSharedFloatplane(dt){
+  const turn=(Number(keys.has('KeyD')||keys.has('ArrowRight'))-
+    Number(keys.has('KeyA')||keys.has('ArrowLeft')))+touchSideways;
+  const lift=(Number(keys.has('KeyW')||keys.has('ArrowUp')||keys.has('Space'))-
+    Number(keys.has('KeyS')||keys.has('ArrowDown')||
+      keys.has('ControlLeft')||keys.has('ControlRight')))+touchForward;
+  const throttle=keys.has('ShiftLeft')||keys.has('ShiftRight');
+  const stop=keys.has('KeyB');
+  const f=floatControl;
+  state.boosting=throttle;
+  if(f.waterborne){
+    f.speed=clamp(f.speed+(stop?-10.5:throttle?5.9:-2.3)*dt,0,26);
+  }else{
+    const target=throttle?25:19;
+    f.speed+=(target-f.speed)*(1-Math.exp(-dt*1.3));
+  }
+  state.heading+=turn*(f.waterborne?clamp(f.speed/24,.07,.51):.94)*dt;
+  const x=state.pos.x+Math.sin(state.heading)*f.speed*dt;
+  const z=state.pos.z-Math.cos(state.heading)*f.speed*dt;
+  const safe=floatWaterSite(x,z,state.heading);
+  if(f.waterborne){
+    if(!safe){
+      // A bank or shallow obstruction stops the hull, never clips through.
+      f.speed=0;
+      message('前方是岸边／浅滩：浮筒无法滑行');
+    }else{
+      state.pos.x=x;state.pos.z=z;
+    }
+    f.pitch=0;
+    state.pos.y=-2.40+1.61+.025*Math.sin(time*2.2);
+    if(throttle && f.speed>=17.5 && lift>.2 && safe){
+      f.waterborne=false;
+      f.pitch=.17;
+      f.sinkRate=2.2;
+      state.pos.y+=.20;
+      message('浮筒离水 · 水上飞机起飞');
+    }
+  }else{
+    state.pos.x=clamp(x,-930,930);
+    state.pos.z=clamp(z,-630,630);
+    const desired=clamp(lift,-1,1)*.34;
+    f.pitch+=(desired-f.pitch)*(1-Math.exp(-dt*2.3));
+    f.sinkRate=f.speed*Math.sin(f.pitch)-(throttle?.25:1.2);
+    state.pos.y=clamp(state.pos.y+f.sinkRate*dt,-.79,725);
+    if(state.pos.y<=-2.4+1.61+.02){
+      const good=safe&&f.sinkRate>=-7.5&&f.speed<=24.5&&
+        f.pitch>=-.17&&f.pitch<=.20&&Math.abs(turn)<.60;
+      if(good){
+        f.waterborne=true;f.pitch=0;
+        state.pos.y=-2.4+1.61;
+        message('水面软着陆 · 浮筒滑行');
+      }else{
+        f.waterborne=true;f.speed=0;f.pitch=0;
+        state.pos.set(-595,-2.4+1.61,riverCenter(-595));
+        state.heading=Math.PI/2;
+        message('不安全的水面冲击：已返回安全水域');
+      }
+    }
+    if(!safe && state.pos.y<=Math.max(ground(state.pos.x,state.pos.z)+2.0,3.0)){
+      f.waterborne=true;f.speed=0;f.pitch=0;
+      state.pos.set(-595,-2.4+1.61,riverCenter(-595));
+      state.heading=Math.PI/2;
+      message('碰到陆地：已返回安全水域');
+    }
+  }
+  state.flying=!f.waterborne;
+  state.onGround=false;
+  state.vel.set(Math.sin(state.heading)*f.speed,f.sinkRate,
+    -Math.cos(state.heading)*f.speed);
+  avatar.position.copy(state.pos);
+  avatar.rotation.y=-state.heading;
+  avatar.rotation.x=-f.pitch;
+  avatar.rotation.z+=(clamp(-turn*.09,-.22,.22)-avatar.rotation.z)*
+    (1-Math.exp(-dt*4));
+  if(seaplaneRoot)seaplaneRoot.position.y=0;
+}
+
 function move(dt){
+  if(seaplaneMode){moveSharedFloatplane(dt);return;}
   // If standing on a moving ferry deck, inherit its motion before player input.
   if(state.onGround&&!state.flying){
     const drift=riverBuild.deckDrift(state.pos.x,state.pos.z,state.pos.y);
@@ -908,8 +1097,7 @@ function move(dt){
   pilotLimbs.arms[1].rotation.x=-swing;
   pilotLimbs.legs[0].rotation.x=-swing;
   pilotLimbs.legs[1].rotation.x=swing;
-  flyingScarf.rotation.y=Math.sin(time*6.8)*.18-(state.boosting?.23:0);
-  flyingScarf.rotation.x=Math.sin(time*5.1)*.12;
+  // Keep physical gait and helmet animation without the removed toy scarf.
   flameLight.intensity+=((state.spicy>0&&(state.boosting||state.flying)?65:0)-flameLight.intensity)*Math.min(1,dt*8);
 }
 const visited={hong:false,bridge:false,raffles:false,liziba:false,ferry:false};
@@ -937,6 +1125,15 @@ function updateQuest(){
     const el=document.getElementById('questFerry');
     if(el){el.textContent='✓ 搭乘嘉陵江游船';el.classList.add('done');}
     message('🚢 成功降落游船甲板，可跟随客船沿江巡航！',4);
+  }
+  if(seaplaneMode){
+    const speed=floatControl.speed;
+    hint.textContent=floatControl.waterborne
+      ?'Cessna 185 · 浮筒接水 · Shift 加速 · W 抬头 (17.5+) · A/D 转向 · B 刹水'
+      :'Cessna 185 · 空中 · W 上升 / S 下降 · Shift 加速 · 保持低下沉率接水';
+    fill.style.width=(speed/26*100).toFixed(1)+'%';
+    meter.textContent=Math.round(speed)+' u/s';
+    return;
   }
   hint.textContent=Math.hypot(state.pos.x-hotpotDoor.x,state.pos.z-hotpotDoor.z)<27&&
     Math.abs(state.pos.y-hotpotDoor.y)<14
@@ -1073,7 +1270,7 @@ function frame(){
   }
 }
 window.PatrolSpaceBridge={getState:()=>({
-  map:'chongqing',aircraft:'jetpack',playing:!graphicsLost,
+  map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
   position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
 })};
@@ -1082,5 +1279,6 @@ window.addEventListener('resize',()=>{
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);
 });
 document.getElementById('loading').remove();
-message('欢迎来到重庆！走近火锅店按 E 开吃',4);
+message(seaplaneMode?'Cessna 185 已就位于两江水面：Shift 加速，W 抬头起飞':
+  '欢迎来到重庆！走近火锅店按 E 开吃',4);
 clock.start();frame();
