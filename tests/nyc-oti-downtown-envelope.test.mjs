@@ -53,7 +53,7 @@ test('no new lot files, collision rules, roads or flying controls',()=>{
 test('solid cornices stay within the official-footprint batch budget and face outward',()=>{
  let totalQuads=0;
  for(const lot of source.footprints)totalQuads+=build(lot).quads.length;
- assert.equal(totalQuads,8832,'100-footprint pilot mesh quad count');
+ assert.equal(totalQuads,8898,'100-footprint pilot mesh with true cut-out doors');
  assert.ok(totalQuads<9000,'original OTI facade batch budget');
  const outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
  // Both valid NYC polygon winding directions must keep cap normals correct.
@@ -72,5 +72,45 @@ test('solid cornices stay within the official-footprint batch budget and face ou
   assert.equal(bottoms.length,stats.corniceBands);
   assert.ok(tops.every(q=>normalY(q)>0),'top cap faces sky');
   assert.ok(bottoms.every(q=>normalY(q)<0),'bottom cap faces ground');
+ }
+});
+
+test('entrance center is truly cut from original wall and glazing faces outside from recess',()=>{
+ const y=14.58,outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
+ for(const [id,poly] of [[300,outline],[303,[...outline].reverse()]]){
+  const {stats,quads}=build([id,-100,-450,12,8,20,poly]);
+  assert.equal(stats.streetEntrances,2,'synthetic two eligible street fronts');
+  const area=poly.reduce((sum,a,i)=>{
+   const b=poly[(i+1)%poly.length];
+   return sum+a[0]*b[1]-a[1]*b[0];
+  },0);
+  const sign=Math.sign(area),centerHeight=y+1.1;
+  for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length];
+   const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+   const outward=[sign*dz/length,-sign*dx/length];
+   if(!(outward[0]<-.30||outward[1]<-.20))continue;
+   const points=q=>q.slice(0,4);
+   const offset=p=>(p[0]-a[0])*outward[0]+(p[2]-a[1])*outward[1];
+   const t=p=>((p[0]-a[0])*dx+(p[2]-a[1])*dz)/(length*length);
+   const spansHeight=q=>{
+    const ys=points(q).map(p=>p[1]);
+    return Math.min(...ys)<centerHeight&&Math.max(...ys)>centerHeight;
+   };
+   const opaque=quads.filter(q=>q[5]===9&&spansHeight(q)&&
+    points(q).every(p=>Math.abs(offset(p))<1e-7)&&
+    Math.min(...points(q).map(t))<.5&&Math.max(...points(q).map(t))>.5);
+   assert.equal(opaque.length,0,'no opaque exterior wall crosses doorway center');
+   const glazing=quads.filter(q=>q[5]===10&&spansHeight(q)&&
+    points(q).every(p=>offset(p)<-.10)&&
+    Math.min(...points(q).map(t))<=.32&&
+    Math.max(...points(q).map(t))>=.68);
+   assert.equal(glazing.length,1,'one source-aligned recessed glass panel');
+   const [p0,p1,p2]=glazing[0],u=p1.map((v,i)=>v-p0[i]),
+     v=p2.map((w,i)=>w-p0[i]);
+   const outwardArea=(u[1]*v[2]-u[2]*v[1])*outward[0]+
+     (u[0]*v[1]-u[1]*v[0])*outward[1];
+   assert.ok(outwardArea>0,'recess glazing normal faces outside, both windings');
+  }
  }
 });
