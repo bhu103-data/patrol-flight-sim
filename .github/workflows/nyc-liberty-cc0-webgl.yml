@@ -55,12 +55,14 @@ jobs:
       - name: Install open-source Blender for headless CPU simplification and atlas bake
         run: |
           sudo apt-get update -qq
-          sudo apt-get install --no-install-recommends -y blender
+          sudo apt-get install --no-install-recommends -y blender python3-numpy
           blender --version | head -n 3
+          blender -b --python-expr 'import numpy; print("PATROL_BLENDER_NUMPY", numpy.__version__)'
       - name: Bake actual candidate GLB and check PATROL decoder limits
         run: |
           blender -b --python tools/nyc/bake-liberty-cc0.py -- \
             /tmp/patrol-liberty-source.glb assets/nyc/scenario/liberty.glb
+          test -s assets/nyc/scenario/liberty.glb
           node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
           sha256sum assets/nyc/scenario/liberty.glb > artifacts/nyc-liberty/optimized-sha256.txt
           test "$(stat -c%s assets/nyc/scenario/liberty.glb)" -le 8388608
