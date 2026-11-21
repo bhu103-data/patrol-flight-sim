@@ -51,3 +51,11 @@ Central QA must compare the same four settings against baseline `6d50bfd` and in
 ## Same-camera before/after evidence — refined scene baseline
 - Run [44958150919](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44958150919) successfully captured eight screenshots: four current-branch and four untouched `6d50bfd` using **the same** real-browser Scenic Views settings and SwiftShader. First-load baseline **9.572 seconds** vs. candidate **8.718 seconds**; mean requestAnimationFrame interval **284.99 ms** vs. **288.69 ms** (+1.30%), approximated software FPS **3.51** vs. **3.46** (-1.28%). This is software rendering, **not GPU frame time** and does not meet 30 FPS.
 - The sample hills are visibly present in the distant daytime and night Bellagio views but were faceted and unnaturally slab-like. Revised to 48 segments per side (768 mountain triangles, 786 total) and warmer strata. Review the new captured screenshots before acceptance; actual DEM import and authentic casino models remain separate work.
+
+## Additional landscape-facing QA (stacked PR #108)
+- The regular four screenshots use Strip Street View and Bellagio; the additional two explicitly target **both** ridge wings.
+- `vegas-ridge-west-noon.png`: Bellagio, bearing 70°, zoom 24, noon/clear.
+- `vegas-ridge-east-noon.png`: The Venetian, bearing -58°, zoom 24, noon/clear.
+- Both cameras have baseline `6d50bfd` screenshots captured by an identical script and 1280×720 screenshot viewport (software 704×396 render canvas observed).
+- The west/east geometry now has **768 total mountain triangles, 384 per wing**, with enforced upward-facing normals; 9 pavement quads are unchanged.
+- Six-image pixel differences are evidence of changed pixels only; animation, lighting progression, and moving vehicles can also differ. **Neither true DEM accuracy nor 30 FPS hardware performance is established.**

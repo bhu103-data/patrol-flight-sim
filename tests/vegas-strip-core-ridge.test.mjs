@@ -38,6 +38,18 @@ test('mountain wings are outside the authored casino blocks and roads',()=>{
  const east=triangles.filter(t=>t.a[0]>0);
  assert.equal(west.length,384);assert.equal(east.length,384);
 });
+test('both refined Vegas ridge wings have upward-facing triangle normals',()=>{
+ const {stats,triangles}=scene();
+ assert.equal(stats.mountainTriangles,768);
+ assert.equal(triangles.length,768);
+ let west=0,east=0;
+ for(const [i,{a,b,c}] of triangles.entries()){
+  const ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+  assert.ok(ny>0,`refined ridge triangle ${i} is downward-facing or degenerate`);
+  if(a[0]<0)west++;else east++;
+ }
+ assert.equal(west,384);assert.equal(east,384);
+});
 test('flush Strip surface repairs have no physical colliders or textures',()=>{
  const {quads}=scene();
  assert.ok(quads.every(q=>[q.a,q.b,q.c,q.d].every(p=>
@@ -53,4 +65,13 @@ test('fixed QA camera names a real Vegas scenic view',async()=>{
  const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
  assert.match(html,/site:\{name:'Strip Street View'\}/);
  assert.match(script,/selectOption\(\{label:'Strip Street View'\}\)/);
+});
+
+test('ridge QA captures both wings from actual Vegas scenic landmark cameras',async()=>{
+ const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(html,/site:VEGAS_SITES\.bellagio/);
+ assert.match(html,/site:VEGAS_SITES\.venetian/);
+ assert.match(script,/\['west','Bellagio'\]/);
+ assert.match(script,/\['east','The Venetian'\]/);
+ assert.match(script,/vegas-ridge-.*-noon\.png/);
 });

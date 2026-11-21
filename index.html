@@ -8971,7 +8971,12 @@ const CENTRAL_PARK_SITES=[
     const stone=[[.47,.37,.29],[.43,.34,.27],[.38,.31,.26],
       [.52,.41,.32],[.46,.36,.28]];
     let triangles=0;
-    const face=(a,b,c,color)=>{addTri(a,b,c,color);triangles++;};
+    const face=(a,b,c,color)=>{
+      // Counter clockwise in XZ for both positive- and negative-X ridge wings.
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      addTri(a,normalY<0?c:b,normalY<0?b:c,color);
+      triangles++;
+    };
     // Combine non-repeating long ridges, secondary crests and smaller
     // weathered outcrops; avoid the former five-sample sawtooth skyline.
     const ridgeHeight=(i,side)=>{

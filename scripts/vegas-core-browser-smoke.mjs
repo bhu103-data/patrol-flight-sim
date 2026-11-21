@@ -91,6 +91,44 @@ try {
    shots.push({shotName,...telemetry});
   }
  }
+ // Two distinct city-scale cameras face the western/eastern ridge wing.
+ // The existing street camera does not show the far mountains. These shots
+ // are an additional fixed-view evidence gate, not geodetic photo matching.
+ await page.locator('#skyTime').evaluate(el=>{
+  el.value='12';el.dispatchEvent(new Event('change',{bubbles:true}));
+ });
+ await page.locator('#skyWeather').evaluate(el=>{
+  el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
+ });
+ for(const [wing,site] of [['west','Bellagio'],['east','The Venetian']]){
+  await page.locator('#hotelTarget').selectOption({label:site});
+  await page.locator('#hotelAngle').evaluate(el=>{
+   el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('#hotelZoom').evaluate(el=>{
+   el.value='24';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(1500);
+  const telemetry=await page.evaluate(()=>{
+   const canvas=document.getElementById('glCanvas');
+   const gl=canvas?.getContext('webgl2');
+   return {webgl2:Boolean(gl&&!gl.isContextLost()),error:gl?.getError(),
+    target:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
+    selected:document.querySelector('input[name="flightMap"]:checked')?.value,
+    angle:document.getElementById('hotelAngle')?.value,
+    zoom:document.getElementById('hotelZoom')?.value};
+  });
+  assert(telemetry.webgl2&&telemetry.error===0,'Ridge view WebGL2/context error');
+  assert(telemetry.target===site&&telemetry.selected==='vegas'&&
+   telemetry.zoom==='24','Ridge scenic camera mismatch: '+JSON.stringify(telemetry));
+  const shotName='vegas-ridge-'+wing+'-noon.png';
+  await page.evaluate(()=>document.body.classList.add('vegas-qa-canvas'));
+  try{await page.locator('#glCanvas').screenshot({
+   path:output+'/'+shotName,timeout:60000,animations:'allow'
+  });}finally{await page.evaluate(()=>document.body.classList.remove('vegas-qa-canvas'));}
+  screenshots.push(shotName);
+  shots.push({shotName,wing,...telemetry});
+ }
  // Frame interval is a CPU/browser observational diagnostic, not GPU time.
  const frameSampling=await page.evaluate(()=>new Promise(resolve=>{
   let count=0,last=0,sum=0,max=0;
