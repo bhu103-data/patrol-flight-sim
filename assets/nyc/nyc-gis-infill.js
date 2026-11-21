@@ -4,7 +4,7 @@
 // Exact source FIDs + lon/lat are in times-square-footprints.json.
 // The calibrated X/Z scale is *not* 1:1 and cannot be presented as survey geometry.
 // Meshes are deliberately restricted to the old procedural Times Square hole.
-const EPS=1e-7,MIN_AREA=7.0,MAX_PIECES=110;
+const EPS=1e-7,MIN_AREA=7.0,MAX_PIECES=110,MAX_WINDOW_TRIM_QUADS=240;
 const crossingZ=[-40,-19,-2,14,31,50];
 function cross(a,b,c){return (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);}
 function signed(poly){return poly.reduce((s,a,i)=>{const b=poly[(i+1)%poly.length];return s+a[0]*b[1]-a[1]*b[0]},0)*.5;}
@@ -90,7 +90,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
-  let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0;
+  let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0;
   const sourceFids=new Set();
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
@@ -201,15 +201,40 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           floors=Math.min(12,Math.floor((h-2.2)/2.35));
         for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
           if(windows>=2200)break;
-          const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
-          const q=(t,y)=>[a[0]+(b[0]-a[0])*t+nx*.045,y,
-            a[1]+(b[1]-a[1])*t+nz*.045];
-          const lower=ground+2.4+row*2.35,upper=lower+.99;
+          // Footprint/edge-specific window widths prevent adjacent GIS
+          // facades from sharing one stamped grid. Widths stay aligned
+          // vertically within each bay, while glass occupancy differs by
+          // storey. This only affects the existing Times Square infill.
+          const style=(Math.imul(rec.fid^(k+1)*131,2246822519)>>>0)+bay*17;
+          const inset=.195+(style%4)*.023;
+          const v0=(bay+inset)/bays,v1=(bay+1-inset)/bays;
+          const q=(t,y,depth=.045)=>[a[0]+(b[0]-a[0])*t+nx*depth,y,
+            a[1]+(b[1]-a[1])*t+nz*depth];
+          const lower=ground+2.4+row*2.35;
+          const upper=lower+.88+(family%3)*.052;
           if(upper>top-.5)continue;
-          const shade=((rec.fid+row*17+bay*31)%11);
-          const tint=shade<2?[.43,.51,.54]:shade<4?[.17,.26,.30]:[.12,.20,.25];
+          const shade=(Math.imul(rec.fid+row*31+bay*17+k*53,
+            2654435761)>>>0)%13;
+          const tint=shade<2?[.40,.48,.52]:shade<5?[.17,.26,.30]:
+            shade<8?[.12,.20,.25]:[.145,.22,.265];
           addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint,7);
           windows++;
+          // A small set of near-pedestrian facades gains masonry jambs,
+          // sills and lintels in the same mesh (no new GPU buffers).
+          // All trim projects <=.067 game units outside the GIS wall.
+          if(row<2 && len>=4.8 && (rec.fid+k)%4===0 &&
+              windowTrimQuads<=MAX_WINDOW_TRIM_QUADS-4){
+            const bar=.055/len,trim=wall.map(c=>Math.min(.86,c*1.12));
+            const quad=(t0,t1,y0,y1)=>{
+              addQuad(q(t0,y0,.067),q(t1,y0,.067),
+                q(t1,y1,.067),q(t0,y1,.067),trim,6);
+              windowTrimQuads++;
+            };
+            quad(v0-bar,v0,lower-.065,upper+.055);
+            quad(v1,v1+bar,lower-.065,upper+.055);
+            quad(v0-bar,v1+bar,lower-.07,lower+.012);
+            quad(v0-bar,v1+bar,upper-.012,upper+.065);
+          }
         }
       }
       // Finish transition: one slim horizontal cornice near the crown and
@@ -244,5 +269,6 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   }
   return {inputRecords:asset.features.length,sourceBuildings:buildings,
     infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
+    windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
 }
