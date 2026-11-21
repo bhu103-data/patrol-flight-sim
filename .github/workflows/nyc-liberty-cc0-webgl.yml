@@ -5,6 +5,7 @@ on:
       - qa/nyc-liberty-cc0-light-lod-20261121
     paths:
       - "tools/nyc/bake-liberty-cc0.py"
+      - "tests/nyc-liberty-light-lod-qa.test.mjs"
       - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
       - "tools/nyc/check-liberty-harbor-placement.mjs"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "tools/nyc/bake-liberty-cc0.py"
+      - "tests/nyc-liberty-light-lod-qa.test.mjs"
       - "tools/nyc/rasterize-liberty-colors.py"
       - "tools/nyc/check-liberty-glb.mjs"
       - "tools/nyc/check-liberty-harbor-placement.mjs"
