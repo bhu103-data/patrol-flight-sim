@@ -4614,7 +4614,12 @@
       const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-
         MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
       const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);
-      const archType=((gridX*3+gridZ*5)%13+13)%13;
+      // Nonperiodic parcel seed avoids visible diagonal repetitions along
+      // Manhattan's street grid; preserve exactly 13 controlled material
+      // families and existing height/collision/LOD constraints.
+      const parcelSeed=(Math.imul(gridX,73856093) ^
+        Math.imul(gridZ,19349663) ^ Math.imul(gridX*gridZ,83492791))>>>0;
+      const archType=parcelSeed%13;
       // Align windows with the lower/middle/crown setback geometry.
       function facadeTier(alt){
         if(!heroDowntown || h<9.2)return {x,w,d};
@@ -4931,47 +4936,47 @@
           box(center,45.58,leg,5.58,1.45,2.94,stone);
         }
         box(center,45.0,z,5.30,1.7,8.6,stone);
-        for(const side of [-1,1])for(let i=0;i<8;i++){
-          const a=i/8,b=(i+1)/8;
-          const inner=t=>[side*2.43*(1-t),36.5+5.7*t];
-          const [az,ay]=inner(a),[bz,by]=inner(b);
-          for(const face of [-1,1]){
-            const px=center+face*2.48;
-            addQuad([px,ay,z+az],[px,by,z+bz],[px,44.2,z+bz],[px,44.2,z+az],stone);
-          }
-          addQuad([center-2.48,ay,z+az],[center+2.48,ay,z+az],
-            [center+2.48,by,z+bz],[center-2.48,by,z+bz],[0.53,0.50,0.45]);
-        }
-      }
-
-      // Pointed Gothic openings on both front faces of each masonry tower.
-      // These are fixed to existing tower positions and stay outside traffic
-      // clearance. Limiting to four arches avoids thousands of small boxes.
-      const voussoir=[.68,.65,.58],archShadow=[.34,.35,.34];
-      for(const center of [x+west,x+east]){
-        for(const front of [-1,1]){
-          const fx=center+front*2.64;
-          for(let k=0;k<16;k++){
-            const u0=k/16,u1=(k+1)/16;
-            const arch=(u,depth=0)=>{
-              const across=2*u-1;
-              const height=34.0+8.10*Math.pow(1-Math.abs(across),.74);
-              return [fx+front*depth,height,z+across*2.34];
-            };
-            const p=arch(u0),q=arch(u1);
-            addRideBeam(addQuad,p,q,.245,voussoir);
-            if(k%2===0){
-              addRideBeam(addQuad,
-                arch(u0,.10),arch(u0,-.12),.072,archShadow);
+        // Physical pointed stone-arch spandrel (not a decal or floating rib).
+        // The masonry fills only ABOVE the underpass; the carriageway,
+        // raised footpath, ship clearance and original collision stay clear.
+        // A curved, 24-segment underside connects both visible tower faces.
+        const archY=u=>34.25+7.95*Math.pow(1-Math.abs(u),.72);
+        const archOuter=2.49,archHalfSpan=2.38,archTop=44.24;
+        const lightStone=[.67,.64,.57],underStone=[.38,.39,.36],
+              cutStone=[.59,.57,.51],pointMortar=[.44,.43,.40];
+        for(let segment=0;segment<24;segment++){
+          const u0=-1+segment/12,u1=-1+(segment+1)/12;
+          const z0=z+u0*archHalfSpan,z1=z+u1*archHalfSpan;
+          const h0=archY(u0),h1=archY(u1);
+          const fill=(segment%7===0)?cutStone:lightStone;
+          for(const front of [-1,1]){
+            const xx=center+front*archOuter;
+            const a=[xx,h0,z0],b=[xx,h1,z1],
+              c=[xx,archTop,z1],d=[xx,archTop,z0];
+            if(front<0)addQuad(a,b,c,d,fill);
+            else addQuad(d,c,b,a,fill);
+            // Raised voussoirs follow the opening and cast real highlights.
+            const lipX=xx+front*.075;
+            addRideBeam(addQuad,
+              [lipX,h0+.06,z0],[lipX,h1+.06,z1],
+              .087,[.73,.69,.61]);
+            if(segment%3===0 && segment>0){
+              const yy=archY(u0)+.17;
+              addRideBeam(addQuad,[lipX,yy,z0],
+                [lipX,Math.min(archTop-.12,yy+.68),z0+.075],
+                .033,pointMortar);
             }
           }
-          // Carved springing blocks beside the opening, plus coping
-          // projecting forward to catch sunlight at close camera distance.
-          for(const side of [-1,1]){
-            box(fx+front*.05,34.12,z+side*2.52,.29,.68,.43,voussoir);
-            box(fx+front*.06,32.6,z+side*2.50,.26,.15,.72,archShadow);
-          }
-          box(fx+front*.09,44.74,z,.21,.27,8.75,voussoir);
+          // The underside is a real stone tunnel vault, not an open roof.
+          addQuad([center-archOuter,h0,z0],
+            [center+archOuter,h0,z0],
+            [center+archOuter,h1,z1],
+            [center-archOuter,h1,z1],underStone);
+        }
+        for(const front of [-1,1])for(const side of [-1,1]){
+          const px=center+front*(archOuter+.06),zz=z+side*(archHalfSpan+.06);
+          box(px,34.33,zz,.19,.43,.29,lightStone);
+          box(px,33.82,zz,.15,.12,.53,pointMortar);
         }
       }
 
