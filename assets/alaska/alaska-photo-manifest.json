@@ -1,10 +1,12 @@
 {
   "format": "patrol-alaska-pbr-atlas-v1",
-  "width": 512,
+  "width": 1024,
   "height": 256,
   "columns": [
     "rock_01",
-    "snow_02"
+    "snow_02",
+    "forest_ground_04",
+    "forrest_ground_03"
   ],
   "maps": {
     "albedo": "alaska-photo-albedo.webp",
@@ -16,6 +18,8 @@
   "source": "https://polyhaven.com/license",
   "assetUrls": [
     "https://polyhaven.com/a/rock_01",
-    "https://polyhaven.com/a/snow_02"
+    "https://polyhaven.com/a/snow_02",
+    "https://polyhaven.com/a/forest_ground_04",
+    "https://polyhaven.com/a/forrest_ground_03"
   ]
 }
