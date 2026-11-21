@@ -62,3 +62,12 @@ test('fixed QA camera names a real Vegas scenic view',async()=>{
  assert.match(html,/site:\{name:'Strip Street View'\}/);
  assert.match(script,/selectOption\(\{label:'Strip Street View'\}\)/);
 });
+
+test('ridge QA captures both wings from real Vegas scenic landmarks',async()=>{
+ const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(html,/site:VEGAS_SITES\.bellagio/);
+ assert.match(html,/site:VEGAS_SITES\.venetian/);
+ assert.match(script,/\['west','Bellagio'\]/);
+ assert.match(script,/\['east','The Venetian'\]/);
+ assert.match(script,/vegas-ridge-.*-noon\.png/);
+});
