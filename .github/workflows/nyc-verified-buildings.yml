@@ -6,6 +6,9 @@ on:
       - 'index.html'
       - 'assets/nyc/times-square-footprints.json'
       - 'assets/nyc/nyc-gis-infill.js'
+      - 'assets/nyc/official-financial-footprints.json'
+      - 'tests/nyc-oti-footprints.test.mjs'
+      - 'tests/nyc-oti-pbr-replacement.test.mjs'
       - 'tests/nyc-times-verified.test.mjs'
       - '.github/workflows/nyc-verified-buildings.yml'
   workflow_dispatch:
@@ -21,4 +24,4 @@ jobs:
         with:
           node-version: '22'
       - name: Verify 13 city survey building shells and LED/collision continuity
-        run: node --test tests/nyc-times-verified.test.mjs tests/nyc-gis-pbr.test.mjs tests/nyc-oti-footprints.test.mjs
+        run: node --test tests/nyc-times-verified.test.mjs tests/nyc-gis-pbr.test.mjs tests/nyc-oti-footprints.test.mjs tests/nyc-oti-pbr-replacement.test.mjs
