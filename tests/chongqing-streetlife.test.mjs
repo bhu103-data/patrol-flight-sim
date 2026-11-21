@@ -138,6 +138,21 @@ test('painted car body, cabin glass, wheels and white-black checker are separate
   assert.ok(instanced.some(x=>x.capacity===72&&x.count===30));
   assert.ok(instanced.some(x=>x.capacity===12&&x.count===5));
 });
+test('front grille and license plate detail remains instanced and low-quality aware',()=>{
+  const {traffic,objects}=setup();
+  const meshes=objects.filter(x=>x instanceof InstancedMesh);
+  const grille=meshes.find(x=>x.capacity===12&&x.count===10&&x.material.roughness===.82);
+  const plates=meshes.find(x=>x.capacity===24&&x.count===20&&x.material.color===0xe4e7d8);
+  const rearTrims=meshes.find(x=>x.capacity===24&&x.count===20&&x.material.color===0xa92a21);
+  assert.ok(grille,'one GPU batch covers all ten front grilles');
+  assert.ok(plates,'one GPU batch covers front and rear plates');
+  assert.ok(rearTrims,'one GPU batch covers rear marker trim');
+  traffic.setQuality('low');
+  for(const mesh of [grille,plates,rearTrims])assert.equal(mesh.visible,false);
+  traffic.setQuality('normal');
+  for(const mesh of [grille,plates,rearTrims])assert.equal(mesh.visible,true);
+});
+
 test('main scene integrates real shadows and street traffic without disabling existing maps',async()=>{
   const src=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   assert.ok(src.includes("from './streetlife.js'"));
