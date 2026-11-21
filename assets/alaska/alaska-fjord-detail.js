@@ -44,9 +44,6 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     }
   }
 
-  // Fjord floes with irregular perimeter (not repeated cone-shaped icebergs).    }
-  }
-
   // Dimensional calving face: narrow ice towers, fractured rock-blue walls,
   // sediment layers and irregular overhangs rather than a flat turquoise quad.
   // Follow the SAME glacier-front control curve used by the main terrain mesh.
@@ -134,8 +131,6 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     addQuad(a,b,cb,ca,i%3?[.36,.41,.43]:[.50,.53,.53]);
     stats.rockBands++;
   }
-  // Alaska coastal spruce/hemlock silhouettes    stats.rockBands++;
-  }
   // Small talus fans at surveyed upland slopes, never invented giant cliffs.
   // Irregular triangular stone faces catch glancing light at low altitude.
   for(let i=0;i<110;i++){
@@ -207,9 +202,6 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
                [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
                [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
                color);
-      }
-    }
-    // Irregular understorey tufts               color);
         // Fine asymmetric branchlet curtains improve nearby spruce shape
         // with a bounded polygon budget. No repeated cone layers or billboards.
         if(i%7===0 && layer<2 && j%2===0){
