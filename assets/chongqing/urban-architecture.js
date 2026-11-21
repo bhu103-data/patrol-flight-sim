@@ -4,17 +4,17 @@
 import {roadReserveAtSite} from './road-clearance.js';
 
 export const CHONGQING_BUILDING_STYLES=[
-  {name:'residential-terrace',bevel:.018,material:'residentialFacade',
+  {name:'residential-terrace',bevel:.018,facadeFloors:24,material:'residentialFacade',
     layers:[[-.5,1,1],[.25,1,1],[.25,.94,.93],[.46,.94,.93],[.46,.86,.84],[.5,.86,.84]]},
-  {name:'office-glass',bevel:.16,material:'curtainWall',
+  {name:'office-glass',bevel:.16,facadeFloors:42,material:'curtainWall',
     layers:[[-.5,1,1],[.34,1,1],[.34,.94,.94],[.47,.94,.94],[.5,.92,.91]]},
-  {name:'mixed-step-tower',bevel:.06,material:'commercialFacade',
+  {name:'mixed-step-tower',bevel:.06,facadeFloors:32,material:'commercialFacade',
     layers:[[-.5,1,1],[-.28,1,1],[-.28,.88,.94],[.20,.88,.94],
       [.20,.72,.81],[.45,.72,.81],[.45,.65,.72],[.5,.65,.72]]},
-  {name:'riverfront-midrise',bevel:.035,material:'residentialFacade',
+  {name:'riverfront-midrise',bevel:.035,facadeFloors:18,material:'residentialFacade',
     layers:[[-.5,1,1],[.05,1,1],[.05,.96,.95],[.40,.96,.95],
       [.40,.91,.9],[.5,.91,.9]]},
-  {name:'slender-skyscraper',bevel:.115,material:'curtainWall',
+  {name:'slender-skyscraper',bevel:.115,facadeFloors:48,material:'curtainWall',
     layers:[[-.5,1,1],[.31,1,1],[.31,.85,.84],[.47,.85,.84],[.5,.77,.76]]}
 ];
 function ring(w,d,bevel) {
@@ -22,9 +22,28 @@ function ring(w,d,bevel) {
  return [[-w,-d+bz],[-w,d-bz],[-w+bx,d],
   [w-bx,d],[w,d-bz],[w,-d+bz],[w-bx,-d],[-w+bx,-d]];
 }
+// Physical facade envelope at an exact normalized height. Used by all
+// attachments so they follow stepped building tiers, not the base box.
+export function chongqingTowerEnvelopeAt(style,level){
+ if(!style||!Array.isArray(style.layers)||style.layers.length<2)
+   throw Error('Missing architectural layers');
+ const layers=style.layers;
+ const y=Math.max(layers[0][0],Math.min(layers[layers.length-1][0],level));
+ for(let i=1;i<layers.length;i++){
+   const a=layers[i-1],b=layers[i];
+   // Reconstructed world-space height can land 1e-16 below a repeated
+   // terrace boundary. Snap both paths to the UPPER facade at the ledge.
+   if(y>=b[0]-1e-8&&i<layers.length-1)continue;
+   const delta=b[0]-a[0];
+   const t=delta>1e-9?Math.max(0,Math.min(1,(y-a[0])/delta)):1;
+   return {width:a[1]+(b[1]-a[1])*t,depth:a[2]+(b[2]-a[2])*t};
+ }
+ const end=layers[layers.length-1];return {width:end[1],depth:end[2]};
+}
 export function makeChongqingTowerProfile(style){
  if(!style||!Array.isArray(style.layers)||style.layers.length<2)throw Error('Missing architectural layers');
  const positions=[],uvs=[],normals=[],indices=[];
+ const verticalTiles=Math.max(1,Math.min(3.5,(style.facadeFloors??32)/16));
  const push=(a,b,c,d,u0,v0,u1,v1)=>{
    const first=positions.length/3;
    positions.push(...a,...b,...c,...d);
@@ -41,7 +60,7 @@ export function makeChongqingTowerProfile(style){
      // across a 50-200m game-scale tower without separate window draw calls.
      push([low[k][0],y0,low[k][1]],[low[next][0],y0,low[next][1]],
        [high[next][0],y1,high[next][1]],[high[k][0],y1,high[k][1]],
-       k*.42,(y0+.5)*3.25,(k+1)*.42,(y1+.5)*3.25);
+       k*.42,(y0+.5)*verticalTiles,(k+1)*.42,(y1+.5)*verticalTiles);
    }
  }
  const top=style.layers[style.layers.length-1],perimeter=ring(top[1]*.5,top[2]*.5,style.bevel*.5);
@@ -50,7 +69,7 @@ export function makeChongqingTowerProfile(style){
    const a=perimeter[k],b=perimeter[(k+1)%8],c=[0,0];
    const i=positions.length/3;
    positions.push(0,top[0],0,a[0],top[0],a[1],b[0],top[0],b[1]);
-   uvs.push(.5,.5,a[0]+.5,a[1]+.5,b[0]+.5,b[1]+.5);
+   uvs.push(.04,.04,.04,.04,.04,.04);
    // XZ ring has outward-facing walls; fan center->edge->next points +Y.
    indices.push(i,i+1,i+2);
  }
@@ -95,7 +114,9 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    ['#8ea9b5','#aec1c9','#c2ccd2']
  ];
  function tower(x,z,w,dz,h,styleIndex,colIndex){
-   const style=styleMeshes[styleIndex],base=ground(x,z),n=style.count;
+   const style=styleMeshes[styleIndex],
+    profile=CHONGQING_BUILDING_STYLES[styleIndex],
+    base=ground(x,z),n=style.count;
    if(n>=100)return;
    set(style,n,x,base+h*.5,z,w,h,dz);
    const variants=colors[styleIndex],tint=variants[colIndex%variants.length];
@@ -112,25 +133,35 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    }
    const units=styleIndex===0||styleIndex===3?6:styleIndex===2?3:0;
    for(let i=0;i<units;i++){
-     const yy=base+h*(.19+i*.105),xx=x+((i%3)-1)*w*.26;
+     const fraction=.19+i*.105,
+       envelope=chongqingTowerEnvelopeAt(profile,fraction-.5),
+       yy=base+h*fraction,
+       xx=x+((i%3)-1)*w*.26*envelope.width;
      if(stats.balconies<2200){
-       set(balconies,stats.balconies++,xx,yy,z+dz*.50+.67,
-         w*.21,.10,1.42);
+       set(balconies,stats.balconies++,xx,yy,
+         z+dz*.50*envelope.depth+.67,
+         w*.21*envelope.width,.10,1.42);
      }
      if(i%2===0&&stats.airConditioners<900){
-       set(acs,stats.airConditioners++,x+w*.50+.24,yy-.44,
-         z+dz*(i%3-1)*.22,.54,.47,.70);
+       set(acs,stats.airConditioners++,
+         x+w*.50*envelope.width+.24,yy-.44,
+         z+dz*envelope.depth*(i%3-1)*.22,.54,.47,.70);
      }
    }
    // Irregular interior lighting, not a complete repeated matrix on every tower.
-   const floorCount=Math.max(6,Math.min(26,Math.round(h/7.3)));
+   const floorCount=Math.max(8,Math.min(72,Math.round(h/3.5)));
    const windowCols=Math.max(2,Math.min(7,Math.round(w/5.5)));
-   for(let row=1;row<floorCount-1;row+=2)for(let col=0;col<windowCols;col++){
+   for(let row=1;row<floorCount-1;row+=3)for(let col=0;col<windowCols;col++){
      if(rand()>.31||stats.litWindows>=4800)continue;
-     const xx=x-w*.5+(col+.5)*w/windowCols,
-       yy=base+(row+.45)*h/floorCount;
-     set(windows,stats.litWindows,xx,yy,z+dz*.5+.075,
-       Math.max(.78,w/windowCols*.40),Math.max(.55,h/floorCount*.40),1);
+     const frac=(row+.45)/floorCount,
+       envelope=chongqingTowerEnvelopeAt(profile,frac-.5),
+       frontage=w*envelope.width,
+       xx=x-frontage*.5+(col+.5)*frontage/windowCols,
+       yy=base+frac*h;
+     set(windows,stats.litWindows,xx,yy,
+       z+dz*envelope.depth*.5+.075,
+       Math.max(.66,frontage/windowCols*.42),
+       Math.max(.46,h/floorCount*.42),1);
      windows.setColorAt(stats.litWindows,glassGlow.set(rand()>.33?'#e2d2b1':'#7a9aa5'));
      stats.litWindows++;
    }
@@ -151,7 +182,7 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      const h=(heightBand+rand()*(business?165:76))*(rand()<.20?.52:1);
      // Reject the entire footprint, not just the center. A building cannot
      // extend into an asphalt ribbon, the bridge deck, or the next tower.
-     // Match the +2-unit actual collision box, not the smaller facade dimensions.
+     // Preserve road-free collision footprint including 2-unit facade clearance.
      const site={x,z,w:w+2,d:d+2};
      if(roadReserveAtSite(site,plannedRoads,0,2.2)){
        stats.skippedRoadOverlap++;continue;
