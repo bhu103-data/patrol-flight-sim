@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>PATROL · 重庆火锅飞行员</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111426;color:#fff}
+canvas#world{display:block;width:100vw;height:100vh;touch-action:none}
+#top{position:absolute;top:16px;left:17px;z-index:3;max-width:min(330px,64vw);pointer-events:none}
+#top h1{font-size:clamp(19px,2.5vw,29px);margin:0;color:#ffe7af;text-shadow:0 3px 13px #000}
+#top p{margin:6px 0;font-size:12px;line-height:1.5;text-shadow:0 2px 5px #000}
+#quest{background:#141d34b8;border:1px solid #e6a65b77;padding:10px 13px;border-radius:12px;margin-top:12px;font-size:13px;line-height:1.7;backdrop-filter:blur(8px)}
+#quest strong{color:#ffc77d}#quest .done{color:#8ef3b8}
+#map{position:absolute;right:18px;top:16px;width:158px;height:158px;background:#162943b8;border:2px solid #f9d9ad99;border-radius:50%;z-index:3;pointer-events:none}
+#bottom{position:absolute;left:50%;bottom:17px;transform:translateX(-50%);width:min(540px,calc(100vw - 30px));z-index:3;pointer-events:none}
+#meter{display:flex;align-items:center;gap:10px;border-radius:15px;padding:10px 13px;background:#17243bd6;border:1px solid #fac78c99;box-shadow:0 4px 30px #0006;backdrop-filter:blur(8px)}
+#meter span{font-size:12px;white-space:nowrap}#meter .track{flex:1;height:13px;border-radius:9px;background:#382c40;overflow:hidden}#meterFill{height:100%;width:0%;border-radius:9px;background:linear-gradient(90deg,#ff542c,#ffb833,#ffe38f);transition:width .12s}#meterStatus{min-width:50px;text-align:right}
+#hint{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);padding:9px 13px;border-radius:9px;background:#1c2437d9;border:1px solid #ffd39a88;z-index:3;text-align:center;font-size:14px;max-width:85vw}
+#toast{position:absolute;top:32%;left:50%;transform:translate(-50%,-50%);background:#291e32d9;color:#ffde92;padding:12px 20px;border:1px solid #ffcb86;border-radius:12px;font-weight:bold;z-index:5;opacity:0;pointer-events:none;transition:opacity .3s;text-align:center}
+#controls{position:absolute;left:17px;bottom:92px;max-width:340px;color:#f4e0c2;font-size:12px;line-height:1.8;text-shadow:0 2px 5px #000;pointer-events:none}
+kbd{font-family:inherit;border:1px solid #fff8;border-radius:4px;padding:1px 4px;background:#1e3047c9}
+#back{position:absolute;right:18px;bottom:18px;z-index:6;color:#fce9d1;border:1px solid #f1d5ac99;background:#1c2338ce;border-radius:9px;padding:11px 14px;text-decoration:none;font-weight:700;font-size:12px}
+#back:hover{background:#75503b}
+#loading{position:absolute;inset:0;z-index:8;background:radial-gradient(circle at 50% 40%,#46516d,#101225 74%);display:grid;place-content:center;text-align:center}
+#loading h2{color:#ffe0ad}#loading p{color:#d0d8e6;font-size:13px}
+#mobile{display:none;position:absolute;left:16px;right:16px;bottom:90px;justify-content:space-between;z-index:5;pointer-events:none}
+#mobile button{pointer-events:auto;width:65px;height:55px;border:1px solid #f7c38aab;border-radius:13px;background:#29394bbd;color:#fff;font-weight:bold}
+@media(max-width:800px),(pointer:coarse){#map{width:108px;height:108px}#top{max-width:60vw}#top h1{font-size:18px}#quest{font-size:11px}#controls{display:none}#mobile{display:flex}#bottom{bottom:13px}#back{bottom:87px;padding:7px 10px}#hint{bottom:153px;font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="world" aria-label="重庆三维探索地图"></canvas>
+<div id="loading"><div><h2>🌶️ 重庆火锅飞行员</h2><p>正在生成山城、两江和洪崖洞…</p></div></div>
+<section id="top"><h1>CHONGQING · PILOT</h1><p>重庆山城自由探索 / Hotpot Jet Flight</p><div id="quest"><strong>探索重庆</strong><div id="questHong">□ 飞过洪崖洞</div><div id="questHotpot">□ 吃一次重庆火锅</div><div id="questBridge">□ 飞过跨江大桥</div></div></section>
+<canvas id="map" width="256" height="256" aria-label="小地图"></canvas>
+<div id="hint">靠近火锅店按 E，解锁麻辣喷火推进 🌶️</div>
+<div id="toast" role="status"></div>
+<div id="controls"><kbd>W A S D</kbd> 移动 / 转向　<kbd>Shift</kbd> 奔跑或冲刺<br><kbd>Space</kbd> 超级跳 / 飞行上升　<kbd>Ctrl</kbd> 下降<br><kbd>F</kbd> 开关飞行　<kbd>E</kbd> 吃火锅　拖动鼠标转动镜头</div>
+<div id="bottom"><div id="meter"><span>🌶️ 麻辣推进</span><div class="track"><div id="meterFill"></div></div><span id="meterStatus">未激活</span></div></div>
+<div id="mobile"><button data-key="KeyE">火锅</button><button data-key="KeyF">飞行</button><button data-key="ShiftLeft">冲刺</button><button data-key="Space">跳 / 升</button></div>
+<a id="back" href="./index.html">← 返回 PATROL</a>
+<script type="module" src="./assets/chongqing/chongqing.js"></script>
+</body>
+</html>
