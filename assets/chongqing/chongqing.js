@@ -919,6 +919,7 @@ function scenicView(key){
     // The camera is still in the actual compressed city, never in water.
     Digit5:{name:'支流护栏与山城道路',pos:[-472,ground(-472,-271)+8,-271],
       target:[-420,ground(-420,-271)+12,-271]}
+    ,Digit6:{name:'洪崖洞临江步道近景',pos:[155,18,72],target:[155,13,110]}
   };
   const next=destinations[key];
   if(!next)return false;
