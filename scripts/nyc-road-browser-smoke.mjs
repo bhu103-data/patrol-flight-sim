@@ -146,9 +146,10 @@ async function capture(name,{control=false}={}){
  }
 }
 
-let result;
+let result,petalwakeQa=null;
 try{
- const res=await page.goto(base+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+ const res=await page.goto(base+'/index.html'+
+   (process.env.PATROL_NYC_ROAD_QA==='1'?'?nycRoadQa=1':''),{waitUntil:'domcontentloaded',timeout:60000});
  check(res?.ok(),'NYC launcher did not respond');
  await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
  await page.locator('#startFlight').click({force:true});
@@ -253,6 +254,58 @@ try{
  check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
    dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
  await capture('03-dumbo-warehouse.png');
+ // PR #102: opt-in, pixel-backed Petalwake road LOD and wet surface QA.
+ // The camera sites are only present with ?nycRoadQa=1. No flight mode,
+ // traffic path, collision, or renderer settings are changed by this test.
+ if(process.env.PATROL_NYC_ROAD_QA==='1'){
+  const setSite=async label=>{
+   await page.locator('#hotelTarget').selectOption({label});
+   await page.locator('#hotelZoom').evaluate(el=>{
+    el.value='42';el.dispatchEvent(new Event('input',{bubbles:true}));
+   });
+   await page.waitForTimeout(1800);
+   const snap=await page.evaluate(()=>window.__patrolNycRoadLodQa?.());
+   check(snap?.chunks?.length===4,
+    'Bridgehead chunk import missing in real WebGL: '+JSON.stringify(snap));
+   const gl=await page.evaluate(()=>{
+    const ctx=document.getElementById('glCanvas')?.getContext('webgl2');
+    return ctx?.getError()??-1;
+   });
+   check(gl===0,'WebGL error on road QA camera: '+gl);
+   return snap;
+  };
+  const near=await setSite('DUMBO Road QA · Near');
+  check(near.chunks.some(c=>c.lod===2),
+   'Near camera never selected high road LOD: '+JSON.stringify(near));
+  check(near.wetness<.10,
+   'Initial dry road unexpectedly wet: '+near.wetness);
+  await capture('11-dumbo-road-near-dry.png');
+  await page.evaluate(()=>{
+   const el=document.getElementById('skyWeather');
+   el.value='Rain';el.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.waitForFunction(()=>window.__patrolNycRoadLodQa?.().wetness>.48,
+   null,{timeout:20000});
+  const wet=await page.evaluate(()=>window.__patrolNycRoadLodQa());
+  check(wet.chunks.some(c=>c.lod===2),
+   'Wet road camera drifted to a different LOD');
+  await capture('12-dumbo-road-near-rain.png');
+  const mid=await setSite('DUMBO Road QA · Mid');
+  check(mid.chunks.some(c=>c.lod===1),
+   'Mid camera never selected medium road LOD: '+JSON.stringify(mid));
+  await capture('13-dumbo-road-mid-rain.png');
+  const far=await setSite('DUMBO Road QA · Far');
+  check(far.chunks.every(c=>c.lod===0),
+   'Far camera retains too many detailed road chunks: '+JSON.stringify(far));
+  await capture('14-dumbo-road-far-rain.png');
+  petalwakeQa={near,wet,mid,far};
+  await page.evaluate(()=>{
+   const el=document.getElementById('skyWeather');
+   el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  console.log('[PATROL QA] Petalwake live LOD/wet camera checks passed',
+   JSON.stringify(petalwakeQa));
+ }
  // Review the procedural Liberty crown from the dedicated close-up camera,
  // rather than inferring statue quality from distant harbor screenshots.
  await page.locator('#hotelTarget').selectOption({label:'Statue of Liberty'});
@@ -325,7 +378,8 @@ try{
   await capture('10-times-square-no-gis.png',{control:true});
  }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings};
+ result={passed:true,state,bridge,dumbo,liberty,petalwakeQa,
+  screenshots,pixels,controlPixels,captureTimings,warnings};
 }catch(e){
  result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
    captureTimings,errors,warnings};
