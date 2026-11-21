@@ -422,23 +422,78 @@ for(let i=0;i<6;i++){
   box(x-16,y+7,z,.4,5,.5,M.rail);
   ball(x-16,y+9.5,z,.43,M.gold);
 }
-const treeGeo=new THREE.ConeGeometry(1,2.7,6);
-const trunkGeo=new THREE.CylinderGeometry(.22,.27,1,5);
-const trees=new THREE.InstancedMesh(treeGeo,M.tree,380);
-const stems=new THREE.InstancedMesh(trunkGeo,M.trunk,380);
-let treeCount=0;
+// Irregular subtropical street trees. No repeated conical/cartoony canopy.
+// Shared instanced branches, bark, and three differently shaped foliage crowns.
+const treeLeafMaterial=new THREE.MeshStandardMaterial({
+  color:0x75927b,roughness:.98,metalness:0,side:THREE.FrontSide
+});
+const treeBarkMaterial=new THREE.MeshStandardMaterial({
+  color:0x68594e,roughness:.97,metalness:0
+});
+const treeGeo=new THREE.IcosahedronGeometry(1,2);
+const trunkGeo=new THREE.CylinderGeometry(.19,.28,1,8);
+const branchGeo=new THREE.CylinderGeometry(.10,.15,1,7);
+const trees=new THREE.InstancedMesh(treeGeo,treeLeafMaterial,1140);
+const stems=new THREE.InstancedMesh(trunkGeo,treeBarkMaterial,380);
+const branches=new THREE.InstancedMesh(branchGeo,treeBarkMaterial,760);
+trees.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+stems.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+branches.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+let treeCount=0,leafCount=0,branchCount=0;
+const upTree=new THREE.Vector3(0,1,0);
+const treeFrom=new THREE.Vector3(),treeTo=new THREE.Vector3(),branchDir=new THREE.Vector3();
+const leafTone=new THREE.Color();
 for(let i=0;i<380;i++){
-  const x=(rand()-.5)*1900,z=(rand()-.5)*1300;
-  if(riverDist(x,z)<5)continue;
-  const y=ground(x,z);
-  const s=2.5+rand()*3.2;
-  dummy.rotation.set(0,0,0);dummy.position.set(x,y+s,z);dummy.scale.set(s,s*1.6,s);dummy.updateMatrix();
-  trees.setMatrixAt(treeCount,dummy.matrix);
-  dummy.position.set(x,y+1.5,z);dummy.scale.set(.8,3,.8);dummy.updateMatrix();
-  stems.setMatrixAt(treeCount,dummy.matrix);treeCount++;
+  const x=(rand()-.5)*1880,z=(rand()-.5)*1240;
+  if(riverDist(x,z)<18)continue;
+  let roadside=false;
+  for(const side of [-1,1])for(let l=0;l<3;l++){
+    const zRoad=riverCenter(x)+side*(145+l*105+14*Math.sin(x/115+l));
+    if(Math.abs(z-zRoad)<12.5)roadside=true;
+  }
+  if(roadside)continue;
+  if(obstacles.some(o=>Math.abs(o.x-x)<o.w*.5+6&&Math.abs(o.z-z)<o.d*.5+6))continue;
+  if(Math.hypot(x-160,z-145)<145||Math.hypot(x-285,z-225)<70)continue;
+  if(Math.abs(x+355)<194&&Math.abs(z-176)<93)continue;
+  if(Math.abs(x+121)<55&&Math.abs(z+254)<46)continue;
+  const y=ground(x,z),h=4.7+rand()*4.8,spread=3.7+rand()*2.5;
+  const trunkScale=.64+rand()*.42;
+  dummy.rotation.set(0,0,0);
+  dummy.position.set(x,y+h*.52,z);
+  dummy.scale.set(trunkScale,h*1.06,trunkScale);
+  dummy.updateMatrix();stems.setMatrixAt(treeCount++,dummy.matrix);
+  for(let j=0;j<3;j++){
+    const angle=(j/3)*TAU+rand()*.9;
+    const dx=Math.cos(angle)*spread*.46,dz=Math.sin(angle)*spread*.42;
+    const dy=h+(j===0?1.6:j===1?2.7:1.1);
+    dummy.position.set(x+dx,y+dy,z+dz);
+    dummy.rotation.set(rand()*.17,rand()*TAU,rand()*.12);
+    const rr=spread*(j===1?1.11:.83);
+    dummy.scale.set(rr,rr*(.72+rand()*.27),rr*(.89+rand()*.11));
+    dummy.updateMatrix();
+    trees.setMatrixAt(leafCount,dummy.matrix);
+    leafTone.setHSL(.322+rand()*.055,.13+rand()*.11,.22+rand()*.08);
+    trees.setColorAt(leafCount,leafTone);
+    leafCount++;
+    if(j>0){
+      treeFrom.set(x,y+h*.72,z);
+      treeTo.set(x+dx,y+dy-.7,z+dz);
+      branchDir.subVectors(treeTo,treeFrom);
+      dummy.position.copy(treeFrom).add(treeTo).multiplyScalar(.5);
+      dummy.quaternion.setFromUnitVectors(upTree,branchDir.clone().normalize());
+      dummy.scale.set(.22,branchDir.length(),.22);
+      dummy.updateMatrix();branches.setMatrixAt(branchCount++,dummy.matrix);
+    }
+  }
 }
-trees.count=stems.count=treeCount;trees.instanceMatrix.needsUpdate=true;stems.instanceMatrix.needsUpdate=true;
-scene.add(trees,stems);
+trees.count=leafCount;stems.count=treeCount;branches.count=branchCount;
+for(const vegetation of [trees,stems,branches]){
+  vegetation.instanceMatrix.needsUpdate=true;
+  if(vegetation.count>0)vegetation.computeBoundingSphere();
+  vegetation.frustumCulled=true;
+}
+if(trees.instanceColor)trees.instanceColor.needsUpdate=true;
+scene.add(trees,stems,branches);
 
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
