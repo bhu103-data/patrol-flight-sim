@@ -15,7 +15,7 @@ export function buildNycStreetNetwork({
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
-    accessibleCorners:0,skippedBuildings:0,
+    accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
     intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
   const hash=(x,z,k=0)=>{
@@ -211,6 +211,25 @@ export function buildNycStreetNetwork({
     addQuad([x-w/2,y,z-d/2],[x-w/2,y,z+d/2],
       [x+w/2,y,z+d/2],[x+w/2,y,z-d/2],color);
   }
+  // Test the *full* asphalt + sidewalk corridor against the buildings, not
+  // only the center of a road segment. Previous center-only furniture checks
+  // allowed a curb and half a road to pass directly through a wall.
+  function roadCorridorClear(a,b,width){
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    if(length<1e-6)return false;
+    const nx=-dz/length,nz=dx/length;
+    const margin=width*.5+1.32;
+    const steps=Math.max(1,Math.ceil(length/2.6));
+    for(let step=0;step<=steps;step++){
+      const t=step/steps,x=a[0]+dx*t,z=a[1]+dz*t;
+      for(const across of [-1,-.73,-.39,0,.39,.73,1]){
+        // A footprint lookup is cheap via the game's spatial lot index.
+        if(!isClear(x+nx*margin*across,z+nz*margin*across,.10))
+          return false;
+      }
+    }
+    return true;
+  }
   function streetSegment(a,b,kind,i,j){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
@@ -218,6 +237,7 @@ export function buildNycStreetNetwork({
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
+    if(!roadCorridorClear(a,b,width)){stats.skippedRoadFootprints++;return false;}
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
