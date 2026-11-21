@@ -350,8 +350,9 @@ const qualityParam=new URLSearchParams(location.search).get('quality');
 let qualityMode=Object.hasOwn(qualityLabels,qualityParam)?qualityParam:'auto';
 const coarsePointer=matchMedia('(pointer:coarse)').matches;
 const maxRatio=Math.min(devicePixelRatio||1,coarsePointer?1.25:1.6);
-const minRatio=Math.min(maxRatio,.75);
-let renderRatio=qualityMode==='low'?minRatio:maxRatio;
+const budgetRatio=Math.min(maxRatio,Math.sqrt((coarsePointer?1600000:3600000)/(innerWidth*innerHeight)));
+const minRatio=Math.min(budgetRatio,.75);
+let renderRatio=qualityMode==='low'?minRatio:qualityMode==='high'?maxRatio:budgetRatio;
 let measuredFPS=0,sampleTime=0,sampleFrames=0,autoCycles=0;
 function applyQuality(){
   renderer.setPixelRatio(renderRatio);
@@ -361,7 +362,7 @@ function applyQuality(){
 }
 qualityBtn.addEventListener('click',()=>{
   qualityMode=qualityMode==='auto'?'high':qualityMode==='high'?'low':'auto';
-  renderRatio=qualityMode==='low'?minRatio:maxRatio;
+  renderRatio=qualityMode==='low'?minRatio:qualityMode==='high'?maxRatio:budgetRatio;
   applyQuality();
 });
 applyQuality();
@@ -644,28 +645,38 @@ function drawMinimap(){
   mapCtx.restore();
 }
 const cameraPos=new THREE.Vector3(285,95,265);
+const cameraDesired=new THREE.Vector3();
+const cameraFocus=new THREE.Vector3();
+const cameraRay=new THREE.Vector3();
+const cameraSample=new THREE.Vector3();
 function updateCamera(dt){
   const speed=Math.hypot(state.vel.x,state.vel.z);
   const distance=camDistance*(1+clamp((speed-28)/160,0,.35));
   const cp=Math.cos(viewPitch),sp=Math.sin(viewPitch);
-  const desired=new THREE.Vector3(
+  cameraDesired.set(
     state.pos.x-Math.sin(viewYaw)*cp*distance,
     state.pos.y+4.7+sp*distance,
     state.pos.z+Math.cos(viewYaw)*cp*distance
   );
-  // Camera blocking: keep the chase view from passing through buildings or the hillside.
-  const focus=new THREE.Vector3(state.pos.x,state.pos.y+1,state.pos.z);
-  const ray=desired.clone().sub(focus);
-  for(let n=1;n<=14;n++){
-    const t=n/14, sample=focus.clone().addScaledVector(ray,t);
-    if(intersectsBuilding(sample.x,sample.y,sample.z)||sample.y<ground(sample.x,sample.z)+.9){
-      desired.copy(focus).addScaledVector(ray,Math.max(.13,(n-1)/14));
+  cameraFocus.set(state.pos.x,state.pos.y+1,state.pos.z);
+  cameraRay.subVectors(cameraDesired,cameraFocus);
+  let cut=1;
+  for(let i=1;i<=12;i++){
+    const t=i/12;
+    cameraSample.copy(cameraFocus).addScaledVector(cameraRay,t);
+    if(intersectsBuilding(cameraSample.x,cameraSample.y,cameraSample.z) ||
+       cameraSample.y<Math.max(ground(cameraSample.x,cameraSample.z),-2.0)+.95){
+      cut=Math.max(.15,(i-1)/12);
       break;
     }
   }
-  cameraPos.lerp(desired,1-Math.exp(-dt*4.1));
+  if(cut<1)cameraDesired.copy(cameraFocus).addScaledVector(cameraRay,cut);
+  cameraPos.lerp(cameraDesired,1-Math.exp(-dt*(cut<1?11:4.1)));
+  // Never leave the interpolated camera inside a building or beneath the hillside.
+  if(intersectsBuilding(cameraPos.x,cameraPos.y,cameraPos.z))cameraPos.copy(cameraDesired);
+  cameraPos.y=Math.max(cameraPos.y,Math.max(ground(cameraPos.x,cameraPos.z),-2.0)+1.15);
   camera.position.copy(cameraPos);
-  cameraAim.set(state.pos.x,state.pos.y+1.0,state.pos.z);
+  cameraAim.copy(cameraFocus);
   camera.lookAt(cameraAim);
   const desiredFov=68+clamp((speed-26)*.24,0,15);
   camera.fov+=(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
@@ -674,12 +685,35 @@ function updateCamera(dt){
 let time=0,mapTimer=0;
 function frame(){
   requestAnimationFrame(frame);
-  const dt=Math.min(clock.getDelta(),.04);
-  time+=dt;waterUniforms.uTime.value=time;
+  const raw=clock.getDelta(),dt=Math.min(raw,.04);
+  if(document.hidden)return;
+  time+=dt;
+  waterUniforms.uTime.value=time;
   move(dt);updateFlames(dt);updateCamera(dt);
   if((mapTimer+=dt)>.09){drawMinimap();updateQuest();mapTimer=0;}
   if(toastUntil&&clock.getElapsedTime()>toastUntil){toastEl.style.opacity='0';toastUntil=0;}
   renderer.render(scene,camera);
+  // Aggregate real frame durations, excluding background-tab stalls.
+  if(raw>.001&&raw<.22){sampleTime+=raw;sampleFrames++;}
+  if(sampleTime>=2.7){
+    measuredFPS=sampleFrames/sampleTime;
+    sampleFrames=0;sampleTime=0;autoCycles++;
+    if(qualityMode==='auto'&&autoCycles>1){
+      let nextRatio=renderRatio;
+      if(measuredFPS<43)nextRatio=Math.max(minRatio,renderRatio-.12);
+      else if(measuredFPS>57)nextRatio=Math.min(budgetRatio,renderRatio+.07);
+      if(Math.abs(nextRatio-renderRatio)>.025){
+        renderRatio=nextRatio;renderer.setPixelRatio(renderRatio);
+      }
+    }
+    if(!perfHud.hidden){
+      const stats=renderer.info.render;
+      perfHud.textContent='FPS '+measuredFPS.toFixed(0)+' / Calls '+stats.calls+
+        '\nTriangles '+stats.triangles.toLocaleString()+
+        '\nPixel ratio '+renderRatio.toFixed(2)+' / '+qualityMode+
+        '\nIndexed buildings '+obstacleIndex.obstacleCount;
+    }
+  }
 }
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
