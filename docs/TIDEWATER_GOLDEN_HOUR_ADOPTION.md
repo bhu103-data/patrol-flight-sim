@@ -17,3 +17,7 @@
 1. Compile the **actual WebGL2 shader** on supported browser and capture matching harbor camera at `12:00`, `18:30`, `00:00` in Clear, with 18:30 side-by-side base/current comparisons for New York, Alaska and DC; verify sky horizon and glint continuity. No source-level success substitutes for screenshot.
 2. Low flight over NYC Harbor and Tracy Arm: look for solar disk clipping, waterline edge discontinuity, glitter stepping/aliasing, wake disappearance and C185 buoyancy/flight regression; keep existing road/building boundaries.
 3. Run Node regression and cross-map WebGL2 smoke, then hardware GPU profiling. Software SwiftShader rAF timings are not 60fps evidence. 
+
+## Actual A/B and clipping correction
+- First WebGL2 run [44962775827](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44962775827) produced four matched actual PNGs and no browser errors. First-pass candidate dusk vs pinned main dusk increased upper 40%-screen mean RGB by **(+14.73,+8.54,+1.87)**, but also increased >=250-channel pixels **2.424% → 4.847%**. Actual images showed an oversized near-sun white region, so the first pass failed artistic acceptance despite passing functional smoke.
+- This correction suppresses added peach near the solar core via a continuous angular gate, warms the surrounding wider sky, and gently lowers the existing solar halo only near sunset. No changes to real solar direction, solar disk, ocean height, wakes, physics or map scene. **Needs fresh same-camera screenshots and QA before acceptance.**

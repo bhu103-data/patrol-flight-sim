@@ -26,7 +26,10 @@ test('dusk horizon is altitude-graded, sunward and weather-bounded',()=>{
  assert.match(world,/horizonBand=1\.0-smoothstep\(0\.07,0\.77,up\)/);
  assert.match(world,/sunward=clamp\(0\.5\+0\.5\*dot\(rd\.xz,uSun\.xz\)/);
  assert.match(world,/goldenHourWeight\(\)\*\(1\.0-cloud\*0\.70\)/);
- assert.match(world,/horizon=mix\(horizon,peach,0\.58\*golden\*horizonBand\)/);
+ assert.match(world,/float sunCore=smoothstep\(0\.970,0\.997,sunAmt\)/);
+ assert.match(world,/float roseBlend=0\.62\*sqrt\(max\(golden,0\.0\)\)\*horizonBand\*\(1\.0-sunCore\)/);
+ assert.match(world,/horizon=mix\(horizon,peach,roseBlend\)/);
+ assert.match(world,/float haloGain=mix\(0\.40,0\.18,goldenHourWeight\(\)\)/);
  assert.match(world,/solarTint=mix\(solarTint,vec3\(1\.0,0\.97,0\.88\),golden\*0\.62\)/);
 });
 test('low-angle reflection retains existing GGX/facet LOD and is capped',()=>{
@@ -48,4 +51,14 @@ test('reflection envelope stays finite and never creates a screen stripe',()=>{
   assert.ok(soft>=0&&soft<=.23&&Number.isFinite(soft));
  }
  assert.doesNotMatch(world,/gl_FragCoord\.[xy].*longReflection/);
+});
+
+test('solar core suppresses peach bloom while horizon stays warm',()=>{
+ const solarCore=dot=>smooth(.970,.997,dot);
+ const w=envelope(.155,.37,true);
+ assert.ok(w>0&&w<.5);
+ const halo=.40+(.18-.40)*w;
+ assert.ok(halo<.40&&halo>.18);
+ assert.ok(.62*Math.sqrt(w)*(1-solarCore(.999))<.00001);
+ assert.ok(.62*Math.sqrt(w)*(1-solarCore(.60))>.25);
 });

@@ -1765,9 +1765,12 @@ const CENTRAL_PARK_SITES=[
       float golden=goldenHourWeight()*(1.0-cloud*0.70)*(1.0-uAtmosphere.w*0.35);
       float horizonBand=1.0-smoothstep(0.07,0.77,up);
       float sunward=clamp(0.5+0.5*dot(rd.xz,uSun.xz),0.0,1.0);
-      vec3 peach=mix(vec3(0.89,0.54,0.56),vec3(1.0,0.78,0.60),
+      vec3 peach=mix(vec3(0.97,0.65,0.58),vec3(1.0,0.78,0.62),
                     sunward*sunward);
-      horizon=mix(horizon,peach,0.58*golden*horizonBand);
+      // Keep color beyond the bright sun instead of a white clipped patch.
+      float sunCore=smoothstep(0.970,0.997,sunAmt);
+      float roseBlend=0.62*sqrt(max(golden,0.0))*horizonBand*(1.0-sunCore);
+      horizon=mix(horizon,peach,roseBlend);
       vec3 overcast=mix(vec3(0.12,0.15,0.22),vec3(0.58,0.65,0.73),day);
       horizon=mix(horizon,overcast,cloud*0.68+uAtmosphere.w*0.20);
       vec2 stars=vec2(atan(rd.z,rd.x)*126.0,asin(clamp(rd.y,-1.0,1.0))*164.0);
@@ -1777,7 +1780,10 @@ const CENTRAL_PARK_SITES=[
       horizon+=vec3(0.66,0.74,0.92)*star*(1.0-day)*(1.0-cloud)*smoothstep(0.01,0.20,rd.y);
       if(uAlaska)horizon+=alaskaAurora(rd);
       float openness=(1.0-cloud*0.88)*(1.0-uAtmosphere.w*0.7);
-      horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*smoothstep(-0.08,0.04,uSun.y)*0.40;
+      // Quiet the existing halo at sunset, retaining the separate solar disk.
+      float haloGain=mix(0.40,0.18,goldenHourWeight());
+      horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*
+               smoothstep(-0.08,0.04,uSun.y)*haloGain;
       float solarRadius=0.0125+0.0025*(1.0-smoothstep(0.02,0.24,uSun.y));
       float solarEdge=1.0-smoothstep(0.94,1.07,sqrt(max(0.0,2.0*(1.0-sunAmt)))/solarRadius);
       float solarCenter=sqrt(clamp(1.0-(2.0*(1.0-sunAmt))/(solarRadius*solarRadius),0.0,1.0));
