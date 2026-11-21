@@ -29,7 +29,12 @@ test('nine NYC cameras are captured with nonblank PNG checks',()=>{
  assert.match(script,/PNG\.sync\.read\(bytes\)/);
  assert.match(script,/stats\.colorBins>32/);
  assert.match(script,/stats\.nearBlackFraction<\.97/);
- assert.match(script,/result=\{passed:true,state,bridge,dumbo,liberty,screenshots,pixels,warnings\}/);
+ assert.match(script,/result=\\{passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings\\}/);
+ assert.match(script,/page.locator\\('#glCanvas'\\).screenshot/);
+ assert.match(script,/timeout:75000/,'software WebGL capture has an explicit bounded budget');
+ assert.match(script,/pendingShot/,'failed stages retain the exact camera name');
+ assert.doesNotMatch(script,/path:out\\+'\\/'\\+name,fullPage:true/,
+  'a HUD screenshot must never be mistaken for valid scene pixels');
 });
 test('same workflow installs the screenshot analyzer and triggers on NYC visuals',()=>{
  assert.match(workflow,/playwright pngjs@7\.0\.0/);
