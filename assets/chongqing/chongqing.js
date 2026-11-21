@@ -207,18 +207,33 @@ function tower(x,z,w,d,h,k) {
     if(windowCount<17000){windowMesh.setMatrixAt(windowCount,dummy.matrix);windowMesh.setColorAt(windowCount,tempColor.set('#b8cbe0'));windowCount++;}
   }
 }
-for(let i=0;i<360;i++){
-  const x=(rand()-.5)*1770,z=(rand()-.5)*1190;
-  if(riverDist(x,z)<26)continue;
-  if(Math.hypot(x-285,z-225)<100)continue;
-  if(Math.hypot(x-160,z-150)<165)continue;
-  // Reserve real landmark envelopes: Raffles City / Chaotianmen and Liziba Station.
-  if(Math.hypot(x+355,z-176)<224)continue;
-  if(Math.abs(x+121)<72&&Math.abs(z+254)<74)continue;
-  const w=17+rand()*25,d=17+rand()*30;
-  const downtown=x>-190&&x<560;
-  const h=(downtown?55:23)+rand()*(downtown?145:70);
-  tower(x,z,w,d,h,i);
+// Riverfront residential and office blocks are now aligned with terrace roads.
+// Avoid random floating towers, major landmark footprints, train tunnel and riverside promenades.
+// A fixed seed keeps the skyline stable across reloads and avoids repeated geometry.
+for(const side of [-1,1]){
+  for(let tier=0;tier<5;tier++){
+    for(let col=0;col<34&&towerCount<360;col++){
+      const offset=(rand()-.5)*15;
+      const x=-948+col*57.8+offset;
+      const bankDistance=180+tier*102+(rand()-.5)*15;
+      const z=riverCenter(x)+side*bankDistance;
+      if(z<-603||z>603||x<-950||x>950)continue;
+      if(riverDist(x,z)<28)continue;
+      // Preserve distinctive foreground silhouettes and walkable sightseeing corridors.
+      if(Math.hypot(x-285,z-225)<112)continue;
+      if(Math.hypot(x-160,z-150)<175)continue;
+      if(Math.abs(x+355)<220&&Math.abs(z-176)<106)continue;
+      if(Math.abs(x+121)<85&&Math.abs(z+254)<78)continue;
+      if(Math.abs(x+135)<58&&Math.abs(z-335)<60)continue;
+      const w=18+rand()*22,d=17+rand()*23;
+      const business=x>-525&&x<590&&tier<4;
+      const heightBand=business?76:38;
+      const h=heightBand+rand()*(business?165:76);
+      // Mid-rise and low-rise buildings break up an otherwise monotonous wall of towers.
+      const finalH=(rand()<.20?h*.52:h);
+      tower(x,z,w,d,finalH,Math.abs(col*17+tier*11+(side+1)*3));
+    }
+  }
 }
 towerMesh.count=towerCount;windowMesh.count=windowCount;
 towerMesh.instanceMatrix.needsUpdate=true;windowMesh.instanceMatrix.needsUpdate=true;
