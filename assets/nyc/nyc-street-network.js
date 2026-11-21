@@ -251,7 +251,14 @@ export function buildNycStreetNetwork({
       let start=-1,rendered=false;
       const flush=end=>{
         if(start<0)return;
-        const p=lerp(start/steps),q=lerp(end/steps);
+        // Conservative clear approach on BOTH sides of occupied parcels.
+        // Keep the last 3 sample cells unpainted before rejoining a wall;
+        // a ~3.6-unit buffer also leaves room for a sidewalk apron.
+        const edgeMargin=3;
+        const first=start+(start>0?edgeMargin:0);
+        const last=end-(end<steps?edgeMargin:0);
+        if(last<=first){start=-1;return;}
+        const p=lerp(first/steps),q=lerp(last/steps);
         if(Math.hypot(q[0]-p[0],q[1]-p[1])>=4 &&
            streetSegment(p,q,kind,i,j,false)){
           stats.preservedRoadSections++;
