@@ -5,7 +5,9 @@ on:
   push:
     branches: [main]
     paths:
+      - "index.html"
       - "assets/nyc/**"
+      - "tests/nyc-brooklyn-*.test.mjs"
       - "scripts/nyc-road-browser-smoke.mjs"
       - "tests/nyc-road-clearance.test.mjs"
       - "tests/nyc-road-coastline.test.mjs"
@@ -32,7 +34,7 @@ jobs:
           node-version: "22"
       - name: Validate NYC road and waterfront clearance
         run: |
-          node --test tests/nyc-road-clearance.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs
+          node --test tests/nyc-road-clearance.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs
       - name: Install Chromium with software WebGL
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
