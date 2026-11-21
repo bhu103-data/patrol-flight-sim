@@ -1,0 +1,11 @@
+{
+  "asset": "empire",
+  "file": "empire.glb",
+  "generation": "Original authored geometric model and Base Color atlas (not Scenario AI)",
+  "triangles": 8988,
+  "bytes": 753936,
+  "height_meters": 443.2,
+  "design": "Art Deco limestone setbacks, mullioned window bays, mooring mast and spire",
+  "license": "Original geometry and texture authored for PATROL; redistribution permitted",
+  "limits": "Game-scale visual interpretation, not photogrammetry or verified 1:1 geometry"
+}
