@@ -15,17 +15,27 @@ await mkdir(out,{recursive:true});
 // places the sun about +8.9° at 18:30 and -1.3° at 19:30, so testing only
 // the preset would miss the actual Manhattan sunset fog transition.
 const times=[{name:'noon',value:'12'},{name:'dusk',value:'18.5'},
- {name:'solar-dusk',value:'19.5'},{name:'midnight',value:'0'}];
+ {name:'solar-dusk',value:'19.5'},
+ {name:'solar-dusk-fog',value:'19.5',weather:'Fog'},
+ {name:'midnight',value:'0'}];
 const problems=[],shots=[],started=Date.now();
 let browser;
 function imageMetrics(buffer){
  const png=PNG.sync.read(buffer),luma=[];
  let saturated=0,nearBlack=0,total=0,rSum=0,gSum=0,bSum=0;
  const buckets=new Set();
+ // Fixed Manhattan ROIs: distant skyline and nearby masonry under the same
+ // camera. Report these separately so global sky/water don't hide haze deltas.
+ const regions={distantSkyline:{bounds:[45,170,335,400],sum:0,count:0},
+   foregroundBuildings:{bounds:[175,350,985,690],sum:0,count:0}};
  for(let y=0;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
   const k=(y*png.width+x)*4,r=png.data[k],g=png.data[k+1],b=png.data[k+2];
   const Y=.2126*r+.7152*g+.0722*b;
   luma.push(Y);total++;rSum+=r;gSum+=g;bSum+=b;
+  for(const region of Object.values(regions)){
+   const [x0,y0,x1,y1]=region.bounds;
+   if(x>=x0&&x<x1&&y>=y0&&y<y1){region.sum+=Y;region.count++;}
+  }
   if(Math.max(r,g,b)>=250)saturated++;
   if(Y<10)nearBlack++;
   buckets.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));
@@ -40,11 +50,13 @@ function imageMetrics(buffer){
    channelMeans:[rSum,gSum,bSum].map(v=>Number((v/total).toFixed(3))),
    clippedChannelFraction:Number((saturated/total).toFixed(5)),
    nearBlackFraction:Number((nearBlack/total).toFixed(5)),
-   colorBins:buckets.size};
+   colorBins:buckets.size,
+   regionMeanLuma:Object.fromEntries(Object.entries(regions).map(([k,v])=>
+     [k,Number((v.sum/Math.max(1,v.count)).toFixed(3))]))};
 }
 const report={version,base,camera,resolution:[1280,720],
-  season:'Summer',weather:'Clear',zoom:'42',angle:'0',
-  times:times.map(({name,value})=>({name,clock:value})),shots,
+  season:'Summer',weather:'Clear except solar-dusk-fog',zoom:'42',angle:'0',
+  times:times.map(({name,value,weather='Clear'})=>({name,clock:value,weather})),shots,
   errors:problems,passed:false};
 try{
  browser=await chromium.launch({headless:true,args:[
@@ -100,12 +112,14 @@ try{
   'body.patrol-env-qa * {visibility:hidden !important;} '+
   'body.patrol-env-qa #glCanvas {visibility:visible !important;}'});
  for(const time of times){
-  await page.evaluate(value=>{
-   const el=document.getElementById('skyTime');
-   if(!el)throw Error('Missing time-of-day control');
-   el.value=value;
-   el.dispatchEvent(new Event('change',{bubbles:true}));
-  },time.value);
+  await page.evaluate(({value,weather='Clear'})=>{
+   for(const [id,choice] of [['skyTime',value],['skyWeather',weather]]){
+    const el=document.getElementById(id);
+    if(!el)throw Error('Missing environment control: '+id);
+    el.value=choice;
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+   }
+  },time);
   // Updating the dropdown does not alter the camera or reset the aircraft.
   // Let two shader frames settle before capturing, without advancing the
   // automatic day/night clock (the user has chosen a fixed time).
@@ -124,7 +138,7 @@ try{
   });
   if(!state.webgl2||state.glError!==0||state.map!=='manhattan'||
      state.camera!==camera||state.zoom!=='42'||state.angle!=='0'||
-     state.clock!==time.value||state.weather!=='Clear'||state.season!=='1')
+     state.clock!==time.value||state.weather!==(time.weather||'Clear')||state.season!=='1')
    throw Error('Fixed-camera invariant failed: '+JSON.stringify(state));
   await page.evaluate(()=>document.body.classList.add('patrol-env-qa'));
   let buffer;
