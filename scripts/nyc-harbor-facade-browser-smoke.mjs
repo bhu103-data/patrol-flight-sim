@@ -2,6 +2,7 @@
 // Keeps the costly nine-scene tour as a separate full visual suite.
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
+import {visibleHarborSkyFraction,MIN_HARBOR_SKY_FRACTION} from './nyc-harbor-sky-qa.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8899').replace(/\/$/,'');
@@ -69,9 +70,14 @@ try{
   if(r+g+b<22)dark++;count++;
  }
  const pixels={width:img.width,height:img.height,colorBins:colors.size,
-   nearBlackFraction:dark/count};
+   nearBlackFraction:dark/count,
+   upperSkyFraction:visibleHarborSkyFraction(img)};
  check(colors.size>32&&dark/count<.97,
    'Harbor facade screenshot too uniform: '+JSON.stringify(pixels));
+ // A 35-bin screenshot passed while showing only near-wall glass/stone;
+ // the dedicated harbor shot must include open daylight sky as well.
+ check(pixels.upperSkyFraction>=MIN_HARBOR_SKY_FRACTION,
+   'Harbor facade camera is blocked by nearby walls: '+JSON.stringify(pixels));
  check(!errors.length,'Game exceptions: '+errors.join('; '));
  report={passed:true,state,pixels,elapsedMs:Date.now()-start,
    warnings,errors};

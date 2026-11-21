@@ -3,6 +3,7 @@
 // Test: node scripts/nyc-road-browser-smoke.mjs
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
+import {visibleHarborSkyFraction,MIN_HARBOR_SKY_FRACTION} from './nyc-harbor-sky-qa.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const out='artifacts/nyc';await mkdir(out,{recursive:true});
@@ -33,7 +34,8 @@ function screenshotPixels(bytes){
   count++;
  }
  return {width:img.width,height:img.height,colorBins:colors.size,
-  nearBlackFraction:black/Math.max(count,1)};
+  nearBlackFraction:black/Math.max(count,1),
+  upperSkyFraction:visibleHarborSkyFraction(img)};
 }
 // HUD panels overlap the canvas in the browser compositor. Even an
 // element.screenshot() includes those overlays unless we hide them.
@@ -68,6 +70,12 @@ async function capture(name){
   check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
    stats.nearBlackFraction<.97,
    'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
+  // A diverse set of nearby windows and walls gave a false green check in
+  // actual 44865972470. Harbor-facing OTI camera must ALSO see enough
+  // bright sky in the top half to prove it is outside the building canyon.
+  if(name==='09-manhattan-window-facades.png')
+   check(stats.upperSkyFraction>=MIN_HARBOR_SKY_FRACTION,
+    'NYC facade camera is still hidden by nearby building walls: '+JSON.stringify(stats));
   screenshots.push(name);pixels[name]=stats;
   pendingShot=null;
   console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
@@ -119,6 +127,34 @@ try{
  await capture('00-harbor.png');
  await page.waitForTimeout(3500);
  await capture('01-city-loaded.png');
+ // Capture the financial-district facade *before* the bridge shortcut
+ // changes zoom to 68 and before a nine-camera tour advances to night.
+ // Both factors previously made 09 render a near-wall/night scene even
+ // when the independent default-zoom daylight view was fully clear.
+ await page.keyboard.press('h');
+ await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
+  null,{timeout:15000});
+ await page.locator('#hotelZoom').evaluate(el=>{
+  el.value='42';
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Window Facades'});
+ await page.waitForTimeout(1600);
+ const facadeView=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null,
+     zoom:document.getElementById('hotelZoom')?.value};
+ });
+ check(facadeView.label==='Lower Manhattan · Window Facades'&&
+   facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
+   'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
+ await capture('09-manhattan-window-facades.png');
+ // Restore the same free-flight state as the original tour before invoking
+ // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
+ await page.locator('#resumeFlight').click({force:true});
+ await page.waitForFunction(()=>document.getElementById('hotelViews')?.hidden,
+  null,{timeout:12000});
  // The previous smoke test photographed only the spawn harbor. Explicitly
  // visit the Brooklyn Bridge camera so bridgehead, nearby parcels and road
  // clipping are visible in CI artifacts rather than being inferred from code.
@@ -192,20 +228,6 @@ try{
  }
 
 
- // Inspect the newly physical OTI window surrounds with the same real
- // headless WebGL pipeline; a distant spawn skyline cannot reveal their
- // geometry or catch the camera facing the wrong side of the city.
- await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Window Facades'});
- await page.waitForTimeout(1600);
- const facadeView=await page.evaluate(()=>{
-   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
-   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
-   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null};
- });
- check(facadeView.label==='Lower Manhattan · Window Facades'&&
-   facadeView.webgl&&facadeView.error===0,
-   'Lower Manhattan facade camera failed: '+JSON.stringify(facadeView));
- await capture('09-manhattan-window-facades.png');
 
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
  result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings};

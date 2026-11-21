@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/nyc-harbor-facade-browser-smoke.mjs'
+      - 'scripts/nyc-harbor-sky-qa.mjs'
+      - 'tests/nyc-harbor-sky-qa.test.mjs'
       - '.github/workflows/nyc-harbor-facade-oneview.yml'
 permissions:
   contents: read
@@ -20,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Ensure harbor facade framing rejects obstructed wall-only screenshots
+        run: node --test tests/nyc-harbor-sky-qa.test.mjs
       - name: Install software-WebGL Chromium and PNG reader
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
