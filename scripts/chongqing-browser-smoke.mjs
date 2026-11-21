@@ -37,9 +37,20 @@ async function capture(name){
   check(state.game?.map==='chongqing'&&state.game?.playing,'Game did not start at '+name);
   check(state.game.position.every(Number.isFinite),'Nonfinite pilot position at '+name);
   // Capture the actual WebGL canvas, not HUD panels that can hide black frames.
-  const raw=await page.locator('#world').screenshot({
-    path:dir+'/'+name+'.png',timeout:75000,animations:'allow'
-  });
+  // Element screenshots can still include HTML HUD painted above the canvas
+  // by the browser compositor. Explicitly hide the overlay just for capture.
+  await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
+  let raw;
+  try{
+    check(await page.locator('#questHotpot').evaluate(
+      el=>getComputedStyle(el).visibility==='hidden'),
+      'HUD overlays not hidden during Chongqing WebGL screenshot');
+    raw=await page.locator('#world').screenshot({
+      path:dir+'/'+name+'.png',timeout:75000,animations:'allow'
+    });
+  }finally{
+    await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
+  }
   const png=PNG.sync.read(raw),colorBins=new Set();
   let nearBlack=0,sampled=0;
   for(let y=0;y<png.height;y+=10)for(let x=0;x<png.width;x+=10){
@@ -65,6 +76,9 @@ try{
     waitUntil:'domcontentloaded',timeout:60000
   });
   check(response?.ok(),'Chongqing HTTP page unavailable');
+  await page.addStyleTag({content:
+    'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
+    'body.patrol-qa-scene-only #world {visibility:visible !important;}'});
   await page.locator('#loading').waitFor({state:'detached',timeout:105000});
   await page.waitForTimeout(900);
   await capture('00-spawn');

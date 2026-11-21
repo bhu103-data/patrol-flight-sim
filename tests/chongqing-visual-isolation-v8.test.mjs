@@ -37,6 +37,12 @@ test('Chongqing PRs capture actual WebGL pixels without Manhattan dependencies',
  const script=readFileSync(new URL('../scripts/chongqing-browser-smoke.mjs',import.meta.url),'utf8');
  assert.match(script,/page\.locator\('#world'\)\.screenshot/);
  assert.match(script,/PNG\.sync\.read\(raw\)/);
+ // A canvas element screenshot alone still captures composited HTML overlays.
+ assert.match(script,/body\.patrol-qa-scene-only \* \{visibility:hidden/);
+ assert.match(script,/body\.patrol-qa-scene-only #world \{visibility:visible/);
+ assert.match(script,/document\.body\.classList\.add\('patrol-qa-scene-only'\)/);
+ assert.match(script,/document\.body\.classList\.remove\('patrol-qa-scene-only'\)/);
+ assert.match(script,/getComputedStyle\(el\)\.visibility==='hidden'/);
  assert.match(script,/pixels\.nearBlackFraction<0\.985/);
  assert.match(cq,/playwright pngjs@7\.0\.0/);
 });
