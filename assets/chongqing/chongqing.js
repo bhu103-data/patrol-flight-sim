@@ -57,9 +57,11 @@ const M = {
   tree:mat('#314d4d'), trunk:mat('#4d3e34'),
   water:new THREE.MeshBasicMaterial({color:0x255675})
 };
+const sharedBoxGeometry = new THREE.BoxGeometry(1,1,1);
 function box(x,y,z,w,h,d,material,parent=scene) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
-  mesh.position.set(x,y,z); parent.add(mesh); return mesh;
+  // Share a single GPU cube rather than allocating hundreds of identical vertex buffers.
+  const mesh = new THREE.Mesh(sharedBoxGeometry, material);
+  mesh.position.set(x,y,z);mesh.scale.set(w,h,d);parent.add(mesh);return mesh;
 }
 function ball(x,y,z,r,material,parent=scene){
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(r,10,7),material);
@@ -169,7 +171,7 @@ function tower(x,z,w,d,h,k) {
   dummy.updateMatrix();towerMesh.setMatrixAt(towerCount,dummy.matrix);
   towerMesh.setColorAt(towerCount,new THREE.Color(hues[k%hues.length]));
   towerCount++;
-  obstacles.push({x,z,w:w+2,d:d+2,top:base+h});
+  obstacles.push({x,z,w:w+2,d:d+2,base,top:base+h});
   const nx=Math.max(2,Math.floor(w/6)),ny=Math.max(2,Math.floor(h/7));
   for(let r=1;r<ny;r++)for(let col=0;col<nx;col++){
     if(rand()<0.22)continue;
@@ -251,28 +253,8 @@ function bridge(x,style=0){
 }
 bridge(40,0);bridge(470,1);
 
-// Warm, stacked Hongyadong-style architecture. An intentionally compressed artistic reconstruction.
-const hong=new THREE.Group();scene.add(hong);
-for(let level=0;level<11;level++){
-  const z=112+level*8.3, y=13+level*10.25;
-  const w=128-level*4.1;
-  box(155,y+5.1,z,w,9.5,23,M.beam,hong);
-  box(155,y+5.3,z+12.0,w*.93,7.4,1.0,M.gold,hong);
-  for(let col=0;col<11;col++){
-    const cx=155-w/2+7+(col+.5)*(w-14)/11;
-    box(cx,y+5.4,z+12.65,2.7,5.7,.5,col%3===0?M.red:M.gold,hong);
-  }
-  box(155,y+10.5,z,w+12,2.6,31,M.roof,hong);
-  box(155,y+11.5,z+15,w+16,1.15,2,M.gold,hong);
-  for(const x of [155-w/2+6,155+w/2-6]){
-    box(x,y+2.5,z+9,2,21,2,M.copper,hong);
-    ball(x,y+2,z+14,2.4,M.red,hong);
-  }
-}
-for(let n=0;n<10;n++){
-  const z=88+n*3.1;
-  box(155,8+n*1.5,z,110,3,3,M.stone,hong);
-}
+// Hongyadong's facade, eleven floors and roof cores are batched in details.js.
+// The old per-window meshes were removed to avoid duplicate geometry and z-fighting.
 
 function sign(text,x,y,z,w=44,h=11,ink='#ffe3a4',bg='#58202a'){
   const c=document.createElement('canvas');c.width=512;c.height=128;
