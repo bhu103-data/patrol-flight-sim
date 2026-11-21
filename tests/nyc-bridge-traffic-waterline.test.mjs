@@ -37,7 +37,7 @@ test('bridge lane height is elevated for every car style, not only taxis',()=>{
   'missing bridge flag previously drew SUV down near waterline');
  const builder=sourceOf('prepareCityTraffic');
  assert.match(builder,/\['sedan','suv','sedan','van','suv'\]\[j\]/);
- assert.match(builder,/offset:23\+j\*route\.total\/5\.9\+i\*15,pace:5\.2\+\(j%3\)\*\.55,bridge:i===0/);
+ assert.match(builder,/offset:23\\+j\\*route\\.total\\/5\\.9\\+i\\*15,pace:5\\.2\\+\\(j%3\\)\\*\\.55,\\s*bridge:i===0/);
 });
 test('actual city renderer suppresses ordinary cars over water but preserves elevated bridge and expressway',()=>{
  const vehicles=[
