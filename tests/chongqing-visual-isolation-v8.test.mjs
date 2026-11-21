@@ -29,7 +29,7 @@ test('Chongqing screenshots are isolated from Manhattan browser work',()=>{
 
 test('Chongqing PRs capture actual WebGL pixels without Manhattan dependencies',()=>{
  const cq=readFileSync(new URL('../.github/workflows/chongqing-visual.yml',import.meta.url),'utf8');
- const pr=cq.split('  pull_request:\n')[1]?.split('  push:\n')[0];
+ const pr=cq.split(/  pull_request:\r?\n/)[1]?.split(/  push:\r?\n/)[0];
  assert.ok(pr,'Chongqing visual QA must run before feature PRs merge');
  for(const path of [
    'chongqing.html','assets/chongqing/**','scripts/chongqing-browser-smoke.mjs'

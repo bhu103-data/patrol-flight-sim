@@ -60,7 +60,7 @@ test('Playwright browser script parses as valid JavaScript',()=>{
 });
 
 test('NYC PR visual workflow covers production visuals before merge',()=>{
- const pr=workflow.split('  pull_request:\n')[1]?.split('  push:\n')[0];
+ const pr=workflow.split(/  pull_request:\r?\n/)[1]?.split(/  push:\r?\n/)[0];
  assert.ok(pr,'NYC screenshot QA must trigger on pull requests');
  for(const changed of [
   'index.html','assets/nyc/**','scripts/nyc-road-browser-smoke.mjs',
