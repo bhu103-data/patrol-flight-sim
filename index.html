@@ -5761,8 +5761,35 @@ const CENTRAL_PARK_SITES=[
     const waterline=WATER_H;
     const deck=waterline+1.60;
 
+    // LAND_PAD_GUARD_V1: check all footprints; water-clamped terrain
+    // would otherwise place houses exactly at the water surface.
+    function dryPad(x,z,w,d,maxMove=38){
+      const candidates=[[x,z]];
+      for(let ring=1;ring<=Math.ceil(maxMove/7);ring++){
+        const radius=ring*7;
+        if(radius>maxMove)break;
+        for(let step=0;step<16;step++){
+          const angle=step*Math.PI/8+ring*.29;
+          candidates.push([x+Math.cos(angle)*radius,z+Math.sin(angle)*radius]);
+        }
+      }
+      for(const [cx,cz] of candidates){
+        const heights=[];
+        for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
+          heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
+        const low=Math.min(...heights),high=Math.max(...heights);
+        if(low<=WATER_H+.72||high-low>1.8)continue;
+        if(alaskaObstacles.some(o=>Math.abs(cx-o.x)<w*.5+o.halfX+2.2 &&
+           Math.abs(cz-o.z)<d*.5+o.halfZ+2.2))continue;
+        return {x:cx,z:cz,y:low};
+      }
+      return null;
+    }
     function hut(x,z,w,l,color) {
-      const ground=sampleTerrainHeight(x,z);
+      const pad=dryPad(x,z,w,l,42);
+      if(!pad)return;
+      x=pad.x;z=pad.z;
+      const ground=pad.y;
       const floor=ground+0.24;
       const wallTop=floor+3.5;
       box(x,floor-0.05,z,w+0.3,0.42,l+0.3,wood);
@@ -5804,6 +5831,10 @@ const CENTRAL_PARK_SITES=[
     }
     const rampY=sampleTerrainHeight(139,pierZ)+0.10;
     const dockRamp = (x,y)=>[x,y,pierZ];
+    const rampLands=sampleTerrainHeight(139,pierZ)>WATER_H+.72 &&
+      sampleTerrainHeight(169,pierZ)>WATER_H+.72;
+    // Piers may be over water; connecting land roads cannot.
+    if(rampLands){
     pushRoadStrip(addQuad,dockRamp(76,deck),dockRamp(93,rampY-2.2),4.15,wood,0.06);
     pushRoadStrip(addQuad,dockRamp(93,rampY-2.2),dockRamp(113,rampY+0.6),4.15,wood,0.06);
     pushRoadStrip(addQuad,dockRamp(113,rampY+0.6),dockRamp(139,rampY),4.15,wood,0.06);
@@ -5815,6 +5846,7 @@ const CENTRAL_PARK_SITES=[
       }
     }
     pushRoadStrip(addQuad,[139,rampY,pierZ],[169,sampleTerrainHeight(169,pierZ)+0.10,pierZ],4.15,[0.54,0.45,0.32]);
+    }
     alaskaObstacles.push({x:pierX,z:pierZ,y:deck-0.37,halfX:15,halfZ:2.5,top:deck+0.13,name:'harbor pier'});
 
     // Moored floatplane, with pontoons and a red wing stripe.
@@ -5831,10 +5863,12 @@ const CENTRAL_PARK_SITES=[
     box(px,py+1.39,pz+2.53,0.10,1.12,0.10,roof);
     alaskaObstacles.push({x:px,z:pz,y:waterline,halfX:3.9,halfZ:2.6,top:py+2.5,name:'moored floatplane'});
 
-    // Octagonal lighthouse with a lantern room and a red roof.
-    const foot=sampleTerrainHeight(cape.x,cape.z);
+    // An actual lighthouse must stand on a dry coastal rock or pad.
+    const beaconPad=dryPad(cape.x,cape.z,6.4,6.4,28);
+    if(beaconPad){
+    const foot=beaconPad.y,capeX=beaconPad.x,capeZ=beaconPad.z;
     function beaconBand(y1,y2,r1,r2,color) {
-      const p=(y,r,i)=>[cape.x+Math.sin(i*Math.PI/6)*r,foot+y,cape.z+Math.cos(i*Math.PI/6)*r];
+      const p=(y,r,i)=>[capeX+Math.sin(i*Math.PI/6)*r,foot+y,capeZ+Math.cos(i*Math.PI/6)*r];
       for(let i=0;i<12;i++) addQuad(p(y1,r1,i),p(y1,r1,i+1),p(y2,r2,i+1),p(y2,r2,i),color);
     }
     beaconBand(0,1.4,4.0,3.9,[0.50,0.51,0.48]);
@@ -5845,11 +5879,12 @@ const CENTRAL_PARK_SITES=[
     beaconBand(10.9,13.4,1.93,1.93,[0.40,0.59,0.64]);
     for(let i=0;i<8;i++){
       const a=i*Math.PI/4;
-      box(cape.x+Math.sin(a)*2,foot+12.2,cape.z+Math.cos(a)*2,0.15,2.57,0.15,roof);
+      box(capeX+Math.sin(a)*2,foot+12.2,capeZ+Math.cos(a)*2,0.15,2.57,0.15,roof);
     }
     beaconBand(13.4,15.1,2.26,0.20,red);
-    box(cape.x,foot+15.2,cape.z,0.20,0.63,0.20,roof);
-    alaskaObstacles.push({x:cape.x,z:cape.z,y:foot,halfX:2.6,halfZ:2.6,top:foot+15.5,name:'Cape Beacon'});
+    box(capeX,foot+15.2,capeZ,0.20,0.63,0.20,roof);
+    alaskaObstacles.push({x:capeX,z:capeZ,y:foot,halfX:2.6,halfZ:2.6,top:foot+15.5,name:'Cape Beacon'});
+    }
     return upload();
   }
 
@@ -5867,7 +5902,9 @@ const CENTRAL_PARK_SITES=[
       for(let i=0;i<30;i++) {
         const brightness=0.5+0.5*Math.sin(i*0.85+branch);
         const tint=[0.48+0.13*brightness,0.69+0.13*brightness,0.77+0.09*brightness];
-        addQuad(point(i,-1),point(i,1),point(i+1,1),point(i+1,-1),tint);
+        const a=point(i,-1),b=point(i,1),c=point(i+1,1),d=point(i+1,-1);
+        if(Math.min(a[1],b[1],c[1],d[1])<=WATER_H+.58)continue;
+        addQuad(a,b,c,d,tint);
       }
     }
     return upload();
