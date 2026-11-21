@@ -51,7 +51,9 @@ for mat in obj.data.materials:
 
 # Collapse geometry before baking, so UV seams follow the final LOD.
 modifier = obj.modifiers.new("PATROL_CPU_DECIMATE", "DECIMATE")
-modifier.ratio = min(0.98, 24400 / source_triangles)
+# Isolated faster candidate: fewer original faces, unchanged source UV/atlas.
+# Do NOT change the licensed source, game placement or enabled manifest.
+modifier.ratio = min(0.98, 15900 / source_triangles)
 modifier.use_collapse_triangulate = True
 bpy.ops.object.modifier_apply(modifier=modifier.name)
 triangles = sum(max(0, len(p.vertices) - 2) for p in obj.data.polygons)
@@ -147,6 +149,7 @@ if bytes_out > 8388608:
 report = {
     "input": src.name, "sourceTriangles": source_triangles,
     "outputTrianglesBeforeGLTFExport": triangles,
+    "targetTriangles": 15900, "qaLightLOD": True,
     "outputBytes": bytes_out, "atlasBytes": atlas_file.stat().st_size,
     "output": str(dst),
     "bakedCPUOnly": True, "productionManifestActivated": False,
