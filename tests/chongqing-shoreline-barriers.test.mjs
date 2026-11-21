@@ -57,7 +57,7 @@ const THREE={
 test('three unbridged tributary roads produce exactly six bounded steel end guards',()=>{
   const ends=endpoints(),meshes=[],scene={add(mesh){meshes.push(mesh)}};
   assert.equal(ends.length,6,'three roads each terminate on both banks');
-  const stats=buildChongqingShorelineBarriers({THREE,scene,ends});
+  const stats=buildChongqingShorelineBarriers({THREE,scene,ground,ends});
   assert.deepEqual(stats,{barriers:6,posts:30,rails:12,reflectors:30,skippedInvalid:0});
   assert.equal(meshes.length,4,'posts, rails and two reflector hues are four instanced batches');
   assert.deepEqual(meshes.map(m=>m.count).sort((a,b)=>a-b),[12,12,18,30]);
@@ -78,7 +78,7 @@ test('three unbridged tributary roads produce exactly six bounded steel end guar
 });
 test('invalid ends are rejected without allocating a gratuitous scene batch',()=>{
   const meshes=[],scene={add(x){meshes.push(x)}};
-  const stats=buildChongqingShorelineBarriers({THREE,scene,
+  const stats=buildChongqingShorelineBarriers({THREE,scene,ground,
     ends:[null,{point:{x:0,y:2,z:0},tangent:[0,0],width:12,intoRoad:1}]});
   assert.equal(stats.barriers,0);
   assert.equal(stats.skippedInvalid,2);
