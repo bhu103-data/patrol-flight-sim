@@ -11,7 +11,7 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
-import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface } from './road-clearance.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
@@ -542,6 +542,10 @@ function streetSpaceClear(x,z,y,radius=0){
   if(![x,z,y,radius].every(Number.isFinite))return false;
   // Spatial hash avoids scanning hundreds of towers several times per
   // vehicle, streetlight and wet-road decal on every animation frame.
+  // A clear building lookup alone does not mean drivable asphalt: the
+  // north-side terrace roads cross a tributary without authored bridges.
+  // Keep cars, road paint and lamp bases on dry shoreline clearances.
+  if(ground(x,z)<=0||riverDist(x,z)<Math.max(3,radius+2.4))return false;
   return !obstacleIndex.eachNear(x,z,Math.max(0,radius),o=>
     Math.abs(x-o.x)<o.w*.5+radius &&
     Math.abs(z-o.z)<o.d*.5+radius &&
@@ -566,12 +570,17 @@ for(const plan of plannedRoads){
   // Follow the same analytical bends as street traffic, sampling terrain at
   // <=5.5-unit intervals before clipping against building volumes.
   const points=sampleChongqingTerraceSurface(plan,ground,riverCenter);
-  const clear=clipRoadToFreeSegments(points,plan.width,obstacles,.8,2.5);
-  for(const path of clear.paths){
-    if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+  // Tributary cuts come FIRST; only dry road sections may reach the
+  // building-volume clipper, never the river surface or unsupported banks.
+  const dryRoads=clipChongqingDryRoadSegments(points,plan.width,ground,riverDist);
+  for(const dry of dryRoads){
+    const clear=clipRoadToFreeSegments(dry,plan.width,obstacles,.8,2.5);
+    for(const path of clear.paths){
+      if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+    }
+    roadClearanceStats.clipped+=clear.stats.clippedSegments;
+    roadClearanceStats.removedLength+=clear.stats.removedLength;
   }
-  roadClearanceStats.clipped+=clear.stats.clippedSegments;
-  roadClearanceStats.removedLength+=clear.stats.removedLength;
 }
 // The shared obstacle index was built after all static structures above.
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
