@@ -45,7 +45,8 @@ test('actual city renderer suppresses ordinary cars over water but preserves ele
   {kind:'taxi',pose:{x:100,y:14.93,z:-330,yaw:0}}, // wet ordinary street
   {kind:'suv',bridge:true,pose:{x:82,y:24.65,z:-342,yaw:1.57}},
   {kind:'sedan',pose:{x:150,y:14.93,z:-50,yaw:0}}, // dry downtown
-  {kind:'van',expressway:true,pose:{x:180,y:22,z:-310,yaw:1.57}}
+  {kind:'van',expressway:true,pose:{x:180,y:22,z:-310,yaw:1.57}},
+  {kind:'suv',pose:{x:160,y:14.93,z:25,yaw:1.57}} // inside occupied building
  ];
  const identities={taxi:'wet ordinary car',suv:'Brooklyn Bridge SUV',
   sedan:'dry downtown car',van:'elevated expressway van'};
@@ -55,11 +56,12 @@ test('actual city renderer suppresses ordinary cars over water but preserves ele
   'selectedMap','bridgeRails','cityTraffic','mat4FromBasis','camPos',
   'railPose','sceneryTime','streetMeshes','nycDetailBand','trafficPose',
   'drawStreetWalker','worldUp','wreckedTaxiMesh','taxiLamps',
-  'sampleTerrainHeight','WATER_H',
+  'sampleTerrainHeight','WATER_H','cityLotAt',
   'return ('+sourceOf('drawCityTraffic')+')')(
   {city:true},null,vehicles,(p)=>p,[0,0,0],()=>null,0,mesh,
   ()=>3,actor=>actor.pose,()=>{},[0,1,0],null,null,
-  (x,z)=>z<-200?12.2:30,12.2);
+  (x,z)=>z<-200?12.2:30,12.2,
+  (x,z)=>[82,160,180].includes(x)?{occupied:true}:null);
  render((id)=>drawn.push(id.id));
  assert.deepEqual(drawn,['Brooklyn Bridge SUV','dry downtown car',
   'elevated expressway van']);
