@@ -1,0 +1,48 @@
+name: NYC Central Park WebGL browser smoke
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nyc-central-park-browser.yml'
+      - 'tests/nyc-browser-smoke.cjs'
+  pull_request:
+    paths:
+      - '.github/workflows/nyc-central-park-browser.yml'
+      - 'tests/nyc-browser-smoke.cjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  central-park-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install isolated Chromium for visual test
+        shell: bash
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Host the game on localhost
+        shell: bash
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 >/tmp/patrol-nyc-server.log 2>&1 &
+          echo $! >/tmp/patrol-nyc-server.pid
+          sleep 2
+      - name: Boot Manhattan, inspect Reservoir and Bow Bridge, then resume flight
+        shell: bash
+        timeout-minutes: 5
+        run: node tests/nyc-browser-smoke.cjs
+      - name: Upload scene screenshots and inspectable browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-central-park-webgl-screenshots
+          path: |
+            artifacts/nyc-*.png
+            artifacts/nyc-browser-report.json
+          retention-days: 14
+          if-no-files-found: warn
