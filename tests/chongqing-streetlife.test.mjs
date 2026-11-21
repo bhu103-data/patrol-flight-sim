@@ -65,8 +65,10 @@ test('active Chongqing street traffic has 10 distinct cars including yellow taxi
   assert.equal(traffic.stats.movingHeadlights,2);
   assert.ok(traffic.stats.streetLamps>=50);
   assert.ok(traffic.stats.roadMarkings>200);
-  assert.equal(traffic.stats.zebraStripes,10);
-  assert.equal(traffic.stats.trafficSignals,2);
+  assert.equal(traffic.stats.zebraStripes,40);
+  assert.equal(traffic.stats.trafficSignals,8);
+  assert.equal(traffic.stats.pedestrianSignals,8);
+  assert.equal(traffic.stats.signalizedCrossings,4);
   assert.ok(objects.filter(x=>x instanceof InstancedMesh).length>=15);
 });
 test('moving vehicles keep dynamic matrix counts inside buffers',()=>{
@@ -91,38 +93,47 @@ test('battery mode removes decorative checker and hub detail, not actual car bod
   assert.equal(body.visible,true);
   assert.ok(instanced.filter(x=>!x.visible).length>=3);
   traffic.setQuality('normal');
-  // A red traffic signal remains correctly dark while vehicle green is active.
-  assert.ok(instanced.filter(x=>x.capacity!==2).every(x=>x.visible));
+  // Decorative meshes recover, but unlit signal bulbs must stay dark.
+  assert.equal(body.visible,true);
+  assert.ok(instanced.find(x=>x.capacity===8&&x.material.color===0x4ee28b).visible);
+  assert.equal(instanced.find(x=>x.capacity===8&&x.material.color===0xff4539).visible,false);
   assert.equal(objects.filter(x=>x instanceof THREE.SpotLight).length,2);
 });
 test('crossing changes its active lamp after 24 seconds and again after 36',()=>{
   const {traffic,objects}=setup();
-  const reds=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===2&&x.material.color===0xff4539);
-  const greens=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===2&&x.material.color===0x4ee28b);
+  const reds=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8&&x.material.color===0xff4539);
+  const ambers=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8&&x.material.color===0xffb92f);
+  const greens=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8&&x.material.color===0x4ee28b);
   assert.equal(reds.length,1);
   assert.equal(greens.length,1);
+  assert.equal(ambers.length,1);
   assert.equal(greens[0].visible,true);
   assert.equal(reds[0].visible,false);
-  for(let i=0;i<510;i++)traffic.update(.05,null);
+  for(let i=0;i<450;i++)traffic.update(.05,null);
+  assert.equal(ambers[0].visible,true,'real yellow transition before red');
+  assert.equal(greens[0].visible,false);
+  for(let i=0;i<60;i++)traffic.update(.05,null);
   assert.equal(greens[0].visible,false);
   assert.equal(reds[0].visible,true);
+  assert.equal(ambers[0].visible,false);
   for(let i=0;i<230;i++)traffic.update(.05,null);
   assert.equal(greens[0].visible,true);
   assert.equal(reds[0].visible,false);
 });
 test('westbound taxi traffic can stop at red and resume when signal turns green',()=>{
   const {traffic}=setup();
-  let sawStop=false,sawRelease=false,stoppedId=-1;
+  let sawStop=false,sawRelease=false,stoppedId=-1,stoppedAt=null;
   for(let frame=0;frame<3500;frame++){
     traffic.update(.04,null);
     const snap=traffic.snapshot();
     for(let i=0;i<snap.vehicles.length;i++){
       const v=snap.vehicles[i];
       if(v.side!==1||v.tier!==1||v.dir!==-1)continue;
-      if(!snap.vehicleGreen&&Math.abs(v.x-297)<.08){
-        sawStop=true;stoppedId=i;
+      const stop=snap.crossingXs.find(cx=>Math.abs(v.x-(cx+12))<.08);
+      if(!sawStop&&!snap.vehicleGreen&&stop!==undefined){
+        sawStop=true;stoppedId=i;stoppedAt=stop+12;
       }
-      if(sawStop&&snap.vehicleGreen&&i===stoppedId&&v.x<294){
+      if(sawStop&&snap.vehicleGreen&&i===stoppedId&&v.x<stoppedAt-3){
         sawRelease=true;
       }
     }
@@ -130,6 +141,19 @@ test('westbound taxi traffic can stop at red and resume when signal turns green'
   assert.equal(sawStop,true,'at least one car halts before the pedestrian crossing');
   assert.equal(sawRelease,true,'held car resumes at the next green phase');
 });
+test('four real crossing sites are spaced apart and serve the actual car route',()=>{
+  const {traffic,objects}=setup();
+  const {crossingXs,signalAspect}=traffic.snapshot();
+  assert.equal(signalAspect,'green');
+  assert.equal(crossingXs.length,4);
+  assert.equal(crossingXs[0],285,'retain the original hotpot district crossing');
+  assert.ok(crossingXs.every((x,i)=>i===0||
+    crossingXs.slice(0,i).every(before=>Math.abs(before-x)>=110)));
+  const heads=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8);
+  assert.ok(heads.length>=9,'batched masts, overhead arms and pedestrian heads');
+  assert.ok(heads.every(m=>m.count===8));
+});
+
 test('painted car body, cabin glass, wheels and white-black checker are separate batches',()=>{
   const {objects}=setup();
   const instanced=objects.filter(x=>x instanceof InstancedMesh);
