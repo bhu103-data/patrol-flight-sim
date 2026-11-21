@@ -1,0 +1,71 @@
+name: Audit 3DAssets CC0 modern streetlight source
+on:
+  push:
+    branches: [review/chongqing-lightweight-lamp-3dassets-20261121]
+    paths:
+      - "scripts/audit-3dassets-lamp.mjs"
+      - ".github/workflows/3dassets-streetlamp-audit.yml"
+      - "docs/3DASSETS_STREETLAMP_AUDIT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: streetlamp-3dassets-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  producer-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download only the pinned publisher original and API rights record
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/3dassets-lamp
+          curl --fail --location --retry 2 --max-time 45 --proto '=https' \
+            'https://cdn.3dassets.dev/assets/28261/v1/model.glb' \
+            -o /tmp/patrol-3dassets-lamp.glb
+          curl --fail --location --retry 2 --max-time 45 --proto '=https' \
+            'https://3dassets.dev/api/v1/assets/battle-royale-town-and-airfield-street-lamp-d6bcc658' \
+            -o artifacts/3dassets-lamp/publisher-source.json
+      - name: Independently check actual GLB, embedded images, CC0 claim, and SHA-256
+        run: |
+          node scripts/audit-3dassets-lamp.mjs \
+            /tmp/patrol-3dassets-lamp.glb \
+            artifacts/3dassets-lamp/publisher-source.json \
+            artifacts/3dassets-lamp/binary-audit.json
+      - name: Install audit-passed original only into ephemeral test server
+        run: |
+          mkdir -p assets/chongqing/review
+          cp /tmp/patrol-3dassets-lamp.glb assets/chongqing/review/3dassets-street-light.glb
+      - name: Install free Chromium and image comparison package
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve standalone Chongqing level
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-3dassets-lamp-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent http://127.0.0.1:8765/chongqing.html >/dev/null
+      - name: Verify exact same-camera WebGL rendering and low preset fallback
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/3dassets-lamp-browser-review.mjs
+      - name: Real Chromium night streetlamp emissive A/B and HUD-free images
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+          PATROL_REVIEW_TIME: night
+        run: node scripts/3dassets-lamp-browser-review.mjs
+      - name: Preserve audit evidence, do not install the asset into PATROL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-3dassets-lamp-source-audit
+          path: artifacts/3dassets-lamp/
+          retention-days: 7
+          if-no-files-found: ignore
