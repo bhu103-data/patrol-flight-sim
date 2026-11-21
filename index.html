@@ -2176,7 +2176,7 @@ const CENTRAL_PARK_SITES=[
             // Near-field CC0 photography: normal and roughness channels are
             // sampled only for Alaska and within a short flight detail radius.
             if(uAlaskaPhotoReady){
-              float closeDetail=1.0-smoothstep(105.0,255.0,hitDist);
+              float closeDetail=1.0-smoothstep(95.0,425.0,hitDist);
               float forestFloor=smoothstep(.85,3.2,alt)*
                 (1.0-smoothstep(11.0,23.0,alt))*
                 (1.0-smoothstep(.15,.39,slope));
@@ -2187,7 +2187,7 @@ const CENTRAL_PARK_SITES=[
                 (1.0-smoothstep(.30,.65,frost))*
                 (1.0-smoothstep(.15,.54,glacier));
               float photoAmount=closeDetail*
-                max(max(max(exposed*.74,frost*.87),forestWeight*.47),
+                max(max(max(exposed*.74,frost*.87),forestWeight*.37),
                     glacier*.31)*(1.0-glacier*.42);
               if(photoAmount>.018){
                 // Reuse bundled real CC0 snow surface photography for the
@@ -2204,7 +2204,7 @@ const CENTRAL_PARK_SITES=[
                 float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
                 vec3 alpinePhoto=textureLod(uAlaskaPhotoAlbedo,groundUV,lod).rgb;
                 vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
-                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.75,.91,.76),
+                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.87,1.02,.88),
                                forestWeight);
                 photo=mix(photo,photo*vec3(.72,.88,.96),
                           smoothstep(.24,.75,glacier)*.68);
@@ -2775,7 +2775,7 @@ const CENTRAL_PARK_SITES=[
     void alaskaGlacierFace(inout vec3 material,inout vec3 n,
                            inout float roughness){
       if(!uAlaskaMesh || vHarborSurface<11.5 || vHarborSurface>12.5)return;
-      float near=1.0-smoothstep(95.0,305.0,distance(vWorld,uEye));
+      float near=1.0-smoothstep(95.0,375.0,distance(vWorld,uEye));
       if(near<.002)return;
       vec2 uv0=abs(n.y)>.64?vWorld.xz*.115:
                 vec2(vWorld.x*.091+vWorld.z*.028,vWorld.y*.16);
@@ -2796,7 +2796,7 @@ const CENTRAL_PARK_SITES=[
         vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.001,0.0,.001));
         vec3 bitangent=normalize(cross(n,tangent));
         n=normalize(n+(tangent*micro.x+bitangent*micro.y)*.10*near);
-        material=mix(material,photographed*vec3(.66,.84,.94),.32*near);
+        material=mix(material,photographed*vec3(.66,.84,.94),.44*near);
         roughness=mix(roughness,clamp(normalRough.a,.38,.88),.75*near);
       }
       float frostFresnel=pow(1.0-abs(dot(n,normalize(uEye-vWorld))),3.0);
