@@ -12837,9 +12837,21 @@ const CENTRAL_PARK_SITES=[
     // water runway to accelerate, rotate and climb away from shore.
     // The original Alaska spawn faces dry USGS land just ~40 units ahead;
     // try perpendicular headings before relocating the aircraft.
+    // In Alaska the southern channel remains water but heads directly into
+    // the world-edge autopilot turn. Require enough clear air/water ahead for
+    // the post-rotation climb as well as the first 94 m of water taxi.
+    const runwayLength=selectedMap.alaska?132:94;
+    const approachLimit=selectedMap.alaska
+      ?FLIGHT_RADIUS-WARNING_DISTANCE-8:limit;
     const runwayClear=(x,z,yaw)=>{
       const fx=Math.sin(yaw),fz=Math.cos(yaw);
-      for(const advance of [0,18,36,54,76,94]){
+      const endX=x+fx*runwayLength,endZ=z+fz*runwayLength;
+      // A straight segment is inside a disk when both endpoints are inside.
+      // Avoid boundary-assist taking control while climbing over the fjord.
+      if(Math.hypot(x,z)>approachLimit ||
+         Math.hypot(endX,endZ)>approachLimit)return false;
+      // Six-metre samples catch inlets/ships between 18-metre checkpoints.
+      for(let advance=0;advance<=runwayLength;advance+=6){
         const px=x+fx*advance,pz=z+fz*advance;
         if(!safe(px,pz,yaw))return false;
       }
