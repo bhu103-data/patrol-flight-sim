@@ -1,0 +1,17 @@
+{
+  "description": "Original PBR authoring inputs. Local Poly Haven photographs are optional until fetched by prepare_chongqing_cc0.py. All Poly Haven assets are CC0.",
+  "concrete": {
+    "basecolor": "../../assets/nyc/concrete_wall_008_diff_1k.jpg",
+    "normal": "../../assets/nyc/concrete_wall_008_nor_gl_1k.jpg"
+  },
+  "brick": {
+    "basecolor": "../../assets/nyc/concrete_wall_008_diff_1k.jpg",
+    "normal": "../../assets/nyc/concrete_wall_008_nor_gl_1k.jpg"
+  },
+  "timber": {
+    "basecolor": "generated/wood_planks_diff_1k.jpg"
+  },
+  "terracotta": {
+    "basecolor": "generated/clay_roof_tiles_03_diff_1k.jpg"
+  }
+}
