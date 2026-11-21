@@ -30,7 +30,8 @@ test('Alaska detail draws one bounded, finite scene batch',()=>{
   assert.ok(stats.crevasses>=15,'multiple glacier fissures');
   assert.ok(stats.iceFloes>=25,'irregular floes along the fjord');
   assert.ok(stats.rockBands>=1,'terrain-clamped geological exposure');
-  assert.ok(points.length<27000,'bounded geometry budget');
+  assert.ok(points.length<105000,'bounded terrain-aware forestry GPU budget');
+  assert.ok(stats.conifers>=180&&stats.conifers<=940,'dense but bounded Alaska forest');
 });
 
 test('detail is gated behind the Alaska map and map-switch lifetime',()=>{
