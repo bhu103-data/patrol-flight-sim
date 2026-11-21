@@ -60,6 +60,7 @@ jobs:
       - name: Render NYC harbor, finance-district facades, Brooklyn and Midtown close-ups
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
+          PATROL_NYC_QA_GIS_CONTROL: '1'
         run: node scripts/nyc-road-browser-smoke.mjs
       - name: Upload New York WebGL screenshots and diagnostics
         if: always()
