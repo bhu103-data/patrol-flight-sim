@@ -2,7 +2,7 @@ name: PATROL regression tests
 
 on:
   push:
-    branches: [main, feature/alaska-glacier-face-cc0-pbr-validated]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
