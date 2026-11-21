@@ -52,7 +52,7 @@ const M = {
   copper:mat('#946046',0.46), gold:mat('#ffc47a',0.35,0xcc7234,0.42),
   glass:pbr.glass, beam:mat('#654941',.75),
   roof:pbr.roof, red:mat('#ae2932',0.43,0x651318,0.28),
-  road:pbr.asphalt, rail:mat('#a5adb4',0.37),
+  road:pbr.asphalt, rail:new THREE.MeshStandardMaterial({color:0xa5adb4,roughness:.37,metalness:.42,side:THREE.DoubleSide}),
   window:pbr.window,
   white:new THREE.MeshBasicMaterial({color:0xffd998}),
   dark:mat('#22263b'), skin:mat('#e1a97e'), coat:mat('#e4c18b'),
@@ -285,8 +285,7 @@ function sign(text,x,y,z,w=44,h=11,ink='#ffe3a4',bg='#58202a'){
   plane.position.set(x,y,z);scene.add(plane);return plane;
 }
 sign('洪崖洞',155,133,177,48,13);
-sign('千厮门大桥',40,82,40,40,10);
-sign('解放碑',-135,ground(-135,335)+64,347,28,8);
+// Bridge and civic monument are identified in the HUD/map, not by floating billboards.
 
 const hotpot={x:285,z:225};
 const shopY=ground(hotpot.x,hotpot.z);
@@ -303,7 +302,30 @@ potLight.position.set(hotpot.x,shopY+13,hotpot.z+34);scene.add(potLight);
 const jiefang={x:-135,z:335},jy=ground(jiefang.x,jiefang.z);
 box(jiefang.x,jy+7,jiefang.z,20,14,20,M.stone);
 box(jiefang.x,jy+34,jiefang.z,12,40,12,M.stone);
-box(jiefang.x,jy+55,jiefang.z,15,3,15,M.roof);
+box(jiefang.x,jy+55,jiefang.z,15,3,15,M.stone);
+// Monument stepped masonry, waist cornice and clock faces, rather than a blank cuboid.
+box(jiefang.x,jy+1,jiefang.z,31,2,31,M.stone);
+box(jiefang.x,jy+3,jiefang.z,27,2,27,M.granite);
+box(jiefang.x,jy+15,jiefang.z,22,1.4,22,M.stone);
+box(jiefang.x,jy+48,jiefang.z,16,1.6,16,M.stone);
+for(let side=0;side<4;side++){
+  const angle=side*Math.PI/2;
+  const face=new THREE.Mesh(new THREE.CircleGeometry(3.15,32),
+    new THREE.MeshStandardMaterial({color:0xf1e8cf,roughness:.6,metalness:.02,side:THREE.DoubleSide}));
+  face.position.set(jiefang.x+Math.sin(angle)*6.2,jy+41,jiefang.z+Math.cos(angle)*6.2);
+  face.rotation.y=angle;scene.add(face);
+  for(let tick=0;tick<12;tick++){
+    const theta=tick*Math.PI/6;
+    const mark=box(face.position.x+Math.cos(angle)*Math.sin(theta)*2.53,
+      jy+41+Math.cos(theta)*2.53,
+      face.position.z-Math.sin(angle)*Math.sin(theta)*2.53,
+      .17,.42,.08,M.copper);
+    mark.rotation.y=angle;
+  }
+  const shortHand=box(face.position.x,jy+41.75,face.position.z+.035,.16,1.75,.15,M.dark);
+  shortHand.rotation.y=angle;
+}
+
 const railPoints=[];
 for(let i=0;i<=65;i++){
   const x=-850+i*27,z=-235+35*Math.sin(x/210);
