@@ -5,6 +5,9 @@
   const allowed = new Set(['manhattan','dc','vegas','alaska','coast','valley','chongqing']);
   const form = document.getElementById('flightSetup');
   const menu = document.getElementById('titleOverlay');
+  // Capture the classic script's asset folder, not the index page base URL.
+  const nyModuleUrl = new URL('ny-cosmos.js',
+    document.currentScript?.src || new URL('assets/cosmos/portal.js', document.baseURI)).href;
   const state = () => {
     const bridge = window.PatrolSpaceBridge?.getState?.();
     const chosen = form ? new FormData(form) : null;
@@ -35,7 +38,8 @@
     const flight=state();
     jumping=true;
     if(!isChongqing && flight.map==='manhattan'){
-      import('./ny-cosmos.js').then(module=>module.enter(flight)).catch(error=>{
+      if(flight.playing)window.PatrolSpaceBridge?.suspendForOrbit?.();
+      import(nyModuleUrl).then(module=>module.enter(flight)).catch(error=>{
         jumping=false;
         console.error('Manhattan universe could not start:',error);
         button.title='Cosmos failed to load; check network or WebGL';
@@ -79,14 +83,18 @@
     event.preventDefault();
     jumpToOrbit();
   });
-  // The regular maps cap Y at 100 game units. Treat a continued climb at the
-  // ceiling as the orbital handoff; never change city collision or aircraft physics.
-  const watch = window.setInterval(() => {
+  // Manhattan has a 180-unit orbit gate; keep this observer alive after every return.
+  window.setInterval(() => {
     if (jumping || document.hidden || !window.PatrolSpaceBridge) return;
     const f = state();
+    if(!isChongqing && f.playing && f.map==='manhattan' && !window.PatrolNYCosmos?.isActive?.()){
+      button.textContent=f.altitude>100
+        ? '🚀 ORBIT '+Math.floor(Math.max(0,f.altitude))+'/180 [U]'
+        : '🚀 ORBIT / 宇宙 [U]';
+    }
     if (f.playing && f.climb > 0.4 &&
         (isChongqing ? f.altitude>650 : f.map==='manhattan'?f.altitude>=179.6:f.altitude>=99.6)) {
-      window.clearInterval(watch);
+      // Keep watching after returning from orbit for subsequent ascents.
       jumpToOrbit();
     }
   }, 400);
