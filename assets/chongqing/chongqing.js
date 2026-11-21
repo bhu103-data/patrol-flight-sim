@@ -100,7 +100,14 @@ function ground(x,z) {
   const sm=tierFrac*tierFrac*(3-2*tierFrac);
   const terraces=(Math.floor(tier)+sm)*2.1;
   const relief=3.4*Math.sin(x/105)*Math.cos(z/150)+2.2*Math.sin(x/39+z/57);
-  return Math.max(8, 9+d*0.172+terraces+relief);
+  // Hongyadong is inserted into a steep hillside, not an isolated free-standing
+  // 11-storey tower. Local sculpted cliff connects its upper road to street level.
+  // This footprint stays compact so the hotpot start and other maps remain unchanged.
+  const cliffX=Math.exp(-Math.pow((x-153)/115,4));
+  const cliffT=clamp((z-185)/120,0,1);
+  const cliffRamp=cliffT*cliffT*(3-2*cliffT);
+  const hillside=cliffX*cliffRamp*86;
+  return Math.max(8, 9+d*0.172+terraces+relief+hillside);
 }
 
 const worldGeometry=new THREE.BufferGeometry();
