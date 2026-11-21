@@ -31,7 +31,9 @@ export function chongqingTowerEnvelopeAt(style,level){
  const y=Math.max(layers[0][0],Math.min(layers[layers.length-1][0],level));
  for(let i=1;i<layers.length;i++){
    const a=layers[i-1],b=layers[i];
-   if(y>=b[0]&&i<layers.length-1)continue;
+   // Reconstructed world-space height can land 1e-16 below a repeated
+   // terrace boundary. Snap both paths to the UPPER facade at the ledge.
+   if(y>=b[0]-1e-8&&i<layers.length-1)continue;
    const delta=b[0]-a[0];
    const t=delta>1e-9?Math.max(0,Math.min(1,(y-a[0])/delta)):1;
    return {width:a[1]+(b[1]-a[1])*t,depth:a[2]+(b[2]-a[2])*t};
