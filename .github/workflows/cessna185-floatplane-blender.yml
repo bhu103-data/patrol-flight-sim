@@ -74,5 +74,19 @@ jobs:
           git add assets/aircraft/cessna185-floats.glb
           if ! git diff --cached --quiet; then
             git commit -m "build(aircraft): publish Blender-baked Cessna 185 floatplane"
-            git push origin HEAD:main
+            # Other PATROL jobs may commit while Blender is baking. Keep
+            # changes; rebase the single GLB commit with a bounded retry.
+            for attempt in {1..15}; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                echo "Published Blender floatplane on attempt $attempt"
+                break
+              fi
+              if [[ "$attempt" -eq 15 ]]; then
+                echo "Asset publication failed after 15 non-force attempts" >&2
+                exit 1
+              fi
+              sleep 2
+            done
           fi
