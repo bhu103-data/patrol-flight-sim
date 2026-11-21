@@ -325,8 +325,8 @@ export function buildNycStreetNetwork({
       const separator=shift(a,b,side*(half-2.00));
       slab(separator[0],separator[1],.076,paint,markY+.008);
       if(pavementText && j%4===0 && stats.busLaneSegments<14){
-        const p=[mid[0]+cross[0]*side*(half-.96),markY+.026,
-          mid[1]+cross[1]*side*(half-.96)];
+        const p=[mid[0]+normal[0]*side*(half-.96),markY+.026,
+          mid[1]+normal[1]*side*(half-.96)];
         pavementText('BUS',p,1.28,.54,paint);
       }
       stats.busLaneSegments++;
