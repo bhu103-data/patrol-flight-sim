@@ -473,6 +473,13 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter });
+// Match electrical street lighting to the independently selected city environment.
+streetBuild.setTimeOfDay(cqTimeSelect.value);
+wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+cqTimeSelect.addEventListener('change',()=>{
+  streetBuild.setTimeOfDay(cqTimeSelect.value);
+  wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+});
 const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
@@ -714,7 +721,9 @@ window.addEventListener('keydown',e=>{
   if(!e.repeat&&e.code==='KeyH'){document.body.classList.toggle('cinematic');return;}
   if(!e.repeat&&e.code==='KeyT'){
     cqTimeSelect.value=cqTimeOptions[(cqTimeOptions.indexOf(cqTimeSelect.value)+1)%cqTimeOptions.length];
-    applyCinematicEnvironment(cqTimeSelect.value);return;
+    applyCinematicEnvironment(cqTimeSelect.value);
+    streetBuild.setTimeOfDay(cqTimeSelect.value);
+    wetStreetBuild.setTimeOfDay(cqTimeSelect.value);return;
   }
   if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
