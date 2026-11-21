@@ -2013,18 +2013,18 @@ const CENTRAL_PARK_SITES=[
             // sampled only for Alaska and within a short flight detail radius.
             if(uAlaskaPhotoReady){
               float closeDetail=1.0-smoothstep(105.0,255.0,hitDist);
-              float photoAmount=closeDetail*max(exposed*.78,frost*.90);
+              float forestFloor=smoothstep(.85,3.2,alt)*
+                (1.0-smoothstep(11.0,23.0,alt))*
+                (1.0-smoothstep(.15,.39,slope));
+              float photoAmount=closeDetail*
+                max(max(exposed*.78,frost*.90),forestFloor*.90)*
+                (1.0-glacier*.88);
               if(photoAmount>.018){
                 float snowTile=step(.51,frost);
-                float forestFloor=smoothstep(.85,3.2,alt)*
-                  (1.0-smoothstep(11.0,23.0,alt))*
-                  (1.0-smoothstep(.15,.39,slope));
                 float forestChoice=step(.23,forestFloor)*
                   (1.0-step(.52,exposed))*(1.0-step(.48,frost));
                 float forestVariant=step(.54,vnoise(p.xz*.028));
                 float photoColumn=mix(snowTile,2.0+forestVariant,forestChoice);
-                photoAmount=closeDetail*max(photoAmount,
-                  forestFloor*.90)*(1.0-glacier*.88);
                 vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
                 vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
                 vec2 tiled=fract(projected*.107);
