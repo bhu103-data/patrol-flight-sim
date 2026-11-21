@@ -4877,7 +4877,8 @@ const CENTRAL_PARK_SITES=[
         }
         for(let j=0;j<5;j++)
           cityTraffic.push({kind:['sedan','suv','sedan','van','suv'][j],
-            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55,bridge:i===0});
+            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55,
+            bridge:i===0,livery:(j*5+i*3+Math.floor(j/3))%3});
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
@@ -4887,7 +4888,7 @@ const CENTRAL_PARK_SITES=[
       for(let j=0;j<9;j++)
         cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,
           route:seventh,offset:11+seventh.total*(j+.34)/10.3,
-          pace:5.2+(j%4)*.45});
+          pace:5.2+(j%4)*.45,livery:(j+Math.floor(j/3))%3});
       cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
       civilAirTraffic.push(
         {center:[18,-282],rx:250,rz:138,altitude:62,phase:0.2,pace:0.075,scale:2.15,livery:0},
@@ -4908,13 +4909,13 @@ const CENTRAL_PARK_SITES=[
       if(selectedMap.city)for(let i=0;i<8;i++)
         cityTraffic.push({kind:['suv','sedan','van','sedan'][i%4],
           expressway:true,route,offset:31+route.total*i/8.3,
-          pace:7.5+(i%3)*.65});
+          pace:7.5+(i%3)*.65,livery:(i+Math.floor(i/4))%3});
       for(let i=0;i<2;i++)cityTraffic.push({kind:'taxi',expressway:true,route:ramp,laneOffset:0.95,offset:i*ramp.total,pace:6.9});
     }
     updateBridgeRails();
   }
 
-  function buildStreetVehicle(kind,clothing=[0.27,0.37,0.52],skin=[0.69,0.51,0.39]) {
+  function buildStreetVehicle(kind,clothing=[0.27,0.37,0.52],skin=[0.69,0.51,0.39],bodyPaint=null) {
     const { addTri,addQuad,upload }=createTriangleMesh();
     const box=(...args)=>addModelBox(addQuad,...args);
     const glass=[0.25,0.39,0.44], rubber=[0.12,0.14,0.15];
@@ -4924,6 +4925,7 @@ const CENTRAL_PARK_SITES=[
       // not licensed or dimension-verified manufacturer models.
       const police=kind==='police',suv=kind==='suv',van=kind==='van';
       const body=police?[.80,.83,.86]:kind==='taxi'?[.96,.66,.11]:
+        bodyPaint&&['sedan','suv','van'].includes(kind)?bodyPaint:
         kind==='sedan'?[.24,.28,.34]:suv?[.65,.69,.70]:[.88,.89,.87];
 
       // Six longitudinal sections create a sculpted hood, tapered bumpers,
@@ -5188,6 +5190,18 @@ const CENTRAL_PARK_SITES=[
   const streetMeshes=Object.fromEntries(
     ['taxi','police','sedan','suv','van','train','walker']
       .map(kind=>[kind,buildStreetVehicle(kind)]));
+  // PATROL_NYC_RESIDENT_FLEET_LIVERIES_V1: three grounded, locally common
+  // paint finishes per ordinary car class, shared by all actors of that kind.
+  // Palette 0 reuses the pre-existing mesh; only six additional compact
+  // meshes are uploaded once. No repainting a draw call or per-frame rebuild.
+  const nycResidentMeshes=Object.fromEntries(Object.entries({
+    sedan:[[.24,.28,.34],[.76,.77,.74],[.45,.16,.18]],
+    suv:[[.65,.69,.70],[.18,.22,.24],[.20,.37,.53]],
+    van:[[.88,.89,.87],[.30,.34,.37],[.76,.71,.61]]
+  }).map(([kind,paint])=>[kind,[
+    streetMeshes[kind],...paint.slice(1).map(color=>
+      buildStreetVehicle(kind,undefined,undefined,color))
+  ]]));
   // Procedural, logo-free civilian airliners based on the proportions of the
   // open CC-BY airliner reference set. This fits PATROL's raw WebGL2 pipeline.
   function buildCivilAirlinerMesh(livery=0) {
@@ -5395,7 +5409,11 @@ const CENTRAL_PARK_SITES=[
       } else {
         const front=[Math.sin(yaw),0,Math.cos(yaw)],right=[front[2],0,-front[0]];
         const model=mat4FromBasis([x,y,z],right,worldUp,front);
-        drawMesh(actor.wreck?wreckedTaxiMesh:streetMeshes[actor.kind],model);
+        const vehicleMesh=selectedMap.city && !actor.wreck &&
+          actor.livery!==undefined && nycResidentMeshes[actor.kind]
+          ?nycResidentMeshes[actor.kind][actor.livery%3]
+          :streetMeshes[actor.kind];
+        drawMesh(actor.wreck?wreckedTaxiMesh:vehicleMesh,model);
         if(!actor.wreck && actor.kind==='taxi' && distanceSq<240*240){
           drawMesh(taxiLamps,model,true);
         }
