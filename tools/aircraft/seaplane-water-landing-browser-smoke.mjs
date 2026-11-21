@@ -25,7 +25,10 @@ const fixture=[
   '    },',
   '    read:()=>({waterborne,grounded,crashed:Boolean(crash),',
   '      valid:usableFloatWater(plane.pos[0],plane.pos[2],plane.yaw),',
-  '      speed:plane.speed,altitude:plane.pos[1]})',
+  '      speed:plane.speed,altitude:plane.pos[1],',
+  '      oceanHeave:waterborne&&selectedMap.city?',
+  '        floatOceanPose(plane.pos[0],plane.pos[2],plane.yaw,',
+  '          Math.fround((lastTime??0)*.001),selectedMap,WATER_H,sampleTerrainHeight).height:null})',
   '  };'
 ].join('\n');
 const injected=html.replace(anchor,fixture+'\n'+anchor);
@@ -91,7 +94,10 @@ try {
     });
     if(after.physics.crashed||!after.physics.waterborne||!after.physics.valid||
        after.physics.speed>10||!after.flight.playing||!/FLOATS · (WATER TAXI|ON STEP|DOCKING BRAKE)/.test(after.status)||
-       after.webglLost||Math.abs(after.physics.altitude-(staged.waterHeight+1.50))>0.12)
+       after.webglLost||
+       (map==='manhattan'&&!Number.isFinite(after.physics.oceanHeave))||
+       Math.abs(after.physics.altitude-(staged.waterHeight+1.50+
+         (map==='manhattan'?after.physics.oceanHeave:0)))>0.12)
       throw new Error(map+' failed assisted hard-water touchdown: '+JSON.stringify({staged,after}));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-touchdown.png',animations:'disabled'});
     // G toggles the real docking brake in the shipped game, unlike

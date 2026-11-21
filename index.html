@@ -13665,7 +13665,9 @@ const CENTRAL_PARK_SITES=[
           plane.pos[1]=WATER_H+FLOAT_CLEARANCE+floatHeave;
         }else if(usableFloatWater(prevPos[0],prevPos[2],prevYaw)){
           // Last clear footprint is still safe: stop before the obstruction.
-          plane.pos=[prevPos[0],WATER_H+FLOAT_CLEARANCE,prevPos[2]];
+          plane.pos=[prevPos[0],WATER_H+FLOAT_CLEARANCE+
+            (selectedMap.city?floatOceanPose(prevPos[0],prevPos[2],prevYaw,
+                Math.fround(lastTime*.001),selectedMap,WATER_H,sampleTerrainHeight).height:0),prevPos[2]];
           plane.yaw=prevYaw;
           plane.speed=0;
           plane.afterburner=false;
@@ -13684,7 +13686,11 @@ const CENTRAL_PARK_SITES=[
           const smooth=sink>=-7.8 && plane.speed<=24.5 &&
             plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
           waterborne=true;
-          plane.pos[1]=WATER_H+FLOAT_CLEARANCE;
+          // Contact with the same visible crest from the first afloat frame.
+          // Touchdown eligibility, deceleration and collision remain unchanged.
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+
+            (selectedMap.city?floatOceanPose(x,z,plane.yaw,
+                Math.fround(lastTime*.001),selectedMap,WATER_H,sampleTerrainHeight).height:0);
           plane.pitch=plane.bank=plane.rollAnim=0;
           plane.afterburner=false;
           if(!smooth){
