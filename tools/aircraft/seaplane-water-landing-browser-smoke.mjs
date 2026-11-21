@@ -94,9 +94,26 @@ try {
        after.webglLost||Math.abs(after.physics.altitude-(staged.waterHeight+1.50))>0.12)
       throw new Error(map+' failed controlled safe-water touchdown: '+JSON.stringify({staged,after}));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-touchdown.png',animations:'disabled'});
+    // G toggles the real docking brake in the shipped game, unlike
+    // B which only brakes while held. Complete the water landing lifecycle.
+    await page.keyboard.press('g');
+    await page.waitForFunction(()=>{
+      const q=window.PatrolSeaplaneSmoke.read();
+      return q.crashed || (q.waterborne && q.speed<0.25);
+    },null,{timeout:120000,polling:500});
+    const docked=await page.evaluate(()=>({
+      hud:document.querySelector('#gearStatus')?.textContent,
+      flight:window.PatrolSpaceBridge.getState(),
+      physics:window.PatrolSeaplaneSmoke.read()
+    }));
+    if(docked.physics.crashed||!docked.physics.waterborne||
+       !docked.physics.valid||docked.physics.speed>=.25||
+       !docked.hud?.includes('DOCKING BRAKE')||!docked.flight.playing)
+      throw new Error(map+' failed docking brake/stop after touchdown: '+JSON.stringify(docked));
+    await page.screenshot({path:'artifacts/cessna185-'+map+'-docked.png',animations:'disabled'});
     if(errors.length)throw new Error(map+' browser errors: '+JSON.stringify(errors.slice(0,8)));
     results.push({map,loadedBlenderGLB:true,initialWaterTaxi:true,
-      stagedApproach:staged,touchdown:after,errors:[]});
+      stagedApproach:staged,touchdown:after,docked,errors:[]});
     await page.close();
   }
   console.log('PASS C185 genuine WebGL + real-physics water touchdown: '+JSON.stringify(results));
