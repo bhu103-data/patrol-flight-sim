@@ -81,3 +81,16 @@ test('One Times Square official wedge preserves municipal roof and NYE lighting'
  assert.match(html,/const face=side\*7\.12/,'side screens remain outside tapered body');
  assert.match(html,/const ball=\[\[34\.18/,'New Year ball remains');
 });
+
+test('One Times Square eight original static LED captions never repeat on nearby faces or next local session',()=>{
+ const start=html.indexOf('const layouts=side===1?[',html.indexOf('PATROL_NYC_ONE_TIMES_AD_UNIQUENESS_V16'));
+ const end=html.indexOf('for(const [base,height,tint,caption] of boards)',start);
+ assert.ok(start>0&&end>start);
+ const captions=new Function('side','oneTimesCreativeBase','pads',html.slice(start,end)+'return boards');
+ const format=n=>String(n).padStart(6,'0');
+ const list=[captions(1,1,format),captions(-1,1,format),
+             captions(1,9,format),captions(-1,9,format)].flat().map(v=>v[3]);
+ assert.equal(list.length,16);
+ assert.equal(new Set(list).size,16);
+ assert.match(html,/patrol\.nyc\.oneTimes\.nextCreative/);
+});
