@@ -34,7 +34,7 @@ test('Boathouse has green gabled metal roof, high-detail standing seams',()=>{
   }
   const highRibs=high.beams.filter(b=>rgb(b.color,seam)&&b.w===.023);
   const lowRibs=low.beams.filter(b=>rgb(b.color,seam)&&b.w===.023);
-  assert.equal(highRibs.length,18,'nine standing seams on each slope');
+  assert.equal(highRibs.length,14,'seven standing seams on each slope');
   assert.equal(lowRibs.length,0,'low graphics skips micro-geometry');
   for(const b of highRibs)for(const point of [b.a,b.b]){
     assert(point.every(Number.isFinite));
