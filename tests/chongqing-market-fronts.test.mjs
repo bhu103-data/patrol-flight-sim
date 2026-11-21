@@ -174,6 +174,28 @@ test('invalid flooded or unbuildable pads must render no gallery or collider',()
   assert.ok(objects.every(m=>m.count===0));
 });
 
+test('market viewpoint 7 has a real unoccluded line above the existing cliff',async()=>{
+  const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  assert.match(game,/eyeX=site\.x\+31,eyeZ=site\.z\+35/);
+  assert.match(game,/viewPitch=key==='Digit7'\?-.28/);
+  const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
+    game.indexOf('const worldGeometry='));
+  const {ground:terrainY}=new Function('clamp',
+    terrain+';return {ground};')((v,a,b)=>Math.max(a,Math.min(b,v)));
+  const site=CHONGQING_MARKET_SITES[1],eyeX=site.x+31,eyeZ=site.z+35;
+  const targetX=site.x,targetZ=site.z+2.6,targetY=terrainY(site.x,site.z)+12;
+  const yaw=Math.atan2(targetX-eyeX,eyeZ-targetZ),pitch=-.28,dist=14;
+  const ax=eyeX-Math.sin(yaw)*Math.cos(pitch)*dist,
+    az=eyeZ+Math.cos(yaw)*Math.cos(pitch)*dist,
+    ay=terrainY(eyeX,eyeZ)+18+4.7+Math.sin(pitch)*dist;
+  for(let i=0;i<=30;i++){
+    const t=i/30,x=ax+(targetX-ax)*t,z=az+(targetZ-az)*t,
+      y=ay+(targetY-ay)*t;
+    assert.ok(y>terrainY(x,z)+3,
+      'street photo sightline must not pass through the scenic cliff');
+  }
+});
+
 test('main game builds galleries BEFORE shared collisions and has a QA shortcut',async()=>{
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');
