@@ -5,10 +5,16 @@ on:
     paths:
       - '.github/workflows/nyc-central-park-browser.yml'
       - 'tests/nyc-browser-smoke.cjs'
+      - 'assets/nyc/central-park.js'
+      - 'assets/nyc/central-park-amenities.js'
+      - 'tests/central-park*.test.mjs'
   pull_request:
     paths:
       - '.github/workflows/nyc-central-park-browser.yml'
       - 'tests/nyc-browser-smoke.cjs'
+      - 'assets/nyc/central-park.js'
+      - 'assets/nyc/central-park-amenities.js'
+      - 'tests/central-park*.test.mjs'
   workflow_dispatch:
 
 permissions:
