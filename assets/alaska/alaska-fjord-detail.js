@@ -35,7 +35,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       const a=glacierPoint(col,r),b=glacierPoint(col+span,r+.21);
       const c=glacierPoint(col+span+.13,r+.21+width);
       const d=glacierPoint(col+.08,r+width);
-      const trench=[.045,.205,.285],inner=[.14,.39,.48];
+      const trench=[.16,.33,.40],inner=[.25,.48,.57];
       iceQuad(lift(a,.15),lift(b,.15),lift(c,.13),lift(d,.13),trench);
       // Asymmetric turquoise fracture wall and snow-rich windward lip.
       iceQuad(lift(d,.14),lift(c,.14),lift(c,.41),lift(d,.36),inner);
@@ -62,8 +62,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const forward=.68+.84*hash(i*31+1);
     const zL=L[2]-forward,zR=R[2]-forward;
     const deepFracture=i%9===3;
-    const muted=deepFracture?[.11,.30,.36]:
-      [.26+.065*j,.49+.065*j,.57+.055*j];
+    const muted=deepFracture?[.20,.38,.46]:
+      [.32+.065*j,.54+.065*j,.63+.055*j];
     const light=[.49+.075*j,.68+.085*j,.76+.055*j];
     const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
     const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
