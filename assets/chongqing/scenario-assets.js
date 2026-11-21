@@ -124,6 +124,18 @@ export async function loadOptionalHongyadong({
   }
   const model = asset.scene || asset;
   if (!model?.isObject3D) throw Error('Scenario decoder returned no Three.js scene');
+  // glTFLoader does not enable dynamic shadows on imported meshes by default.
+  // Keeping normal PBR occlusion makes roof eaves, balconies and window recesses
+  // read as genuine layered architecture rather than uniformly lit cardboard.
+  model.traverse?.(node=>{
+    if(!node.isMesh)return;
+    node.castShadow=true;
+    node.receiveShadow=true;
+    for(const mat of Array.isArray(node.material)?node.material:[node.material]){
+      if(mat?.map)mat.map.anisotropy=Math.max(mat.map.anisotropy||1,4);
+      if(mat?.normalMap)mat.normalMap.anisotropy=Math.max(mat.normalMap.anisotropy||1,4);
+    }
+  });
   model.position.set(...spec.position);
   model.rotation.y = spec.rotation_y;
   model.scale.set(...spec.scale);
