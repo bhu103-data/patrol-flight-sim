@@ -208,9 +208,41 @@ async function preview(){
   return {status:text,atlas,triangles,nonfatalConsole:consoleProblems};
  }finally{await page.close();}
 }
+// Detect a real change in the STATUE-centered pixels, not merely a 200 GLB
+// download. A decoder that silently renders the old model must fail this QA.
+// These screenshots use identical game cameras, weather and viewport size;
+// water/ship motion outside the statue ROI cannot satisfy this threshold.
+async function compareStatuePixels(fallback,candidate){
+ const a=PNG.sync.read(await readFile(out+'/'+fallback));
+ const b=PNG.sync.read(await readFile(out+'/'+candidate));
+ if(a.width!==b.width||a.height!==b.height||a.width!==1280||a.height!==720)
+  die('Scene comparison size mismatch');
+ const roi={left:520,top:80,right:780,bottom:610};
+ let changed=0,count=0,absoluteSum=0;
+ for(let y=roi.top;y<roi.bottom;y++)for(let x=roi.left;x<roi.right;x++){
+  const i=(y*a.width+x)*4;
+  const d=Math.max(Math.abs(a.data[i]-b.data[i]),
+    Math.abs(a.data[i+1]-b.data[i+1]),
+    Math.abs(a.data[i+2]-b.data[i+2]));
+  changed+=d>32?1:0;absoluteSum+=d;count++;
+ }
+ const report={fallback,candidate,roi,changedFraction:changed/count,
+  meanMaxChannelDifference:absoluteSum/count,threshold:0.10};
+ if(report.changedFraction<report.threshold)
+  die('Model did not visibly replace fallback in central region: '+JSON.stringify(report));
+ return report;
+}
 try{
  results.browsers.fallback=await flight(false);
  results.browsers.candidate=await flight(true);
+ results.visualDifferences={
+  fullView:await compareStatuePixels('01-liberty-game-fallback.png',
+    '02-liberty-game-candidate.png'),
+  harborBase:await compareStatuePixels('06-liberty-low-south-fallback.png',
+    '06-liberty-low-south-candidate.png'),
+  obliqueBase:await compareStatuePixels('07-liberty-low-oblique-fallback.png',
+    '07-liberty-low-oblique-candidate.png')
+ };
  results.preview.status=await preview();
  console.log('LIBERTY_WEBGL_STATIC_PASS '+JSON.stringify(results));
 }finally{
