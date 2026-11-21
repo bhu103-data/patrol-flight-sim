@@ -5959,7 +5959,22 @@
       const p=(u,v,offset=0)=>[x+u,y+v,face+side*offset];
       ledQuad(p(-width/2,-height/2),p(width/2,-height/2),
         p(width/2,height/2),p(-width/2,height/2),color,text);
-      for(const h of [-height/2,height/2])lamp(x,y+h,face+side*0.032,width,0.072,0.06,color);
+      for(const h of [-height/2,height/2])
+        lamp(x,y+h,face+side*0.032,width,0.072,0.06,color);
+      // PATROL_NYC_BILLBOARD_HARDWARE_V9 — independent metal structure,
+      // shadow lip and power housings around each static LED surface.
+      const edge=[.25,.28,.31],sil=[.49,.53,.55];
+      for(const u of [-width*.5,width*.5]){
+        box(x+u,y,face-side*.05,.095,height+.18,.24,edge);
+        box(x+u,y-height*.38,face-side*.13,.19,.26,.16,sil);
+      }
+      box(x,y+height*.5+.17,face-side*.04,width+.26,.10,.26,sil);
+      box(x,y-height*.5-.15,face-side*.07,width+.26,.19,.30,edge);
+      for(let i=0;i<Math.min(7,Math.max(2,Math.floor(width/2.5)));i++){
+        const u=(i+.5)/Math.max(2,Math.floor(width/2.5))-.5;
+        box(x+u*width,y-height*.5-.25,face-side*.21,
+          .14,.15,.36,edge);
+      }
     }
 
     // PATROL_NYC_GMAP_V8 — venue address/adjacency and screen direction
@@ -6013,6 +6028,14 @@
     ];
     for(const [i,b] of blocks.entries()){
       const {x,z,w,d,h,color,panels}=b;
+      // PATROL_NYC_ARCH_MASSING_V9: site-specific crown, glass framing,
+      // exposed structural ribs and podium profiles. Based on street-level
+      // visual characteristics; geometry remains game-scale approximation.
+      const style=i%6;
+      const glazed=style===0||style===3||b.name.includes('Marriott')||
+        b.name.includes('EDITION');
+      const metal=glazed?[.35,.43,.48]:[.37,.38,.39],
+        stone=glazed?[.46,.53,.57]:color.map(v=>Math.min(.91,v*1.16));
       // Source-ordered compact footprints, with the real tapered 2 Times Square
       // parcel represented by an actual nonrectangular prism.
       if(b.shape==='wedge'){
@@ -6037,13 +6060,63 @@
       box(x,ground+1.34,z,w+0.14,2.68,d+0.18,[0.37,0.39,0.40]);
       box(x,ground+h-0.15,z,w+0.25,0.32,d+0.25,color.map(v=>v*1.19));
       box(x-0.63,ground+h+0.42,z+0.55,w*0.47,0.88,d*0.35,[0.37,0.39,0.40]);
-      solidAt('Times Square streetfront',x,z,ground,ground+h+0.86,w/2,d/2);
+      // Real urban roof clutter (mechanical louvers, ducts, parapet,
+      // solar-shaded setbacks) at a fixed geometry budget per site.
+      for(let unit=0;unit<2+(i%3);unit++){
+        const xx=x+(unit-1)*w*.19,zz=z+(unit%2?.16:-.18)*d;
+        box(xx,ground+h+.55,zz,w*.11+.15,.95+(unit%2)*.57,
+          d*.17,unit%2?stone:metal);
+        for(let louver=0;louver<4;louver++){
+          const y=ground+h+.25+louver*.16;
+          box(xx,y,zz+d*.086+.025,w*.09,.028,.04,[.22,.30,.34]);
+        }
+      }
+      // Signature tower profiles: asymmetric fins / light-well frames
+      // replace identical top-of-box silhouettes across all 13 sites.
+      if(style===0||style===4){
+        for(const side of [-1,1])for(let ridge=0;ridge<3;ridge++){
+          const px=x+side*w*(.31+ridge*.035);
+          box(px,ground+h*.48,z+d*.13,.095,h*.81,
+            .12,stone);
+        }
+      }else if(style===1||style===5){
+        for(let tier=0;tier<3;tier++){
+          const yy=ground+h*.80+tier*.65;
+          box(x+w*.15,yy,z-d*.12,
+            w*(.55-tier*.08),.13,d*(.50-tier*.07),metal);
+        }
+      }else if(style===2){
+        for(const side of [-1,1]){
+          box(x+side*w*.32,ground+h*.51,z-d*.19,
+            .14,h*.75,.18,stone);
+          box(x+side*w*.25,ground+h*.63,z-d*.21,
+            .075,h*.48,.14,metal);
+        }
+      }else{
+        for(let unit=0;unit<4;unit++){
+          const zz=z-d*.30+unit*d*.20;
+          box(x-w*.28,ground+h*.43,zz,.16,h*.59,.15,metal);
+        }
+      }
+      solidAt('Times Square streetfront',x,z,ground,ground+h+1.4,w/2,d/2);
       for(const side of [-1,1]){
         const face=z+side*(d/2+0.048);
-        for(let y=ground+3.1;y<ground+h-0.85;y+=1.94)for(let col=-3;col<=3;col++){
-          const u=x+col*w/8;
-          box(u,y,face,0.73,1.11,0.068,[0.24,0.34,0.43]);
-          if((col+Math.round(y)*3+i*2+29)%7<2)lamp(u,y+0.12,face+side*0.059,0.58,0.59,0.04,[0.79,0.66,0.47]);
+        const floorPitch=glazed?1.76:2.16+(style%3)*.20;
+        const columns=glazed?9:6+style%3;
+        const paneW=(w*.84)/columns*.68;
+        for(let floor=ground+3.15;floor<ground+h-.98;floor+=floorPitch){
+          for(let col=0;col<columns;col++){
+            const u=x+(col-(columns-1)*.5)*w*.86/columns;
+            const variant=Math.abs(Math.round(floor*31)+col*13+i*7)%11;
+            const tint=variant<2?[.50,.58,.59]:variant<5?
+              [.14,.23,.29]:glazed?[.19,.31,.37]:[.22,.29,.33];
+            box(u,floor,face,paneW,floorPitch*.53,.072,tint);
+            if(variant===0)lamp(u,floor+.12,face+side*.059,
+              paneW*.82,.27,.034,[.83,.66,.45]);
+            if(glazed && col%3===0)
+              box(u,floor+floorPitch*.44,face+side*.026,
+                paneW*.91,.085,.099,metal);
+          }
         }
         for(let col=-2;col<=2;col++){
           box(x+col*w/5.5,ground+1.30,face,1.10,1.92,0.10,[0.23,0.31,0.39]);
@@ -6085,15 +6158,20 @@
       const masonry=[0.43,0.45,0.46], brushed=[0.29,0.34,0.37];
       const sideMasonry=color.map(c=>Math.min(0.88,c*0.82));
       for(const side of [-1,1]){
-        const facade=z+side*(d/2+0.126);
-        for(let floor=3.10;floor<h-0.42;floor+=2.56){
-          box(x,ground+floor,facade,w*0.93,0.105,0.18,sideMasonry);
+        const facade=z+side*(d/2+.126);
+        const spacing=glazed?2.09:2.45+(style%3)*.18;
+        for(let level=3.05;level<h-.50;level+=spacing){
+          box(x,ground+level,facade,w*.94,glazed?.064:.11,.18,
+            glazed?metal:sideMasonry);
         }
-        for(let col=-4;col<=4;col++){
-          const cx=x+col*w/9.7;
-          box(cx,ground+3.05+(h-3.55)/2,facade+side*0.026,
-            0.075,Math.max(0.22,h-3.55),0.13,masonry);
-          if(col%2===0)box(cx,ground+2.37,facade+side*0.08,0.11,0.76,0.15,brushed);
+        const columns=glazed?10:6+(i%4);
+        for(let col=0;col<columns;col++){
+          const cx=x+((col/(columns-1))-.5)*w*.88;
+          box(cx,ground+3.05+(h-3.55)/2,facade+side*.036,
+            glazed?.056:.085,Math.max(.22,h-3.55),.13,
+            glazed?metal:masonry);
+          if(col%3===0)
+            box(cx,ground+2.36,facade+side*.08,.12,.76,.15,brushed);
         }
       }
       // Real entrance reveals and a rain canopy, not billboard-only walls.
@@ -8609,8 +8687,15 @@
       detail:'Broadway, Seventh Avenue and the bow-tie pedestrian plazas'},
     {name:'Duffy Square Street View',x:-0.9,z:43,height:2.0,bearing:155,radius:12.5,rise:1.9,
       detail:'Red TKTS stairs, the Broadway plazas and theatre marquees'},
-    {name:'One Times Square',x:23,z:-28.5,height:16,bearing:184,radius:27,rise:7.0,
-      detail:'Billboard tower with the New Year’s Eve ball'},
+    {name:'One Times Square',x:23,z:-47.5,height:16,bearing:184,radius:26,rise:7.0,
+      detail:'Corrected W 42nd Street anchor, original static LED art and New Year’s Eve ball'},
+    // PATROL_NYC_GIS_VISUAL_V9: controllable facade inspection views.
+    // Use Scenic Views [H] > Landmark to directly inspect the 42nd–47th
+    // streets, not a distant harbor camera or automated camera assumptions.
+    {name:'Times Square Street Level',x:13,z:2,height:2.3,bearing:190,radius:13,rise:2.2,
+      detail:'Look north toward Broadway, Seventh Avenue, marquees and the pedestrian bow-tie'},
+    {name:'44th Street LED Canyon',x:13,z:5,height:7.3,bearing:197,radius:19,rise:5,
+      detail:'Inspect 1515 and 1540 Broadway screens, storefronts and rooftops'},
     {name:'Brooklyn Bridge',x:82,z:-342,height:18,bearing:158,radius:103,rise:19,
       detail:'Stone towers, suspension cables and lit approaches'},
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
