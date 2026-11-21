@@ -16,6 +16,7 @@ export function buildNycStreetNetwork({
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
+    preservedRoadSections:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
     intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
   const hash=(x,z,k=0)=>{
@@ -232,14 +233,40 @@ export function buildNycStreetNetwork({
     return true;
   }
   const visibleStreetSegments=new Set();
-  function streetSegment(a,b,kind,i,j){
+  function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
       nearOld(...mid,7.8))return false;
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
-    if(!roadCorridorClear(a,b,width)){stats.skippedRoadFootprints++;return false;}
+    if(!roadCorridorClear(a,b,width)){
+      stats.skippedRoadFootprints++;
+      if(!allowClip)return false;
+      // Preserve individually safe stretches without letting a road ribbon
+      // or sidewalk pass through an occupied building footprint.
+      const steps=Math.ceil(distance/1.2),lerp=t=>[
+        a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t
+      ];
+      let start=-1,rendered=false;
+      const flush=end=>{
+        if(start<0)return;
+        const p=lerp(start/steps),q=lerp(end/steps);
+        if(Math.hypot(q[0]-p[0],q[1]-p[1])>=4 &&
+           streetSegment(p,q,kind,i,j,false)){
+          stats.preservedRoadSections++;
+          rendered=true;
+        }
+        start=-1;
+      };
+      for(let n=0;n<steps;n++){
+        const safe=roadCorridorClear(lerp(n/steps),lerp((n+1)/steps),width);
+        if(safe&&start<0)start=n;
+        if(!safe)flush(n);
+      }
+      flush(steps);
+      return rendered;
+    }
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
