@@ -79,7 +79,11 @@ try{
   await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
   let bytes;
   try{
-   bytes=await page.locator('#glCanvas').screenshot({
+   // Locator screenshots wait for element-stability and can time out when
+   // SwiftShader continuously resizes/paints the live canvas. The HUD is
+   // hidden above, so viewport screenshot preserves live WebGL pixels
+   // without Playwright's element scroll/stability wait. 1280x720 fixed.
+   bytes=await page.screenshot({
     path:dest+'/'+name,animations:'allow',timeout:75000});
   }finally{
    await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
