@@ -7,7 +7,7 @@ const a=game.indexOf('  function findFloatWaterStart(){');
 const b=game.indexOf('  let gearDown = false;',a);
 assert.ok(a>=0&&b>a,'floatplane water-launch search must be extractable');
 const choose=new Function('selectedMap','NYC_FLIGHT_RADIUS','FLIGHT_RADIUS',
-  'usableFloatWater','boats','sceneryPose',game.slice(a,b)+';return findFloatWaterStart;');
+  'usableFloatWater','boats','sceneryPose','const sceneryTime=0;'+game.slice(a,b)+';return findFloatWaterStart;');
 
 test('the global launcher offers a waterborne start only with appropriate aircraft and map',()=>{
   assert.match(game,/id="waterStartChoice"/);
