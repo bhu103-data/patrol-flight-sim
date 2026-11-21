@@ -9,6 +9,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     throw new TypeError('Alaska detail requires mesh writers and terrain sampling');
   }
   const stats={crevasses:0,iceFloes:0,rockBands:0};
+  // All geometry is cosmetic, measured heights still come from terrainAt.
+  stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
   // Match the existing Glacier Head mesh in index.html. These cracks are a
@@ -40,6 +42,54 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
         [.73+.1*jitter,.88+.04*jitter,.92]);
       stats.crevasses++;
     }
+  }
+
+  // Fjord floes with irregular perimeter (not repeated cone-shaped icebergs).    }
+  }
+
+  // Dimensional calving face: narrow ice towers, fractured rock-blue walls,
+  // sediment layers and irregular overhangs rather than a flat turquoise quad.
+  // Follow the SAME glacier-front control curve used by the main terrain mesh.
+  // The front looks toward south (-Z) down the flight route.
+  for(let i=0;i<42;i++){
+    const start=i/42*19.25+.32,end=(i+1)/42*19.25+.32;
+    const L=glacierPoint(start,0),R=glacierPoint(end,0);
+    const jitter=hash(283+i*37),jitter2=hash(94+i*71);
+    const baseY=waterY-.28,topL=Math.max(waterY+2,L[1]+.3+2.2*jitter);
+    const topR=Math.max(waterY+2,R[1]+.3+2.1*jitter2);
+    const forward=.70+.32*hash(i*49+12);
+    const zL=L[2]-forward,zR=R[2]-forward;
+    const stripe=i%7===0;
+    const dark= stripe?[.12,.30,.38]:[.32+.13*jitter,.56+.13*jitter,.65+.11*jitter];
+    const lit=[.51+.12*jitter,.73+.08*jitter,.81+.06*jitter];
+    const shadow=[.13+.08*jitter,.31+.06*jitter,.40+.07*jitter];
+    const a=[L[0],baseY,zL],b=[R[0],baseY,zR],
+      c=[R[0],topR,zR],d=[L[0],topL,zL];
+    addQuad(a,b,c,d,dark);
+    // Eroded, uneven lip produces a real oblique ice face and roof silhouette.
+    const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.85+1.7*jitter,
+      (zL+zR)*.5+1.9+.4*jitter2];
+    addTri(d,c,roof,lit);
+    addTri([L[0],topL,zL+1.08],d,roof,shadow);
+    for(let band=1;band<=3;band++){
+      const t=band/4,uneven=(hash(i*167+band*23)-.5)*.38;
+      const hL=baseY+(topL-baseY)*t+uneven;
+      const hR=baseY+(topR-baseY)*t-uneven*.5;
+      const col=band===1?[.25,.46,.55]:band===2?[.43,.65,.70]:[.56,.76,.79];
+      addQuad([L[0],hL,zL-.065],[R[0],hR,zR-.065],
+        [R[0],hR+.075,zR-.067],[L[0],hL+.075,zL-.067],col);
+      stats.iceStrata++;
+    }
+    if(i%6===2){
+      // Blue undercut and vertical fracture shadow; no false collision surface.
+      const width=Math.max(.12,(R[0]-L[0])*.27);
+      const xc=L[0]+(R[0]-L[0])*(.25+.34*jitter2);
+      const z=(zL+zR)*.5-.13;
+      addQuad([xc,baseY+.15,z],[xc+width,baseY+.15,z],
+        [xc+width,Math.min(topL,topR)*.91,z],
+        [xc,Math.min(topL,topR)*.96,z],[.075,.20,.27]);
+    }
+    stats.seracs++;
   }
 
   // Fjord floes with irregular perimeter (not repeated cone-shaped icebergs).
@@ -83,6 +133,24 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const ca=[a[0],a[1]+.24,a[2]+.9],cb=[b[0],b[1]+.24,b[2]+.9];
     addQuad(a,b,cb,ca,i%3?[.36,.41,.43]:[.50,.53,.53]);
     stats.rockBands++;
+  }
+  // Alaska coastal spruce/hemlock silhouettes    stats.rockBands++;
+  }
+  // Small talus fans at surveyed upland slopes, never invented giant cliffs.
+  // Irregular triangular stone faces catch glancing light at low altitude.
+  for(let i=0;i<110;i++){
+    const x=-375+hash(321+i*11)*720,z=-650+hash(82+i*17)*1060;
+    const ground=terrainAt(x,z),side=terrainAt(x+5,z+4);
+    if(ground<waterY+6||ground>waterY+42||
+       Math.abs(side-ground)<.32||Math.abs(side-ground)>10||
+       Math.hypot(x-130,z-450)<140)continue;
+    const extent=.55+hash(i*23+7)*1.5;
+    const color=i%3===0?[.39,.44,.46]:[.30+.08*hash(i),.36,.39];
+    const a=[x-extent,terrainAt(x-extent,z)+.05,z-extent*.5],
+          b=[x+extent,terrainAt(x+extent,z)+.05,z+extent*.45],
+          c=[x,ground+.22+extent*.48,z-.3*extent];
+    addTri(a,b,c,color);
+    stats.talus++;
   }
   // Alaska coastal spruce/hemlock silhouettes: one batched draw call, no
   // cloned cuboids or unique textures. Geographically sampled ground altitude
@@ -139,6 +207,23 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
                [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
                [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
                color);
+      }
+    }
+    // Irregular understorey tufts               color);
+        // Fine asymmetric branchlet curtains improve nearby spruce shape
+        // with a bounded polygon budget. No repeated cone layers or billboards.
+        if(i%7===0 && layer<2 && j%2===0){
+          const a2=a+.22,b2=b-.16,twigY=start+treeH*.19;
+          const spread=radius*.77,topY=tip-treeH*.10;
+          const green=tone.map((v,k)=>Math.min(1,v*(k===1?1.18:.92)));
+          addTri(
+            [x+Math.cos(a2)*spread,start,z+Math.sin(a2)*spread],
+            [x+Math.cos(b2)*spread*.86,start+treeH*.04,z+Math.sin(b2)*spread*.86],
+            [x+Math.cos(a2+.1)*radius*.26,Math.max(twigY,topY),
+              z+Math.sin(a2+.1)*radius*.26],
+            green);
+          stats.branchlets++;
+        }
       }
     }
     // Irregular understorey tufts, not repeated billboard trees. Vary by
