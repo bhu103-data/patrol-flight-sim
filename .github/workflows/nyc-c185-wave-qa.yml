@@ -1,0 +1,44 @@
+name: NYC C185 water wave and fixed camera QA
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'tests/floatplane-wave-pose.test.mjs'
+      - 'tools/aircraft/nyc-ocean-wave-qa.mjs'
+      - '.github/workflows/nyc-c185-wave-qa.yml'
+permissions:
+  contents: read
+jobs:
+  nyc-c185-water:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Local flight/float regression
+        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs
+      - name: Install software WebGL2 browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve PATROL
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 > /tmp/patrol-wave.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8766/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: NYC same-camera WebGL2 frames and RAF pacing
+        run: node tools/aircraft/nyc-ocean-wave-qa.mjs
+      - name: Preserve screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-c185-water-wave-qa
+          path: artifacts/nyc-ocean-wave/
+          if-no-files-found: ignore
+          retention-days: 14
