@@ -1,0 +1,78 @@
+name: Bake US Cessna 185 floatplane in Blender
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/blender/cessna185_floatplane.py'
+      - 'assets/aircraft/floatplane-glb.js'
+      - '.github/workflows/cessna185-floatplane-blender.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cessna185-blender-bake
+  cancel-in-progress: false
+
+jobs:
+  blender-floatplane:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install authenticated Blender archive with SHA256 verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE=blender-5.2.1-linux-x64.tar.xz
+          SOURCE=https://download.blender.org/release/Blender5.2
+          curl -fL --retry 3 --connect-timeout 20 --max-time 420 -o "$PACKAGE" "$SOURCE/$PACKAGE"
+          curl -fL --retry 3 --connect-timeout 20 --max-time 45 -o blender.sha256 "$SOURCE/blender-5.2.1.sha256"
+          grep -F "$PACKAGE" blender.sha256 | sha256sum --check
+          tar -xf "$PACKAGE"
+      - name: Generate metric-scale amphibious scene asset with Blender
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./blender-5.2.1-linux-x64/blender -b --python-exit-code 1 \
+            --python tools/blender/cessna185_floatplane.py -- \
+            --output assets/aircraft/cessna185-floats.glb
+          test -s assets/aircraft/cessna185-floats.glb
+          test "$(stat -c%s assets/aircraft/cessna185-floats.glb)" -lt 2000000
+      - name: Validate triangles and physical dimensions
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const src=readFileSync('assets/aircraft/floatplane-glb.js','utf8');
+          const {decodeFloatplaneGLB}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+          const raw=readFileSync('assets/aircraft/cessna185-floats.glb');
+          const buffer=raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength);
+          let count=0;
+          const details=decodeFloatplaneGLB(buffer,()=>{count++});
+          if(count!==details.triangles)throw new Error('Triangle count mismatch');
+          console.log('Metric Blender aircraft:',details);
+          NODE
+      - name: Attach Blender-generated asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: cessna185-floatplane-blender-glb
+          path: assets/aircraft/cessna185-floats.glb
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish small Blender GLB to game assets on main
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/aircraft/cessna185-floats.glb
+          if ! git diff --cached --quiet; then
+            git commit -m "build(aircraft): publish Blender-baked Cessna 185 floatplane"
+            git push origin HEAD:main
+          fi
