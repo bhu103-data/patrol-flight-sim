@@ -5,6 +5,9 @@ on:
   push:
     paths:
       - '.github/workflows/chongqing-blender-export.yml'
+      - 'tools/blender/chongqing_scenario_author.py'
+      - 'tools/blender/chongqing-material-inputs.json'
+      - 'tools/blender/prepare_chongqing_cc0.py'
 
 permissions:
   contents: read
