@@ -224,6 +224,47 @@ export function createChongqingPBR(THREE){
   const roofMat=new THREE.MeshStandardMaterial({
     color:0xddd6cc,map:tileTexture,bumpMap:tileTexture,bumpScale:.09,roughness:.83,metalness:0
   });
+  // Directly use verified CC0 photoscanned materials from Poly Haven.
+  // They are optional progressive upgrades: the local canvases are always available.
+  // These assets are CC0, so no in-game attribution banner is required.
+  // Keep third-party provenance in CHONGQING_LICENSES.md for auditability.
+  const fallbackWood=makeAtlas('wood');
+  const woodMat=new THREE.MeshStandardMaterial({
+    color:0xb9a99a,map:fallbackWood,bumpMap:fallbackWood,bumpScale:.025,
+    roughness:.82,metalness:0
+  });
+  const carvedWoodMat=new THREE.MeshStandardMaterial({
+    color:0xd0b9a0,map:fallbackWood,bumpMap:fallbackWood,bumpScale:.027,
+    roughness:.75,metalness:0
+  });
+  const cc0Images=[
+    {
+      url:'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks/wood_planks_diff_1k.jpg',
+      materials:[woodMat,carvedWoodMat],repeat:[1.4,2.0],bumpScale:.022
+    },
+    {
+      url:'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clay_roof_tiles_03/clay_roof_tiles_03_diff_1k.jpg',
+      materials:[roofMat],repeat:[2.5,2.5],bumpScale:.05
+    }
+  ];
+  const cc0Status={attempted:0,loaded:0,failed:0};
+  for(const item of cc0Images){
+    cc0Status.attempted++;
+    loader.load(item.url,loaded=>{
+      loaded.wrapS=loaded.wrapT=THREE.RepeatWrapping;
+      loaded.colorSpace=THREE.SRGBColorSpace;
+      loaded.anisotropy=anisotropy;
+      loaded.repeat.set(...item.repeat);
+      for(const mat of item.materials){
+        mat.map=loaded;mat.bumpMap=loaded;mat.bumpScale=item.bumpScale;
+        mat.needsUpdate=true;
+      }
+      cc0Status.loaded++;
+    },undefined,()=>{
+      cc0Status.failed++;
+      console.warn('CC0 surface unavailable; retaining embedded procedural surface.');
+    });
+  }
   const carvedStoneMat=new THREE.MeshStandardMaterial({
     color:0xb9afa3,map:cutStoneTexture,bumpMap:cutStoneTexture,bumpScale:.08,roughness:.94,metalness:0
   });
@@ -237,6 +278,7 @@ export function createChongqingPBR(THREE){
   return {
     concrete:concreteMat,stone:stoneMat,asphalt:asphaltMat,roof:roofMat,
     cutStone:carvedStoneMat,glass:glassMat,window:nightWindowMat,
-    curtainWall:curtainWallMat,glassPane:glassPaneMat,hillside:hillsideMat
+    curtainWall:curtainWallMat,glassPane:glassPaneMat,hillside:hillsideMat,
+    wood:woodMat,carvedWood:carvedWoodMat,cc0Status
   };
 }
