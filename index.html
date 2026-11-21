@@ -4076,7 +4076,10 @@ const CENTRAL_PARK_SITES=[
   // Dynamically imported only for Manhattan, never added to other maps.
   let nycRealismAssets=null,nycRealismLoading=false;
   function prepareNycRealismAssets(){
-    if(!selectedMap.city || graphicsCompat || directRendering ||
+    // Direct drawing is only a compositor fallback: native WebGL2 and
+    // textured GLB landmarks still work without the offscreen framebuffer.
+    // Keep the shader-compatibility and inactive-map guards unchanged.
+    if(!selectedMap.city || graphicsCompat ||
        nycRealismAssets || nycRealismLoading)return;
     nycRealismLoading=true;
     import('./assets/nyc/nyc-realism.js')
