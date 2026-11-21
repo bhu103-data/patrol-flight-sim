@@ -1344,13 +1344,17 @@ function frame(){
   // Baseline and imported candidate share the same collision-clear anchor.
   if((assetReviewPose==='street'||assetReviewPose==='air')&&streetBuild.reviewLampSlot){
     const a=streetBuild.reviewLampSlot;
-    if(assetReviewPose==='street'){
-      camera.position.set(a.x-30,a.y+3.4,a.z+26);
-      camera.lookAt(a.x,a.y+5.4,a.z);
-    }else{
-      camera.position.set(a.x-115,a.y+38,a.z+92);
-      camera.lookAt(a.x,a.y+5,a.z);
-    }
+    // Previous QA placement was BELOW terrain at (a.x-30,a.z+26):
+    // screenshots mostly showed a black hill underside, despite passing WebGL.
+    // Approach from the roadway (river-facing side of the lamp), above
+    // sampled local terrain, with enough clearance to see the full luminaire.
+    const street=assetReviewPose==='street';
+    const eyeX=a.x-(street?18:30);
+    const eyeZ=a.z-(street?12:27);
+    const eyeY=street?Math.max(ground(eyeX,eyeZ)+5,a.y+3):
+      Math.max(ground(eyeX,eyeZ)+25,a.y+24);
+    camera.position.set(eyeX,eyeY,eyeZ);
+    camera.lookAt(a.x,a.y+(street?6:4),a.z);
     camera.updateMatrixWorld(true);
   }
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
@@ -1400,6 +1404,12 @@ getAssetReviewState:()=>({
   drawCalls:renderer.info.render.calls,
   triangles:renderer.info.render.triangles,
   pixelRatio:renderRatio,qualityMode,
+  cameraPosition:camera.position.toArray(),
+  lampScreenProjection:streetBuild.reviewLampSlot?[
+    new THREE.Vector3(streetBuild.reviewLampSlot.x,
+      streetBuild.reviewLampSlot.y+4.1,
+      streetBuild.reviewLampSlot.z).project(camera).toArray()
+  ][0]:null,
   candidateBytes:lampReviewController?.bytes??0,
   decodeMs:lampReviewController?.decodeMs??null
 })};
