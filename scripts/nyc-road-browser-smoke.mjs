@@ -39,12 +39,17 @@ function screenshotPixels(bytes){
 // element.screenshot() includes those overlays unless we hide them.
 // The temporary class preserves canvas visibility and is always removed,
 // so scenic view controls still work for subsequent camera selections.
-await page.addStyleTag({content:
- 'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
- 'body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'});
 const screenshots=[],pixels={},captureTimings={};
-let pendingShot=null;
+let pendingShot=null,hudStyleInstalled=false;
 async function capture(name){
+ // Navigation replaces document styles, so install the UI-hiding style
+ // lazily on the loaded game page, not on Playwright's blank startup tab.
+ if(!hudStyleInstalled){
+  await page.addStyleTag({content:
+   'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
+   'body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'});
+  hudStyleInstalled=true;
+ }
  // Photograph WebGL color alone. The menu/HUD cannot make a blank scene
  // appear detailed. Software SwiftShader gets a bounded 75-second budget.
  const started=Date.now();
