@@ -120,6 +120,61 @@ export function createChongqingPBR(THREE){
   const tileTexture=makeAtlas('tile');
   const cutStoneTexture=makeAtlas('stone');
   const windowTexture=makeAtlas('window');
+  // Glazed curtain-wall atlas with true floor-height rhythm and nonuniform interiors.
+  // 12 floors per atlas; sail-geometry UVs use ~7.5 game units per floor.
+  function makeCurtainWallAtlas() {
+    const canvas=document.createElement('canvas');canvas.width=768;canvas.height=768;
+    const ctx=canvas.getContext('2d');
+    let seed=718291;
+    const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+    const columns=10,rows=12,w=canvas.width/columns,h=canvas.height/rows;
+    ctx.fillStyle='#202d36';ctx.fillRect(0,0,canvas.width,canvas.height);
+    for(let row=0;row<rows;row++)for(let col=0;col<columns;col++){
+      const x=col*w,y=row*h,occupied=rand()>.67;
+      const hue=occupied?(rand()>.2?'#a39b85':'#8dacae'):(rand()>.4?'#314652':'#263a48');
+      const gradient=ctx.createLinearGradient(x+4,y+3,x+w-4,y+h-4);
+      gradient.addColorStop(0,'#17232d');
+      gradient.addColorStop(.27,hue);
+      gradient.addColorStop(.62,occupied?'#747b80':'#45606e');
+      gradient.addColorStop(1,'#172632');
+      ctx.fillStyle=gradient;ctx.fillRect(x+6,y+5,w-12,h-11);
+      // Individual floor-to-ceiling structural modules, small spandrels and reveals.
+      ctx.fillStyle='#26333c';ctx.fillRect(x,y,w,5);
+      ctx.fillStyle='#677a84';ctx.fillRect(x,y,3,h);
+      ctx.fillStyle='#192630';ctx.fillRect(x+w-5,y,5,h);
+      ctx.fillStyle='rgba(193,214,221,.15)';ctx.fillRect(x+10,y+9,2,h-19);
+      ctx.fillStyle='rgba(11,19,29,.33)';ctx.fillRect(x+w*.58,y+5,3,h-12);
+      ctx.fillStyle='rgba(220,234,232,.11)';ctx.fillRect(x+15,y+11,w*.23,3);
+      if(occupied){
+        ctx.fillStyle='rgba(251,211,148,.14)';ctx.fillRect(x+8,y+h*.73,w-16,h*.13);
+        if(rand()>.48){ctx.fillStyle='rgba(24,26,34,.42)';ctx.fillRect(x+w*.38,y+h*.55,w*.25,h*.32);}
+      }
+    }
+    // Broken horizontal reflected sky streaks keep the glazing from reading as a checkerboard.
+    for(let n=0;n<380;n++){
+      const x=rand()*768,y=rand()*768;
+      ctx.fillStyle='rgba(185,213,225,'+(0.035+rand()*.04)+')';
+      ctx.fillRect(x,y,4+rand()*56,.7+rand()*1.2);
+    }
+    const texture=new THREE.CanvasTexture(canvas);
+    texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+    texture.anisotropy=anisotropy;
+    texture.colorSpace=THREE.SRGBColorSpace;
+    texture.generateMipmaps=true;
+    return texture;
+  }
+  const curtainWallTexture=makeCurtainWallAtlas();
+  const curtainWallMat=new THREE.MeshPhysicalMaterial({
+    map:curtainWallTexture,color:0xcad6dc,metalness:.28,roughness:.23,
+    clearcoat:.42,clearcoatRoughness:.28,emissive:0x11191f,emissiveIntensity:.2,
+    side:THREE.DoubleSide
+  });
+  // Instanced window panes keep individually colored occupancy, not a whole atlas
+  // of microscopic repeated windows on every single 2m-wide pane.
+  const glassPaneMat=new THREE.MeshStandardMaterial({
+    color:0x89a9b2,metalness:.39,roughness:.26,emissive:0x314a4f,
+    emissiveIntensity:.36,side:THREE.DoubleSide
+  });
   const roofMat=new THREE.MeshStandardMaterial({
     color:0xddd6cc,map:tileTexture,bumpMap:tileTexture,bumpScale:.09,roughness:.83,metalness:0
   });
@@ -135,6 +190,7 @@ export function createChongqingPBR(THREE){
   });
   return {
     concrete:concreteMat,stone:stoneMat,asphalt:asphaltMat,roof:roofMat,
-    cutStone:carvedStoneMat,glass:glassMat,window:nightWindowMat
+    cutStone:carvedStoneMat,glass:glassMat,window:nightWindowMat,
+    curtainWall:curtainWallMat,glassPane:glassPaneMat
   };
 }
