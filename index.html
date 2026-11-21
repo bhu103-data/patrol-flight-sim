@@ -5849,7 +5849,7 @@ const CENTRAL_PARK_SITES=[
     ];
     const [stone,glass]=palettes[Math.floor(tone*palettes.length)%palettes.length];
     const wallTint=isGlass?glass:stone,frameTint=isGlass?[.35,.42,.45]:[.48,.44,.39];
-    let walls=0,windows=0,roof=0;
+    let walls=0,windows=0,roof=0,streetEntrances=0,corniceBands=0;
     const face=(a,b,c,d,color,surface=0)=>{
       if(sign>0)addQuad(d,c,b,a,color,surface);
       else addQuad(a,b,c,d,color,surface);
@@ -5870,6 +5870,12 @@ const CENTRAL_PARK_SITES=[
       const detailedHarborFront=detailBand===3 && y<20 &&
         x>-110 && x<-60 && z>-500 && z<-400 && h>14 &&
         normal[1]<-.15 && length>=3.6 && i%2===0;
+      // PATROL_OTI_DOWNTOWN_ENVELOPE_V2 — retain surveyed OTI building rings
+      // and roof elevations; only small authored architectural surface relief.
+      // The near-view corridor is clipped to the original 100-footprint pilot,
+      // preserving game road/collision indices and all existing landmarks.
+      const downtownRelief=detailBand===3 && y<20 &&
+        x>-155&&x<-40&&z>-515&&z<-400 && h>=8 && !destroyed;
       const at=(t,yy,offset)=>[
         a[0]+dx*t+normal[0]*offset,yy,
         a[1]+dz*t+normal[1]*offset
@@ -5912,6 +5918,39 @@ const CENTRAL_PARK_SITES=[
           }
           windows++;
         }
+      }
+      // Only existing building frontage, never synthetic replacement boxes.
+      // Ground-level entrance/glazing is *authored* and not an OTI surveyed
+      // tenant, opening, or historic architectural detail. Four-sided recess
+      // uses the same 9/10 material tags already in the native WebGL city mesh.
+      if(downtownRelief && streetEntrances<2 && length>=3.5 &&
+          (normal[1]<-.20 || normal[0]<-.30)){
+        const u=.31,v=.69,base=y+.24,top=Math.min(roofY-.48,y+2.42);
+        if(top>base+.88){
+          const trim=isGlass?[.35,.40,.41]:[.45,.43,.39];
+          const dark=[.11,.16,.20],lintel=[.58,.56,.52];
+          face(at(u,base,.070),at(v,base,.070),
+            at(v,top,.070),at(u,top,.070),dark,9);
+          face(at(u+.015,base+.12,.079),at(v-.015,base+.12,.079),
+            at(v-.015,top-.15,.079),at(u+.015,top-.15,.079),glass,10);
+          for(const [a0,b0] of [[u-.018,u],[v,v+.018]])
+            face(at(a0,base-.08,.13),at(b0,base-.08,.13),
+              at(b0,top+.08,.13),at(a0,top+.08,.13),trim,9);
+          face(at(u-.020,top-.04,.133),at(v+.020,top-.04,.133),
+            at(v+.020,top+.09,.133),at(u-.020,top+.09,.133),lintel,9);
+          const mid=(u+v)*.5;
+          face(at(mid-.008,base+.12,.138),at(mid+.008,base+.12,.138),
+            at(mid+.008,top-.14,.138),at(mid-.008,top-.14,.138),trim,9);
+          streetEntrances++;
+        }
+      }
+      // Cornice lies *below* source HEIGHT_ROOF and follows polygon edges:
+      // no floating rooftop cuboid, no change to roof clipping/collisions.
+      if(downtownRelief && corniceBands<8 && length>=2.2 && i%2===0){
+        const lower=roofY-.30,upper=roofY-.19;
+        face(at(.035,lower,.053),at(.965,lower,.053),
+          at(.965,upper,.053),at(.035,upper,.053),frameTint,9);
+        corniceBands++;
       }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
       const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
@@ -5998,7 +6037,8 @@ const CENTRAL_PARK_SITES=[
       }
       if(!clipped)break;
     }
-    return {walls,windows,roof,expectedRoof:outline.length-2};
+    return {walls,windows,roof,streetEntrances,corniceBands,
+      expectedRoof:outline.length-2};
   }
 
   function buildCityBuildings(parcels,local=false) {
