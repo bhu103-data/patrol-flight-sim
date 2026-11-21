@@ -76,6 +76,7 @@ test('curved pitched roof has eleven levels times three bays and a non-flat surf
   const roof=meshes.find(m=>m instanceof InstancedMesh&&m.geometry instanceof Geometry&&m.geometry.attributes.position);
   assert.ok(roof,'custom roof mesh exists');
   assert.equal(roof.count,33);
+  assert.equal(roof.material,pbr.roof,'curved roofs retain live PBR material for async texture update');
   const values=roof.geometry.attributes.position.array;
   const y=[];for(let i=1;i<values.length;i+=3)y.push(values[i]);
   assert.ok(Math.max(...y)-Math.min(...y)>.6,'real roof curvature present');
