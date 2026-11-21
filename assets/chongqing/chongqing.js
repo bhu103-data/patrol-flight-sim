@@ -9,6 +9,7 @@ import { buildChongqingWetStreets } from './wetstreets.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
+import { loadOptionalHongyadong } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -524,6 +525,22 @@ const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter })
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
+// A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
+// The old collision boxes and all other scenic geometry remain intact.
+const previewScenario=new URLSearchParams(location.search).get('scenario')==='hongyadong';
+void loadOptionalHongyadong({THREE,scene,detailBuild,search:location.search})
+  .then(replacement=>{
+    document.documentElement.dataset.scenarioHongyadong=replacement.active?'ready':'off';
+    if(replacement.active){
+      console.info('PATROL Scenario Hongyadong loaded',replacement.audit,replacement.bounds);
+      if(previewScenario)message('已加载 Blender 洪崖洞模型预览；保持原有碰撞',4);
+    }
+  })
+  .catch(error=>{
+    document.documentElement.dataset.scenarioHongyadong='fallback';
+    console.warn('Scenario Hongyadong unavailable; preserving original scene:',error);
+    if(previewScenario)message('Blender 模型不可用，已保留原本洪崖洞场景',4);
+  });
 // Raffles shopping podium is an obstacle, in addition to its individual towers.
 
 
