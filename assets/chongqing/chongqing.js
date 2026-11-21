@@ -685,7 +685,11 @@ qualityBtn.addEventListener('click',()=>{
 applyQuality();
 // Review is opt-in, same-origin and hash-locked; regular production gameplay
 // neither loads nor fetches a third-party lamp.
-if(lampReviewMode==='grab3d'){
+if(lampReviewMode==='grab3d'&&qualityMode==='low'){
+  // Save memory and decode time on battery mode: no optional GLB is fetched.
+  document.documentElement.dataset.streetlampReview='low-fallback';
+}
+if(lampReviewMode==='grab3d'&&qualityMode!=='low'){
   import('./street-lamp-preview.js')
     .then(({loadAuditedLampPreview})=>loadAuditedLampPreview({
       THREE,scene,streetBuild,search:location.search
