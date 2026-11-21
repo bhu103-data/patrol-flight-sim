@@ -202,6 +202,7 @@ def run(output):
     bpy.ops.wm.save_as_mainfile(filepath=str(editable),compress=True)
     if not editable.is_file() or editable.stat().st_size>8_000_000:
         raise RuntimeError("Editable Blender source is empty or exceeds 8 MB")
+    print(f"PATROL editable C185 Blender scene: {editable.stat().st_size} bytes")
     bpy.ops.export_scene.gltf(filepath=str(out),export_format="GLB",
                               export_yup=True,export_apply=True)
     if out.stat().st_size>2_000_000:
