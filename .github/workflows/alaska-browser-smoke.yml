@@ -1,6 +1,13 @@
 name: Alaska browser WebGL scene smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/alaska/smoke_browser.mjs'
+      - 'tests/alaska-village-realism.test.mjs'
+      - '.github/workflows/alaska-browser-smoke.yml'
+      - 'assets/alaska/**'
   pull_request:
     paths:
       - 'index.html'
