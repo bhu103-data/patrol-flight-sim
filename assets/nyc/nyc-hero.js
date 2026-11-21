@@ -128,7 +128,140 @@ export function buildNycHeroScenery({addQuad,box,beam,waterY,groundY,spawn,liber
     box(tx,starTop-.54,tz,.42,.84,.41,mortar);
     box(tx,starTop+.09,tz,.55,.08,.53,stone);
   }
-  return {starPoints:11,walkwayPanels:44,pierPanels:8,shorelineFixtures:11};
+  // PATROL_NYC_LIBERTY_WEST_DOCK_V8 — visible geometry only, not navigable
+  // ferry gameplay. NPS records today's ferry landing on Liberty Island's
+  // west side; keep the existing spawn-facing jetty as a gameplay approach.
+  // Ref: https://www.nps.gov/articles/000/stli-liberty-island-650003.htm
+  // These are artistic game coordinates and NOT a surveyed shoreline.
+  const mortarJoint=[.33,.34,.32], graniteFaces=[
+    [.54,.52,.48],[.57,.56,.52],[.48,.49,.46],
+    [.60,.58,.53],[.51,.52,.49],[.59,.56,.51]
+  ],tidalStain=[.31,.38,.36];
+  let masonryPanels=0;
+  const wallBottom=waterY+.17, wallHeight=starTop-.12-wallBottom;
+  if(wallHeight>.35){
+    for(let edge=0;edge<points.length;edge++){
+      const [ax,az]=points[edge],[bx,bz]=points[(edge+1)%points.length];
+      const midx=(ax+bx)*.5-x0,midz=(az+bz)*.5-z0;
+      const inverse=1/(Math.hypot(midx,midz)||1);
+      const ox=midx*inverse*.043,oz=midz*inverse*.043;
+      const along=t=>[ax+(bx-ax)*t+ox,az+(bz-az)*t+oz];
+      // Thin waterline deposit reads as a separate aged stone material.
+      const [w0x,w0z]=along(0),[w1x,w1z]=along(1);
+      const tideTop=Math.min(starTop-.09,waterY+.49);
+      if(tideTop>wallBottom)
+        addQuad([w0x,wallBottom,w0z],[w1x,wallBottom,w1z],
+          [w1x,tideTop,w1z],[w0x,tideTop,w0z],tidalStain);
+      // Staggered ashlar blocks have shallow mortar gaps and slight
+      // per-block tone variation; no additional textures or draw calls.
+      for(let row=0;row<5;row++){
+        const y0=wallBottom+(row/5)*wallHeight+.022;
+        const y1=wallBottom+((row+1)/5)*wallHeight-.026;
+        if(y1<=y0)continue;
+        for(let block=0;block<6;block++){
+          const stagger=row%2?-.10:0;
+          const a=Math.max(0,block/5+stagger+.004);
+          const b=Math.min(1,(block+1)/5+stagger-.004);
+          if(b<=a)continue;
+          const [p0x,p0z]=along(a),[p1x,p1z]=along(b);
+          const color=graniteFaces[(edge*13+row*7+block*11)%graniteFaces.length];
+          addQuad([p0x,y0,p0z],[p1x,y0,p1z],
+            [p1x,y1,p1z],[p0x,y1,p0z],color);
+          masonryPanels++;
+        }
+      }
+      // The original solid wall remains behind these mortar gaps.
+      if(edge%2===0){
+        const [jx,jz]=along(.5);
+        beam([jx,wallBottom+.04,jz],[jx,starTop-.10,jz],.022,mortarJoint);
+      }
+    }
+  }
+
+  // West-side ferry arrival: slightly sloped visitor gangway, timber
+  // cross-planks, steel railings and paired mooring dolphins.
+  const westDeckY=waterY+1.32;
+  const westZ=z0+4.6;
+  const wp=(along,side,y)=>[x0-along,y,westZ+side];
+  const rampStartY=Math.max(waterY+.48,Math.min(ground+.07,westDeckY+.90));
+  for(let i=0;i<4;i++){
+    const a=19.6+i*1.35,b=a+1.35;
+    const ya=rampStartY+(westDeckY-rampStartY)*i/4;
+    const yb=rampStartY+(westDeckY-rampStartY)*(i+1)/4;
+    addQuad(wp(a,-2.34,ya),wp(b,-2.34,yb),
+      wp(b,2.34,yb),wp(a,2.34,ya),i%2?timber:limestone);
+    for(const side of [-1,1]){
+      beam(wp(a,side*2.22,ya+.77),wp(b,side*2.22,yb+.77),.054,iron);
+    }
+  }
+  let westFerryDeckPanels=0;
+  for(let panel=0;panel<18;panel++){
+    const a=25+panel*1.44,b=a+1.44;
+    const tone=panel%5===0?[.43,.36,.28]:panel%3===0?[.37,.32,.26]:timber;
+    addQuad(wp(a,-2.62,westDeckY),wp(b,-2.62,westDeckY),
+      wp(b,2.62,westDeckY),wp(a,2.62,westDeckY),tone);
+    addQuad(wp(a,-2.62,westDeckY-.23),wp(b,-2.62,westDeckY-.23),
+      wp(b,-2.62,westDeckY-.07),wp(a,-2.62,westDeckY-.07),iron);
+    addQuad(wp(b,2.62,westDeckY-.23),wp(a,2.62,westDeckY-.23),
+      wp(a,2.62,westDeckY-.07),wp(b,2.62,westDeckY-.07),iron);
+    // Visible transverse board seams on the dock's surface.
+    addQuad(wp(b-.036,-2.61,westDeckY+.007),
+      wp(b+.036,-2.61,westDeckY+.007),
+      wp(b+.036,2.61,westDeckY+.007),
+      wp(b-.036,2.61,westDeckY+.007),mortarJoint);
+    if(panel%3===0){
+      for(const side of [-1,1]){
+        const p=wp(a,side*2.49,westDeckY);
+        beam(wp(a,side*2.49,waterY-.55),wp(a,side*2.49,westDeckY+1.03),.074,iron);
+        box(p[0],p[1]+1.02,p[2],.21,.12,.21,coping);
+      }
+    }
+    westFerryDeckPanels++;
+  }
+  // Parallel handrails do not overlap the existing spawn-facing walkway.
+  const westEnd=25+18*1.44;
+  for(const side of [-1,1]){
+    for(const lift of [.48,.96]){
+      beam(wp(25,side*2.49,westDeckY+lift),
+        wp(westEnd,side*2.49,westDeckY+lift),.055,iron);
+    }
+    // Thick rubber bumper / mooring stanchion geometry at dock end.
+    for(const along of [westEnd-2.4,westEnd-.4]){
+      const [x,y,z]=wp(along,side*2.88,waterY+.20);
+      box(x,y,z,.43,1.90,.39,[.16,.18,.19]);
+      box(x,y+1.02,z,.58,.16,.55,iron);
+    }
+  }
+  for(const along of [westEnd-3.2,westEnd-1.25]){
+    const [x,y,z]=wp(along,0,waterY+.16);
+    beam([x-.55,waterY-.65,z-.72],[x-.55,westDeckY+.25,z-.72],.18,stone);
+    beam([x+.55,waterY-.65,z+.72],[x+.55,westDeckY+.25,z+.72],.18,stone);
+    box(x,westDeckY+.18,z,2.30,.25,1.95,limestone);
+  }
+  // Small low-profile deck shelter with angled roof and open steel posts.
+  const canopyAt=32.2;
+  for(const along of [canopyAt-2.2,canopyAt+2.2])
+    for(const side of [-1,1])
+      beam(wp(along,side*1.94,westDeckY),
+        wp(along,side*1.94,westDeckY+3.04),.092,iron);
+  addQuad(wp(canopyAt-2.75,-2.38,westDeckY+3.14),
+    wp(canopyAt+2.75,-2.38,westDeckY+3.14),
+    wp(canopyAt+2.75,2.38,westDeckY+2.90),
+    wp(canopyAt-2.75,2.38,westDeckY+2.90),[.41,.45,.46]);
+  for(const side of [-1,1]){
+    beam(wp(canopyAt-2.75,side*2.38,westDeckY+3.03),
+      wp(canopyAt+2.75,side*2.38,westDeckY+3.03),.087,coping);
+  }
+  // Paired safety markers use geometry-only amber caps, not real advertising.
+  for(const along of [27.1,westEnd-1.2]){
+    for(const side of [-1,1]){
+      const [x,y,z]=wp(along,side*2.08,westDeckY+.45);
+      box(x,y,z,.19,.90,.19,iron);
+      box(x,y+.48,z,.27,.17,.26,[.85,.59,.28]);
+    }
+  }
+  return {starPoints:11,walkwayPanels:44,pierPanels:8,shorelineFixtures:11,
+    masonryPanels,westFerryDeckPanels};
 }
 
 
