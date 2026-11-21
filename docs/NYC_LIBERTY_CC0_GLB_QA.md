@@ -45,6 +45,23 @@ CLI equivalents (after dependencies / official download):
 - Browser software animation-frame averages from run #33: fallback **525.6 ms**, candidate **740.1 ms** (37 frames). These are SwiftShader software timings and NOT Windows GPU FPS. Hardware performance may be much better or worse; hardware validation remains outstanding.
 - The original `assets/nyc/statue-of-liberty.glb` and `?nycModels=legacy` rollback path remain unchanged. The QA branch may include the candidate binary for reproducible review, but production `assets/nyc/scenario-manifest.json` Liberty `enabled=false` is a hard gate.
 
+## Windows Chrome native GPU verification (opt-in, not run by Actions)
+After checkout of the QA branch with `assets/nyc/scenario/liberty.glb` staged, install Google Chrome, Node.js and Python. Use two PowerShell terminals:
+
+```powershell
+# Terminal 1
+python -m http.server 8765
+```
+```powershell
+# Terminal 2
+npm install --no-save --no-package-lock --ignore-scripts playwright pngjs@7.0.0
+$env:PATROL_LIBERTY_GPU_MODE = 'native'
+$env:PATROL_BASE_URL = 'http://127.0.0.1:8765'
+node scripts/nyc-liberty-static-webgl.mjs
+```
+
+Native mode opens installed Google Chrome in a visible window. The result `artifacts/nyc-liberty/webgl-review.json` records the unmasked renderer string, three explicit image comparisons, real GL errors, and the two sampled average frame durations. It refuses to call the hardware test a pass if the reported renderer is SwiftShader, llvmpipe, lavapipe, software, or Microsoft Basic Render. This is a **reproducible Windows QA test**, not a claim of having performed the Windows run in cloud CI.
+
 ## Release gate
 Demand all source, licensed GLB, <=8 MiB / <=25k triangles / single <=4 MiB image, and real WebGL2 screenshot results, plus HUMAN REVIEW of:
 - Torch, crown, tablet and robe silhouette and front direction toward harbor.
