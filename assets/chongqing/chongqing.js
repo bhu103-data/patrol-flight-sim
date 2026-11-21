@@ -5,6 +5,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { buildChongqingDetails } from './details.js';
 import { buildChongqingLandmarks } from './landmarks.js';
 import { buildChongqingStreetlife } from './streetlife.js';
+import { buildChongqingWetStreets } from './wetstreets.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
@@ -520,6 +521,7 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter });
+const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter });
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 // Raffles shopping podium is an obstacle, in addition to its individual towers.
@@ -546,6 +548,7 @@ function applyQuality(){
   detailBuild.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
 }
@@ -972,6 +975,7 @@ function frame(){
   time+=dt;
   waterUniforms.uTime.value=time;
   streetBuild.update(dt,state.pos);
+  wetStreetBuild.update(dt);
   // Move the directional shadow camera with the avatar, limited to ~290m square.
   // Coarse world-space snapping keeps the shadow image from crawling on wet stone.
   moon.target.position.set(
@@ -1008,7 +1012,8 @@ function frame(){
         '\nTriangles '+stats.triangles.toLocaleString()+
         '\nPixel ratio '+renderRatio.toFixed(2)+' / '+qualityMode+
         '\nIndexed buildings '+obstacleIndex.obstacleCount+
-        '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps';
+        '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
+        '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips;
     }
   }
 }
