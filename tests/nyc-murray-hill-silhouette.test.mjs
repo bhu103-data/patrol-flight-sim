@@ -21,7 +21,8 @@ test('never accepts a collision-enabled snapshot',()=>{
  assert.throws(()=>murrayHillSilhouettes({schema:'patrol-nyc-murray-hill-visual-only-v1',viewOnly:true,collision:true,buildings:[]},()=>{}));
 });
 test('visual mesh generates true walls, roof triangles, bounded window details and inset roof',async()=>{
- const snapshotData=await snapshot(async()=>({ok:true,json:async()=>({features:[feature(20,300)]})}));
+ const wide=[[-73.98,40.75],[-73.9796,40.75],[-73.9796,40.75025],[-73.98,40.75025],[-73.98,40.75]];
+ const snapshotData=await snapshot(async()=>({ok:true,json:async()=>({features:[feature(20,300,wide)]})}));
  const quads=[],tris=[];
  const stats=buildMurrayHillVisualMesh(snapshotData,{addQuad:(...args)=>quads.push(args),addTri:(...args)=>tris.push(args)});
  assert.equal(stats.buildings,1);
