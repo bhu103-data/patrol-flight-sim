@@ -147,6 +147,10 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
 
   // Hongyadong: distinct eleven-level terraced profile with railings, bracket sets, glazed stalls,
   // suspended lanterns, timber posts and pitched tiled roofs.
+  // Preserve exact instance ranges so an approved GLB replaces ONLY Hongyadong.
+  // Shared pools also contain the bridge, sidewalks and other city props.
+  const hongStart=Object.fromEntries([...pools].map(([key,p])=>[key,p.count]));
+  const hongRoofStart=curvedRoofs.count;
   const hongX=155;
   for(let level=0;level<11;level++){
     const z=112+level*8.3, y=13+level*10.25, w=128-level*4.1;
@@ -253,6 +257,9 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     put('stone',80,ground(80,z)+1,z,8,2.0,6);
     put('amber',83.9,ground(80,z)+2.25,z,0.22,.25,4);
   }
+
+  const hongEnd=Object.fromEntries([...pools].map(([key,p])=>[key,p.count]));
+  const hongRoofEnd=curvedRoofs.count;
 
   // Geometric connection to the steep Yuzhong hillside: the upper city actually
   // meets the 11th-floor entrance, with visible masonry terraces below the road.
@@ -624,8 +631,42 @@ put('paving',sx,sy+.36,sz+31.3,72,.7,14);
   }
   curvedRoofs.instanceMatrix.needsUpdate=true;
   if(curvedRoofs.count>0)curvedRoofs.computeBoundingSphere();
+  // Set this only AFTER the replacement GLB has been validated and added.
+  // Preserve matrix data for a reversible, instance-range-only facade swap.
+  let hongReplaced=false;
+  const hongOriginalMatrices=new Map();
+  function setHongyadongReplacement(enabled){
+    const next=enabled===true;
+    if(next===hongReplaced)return;
+    const targets=[...pools].map(([name,p])=>({
+      name,mesh:p.mesh,start:hongStart[name],end:hongEnd[name]
+    }));
+    targets.push({name:'curvedRoof',mesh:curvedRoofs,start:hongRoofStart,end:hongRoofEnd});
+    // Preflight all arrays before modifying any instance, to avoid a half-hidden city.
+    for(const t of targets){
+      if(t.end===t.start)continue;
+      const data=t.mesh.instanceMatrix?.array;
+      if(!data || data.length < t.end*16)throw Error('Instance matrix data missing: '+t.name);
+      if(next&&!hongOriginalMatrices.has(t.name)){
+        hongOriginalMatrices.set(t.name,data.slice(t.start*16,t.end*16));
+      }
+      if(!next&&!hongOriginalMatrices.has(t.name))throw Error('Cannot restore missing original instance matrices');
+    }
+    const hidden=next?new THREE.Matrix4().makeScale(0,0,0):null;
+    for(const t of targets){
+      if(t.end===t.start)continue;
+      if(next){
+        for(let i=t.start;i<t.end;i++)t.mesh.setMatrixAt(i,hidden);
+      }else{
+        t.mesh.instanceMatrix.array.set(hongOriginalMatrices.get(t.name),t.start*16);
+      }
+      t.mesh.instanceMatrix.needsUpdate=true;
+    }
+    hongReplaced=next;
+  }
   // Toggle purely ornamental layers for battery life; core landmarks stay intact.
   return {
+    setHongyadongReplacement,
     stats:{...Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),curvedRoofs:curvedRoofs.count},
     detailMeshes:pools.size+3,
     setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;pools.get('lattice').mesh.visible=!low;}
