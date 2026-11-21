@@ -322,7 +322,7 @@
     "Not accurate 1:1 scale; current game uses compressed non-georeferenced layout",
     "No Google imagery or Maps tiles are bundled",
     "Photorealistic 3D Tiles would require a licensed live 3D Tiles renderer, attributions, Google key and billing",
-    "Generic building parcel positions are not yet replaced by municipal footprint geometry",
+    "An initial 60-building pilot uses NYC OTI exterior footprint polygons in a bounded Lower Manhattan corridor; other city parcels remain procedural, and all geometry is scaled to fictional PATROL coordinates",
     "Current GLB models are low-poly; higher-detail rights-cleared architectural assets needed"
   ]
 }

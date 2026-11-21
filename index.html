@@ -911,6 +911,41 @@
     }
 
     const cityParcels = new Map();
+    // OTI roof heights are pre-scaled to PATROL's fictional world.
+    // Snapshot loads once per NYC flight; all other maps keep the old path.
+    const officialLots=city&&Array.isArray(city.officialFootprints)
+      ?city.officialFootprints.map(row=>[
+        row[1],row[2],row[3],row[4],row[5],
+        ((row[0]%101)+101)%101/101,false,row[6],row[0]])
+        .filter(lot=>lot[7]?.length>=3 &&
+          cityHeight(lot[0],lot[1])*scale>water+.65):[];
+    const officialBounds=officialLots.reduce((b,lot)=>{
+      b[0]=Math.min(b[0],lot[0]-lot[2]/2);
+      b[1]=Math.min(b[1],lot[1]-lot[3]/2);
+      b[2]=Math.max(b[2],lot[0]+lot[2]/2);
+      b[3]=Math.max(b[3],lot[1]+lot[3]/2);
+      return b;
+    },[Infinity,Infinity,-Infinity,-Infinity]);
+    function inOfficialPolygon(east,north,poly){
+      let inside=false;
+      for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+        const a=poly[i],b=poly[j];
+        if((a[1]>north)!==(b[1]>north) &&
+           east<(b[0]-a[0])*(north-a[1])/(b[1]-a[1])+a[0])
+          inside=!inside;
+      }
+      return inside;
+    }
+    function officialLotAt(east,north){
+      if(east<officialBounds[0]||east>officialBounds[2]||
+         north<officialBounds[1]||north>officialBounds[3])return null;
+      for(const lot of officialLots){
+        if(Math.abs(east-lot[0])<=lot[2]*.5 &&
+           Math.abs(north-lot[1])<=lot[3]*.5 &&
+           inOfficialPolygon(east,north,lot[7]))return lot;
+      }
+      return null;
+    }
     if (city) {
       const gridX = Math.ceil(span / city.blockWidth * 0.65);
       const gridZ = Math.ceil(span / city.blockLength * 0.5);
@@ -930,6 +965,11 @@
         const tone = hash(ix,iz,312);
         const width=city.blockWidth*(0.36+tone*0.28);
         const length=city.blockLength*(0.41+hash(ix,iz,531)*0.26);
+        // Suppress only anonymous parcels physically overlapping the
+        // OTI polygons. Keep other procedural streets and skyline unchanged.
+        if(officialLots.some(lot=>
+          Math.abs(x-lot[0])<(width+lot[2])*.5+1 &&
+          Math.abs(z-lot[1])<(length+lot[3])*.5+1))continue;
         const corners = [[-1,-1],[-1,1],[1,-1],[1,1]];
         if (!corners.every(([i,j])=>Math.abs(cityHeight(x+i*width/2,z+j*length/2)*scale-base)<0.4)) continue;
         // Leave room for the authored road corridors before placing city parcels.
@@ -950,6 +990,8 @@
         if(x+width/2>west&&x-width/2<east&&z+length/2>south&&z-length/2<north)continue;
         cityParcels.set(iz*256+ix,[x,z,width,length,top-base,tone]);
       }
+      for(let i=0;i<officialLots.length;i++)
+        cityParcels.set(-10000000-i,officialLots[i]);
     }
 
     const ground = city ? new Float32Array(N * N) : null;
@@ -972,7 +1014,7 @@
           const base = cityHeight(east,north);
           const ix = Math.floor((east-city.tilt*north-city.offset)/city.blockWidth);
           const iz = Math.floor(north/city.blockLength);
-          const parcel = cityParcels.get(iz*256+ix);
+          const parcel = officialLotAt(east,north)||cityParcels.get(iz*256+ix);
           ground[idx] = base;
           height[idx] = parcel && Math.abs(east-parcel[0])<parcel[2]/2 &&
             Math.abs(north-parcel[1])<parcel[3]/2 ? base+parcel[4]/scale : base;
@@ -4582,17 +4624,35 @@
     if (!selectedMap.city) return null;
     const key=lotKey(x,z);
     for (let row=-1;row<=1;row++) for (let column=-1;column<=1;column++) {
-      const lot=lotIndex.get(key+row*256+column);
-      if (lot && Math.abs(x-lot[0])<=lot[2]/2 && Math.abs(z-lot[1])<=lot[3]/2) return lot;
+      const bucket=lotIndex.get(key+row*256+column);
+      if(!bucket)continue;
+      for(const lot of bucket){
+        if(Math.abs(x-lot[0])>lot[2]/2||Math.abs(z-lot[1])>lot[3]/2)continue;
+        if(!lot[7]||insideCityFootprint(x,z,lot[7]))return lot;
+      }
     }
     return null;
+  }
+
+  function insideCityFootprint(x,z,poly){
+    let inside=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const a=poly[i],b=poly[j];
+      if((a[1]>z)!==(b[1]>z)&&
+         x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+    }
+    return inside;
   }
 
   function setupCityLots(parcels,ground) {
     cityGroundField=ground;
     cityLots=parcels;
     lotIndex.clear();
-    for (const lot of parcels) lotIndex.set(lotKey(lot[0],lot[1]),lot);
+    for (const lot of parcels){
+      const key=lotKey(lot[0],lot[1]),bucket=lotIndex.get(key);
+      if(bucket)bucket.push(lot);
+      else lotIndex.set(key,[lot]);
+    }
     for (const entry of fallingBuildings) disposeSceneMesh(entry.mesh);
     fallingBuildings=[];
     for(const hit of buildingHits.values())for(const mesh of hit.scars)disposeSceneMesh(mesh);
@@ -4755,15 +4815,111 @@
     return panels;
   }
 
+  // PATROL_NYC_OTI_GIS_MESH_V1: 60 municipal exterior footprint polygons.
+  // Batched into the existing city mesh; the game transform is deliberately
+  // compressed, while polygon topology / building identity comes from NYC OTI.
+  function buildOfficialFootprintMesh(addTri,addQuad,lot,y,detailBand=2){
+    const [x,z,w,d,h,tone,destroyed,outline]=lot;
+    if(!Array.isArray(outline)||outline.length<3)return {walls:0,windows:0,roof:0};
+    let area=0;
+    for(let i=0;i<outline.length;i++){
+      const a=outline[i],b=outline[(i+1)%outline.length];
+      area+=a[0]*b[1]-b[0]*a[1];
+    }
+    if(Math.abs(area)<.01)return {walls:0,windows:0,roof:0};
+    const sign=area>0?1:-1;
+    const roofY=y+(destroyed?.48:h);
+    const isGlass=tone>.42&&h>12;
+    const palettes=[
+      [[.57,.54,.48],[.24,.31,.35]],
+      [[.65,.59,.51],[.28,.29,.27]],
+      [[.40,.49,.55],[.20,.31,.39]],
+      [[.70,.66,.58],[.32,.30,.28]]
+    ];
+    const [stone,glass]=palettes[Math.floor(tone*palettes.length)%palettes.length];
+    const wallTint=isGlass?glass:stone,frameTint=isGlass?[.35,.42,.45]:[.48,.44,.39];
+    let walls=0,windows=0,roof=0;
+    const face=(a,b,c,d,color,surface=0)=>{
+      if(sign>0)addQuad(d,c,b,a,color,surface);
+      else addQuad(a,b,c,d,color,surface);
+    };
+    for(let i=0;i<outline.length;i++){
+      const a=outline[i],b=outline[(i+1)%outline.length];
+      const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+      if(length<.10)continue;
+      const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
+      const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
+      face(loA,loB,hiB,hiA,wallTint);
+      walls++;
+      if(destroyed||length<1.4||detailBand<2)continue;
+      const normal=[sign*dz/length,-sign*dx/length];
+      const at=(t,yy,offset)=>[
+        a[0]+dx*t+normal[0]*offset,yy,
+        a[1]+dz*t+normal[1]*offset
+      ];
+      const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
+      const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
+      for(let floor=0;floor<floors;floor++){
+        const bottom=y+2.9+floor*3.15,top=Math.min(roofY-.54,bottom+1.80);
+        if(top<=bottom)continue;
+        for(let bay=0;bay<bayCount;bay++){
+          const left=(bay+.20)/bayCount,right=(bay+.80)/bayCount;
+          const tint=(i*11+floor*17+bay*7)%23===0?
+            [.40,.40,.37]:glass;
+          face(at(left,bottom,.062),at(right,bottom,.062),
+            at(right,top,.062),at(left,top,.062),tint,5);
+          face(at(left,bottom+.05,.071),at(right,bottom+.05,.071),
+            at(right,bottom+.095,.071),at(left,bottom+.095,.071),frameTint);
+          windows++;
+        }
+      }
+    }
+    // Ear clipping handles the OTI's concave L-, U- and wedge-shaped roofs.
+    // Unlike a centroid fan, no roof is drawn outside its source footprint.
+    const indices=outline.map((_,i)=>i),cross=(a,b,c)=>
+      (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    let attempts=0;
+    while(indices.length>2&&attempts<outline.length*outline.length){
+      attempts++;
+      let clipped=false;
+      for(let i=0;i<indices.length;i++){
+        const ia=indices[(i-1+indices.length)%indices.length],
+          ib=indices[i],ic=indices[(i+1)%indices.length];
+        const a=outline[ia],b=outline[ib],c=outline[ic];
+        if(cross(a,b,c)*sign<.001)continue;
+        let blocked=false;
+        for(const idx of indices){
+          if(idx===ia||idx===ib||idx===ic)continue;
+          const p=outline[idx];
+          if(cross(a,b,p)*sign>=-.00001 &&
+             cross(b,c,p)*sign>=-.00001 &&
+             cross(c,a,p)*sign>=-.00001){blocked=true;break}
+        }
+        if(blocked)continue;
+        const A=[a[0],roofY,a[1]],B=[b[0],roofY,b[1]],C=[c[0],roofY,c[1]];
+        if(sign>0)addTri(C,B,A,isGlass?[.31,.36,.37]:[.47,.44,.40]);
+        else addTri(A,B,C,isGlass?[.31,.36,.37]:[.47,.44,.40]);
+        indices.splice(i,1);roof++;clipped=true;break;
+      }
+      if(!clipped)break;
+    }
+    return {walls,windows,roof,expectedRoof:outline.length-2};
+  }
+
   function buildCityBuildings(parcels,local=false) {
-    const {addQuad,upload}=createTriangleMesh();
+    const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
-    for(const [east,north,w,d,h,tone,destroyed] of parcels){
+    for(const lot of parcels){
+      const [east,north,w,d,h,tone,destroyed]=lot;
       // Local collapsing rubble must bypass regional LOD; it is positioned
       // later by a model transform and does not live at world origin.
       const detailBand=local?2:nycDetailBand(east,north);
       if(detailBand===0)continue;
       const x=local?0:east,z=local?0:north,y=local?0:WATER_H+2.38;
+      if(!local&&lot[7]){
+        buildOfficialFootprintMesh(addTri,addQuad,lot,y,detailBand);
+        continue;
+      }
       // NYC_DOWNTOWN_ARCH_V7 — different facade identities for adjacent lots.
       // HEAT is a VISUAL reference only; no third-party code or assets copied.
       // Building styles combine Indiana-limestone-like stone, terracotta,
@@ -10437,7 +10593,7 @@
   flightSetup.addEventListener('change',updateFlightOptions);
   updateFlightOptions();
 
-  function launchFlight(event) {
+  async function launchFlight(event) {
     event.preventDefault();
     // Chongqing is an isolated, additive 3D pilot level; existing maps keep their renderer.
     if (new FormData(flightSetup).get('flightMap') === 'chongqing') {
@@ -10626,6 +10782,23 @@
       flightFrame = requestAnimationFrame(loop);
     }
 
+    if(selectedMap.city&&!Array.isArray(selectedMap.city.officialFootprints)){
+      // Same-origin static snapshot; flight stays playable if an older
+      // GitHub Pages cache hasn't received the geo-data file yet.
+      try{
+        loadStep.textContent='Loading NYC OTI building footprints…';
+        const response=await fetch('./assets/nyc/official-financial-footprints.json');
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        const snapshot=await response.json();
+        if(snapshot.schema!=='patrol-nyc-oti-footprints-v1'||
+           !Array.isArray(snapshot.footprints)||snapshot.footprints.length>90)
+          throw new Error('Unrecognized NYC footprint snapshot');
+        selectedMap.city.officialFootprints=snapshot.footprints;
+      }catch(error){
+        console.warn('[PATROL] NYC official footprint fallback:',error);
+        selectedMap.city.officialFootprints=[];
+      }
+    }
     const terrainOptions={
       size:MAP_SIZE,span:MAP_SPAN,landmarks:selectedMap.landmarks,
       scale:terrainScaleFor(selectedMap),water:WATER_H,
