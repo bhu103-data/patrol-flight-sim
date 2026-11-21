@@ -361,6 +361,29 @@ box(hotpot.x,shopY+10,hotpot.z,72,20,50,pbr.wood);
   }
 }
 box(hotpot.x,shopY+10.3,hotpot.z+25.35,68,13,1.4,pbr.wood);
+// River-facing shopfront used to be one solid wooden wall, visible as a
+// cartoon cube from the bridge. Recess true window bays, sills and posts.
+const potWarmGlass=new THREE.MeshStandardMaterial({
+  color:0x705f4a,emissive:0x91623d,emissiveIntensity:.35,
+  metalness:.12,roughness:.36,side:THREE.DoubleSide
+});
+for(let bay=0;bay<7;bay++){
+  const xx=hotpot.x-30+bay*10;
+  const riverFront=hotpot.z-25.18;
+  const glass=(bay*5+3)%7<3?potWarmGlass:pbr.glassPane;
+  box(xx,shopY+10.5,riverFront,8.2,6.5,.28,glass);
+  box(xx,shopY+6.95,riverFront-.25,8.6,.23,.48,pbr.carvedWood);
+  box(xx,shopY+14.05,riverFront-.22,8.7,.28,.45,pbr.carvedWood);
+  box(xx,shopY+10.5,riverFront-.31,.19,6.5,.32,pbr.wood);
+}
+for(const x of [hotpot.x-31,hotpot.x-10,hotpot.x+11,hotpot.x+31]){
+  const z=hotpot.z-21.5,earth=ground(x,z);
+  if(earth<shopY-1.3){
+    // Stone stilt foundations stop the restaurant from floating above a slope.
+    const h=shopY-earth+.8;
+    box(x,earth+h*.5,z,2.7,h,3.2,pbr.cutStone);
+  }
+}
 sign('重庆老火锅',hotpot.x,shopY+22.9,hotpot.z+29.1,42,7.5,'#dbbb8f','#302822');
 const cauldron=box(278,shopY+4.5,hotpot.z+31,10,5,10,M.dark);
 ball(278,shopY+7.2,hotpot.z+31,5,M.red);
