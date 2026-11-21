@@ -14,6 +14,7 @@ const urbanSrc=(await read('../assets/chongqing/urban-architecture.js'))
 const {createChongqingUrbanArchitecture}=await import(toUrl(urbanSrc));
 const {buildChongqingDetails}=await import(toUrl(await read('../assets/chongqing/details.js')));
 const {buildChongqingLandmarks}=await import(toUrl(await read('../assets/chongqing/landmarks.js')));
+const {buildChongqingStreetlife}=await import(toUrl(await read('../assets/chongqing/streetlife.js')));
 
 class Vec{
   constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
@@ -53,13 +54,14 @@ class Instanced extends Mesh{
   computeBoundingSphere(){}
 }
 class Color{set(){return this}}
+class Spot extends Obj{constructor(){super();this.target=new Obj()}}
 const THREE={
   Object3D:Obj,Group:Obj,Vector3:Vec,Color,
-  BoxGeometry:Geo,PlaneGeometry:Geo,CylinderGeometry:Geo,TorusGeometry:Geo,
+  BoxGeometry:Geo,PlaneGeometry:Geo,CylinderGeometry:Geo,SphereGeometry:Geo,TorusGeometry:Geo,
   IcosahedronGeometry:Geo,BufferGeometry:Geo,Float32BufferAttribute:Attr,
   Mesh,InstancedMesh:Instanced,MeshStandardMaterial:Mat,
   MeshBasicMaterial:Mat,MeshPhysicalMaterial:Mat,PointsMaterial:Mat,
-  Points:class{},PointLight:Obj,
+  Points:class{},PointLight:Obj,SpotLight:Spot,
   DoubleSide:2,StaticDrawUsage:1,AdditiveBlending:4
 };
 const oldDoc=globalThis.document;
@@ -135,6 +137,33 @@ test('complete Chongqing road network is kept without passing through any buildi
   assert.ok(checked>200,'substantial complete-scene clearance audit');
   assert.ok(stats.clipped>0,'real landmarks must require at least some road clipping');
 });
+test('real Chongqing building parcels still leave safe usable signal crossings',()=>{
+ const {obstacles,ground,riverDist}=generate();
+ const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
+ const roadClear=(x,z,y,radius=0)=>
+   ground(x,z)>0&&riverDist(x,z)>=Math.max(3,radius+2.4)&&
+   !obstacles.some(o=>Math.abs(x-o.x)<o.w*.5+radius &&
+     Math.abs(z-o.z)<o.d*.5+radius &&
+     y+2.2>=(o.base??-Infinity)&&y-1.6<=(o.top??Infinity));
+ const props=[];
+ const traffic=buildChongqingStreetlife({THREE,scene:{add(...p){props.push(...p)}},
+   ground,riverCenter,isRoadClear:roadClear});
+ const sites=traffic.snapshot().crossingXs;
+ assert.ok(sites.length>=2,
+   'multiple signalized pedestrian crossings must remain visible in the real city');
+ assert.equal(traffic.stats.trafficSignals,sites.length*2);
+ for(const x of sites){
+   const z=riverCenter(x)+250+14*Math.sin(x/115+1);
+   assert.equal(roadClear(x,z,ground(x,z)+1.78,11.2),true,
+     'zebra crossings must not intersect tall or raised building volumes');
+   for(const side of [-1,1]){
+     const px=x+11,pz=riverCenter(px)+250+14*Math.sin(px/115+1)+side*9.1;
+     assert.equal(roadClear(px,pz,ground(px,pz)+2.5,1.5),true,
+       'signal pole cannot sit inside building collider or river');
+   }
+ }
+});
+
 test('landmark and background geometry still fit instance buffers',()=>{
   const {sceneObjects,urban,details}=generate();
   assert.ok(urban.stats.towers>100);
