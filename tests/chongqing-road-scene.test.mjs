@@ -109,7 +109,7 @@ function generate() {
     stats.clipped+=trimmed.stats.clippedSegments;
     stats.removed+=trimmed.stats.removedLength;
   }
-  return {obstacles,paths,stats,urban,details,landmark,sceneObjects};
+  return {obstacles,paths,stats,urban,details,landmark,sceneObjects,ground,riverDist};
 }
 test('complete Chongqing road network is kept without passing through any building',()=>{
   const {paths,obstacles,stats,urban,landmark}=generate();
@@ -158,3 +158,33 @@ test('sloped riverside road passes under raised volume but rejects true building
   assert.equal(crossesRoadVolume({...a,y:133},{...b,y:133},raised,5.75,.55),true,'road through the same occupied volume is blocked');
 });
 process.on('exit',()=>{globalThis.document=oldDoc});
+
+test('background towers stand on surveyed dry terraces with bounded retaining walls',()=>{
+  const {obstacles,urban,sceneObjects,ground,riverDist}=generate();
+  const pads=obstacles.filter(o=>Number.isFinite(o.padBase));
+  assert.equal(pads.length,urban.stats.towers);
+  assert.ok(pads.length>120,'retain realistic skyline density rather than deleting city');
+  assert.ok(urban.stats.skippedUnbuildableTerrain>0,
+    'very steep cliff towers must be rejected rather than left floating');
+  assert.ok(urban.stats.maxAcceptedGrade<=10+1e-9);
+  assert.equal(urban.stats.retainingWallTriangles,pads.length*16,
+    'eight hillside wall panels per building, one bounded mesh batch');
+  for(const p of pads){
+    let min=Infinity,max=-Infinity;
+    for(let ix=-2;ix<=2;ix++)for(let iz=-2;iz<=2;iz++){
+      const x=p.x+(p.w-2)*ix/4,z=p.z+(p.d-2)*iz/4;
+      const y=ground(x,z);
+      assert.ok(riverDist(x,z)>=5,'tower foundation enters river or shoreline');
+      min=Math.min(min,y);max=Math.max(max,y);
+    }
+    assert.ok(max-min<=10+1e-7,'building straddles a steep cliff');
+    assert.ok(p.padBase>=max+.2399,'tower wall bottom cannot bury into uphill terrain');
+    assert.ok(p.base<=min-.3499,'collision includes the downhill retaining foundation');
+  }
+  const retaining=sceneObjects.filter(o=>o instanceof Mesh&&
+    o.geometry?.index?.length===urban.stats.retainingWallTriangles*3);
+  assert.equal(retaining.length,1,'all foundation faces share a single GPU draw batch');
+  const vertices=retaining[0].geometry.attributes.position.array;
+  assert.ok(vertices.every(Number.isFinite),'no invalid foundation vertex');
+  assert.ok(vertices.length<=pads.length*8*12,'bounded real geometry allocation');
+});
