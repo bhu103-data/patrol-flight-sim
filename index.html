@@ -12946,11 +12946,12 @@ const CENTRAL_PARK_SITES=[
       if(Math.hypot(x,z)>approachLimit ||
          Math.hypot(endX,endZ)>approachLimit)return false;
       // Continuous 6m shoreline/pontoon/boat checks instead of sparse points.
-      for(let advance=0;advance<=runwayLength;advance+=6){
+      for(let advance=0;advance<runwayLength;advance+=6){
         const px=x+fx*advance,pz=z+fz*advance;
         if(!safe(px,pz,yaw))return false;
       }
-      return true;
+      // 94m is not divisible by six: never skip the last four metres.
+      return safe(endX,endZ,yaw);
     };
     const headings=primary=>[primary,primary+Math.PI/2,
       primary-Math.PI/2,primary+Math.PI];
