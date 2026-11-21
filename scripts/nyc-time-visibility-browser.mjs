@@ -62,8 +62,17 @@ try{
   document.getElementById('titleOverlay')?.hidden&&
   document.getElementById('loadOverlay')?.classList.contains('done'),
  null,{timeout:180000});
- await page.locator('#skySeason').selectOption('1');
- await page.locator('#skyWeather').selectOption('Clear');
+ // Environment controls are intentionally inside a collapsed panel.
+ // Set the actual selects through the DOM, as the existing NYC QA does;
+ // selectOption() would time out because the native controls are hidden.
+ await page.evaluate(()=>{
+  for(const [id,value] of [['skySeason','1'],['skyWeather','Clear']]){
+   const el=document.getElementById(id);
+   if(!el)throw Error('Missing environment control: '+id);
+   el.value=value;
+   el.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+ });
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
@@ -78,7 +87,12 @@ try{
   'body.patrol-env-qa * {visibility:hidden !important;} '+
   'body.patrol-env-qa #glCanvas {visibility:visible !important;}'});
  for(const time of times){
-  await page.locator('#skyTime').selectOption(time.value);
+  await page.evaluate(value=>{
+   const el=document.getElementById('skyTime');
+   if(!el)throw Error('Missing time-of-day control');
+   el.value=value;
+   el.dispatchEvent(new Event('change',{bubbles:true}));
+  },time.value);
   // Updating the dropdown does not alter the camera or reset the aircraft.
   // Let two shader frames settle before capturing, without advancing the
   // automatic day/night clock (the user has chosen a fixed time).
