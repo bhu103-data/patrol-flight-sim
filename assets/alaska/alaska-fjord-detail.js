@@ -148,7 +148,13 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     for(let k=0;k<corners;k++){
       const next=(k+1)%corners,a=ring[k],b=ring[next];
       addTri(center,a,b,top);
-      addQuad(b,a,[a[0],y-.12,a[2]],[b[0],y-.12,b[2]],side);
+      // Break up the uniform cyan wall at the waterline. Subtle darker facets
+      // separate the floe silhouette from bright coastal snow at a distance;
+      // no new shoreline geometry, height samples or collision surfaces.
+      const facet=hash(i*41+k*17+11);
+      const sideShade=side.map((v,channel)=>Math.min(1,
+        v*(.73+.23*facet)*(channel===0?.94:1)));
+      addQuad(b,a,[a[0],y-.12,a[2]],[b[0],y-.12,b[2]],sideShade);
     }
     stats.iceFloes++;
   }
