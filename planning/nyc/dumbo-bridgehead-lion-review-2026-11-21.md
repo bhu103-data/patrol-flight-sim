@@ -38,13 +38,23 @@
 
 ### 下一处真实严重断点：Adams St × Johnson St（自行车）
 
-2026-06 NYC DOT 项目介绍／报道指出，Brooklyn Bridge 下桥向南骑行者经 Adams 中央区域，到 **Johnson Street** 时存在自行车通路结束、需要危险转向的接驳问题；计划于 2026 秋后加入 Johnson–Fulton 的受保护双向自行车连接。**2026-11 是否已投入使用并未现场核实**，所以不能宣称缺口现仍存在，也不能宣称已修好。
+2026-06 NYC DOT 项目介绍／报道指出，Brooklyn Bridge 下桥向南骑行者经 Adams 中央区域，到 **Johnson Street** 时存在自行车通路结束、需要危险转向的接驳问题；计划于 2026 秋后加入 Johnson–Fulton 的受保护双向自行车连接。**2026-10 NYC DOT 已正式宣布开始 Adams/Boerum 段施工**（下方新增官方链接）；但没有工程验收或精确开放日期证据，**不能宣称 Johnson 接驳缺口已消失**。
 
 建议将该点作为 **P1 自行车网络联通验收**：检查 `BIKE_TRAFDIR`、节点可通行性与临时施工布置；不能仅因为 2026 年设计方案就自动标记 `connected`。
 
 ### DUMBO 步行出口是第三种连接：Washington St × Prospect St
 
 Brooklyn Bridge Park 的官方访问信息指出，DUMBO 方向桥上人行步道由 **Washington Street / Cadman Plaza East × Prospect Street** 附近的楼梯接入。这是步行楼梯／桥上人行道连接，**不是桥面机动车直接转入 DUMBO 的出口**；不要在这里生成汽车转弯车道或把这条接驳与 Adams–Tillary 机动车信号合并。
+
+### P1 扩展：DUMBO 的 Sands St → Adams St → York St → Front St（2027 施工计划）
+
+NYC DOT 在 2026-09 发布的街区方案明确区分 **Sands Street：Jay→Adams**，以及 **Adams Street：Sands→Front**。2026-10 官方通报称计划将 Adams 的 Sands–York 段升级为受保护自行车道、York–Front 段使用常规自行车道，并改善 Sands 的 Jay–Adams 骑行接驳；市府“Current Projects”页面将 Sands/Adams 道路施工计划放在 **2027 年街道重铺之后**。因此不能把这些规划车道作为 2026-11 已完成的路网边，也不能用其修改现有汽车车道方向。
+
+- 官方在建声明：https://www.nyc.gov/html/dot/html/pr2026/biketober-brooklyn-bridge-cycling-upgrade.shtml
+- 官方现行项目清单：https://www.nyc.gov/html/dot/html/about/current-projects.shtml
+- DOT 2026-06 Adams/Boerum 分隔岛与自行车道方案：https://www.nyc.gov/html/dot/downloads/pdf/adams-st-boerum-pl-jun2026.pdf （Fulton→Johnson 标示 10 英尺双向保护骑行道，并说明保持既有机动车车道；它是提议断面，不是施工验收图）
+
+**建模界限：** 将该段标记 `planned_2027_unverified_current`；不在城市街段尚未验证 LION `SegmentID/BIKE_TRAFDIR` 前画连续自行车绿道，更不得跨桥面／从桥口直接转接到普通街口。现实街区机动车车道数不能从这个自行车工程图覆盖到整张游戏地图。
 
 ## 3. LION / CSCL 数据对照规则（待导入真实记录）
 
@@ -76,5 +86,8 @@ LION 官方字典：`TrafDir=W` 是 From→To 单向，`A` 是 To→From 单向�
 - 纽约市 DOT 2008 项目左转限制历史：https://www.nyc.gov/html/dot/downloads/pdf/sustainable_streets_index_09.pdf
 - Brooklyn Bridge Park 官方步行入口：https://brooklynbridgepark.org/places-to-see/brooklyn-bridge/
 - 2026-06 Adams–Johnson 自行车网络中断与计划施工（DOT 社区汇报的新闻记录，非竣工证明）：https://nyc.streetsblog.org/2026/06/09/dot-will-install-protected-bike-lane-on-key-bklyn-bridge-connection-boerum-adams
+- 2026-10 DOT 正式开工通告（不代表竣工）：https://www.nyc.gov/html/dot/html/pr2026/biketober-brooklyn-bridge-cycling-upgrade.shtml
+- 2026-09 Sands/Adams→Front 的 2027 方案见当前项目列表：https://www.nyc.gov/html/dot/html/about/current-projects.shtml
+- 2026-06 DOT 机动车/自行车分道断面：https://www.nyc.gov/html/dot/downloads/pdf/adams-st-boerum-pl-jun2026.pdf
 
 **完整性说明**：此文件是规划证据，不是 LION 现场数据提取成果。第一次正式 GIS 导入前，任何精确 GIS 位置、节点连通和交通方向都必须保持 `unverified`。不涉及桥面几何或飞行物理。
