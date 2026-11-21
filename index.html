@@ -2158,11 +2158,37 @@ const CENTRAL_PARK_SITES=[
                       *(1.0-smoothstep(590.0,647.0,p.z));
             float iceVein=vnoise(p.xz*.49+vec2(grain*2.0,-macro*1.8));
             vec3 ice=mix(vec3(.24,.53,.62),vec3(.72,.86,.89),.31+.63*iceVein);
+            // Alaska-only close-range glacier cryosphere. Ice flow is
+            // longitudinal (+Z); sparse dark fracture seams and compressed
+            // blue basal layers fade before the distant DEM horizon.
+            float iceNear=glacier*(1.0-smoothstep(82.0,245.0,hitDist));
+            if(iceNear>.014){
+              vec2 flow=vec2(p.x-iceAxis,p.z-449.0);
+              float warp=vnoise(flow*.068+vec2(macro*.5,grain*.3));
+              float ridge=vnoise(flow*.24+vec2(iceVein,.31));
+              float lamina=.5+.5*sin((p.y-WATER_H)*1.65
+                                      +flow.y*.092+warp*5.2);
+              float laminaEdge=pow(1.0-abs(2.0*lamina-1.0),3.3);
+              // Contorted longitudinal compression fractures, not an
+              // artificial repeated cross-hatched chessboard.
+              float splitPhase=flow.x*.31+warp*3.3+flow.y*.018;
+              float split=1.0-smoothstep(.065,.18,abs(sin(splitPhase)));
+              split*=smoothstep(.32,.72,ridge);
+              float glacialDust=.05+.15*laminaEdge+.08*(1.0-ridge);
+              ice=mix(ice,vec3(.085,.26,.35),glacialDust*.56*iceNear);
+              ice=mix(ice,vec3(.045,.19,.26),split*.54*iceNear);
+              // Approximate blue light scattering in compacted clear ice.
+              // No claim of true subsurface scattering or measured albedo.
+              float clearGlance=pow(1.0-max(dot(n,-rd),0.0),3.0);
+              ice+=vec3(.018,.085,.105)*clearGlance*iceNear;
+              float glint=pow(max(dot(reflect(rd,n),uSun),0.0),64.0);
+              ice+=vec3(.10,.14,.18)*glint*iceNear*(1.0-split*.6);
+            }
             albedo=mix(albedo,ice,glacier*.82);
             // Near-field CC0 photography: normal and roughness channels are
             // sampled only for Alaska and within a short flight detail radius.
             if(uAlaskaPhotoReady){
-              float closeDetail=1.0-smoothstep(105.0,255.0,hitDist);
+              float closeDetail=1.0-smoothstep(95.0,425.0,hitDist);
               float forestFloor=smoothstep(.85,3.2,alt)*
                 (1.0-smoothstep(11.0,23.0,alt))*
                 (1.0-smoothstep(.15,.39,slope));
@@ -2170,12 +2196,15 @@ const CENTRAL_PARK_SITES=[
               // bands seen during actual WebGL flight screenshot review.
               float forestWeight=smoothstep(.14,.72,forestFloor)*
                 (1.0-smoothstep(.28,.63,exposed))*
-                (1.0-smoothstep(.30,.65,frost));
+                (1.0-smoothstep(.30,.65,frost))*
+                (1.0-smoothstep(.15,.54,glacier));
               float photoAmount=closeDetail*
-                max(max(exposed*.74,frost*.87),forestWeight*.47)*
-                (1.0-glacier*.88);
+                max(max(max(exposed*.74,frost*.87),forestWeight*.37),
+                    glacier*.31)*(1.0-glacier*.42);
               if(photoAmount>.018){
-                float snowTile=step(.51,frost);
+                // Reuse bundled real CC0 snow surface photography for the
+                // wind-packed glacier crust, without a new external fetch.
+                float snowTile=max(step(.51,frost),step(.30,glacier));
                 float forestVariant=step(.54,vnoise(p.xz*.028));
                 vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
                 vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
@@ -2187,15 +2216,21 @@ const CENTRAL_PARK_SITES=[
                 float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
                 vec3 alpinePhoto=textureLod(uAlaskaPhotoAlbedo,groundUV,lod).rgb;
                 vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
-                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.75,.91,.76),
+                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.87,1.02,.88),
                                forestWeight);
+                photo=mix(photo,photo*vec3(.72,.88,.96),
+                          smoothstep(.24,.75,glacier)*.68);
                 vec2 normalUV=mix(groundUV,forestUV,step(.5,forestWeight));
                 vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,normalUV,lod);
                 float roughness=normalRough.a;
                 vec2 texSlope=normalRough.rg*2.0-1.0;
                 float microLight=clamp(.87+dot(texSlope,uSun.xz)*.18,.69,1.08);
                 photo*=microLight;
-                albedo=mix(albedo,photo,clamp(photoAmount*.78,0.0,.84));
+                // Brightness-matched forest grain: albedo stays coherent
+                // across the 95–425 unit LOD transition, while rock/snow
+                // retain their stronger photographic color contribution.
+                float colorStrength=mix(.19,.78,1.0-forestWeight);
+                albedo=mix(albedo,photo,clamp(photoAmount*colorStrength,0.0,.84));
                 float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
                                   mix(30.0,95.0,roughness));
                 albedo+=vec3(.15,.22,.25)*sparkle*(1.0-roughness)*photoAmount*.065;
@@ -2410,6 +2445,10 @@ const CENTRAL_PARK_SITES=[
     uniform int uNySurfaceClass;
     uniform highp sampler2DArray uDcMaps;
     uniform int uDcSurface;
+    uniform bool uAlaskaMesh;
+    uniform bool uAlaskaPhotoReady;
+    uniform sampler2D uAlaskaPhotoAlbedo;
+    uniform sampler2D uAlaskaPhotoNormalRough;
 
     float harborGrain(vec2 cell) {
       return fract(sin(dot(cell,vec2(71.17,159.73)))*43758.5453);
@@ -2749,6 +2788,39 @@ const CENTRAL_PARK_SITES=[
         roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
       }
     }
+    // Tagged surface 12: Alaska glacier mesh; distant, other-map and
+    // compatibility geometry retains the existing lightweight fallback.
+    void alaskaGlacierFace(inout vec3 material,inout vec3 n,
+                           inout float roughness){
+      if(!uAlaskaMesh || vHarborSurface<11.5 || vHarborSurface>12.5)return;
+      float near=1.0-smoothstep(95.0,375.0,distance(vWorld,uEye));
+      if(near<.002)return;
+      vec2 uv0=abs(n.y)>.64?vWorld.xz*.115:
+                vec2(vWorld.x*.091+vWorld.z*.028,vWorld.y*.16);
+      float band=.5+.5*sin(vWorld.y*1.18+vWorld.x*.13+vWorld.z*.038);
+      float vein=sin(vWorld.x*.29+vWorld.y*.52+sin(vWorld.z*.08)*2.4);
+      float seam=(1.0-smoothstep(.027,.16,abs(vein)))*.29;
+      material=mix(material,vec3(.44,.67,.77),
+        near*(.22+.18*(1.0-max(n.y,0.0))));
+      material*=1.0-near*(.08*band+seam);
+      if(uAlaskaPhotoReady){
+        // Reuse bundled Poly Haven CC0 snow photo/normal/roughness
+        // (atlas column 1 of four), no extra asset/network request.
+        vec2 tile=fract(uv0);
+        vec2 uv=vec2((1.0+.022+.956*tile.x)*.25,.022+.956*tile.y);
+        vec3 photographed=texture(uAlaskaPhotoAlbedo,uv).rgb;
+        vec4 normalRough=texture(uAlaskaPhotoNormalRough,uv);
+        vec2 micro=normalRough.rg*2.0-1.0;
+        vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.001,0.0,.001));
+        vec3 bitangent=normalize(cross(n,tangent));
+        n=normalize(n+(tangent*micro.x+bitangent*micro.y)*.10*near);
+        material=mix(material,photographed*vec3(.66,.84,.94),.44*near);
+        roughness=mix(roughness,clamp(normalRough.a,.38,.88),.75*near);
+      }
+      float frostFresnel=pow(1.0-abs(dot(n,normalize(uEye-vWorld))),3.0);
+      material+=vec3(.025,.075,.095)*frostFresnel*near;
+    }
+
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2800,6 +2872,7 @@ const CENTRAL_PARK_SITES=[
         nyOfficialGisPbr(material,n,surfaceRoughness);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
+      alaskaGlacierFace(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
         float wind=uSceneTime*1.28;
         float a=dot(vWorld.xz,vec2(0.33,1.47))+wind;
@@ -5887,12 +5960,12 @@ const CENTRAL_PARK_SITES=[
         const a=glacierPoint(col,0), b=glacierPoint(col+1,0);
         addQuad([a[0],sampleGroundHeight(a[0],a[2])-0.18,a[2]],
           [b[0],sampleGroundHeight(b[0],b[2])-0.18,b[2]],b,a,
-          col%3===0 ? [0.34,0.65,0.76] : [0.61,0.80,0.85]);
+          col%3===0 ? [0.34,0.65,0.76] : [0.61,0.80,0.85],12);
         for (let row=0;row<rows;row++) {
           const streak = 0.5 + 0.5*Math.sin(row*0.86+Math.sin(col*0.62)*1.5);
           const ice = [0.69+0.15*streak,0.83+0.08*streak,0.88+0.05*streak];
           addQuad(glacierPoint(col,row),glacierPoint(col,row+1),
-            glacierPoint(col+1,row+1),glacierPoint(col+1,row),ice);
+            glacierPoint(col+1,row+1),glacierPoint(col+1,row),ice,12);
         }
       }
       for (let i=0;i<25;i++) {
@@ -11797,6 +11870,7 @@ const CENTRAL_PARK_SITES=[
     try {
       let meshSource = MESH_FS;
       if(!map.dc)meshSource=meshSource.replace('uniform int uDcSurface;', 'const int uDcSurface = -1;');
+      if(!map.alaska)meshSource=meshSource.replace('uniform bool uAlaskaMesh;', 'const bool uAlaskaMesh = false;');
       if(!map.vegas)meshSource=meshSource.replace('uniform bool uSphereShow;', 'const bool uSphereShow = false;');
       if(!map.city)meshSource=meshSource.replace('uniform bool uTimesScreen;', 'const bool uTimesScreen = false;');
       if(graphicsCompat || !map.city)meshSource=meshSource.replace('uniform float uNyStreetQuality;', 'const float uNyStreetQuality = 0.0;');
@@ -11866,6 +11940,10 @@ const CENTRAL_PARK_SITES=[
     manhattan:gl.getUniformLocation(meshProg,'uManhattanView'),
     dcMaps:gl.getUniformLocation(meshProg,'uDcMaps'),
     dcSurface:gl.getUniformLocation(meshProg,'uDcSurface'),
+    alaskaMesh:gl.getUniformLocation(meshProg,'uAlaskaMesh'),
+    alaskaPhotoReady:gl.getUniformLocation(meshProg,'uAlaskaPhotoReady'),
+    alaskaPhotoAlbedo:gl.getUniformLocation(meshProg,'uAlaskaPhotoAlbedo'),
+    alaskaPhotoNormalRough:gl.getUniformLocation(meshProg,'uAlaskaPhotoNormalRough'),
     sphereShow: gl.getUniformLocation(meshProg, 'uSphereShow'),
     spherePattern: gl.getUniformLocation(meshProg, 'uSpherePattern'),
     sphereCenter: gl.getUniformLocation(meshProg, 'uSphereCenter'),
@@ -13019,6 +13097,17 @@ const CENTRAL_PARK_SITES=[
     gl.uniform1i(uMesh.scenarioDiffuse,10);
     gl.uniform1i(uMesh.dcMaps,2);
     gl.uniform1i(uMesh.dcSurface,-1);
+    gl.uniform1i(uMesh.alaskaMesh,Boolean(selectedMap.alaska));
+    gl.uniform1i(uMesh.alaskaPhotoReady,alaskaPhotoReady?1:0);
+    if(alaskaPhotoReady){
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.albedo);
+      gl.uniform1i(uMesh.alaskaPhotoAlbedo,1);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D,alaskaPhotoTextures.normalRough);
+      gl.uniform1i(uMesh.alaskaPhotoNormalRough,3);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform2f(uMesh.surfaceWeather,environment.climate[2],environment.climate[3]);
     gl.uniform3fv(uMesh.sun,environment.sun);
     gl.uniform4fv(uMesh.atmosphere,environment.atmosphere);
