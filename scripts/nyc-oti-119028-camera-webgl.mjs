@@ -85,11 +85,17 @@ try{
    const gl=document.getElementById('glCanvas')?.getContext('webgl2');
    if(!gl||gl.isContextLost())return resolve({error:'WebGL2 context lost'});
    let tries=0,completed=false;
+   const stop=setTimeout(()=>{
+    if(completed)return;
+    completed=true;
+    resolve({error:'No usable WebGL2 rAF draw buffer within 20 seconds'});
+   },20000);
    const cap=()=>{
     if(completed)return;
     try{
      const width=gl.drawingBufferWidth,height=gl.drawingBufferHeight;
-     if(width<640||height<360)return resolve({error:'Invalid WebGL draw buffer'});
+     if(width<640||height<360){completed=true;clearTimeout(stop);
+      return resolve({error:'Invalid WebGL draw buffer'});}
      const pixels=new Uint8Array(width*height*4);
      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
      const err=gl.getError(),bins=new Set;
@@ -101,9 +107,9 @@ try{
      let binary='';
      for(let i=0;i<pixels.length;i+=8192)
       binary+=String.fromCharCode(...pixels.subarray(i,i+8192));
-     completed=true;
+     completed=true;clearTimeout(stop);
      resolve({width,height,base64:btoa(binary),drawError:err,bins:bins.size});
-    }catch(e){completed=true;resolve({error:String(e)})}
+    }catch(e){completed=true;clearTimeout(stop);resolve({error:String(e)})}
    };
    requestAnimationFrame(cap);
   }));
