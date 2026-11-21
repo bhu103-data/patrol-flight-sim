@@ -1,13 +1,43 @@
 // PATROL NYC original, static LED artwork. No video, no tracking, no remote assets.
 // Art imitates Times Square design grammar; it does not reproduce real ads.
+// PATROL_NYC_UNIQUE_ADS_V6: non-repeating creatives within a
+// retained browser history. Campaign IDs are monotonic across scenery rebuilds.
+let ephemeralCampaign=0;
+function reserveCreativeSerials(count) {
+  let previous=ephemeralCampaign;
+  try {
+    const stored=Number(localStorage.getItem('patrol.nyc.led.nextCreative')||'0');
+    if(Number.isSafeInteger(stored)&&stored>=0)previous=Math.max(previous,stored);
+  }catch(_error){}
+  const nonce=(typeof crypto!=='undefined'&&crypto.getRandomValues)?
+    crypto.getRandomValues(new Uint32Array(1))[0]:Math.floor(Math.random()*4294967296);
+  const start=previous+1;
+  ephemeralCampaign=previous+count;
+  try{localStorage.setItem('patrol.nyc.led.nextCreative',String(ephemeralCampaign));}
+  catch(_error){}
+  return {start,nonce};
+}
+function campaignDetails(serial,nonce) {
+  const prefixes=['ASTRA','MERIDIAN','ARCADIA','VANTAGE','ORIGIN','SKYLARK',
+    'CALDER','CIRRUS','AURORA','NEXUS','ATELIER','KINETIC','LANTERN',
+    'HORIZON','ELEVATE','SOLSTICE','NORTH','MARQUE','STELLAR','CRESCENT',
+    'MOSAIC','AXIOM','NOVA','EMBER','CITADEL','FLUX','ECHO','SPECTRUM','VERVE'];
+  const suffixes=['STUDIO','COLLECTION','FUTURE','MOTION','ATELIER','EDITION',
+    'WORKS','JOURNEY','NIGHTS','VISION','CITY','CRAFT','FORM','OBJECT','SERIES',
+    'DESIGN','LIFE','LIGHT','LAB','NEW YORK','UNIVERSE','GALLERY','CULTURE'];
+  const key=((Math.imul(serial,2654435761)^nonce)>>>0);
+  return {title:prefixes[key%prefixes.length]+' '+suffixes[Math.floor(key/29)%suffixes.length],
+    serial:serial.toString(36).toUpperCase().padStart(6,'0'),seed:key,theme:(key>>>7)%8};
+}
 const PALETTES=[
   ['#101b31','#067cb5','#d5f8ff'],['#1c092a','#e03974','#fff2d5'],
   ['#111919','#db854c','#fff4d4'],['#08292c','#28b5a7','#ecfff8'],
   ['#170e29','#6552e8','#fff0f0'],['#2b0b18','#ea5548','#fff4e6'],
   ['#111729','#dfc18b','#fff9ea'],['#0b2327','#7cbaae','#e7fff6']
 ];
-function panelArt(ctx,x,y,size,info,index){
-  const [base,accent,ink]=PALETTES[index%PALETTES.length];
+function panelArt(ctx,x,y,size,info,index,campaign){
+  const [base,accent,ink]=PALETTES[campaign.theme];
+  const serial=campaign.serial;
   const h=size,w=size;
   ctx.save();ctx.translate(x,y);
   const bg=ctx.createLinearGradient(0,0,w,h);
@@ -21,7 +51,7 @@ function panelArt(ctx,x,y,size,info,index){
   halo.addColorStop(.26,'rgba(255,255,255,.08)');
   halo.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=halo;ctx.fillRect(0,0,w,h);
-  const kind=index%8;
+  const kind=campaign.theme;
   if(kind===0){
     // Boutique timepiece: beveled bezel, dial, hand, highlights.
     const cx=w*.63,cy=h*.48,r=w*.265;
@@ -108,11 +138,17 @@ function panelArt(ctx,x,y,size,info,index){
     ctx.fillStyle='rgba(20,34,42,.6)';ctx.fillRect(w*.49,h*.61,w*.24,h*.025);
   }
   const label=(info?.label||'NEW YORK').toUpperCase().replace(/[^A-Z0-9 &'-]/g,'').slice(0,24);
+  const variant=(campaign.seed>>>12)%7;
+  ctx.save();ctx.globalAlpha=.10;ctx.fillStyle=ink;
+  for(let j=0;j<2+variant;j++){
+    const phase=((campaign.seed>>>((j%4)*6))&63)/63;
+    ctx.fillRect(size*(.08+.84*phase),size*(.23+j*.075),size*.010,size*.045);
+  }
+  ctx.restore();
   ctx.shadowColor='rgba(0,0,0,.72)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
   ctx.fillStyle=ink;ctx.textBaseline='top';
   ctx.font='800 '+Math.round(size*.095)+'px Arial, sans-serif';
-  ctx.fillText(['NOVA','LUMEN','FORM','THE CITY','MOTION','NEXT','ON STAGE','AURA'][kind],
-    size*.075,size*.075,size*.85);
+  ctx.fillText(campaign.title,size*.075,size*.075,size*.85);
   ctx.font='900 '+Math.round(size*.077)+'px Arial, sans-serif';
   const split=label.length>14?label.split(' '):[label];
   if(split.length>1 && label.length>14){
@@ -124,7 +160,8 @@ function panelArt(ctx,x,y,size,info,index){
   ctx.beginPath();ctx.moveTo(size*.075,size*.17);ctx.lineTo(size*.22,size*.17);ctx.stroke();
   ctx.fillStyle='rgba(255,255,255,.75)';
   ctx.font=Math.round(size*.032)+'px Arial, sans-serif';
-  ctx.fillText(['DISCOVER MORE','NYC EDITION','WINTER 2026','ONLY HERE'][index%4],size*.075,size*.94);
+  ctx.fillText(['DISCOVER MORE','NYC EDITION','WINTER 2026','ONLY HERE'][index%4]
+    +'  /  CAMPAIGN '+serial,size*.075,size*.94);
   // Fine, static LED matrix and seam texture, without dynamic animation.
   ctx.fillStyle='rgba(0,0,0,.075)';
   for(let yy=2;yy<size;yy+=5)ctx.fillRect(0,yy,size,1);
@@ -132,14 +169,17 @@ function panelArt(ctx,x,y,size,info,index){
 }
 export function createNycLedAtlas(gl,panels){
   if(!panels||!panels.length)return null;
-  const size=2048,cols=8,step=size/cols,canvas=document.createElement('canvas');
+  const size=2048,cols=Math.max(8,Math.ceil(Math.sqrt(panels.length))),
+    step=size/cols,canvas=document.createElement('canvas');
+  const creativeRun=reserveCreativeSerials(panels.length);
   canvas.width=canvas.height=size;
   const c=canvas.getContext('2d',{alpha:false});
   if(!c)throw Error('LED atlas needs a 2D context');
   c.fillStyle='#080a14';c.fillRect(0,0,size,size);
-  for(let i=0;i<Math.min(64,panels.length);i++){
+  for(let i=0;i<panels.length;i++){
     const x=(i%cols)*step,y=Math.floor(i/cols)*step;
-    panelArt(c,x+2,y+2,step-4,panels[i],i);
+    const campaign=campaignDetails(creativeRun.start+i,creativeRun.nonce);
+    panelArt(c,x+2,y+2,step-4,panels[i],i,campaign);
   }
   const texture=gl.createTexture(),flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
   gl.activeTexture(gl.TEXTURE10);
