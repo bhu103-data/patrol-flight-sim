@@ -64,7 +64,7 @@ jobs:
               await page.waitForTimeout(700);
               await page.screenshot({path:'artifacts/chongqing-scenario-clean.png'});
               console.log(JSON.stringify({report,logs:logs.slice(-25)},null,2));
-              if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/images:\s*4/.test(t))) {
+              if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/triangles:\s*24348.*images:\s*4/.test(t))) {
                 throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
               }
             }finally{await browser.close()}
