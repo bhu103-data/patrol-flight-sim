@@ -38,7 +38,7 @@ test('roof seam coverage is sparse and periodic, not all black rooftops',()=>{
   const s=smooth(.46,.495+.004,seam);
   if(s>.5)blackened++;
  }
- assert.ok(blackened>45&&blackened<130,'approximately 8% joint area');
+ assert.ok(blackened>30&&blackened<65,'sparse 4% joints along each one-dimensional axis');
  const world=(u,v)=>[Math.abs((u*.28%1)-.5),Math.abs((v*.28%1)-.5)];
  const [x0,z0]=world(6.8,13.2);
  const [x1,z1]=world(6.8+1/.28,13.2+1/.28);
