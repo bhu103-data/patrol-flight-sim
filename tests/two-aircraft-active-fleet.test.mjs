@@ -76,8 +76,9 @@ test('actual Viper procedural triangle mesh stays finite and small without PBR d
   const boxBegin=page.indexOf('function addModelBox(');
   const boxEnd=page.indexOf('  const SHIP_TYPES',boxBegin);
   assert.ok(fighterBegin>0&&fighterEnd>fighterBegin&&boxBegin>0&&boxEnd>boxBegin);
-  const source=page.slice(boxBegin,boxEnd)+'\\n'+
-    page.slice(fighterBegin,fighterEnd)+'\\nreturn buildFighterMesh();';
+  const source=page.slice(boxBegin,boxEnd)+String.fromCharCode(10)+
+    page.slice(fighterBegin,fighterEnd)+String.fromCharCode(10)+
+    'return buildFighterMesh();';
   let triangles=0,invalid=0;
   const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
   function capture(vertices,color){
