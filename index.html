@@ -5880,12 +5880,12 @@ const CENTRAL_PARK_SITES=[
         const a=glacierPoint(col,0), b=glacierPoint(col+1,0);
         addQuad([a[0],sampleGroundHeight(a[0],a[2])-0.18,a[2]],
           [b[0],sampleGroundHeight(b[0],b[2])-0.18,b[2]],b,a,
-          col%3===0 ? [0.34,0.65,0.76] : [0.61,0.80,0.85]);
+          col%3===0 ? [0.34,0.65,0.76] : [0.61,0.80,0.85],12);
         for (let row=0;row<rows;row++) {
           const streak = 0.5 + 0.5*Math.sin(row*0.86+Math.sin(col*0.62)*1.5);
           const ice = [0.69+0.15*streak,0.83+0.08*streak,0.88+0.05*streak];
           addQuad(glacierPoint(col,row),glacierPoint(col,row+1),
-            glacierPoint(col+1,row+1),glacierPoint(col+1,row),ice);
+            glacierPoint(col+1,row+1),glacierPoint(col+1,row),ice,12);
         }
       }
       for (let i=0;i<25;i++) {
