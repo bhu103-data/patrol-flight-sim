@@ -57,6 +57,9 @@ function createGL(){
 test('the activated original GLB is present, licensed and within budget',()=>{
   assert.equal(binary.toString('ascii',0,4),'glTF');
   assert.equal(binary.readUInt32LE(8),binary.length);
+  const jsonLength=binary.readUInt32LE(12);
+  const metadata=binary.subarray(20,20+jsonLength).toString('utf8');
+  assert.doesNotMatch(metadata,/\\b(?:NaN|Infinity|-Infinity)\\b/,'JSON must be browser-safe');
   assert.equal(provenance.generation,
     'Original procedural mesh and Base Color atlas (not Scenario AI)');
   assert.equal(provenance.triangles,22064);
