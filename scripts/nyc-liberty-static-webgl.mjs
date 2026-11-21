@@ -7,12 +7,18 @@ const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,
 const out='artifacts/nyc-liberty';
 await mkdir(out,{recursive:true});
 const die=message=>{throw Error('LIBERTY_WEBGL_QA: '+message)};
-const browser=await chromium.launch({headless:true,args:[
- '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
- '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
- '--enable-unsafe-swiftshader'
-]});
+// CI defaults to free, deterministic SwiftShader. Windows users can run this
+// EXACT same test in real, headed Chrome with PATROL_LIBERTY_GPU_MODE=native;
+// reject any renderer still reporting SwiftShader/llvmpipe/software.
+const nativeGpu=process.env.PATROL_LIBERTY_GPU_MODE==='native';
+const args=['--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
+ '--enable-webgl',...nativeGpu?[]:[
+ '--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']];
+const browser=await chromium.launch({
+ headless:!nativeGpu,...nativeGpu?{channel:'chrome'}:{},args
+});
 const results={camera:'Statue of Liberty',viewport:[1280,720],
+ rendererMode:nativeGpu?'Windows native Chrome GPU QA':'CI software SwiftShader',
  dateLock:'noon summer clear',rollbackManifestUntouched:true,
  manualOrientationVerified:false,manualPedestalOverlapVerified:false,
  browsers:{},preview:{}};
@@ -121,11 +127,16 @@ async function flight(candidate){
   await page.waitForTimeout(3800);
   const state=await page.evaluate(()=>{
    const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const rendererExtension=gl?.getExtension('WEBGL_debug_renderer_info');
+   const renderer=rendererExtension?gl.getParameter(rendererExtension.UNMASKED_RENDERER_WEBGL):null;
    return {label:document.querySelector('#hotelTarget option:checked')?.textContent,
-    webgl:!!gl&&!gl.isContextLost(),error:gl?.getError()??null};
+    webgl:!!gl&&!gl.isContextLost(),error:gl?.getError()??null,renderer};
   });
   if(!state.webgl||state.error!==0||state.label!=='Statue of Liberty')
    die('Fixed NYC view unavailable '+JSON.stringify(state));
+  if(nativeGpu && (!state.renderer ||
+     /swiftshader|llvmpipe|lavapipe|software|microsoft basic render/i.test(state.renderer)))
+   die('Cannot verify native hardware WebGL2: '+JSON.stringify(state.renderer));
   if(candidate && (!requests.length||!responses.includes(200)))
    die('Candidate GLB did not load through same-origin manifest path');
   const pixels=await screenshot(page,
