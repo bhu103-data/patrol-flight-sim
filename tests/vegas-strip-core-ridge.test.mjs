@@ -86,3 +86,10 @@ test('ridge QA captures both wings from actual Vegas scenic landmark cameras',as
  assert.match(script,/\['east','The Venetian'\]/);
  assert.match(script,/vegas-ridge-.*-noon\.png/);
 });
+
+test('Vegas QA browser launcher declares error and screenshot buffers',async()=>{
+ const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(script,/const errors=\[\],screenshots=\[\],shots=\[\],startupSnapshots=\[\]/);
+ assert.match(script,/browserChannel=process\.env\.PATROL_BROWSER_CHANNEL/);
+ assert.match(script,/graphicsProfile=process\.env\.PATROL_GRAPHICS_PROFILE/);
+});
