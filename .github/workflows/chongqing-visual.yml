@@ -11,6 +11,7 @@ on:
       - "assets/nyc/nyc-hero.js"
       - "assets/nyc/nyc-led.js"
       - "tests/nyc-road-clearance.test.mjs"
+      - "tests/nyc-authored-road-shoreline.test.mjs"
       - "tests/nyc-waterfront-pier-grounding.test.mjs"
       - "tests/nyc-led-creative.test.mjs"
       - "assets/chongqing/**"
@@ -62,6 +63,8 @@ jobs:
         run: node --test tests/nyc-led-creative.test.mjs
       - name: Validate NYC road/building occupancy
         run: node --test tests/nyc-road-clearance.test.mjs
+      - name: Validate legacy NYC streets do not cross water or lots
+        run: node --test tests/nyc-authored-road-shoreline.test.mjs
       - name: Validate Lower Manhattan docks against shoreline and flight collision bounds
         run: node --test tests/nyc-waterfront-pier-grounding.test.mjs
       - name: New York real-browser skyline and road check
