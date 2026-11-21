@@ -16,11 +16,23 @@ function chunkRadius(seed,calving){
   return calving?1.7+hash(seed*4)*1.9:2.1+hash(seed*7)*3.4;
 }
 function waterFootprintClear(x,z,radius,terrainAt,waterY,allowance=.08){
-  if(terrainAt(x,z)>waterY+allowance)return false;
+  if(![x,z,radius,waterY,allowance].every(Number.isFinite)||radius<=0)
+    return false;
+  // Center and rim alone miss isolated interior shoals and no-data DEM cells.
+  // Two staggered eight-point inner rings keep each moving floe to at most
+  // 33 CPU height samples per frame; no GPU or geometry budget changes.
+  const afloat=(px,pz)=>{
+    const y=terrainAt(px,pz);
+    return Number.isFinite(y)&&y<=waterY+allowance;
+  };
+  if(!afloat(x,z))return false;
   for(let step=0;step<16;step++){
-    const angle=step*Math.PI/8;
-    if(terrainAt(x+Math.cos(angle)*radius,
-                 z+Math.sin(angle)*radius)>waterY+allowance)return false;
+    const angle=step*Math.PI/8,c=Math.cos(angle),s=Math.sin(angle);
+    if(!afloat(x+c*radius,z+s*radius))return false;
+    if(step%2===0){
+      if(!afloat(x+c*radius*.33,z+s*radius*.33) ||
+         !afloat(x+c*radius*.66,z+s*radius*.66))return false;
+    }
   }
   return true;
 }
