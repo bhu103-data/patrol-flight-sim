@@ -8970,7 +8970,11 @@ const CENTRAL_PARK_SITES=[
       [.48,.43,.38],[.39,.36,.33]];
     let triangles=0;
     const face=(a,b,c,color)=>{
-      addTri(a,b,c,color);triangles++;
+      // Reverse only downward-facing faces; both mountain wings must face sky.
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      if(normalY<0)addTri(a,c,b,color);
+      else addTri(a,b,c,color);
+      triangles++;
     };
     const ridgeHeight=(i,side)=>{
       const uneven=Math.sin(i*1.73+side*.6)*.27+

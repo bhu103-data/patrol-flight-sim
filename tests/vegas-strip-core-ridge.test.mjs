@@ -38,6 +38,14 @@ test('mountain wings are outside the authored casino blocks and roads',()=>{
  const east=triangles.filter(t=>t.a[0]>0);
  assert.equal(west.length,108);assert.equal(east.length,108);
 });
+test('both Vegas ridge wings have upward-facing triangle normals',()=>{
+ const {triangles}=scene();
+ assert.equal(triangles.length,216);
+ for(const [i,{a,b,c}] of triangles.entries()){
+  const ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+  assert.ok(ny>0,`ridge triangle ${i} is downward-facing or degenerate`);
+ }
+});
 test('flush Strip surface repairs have no physical colliders or textures',()=>{
  const {quads}=scene();
  assert.ok(quads.every(q=>[q.a,q.b,q.c,q.d].every(p=>
