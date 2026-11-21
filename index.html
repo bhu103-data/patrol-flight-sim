@@ -1515,7 +1515,7 @@ const CENTRAL_PARK_SITES=[
         vec4 p=OCEAN_PHASE[mode];
         height+=sin(dot(xz,p.xy)-p.z*uTime+p.w)*h*(mode<6?shore:edge);
       }
-      return oceanExposure(xz)*height;
+      return oceanExposure(xz)*height*(uAlaska?0.30:1.0);
     }
     // Determinant of the horizontal wave displacement Jacobian. Sum recent
     // upwind samples to approximate foam persistence without a feedback buffer.
@@ -1713,7 +1713,7 @@ const CENTRAL_PARK_SITES=[
 
         // Cloud shadow on ground/water
         vec2 cloudProj = p.xz + sunDirection().xz * ((cloudBase() - p.y) / max(sunDirection().y, 0.1));
-        float cShad = 1.0 - cloudDensity(cloudProj) * (uVegas?0.20:0.52);
+        float cShad = 1.0 - cloudDensity(cloudProj) * (uAlaska?0.21:uVegas?0.20:0.52);
 
         // Plane shadow on ground/water
         vec2 planeProj = uPlanePos.xz - sunDirection().xz * ((uPlanePos.y - p.y) / max(sunDirection().y, 0.1));
