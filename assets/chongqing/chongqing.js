@@ -367,18 +367,49 @@ const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THR
 scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xc5dafa,size:2.4,sizeAttenuation:false})));
 
 const avatar=new THREE.Group();scene.add(avatar);
+// Composed pilot silhouette: soft helmet, metal goggles, visor, straps and chili flightpack.
+// Keep the mesh count small because this character stays close to the camera.
+const pilotMetal=new THREE.MeshStandardMaterial({color:0xcfac76,metalness:.65,roughness:.38});
+const pilotLens=new THREE.MeshStandardMaterial({color:0x82cce3,emissive:0x327b96,emissiveIntensity:.35,metalness:.48,roughness:.14});
+const pilotDark=new THREE.MeshStandardMaterial({color:0x342c35,roughness:.6});
+const pilotCloth=new THREE.MeshStandardMaterial({color:0x932e39,roughness:.88});
+const pilotEyes=new THREE.MeshBasicMaterial({color:0x282127});
+const pilotLimbs={arms:[],legs:[],boots:[]};
+const flameLight=new THREE.PointLight(0xff5b17,0,22,2);
+flameLight.position.set(0,-1.3,1.2);avatar.add(flameLight);
 box(0,-.85,0,1.25,1.65,.9,M.coat,avatar);
 ball(0,.53,0,.72,M.skin,avatar);
 ball(0,.88,-.12,.74,M.pants,avatar);
 box(0,-.12,.65,1.25,1.5,.48,M.copper,avatar);
 box(0,.18,-.7,.75,.2,.18,M.glass,avatar);
 for(const dir of [-1,1]){
-  box(.86*dir,-.58,0,.43,1.3,.44,M.coat,avatar);
-  box(.37*dir,-1.9,0,.52,1.1,.55,M.pants,avatar);
-  box(.37*dir,-2.48,-.19,.64,.4,1.0,M.boot,avatar);
-  ball(.34*dir,.57,-.57,.22,M.glass,avatar);
+  const arm=box(.84*dir,-.52,0,.46,1.35,.5,M.coat,avatar);
+  pilotLimbs.arms.push(arm);
+  const leg=box(.37*dir,-1.9,0,.53,1.1,.58,M.pants,avatar);
+  pilotLimbs.legs.push(leg);
+  const boot=box(.37*dir,-2.47,-.17,.66,.38,1.01,M.boot,avatar);
+  pilotLimbs.boots.push(boot);
+  // Lens, rim, leather strap and earcup: readable even from 10–15 meters.
+  const lens=new THREE.Mesh(new THREE.CircleGeometry(.23,18),pilotLens);
+  lens.position.set(.34*dir,.53,-.75);avatar.add(lens);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(.27,.062,6,18),pilotMetal);
+  ring.position.set(.34*dir,.53,-.78);avatar.add(ring);
+  box(.62*dir,.64,-.12,.24,.28,.46,pilotMetal,avatar);
+  box(.85*dir,-1.06,-.15,.57,.23,.56,pilotDark,avatar);
+  ball(.85*dir,-1.24,-.21,.27,M.skin,avatar);
+  const lash=ball(.23*dir,.17,-.62,.055,pilotEyes,avatar);
+  lash.scale.set(1.3,.5,.3);
+  box(.5*dir,-.8,.57,.24,2.05,.15,pilotMetal,avatar);
 }
-const scarf=box(0,.17,.60,1.1,.25,.65,M.scarf,avatar);
+const scarf=box(0,.17,.60,1.12,.26,.68,M.scarf,avatar);
+const flyingScarf=box(.66,.16,.76,1.25,.19,.27,pilotCloth,avatar);
+const gogglesStrap=box(0,.58,.0,1.65,.19,.53,pilotDark,avatar);
+const helmet=new THREE.Mesh(new THREE.SphereGeometry(.78,18,10,0,Math.PI*2,0,Math.PI*.6),pilotDark);
+helmet.position.set(0,.71,0);avatar.add(helmet);
+box(0,-1.00,.67,1.15,.21,.25,pilotMetal,avatar);
+box(0,-.28,.92,.68,.54,.16,pilotCloth,avatar);
+const badge=ball(0,-.28,1.02,.22,M.red,avatar);
+badge.scale.set(.72,1.3,.28);
 avatar.rotation.order='YXZ';
 
 const state={
@@ -530,6 +561,16 @@ function move(dt){
   const bank=clamp(-state.vel.x*Math.cos(viewYaw)*.005+state.vel.z*Math.sin(viewYaw)*.005,-.24,.24);
   avatar.rotation.z+= (bank-avatar.rotation.z)*(1-Math.exp(-dt*5));
   avatar.rotation.x+=((state.flying?-.11:0)-avatar.rotation.x)*Math.min(1,dt*5);
+  const speed=Math.hypot(state.vel.x,state.vel.z);
+  const running=!state.flying&&state.onGround?Math.min(speed/20,1):0;
+  const swing=Math.sin(time*10.7)*.44*running;
+  pilotLimbs.arms[0].rotation.x=swing;
+  pilotLimbs.arms[1].rotation.x=-swing;
+  pilotLimbs.legs[0].rotation.x=-swing;
+  pilotLimbs.legs[1].rotation.x=swing;
+  flyingScarf.rotation.y=Math.sin(time*6.8)*.18-(state.boosting?.23:0);
+  flyingScarf.rotation.x=Math.sin(time*5.1)*.12;
+  flameLight.intensity+=((state.spicy>0&&(state.boosting||state.flying)?65:0)-flameLight.intensity)*Math.min(1,dt*8);
 }
 const visited={hong:false,bridge:false};
 function updateQuest(){
