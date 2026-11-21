@@ -42,3 +42,31 @@ test('water check follows the current position of a moving harbor ferry',()=>{
 test('no ships means valid open-water touchdown remains possible',()=>{
   assert.equal(water([])(300,-400,0),true);
 });
+
+// The aircraft has a 10.922 m wingspan: collision bounds must follow its yaw,
+// not just the ship's heading or a fixed 4.4-unit center-point padding.
+test('flight heading changes its swept clearance next to a ferry beam',()=>{
+  const ferry={x:300,z:-400,heading:0,halfLength:13,halfWidth:3.3};
+  const usable=water([ferry]);
+  assert.equal(usable(308.5,-400,0),false,
+    'parallel wing tips extend into the ferry safety envelope');
+  assert.equal(usable(308.5,-400,Math.PI/2),true,
+    'crosswise wings do not unnecessarily close the open channel');
+  assert.equal(usable(300,-378,0),true,
+    'clear water beyond the ferry bow remains available');
+});
+
+test('heading-aware clearance follows a ferry turning through ninety degrees',()=>{
+  const ferry={x:300,z:-400,heading:Math.PI/2,halfLength:13,halfWidth:3.3};
+  const usable=water([ferry]);
+  assert.equal(usable(300,-391.5,Math.PI/2),false,
+    'wings parallel to rotated ferry occupy its beam');
+  assert.equal(usable(300,-391.5,0),true,
+    'orthogonal wings leave sufficient cross-channel space');
+});
+
+test('broad-phase range does not miss a diagonal approach to a small vessel',()=>{
+  const buoy={x:300,z:-400,heading:0,halfLength:.5,halfWidth:.5};
+  assert.equal(water([buoy])(306,-394,Math.PI/4),false,
+    'diagonal wing footprint must not be discarded before narrow-phase test');
+});
