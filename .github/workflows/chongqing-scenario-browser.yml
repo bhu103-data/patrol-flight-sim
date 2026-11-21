@@ -72,6 +72,19 @@ jobs:
               if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/triangles:\s*15996.*images:\s*4/.test(t))) {
                 throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
               }
+              // Same cinematic camera on the ordinary unmodified production map:
+              // a live A/B screenshot, with no Scenario query or hidden art.
+              await page.goto('http://127.0.0.1:8127/chongqing.html',
+                {waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForFunction(()=>
+                document.documentElement.dataset.scenarioHongyadong==='off',
+                null,{timeout:65000});
+              await page.keyboard.press('1');
+              await page.waitForTimeout(1500);
+              await page.keyboard.press('h');
+              await page.waitForTimeout(500);
+              await page.screenshot({path:'artifacts/chongqing-default-clean.png'});
+              console.log('Production fallback scene also loaded and screenshot captured');
             }finally{await browser.close()}
           })().catch(e=>{console.error(e);process.exitCode=1});
           NODE
@@ -80,6 +93,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: chongqing-scenario-pbr-browser-screenshots
-          path: artifacts/chongqing-scenario-*.png
+          path: artifacts/chongqing-*.png
           retention-days: 15
           if-no-files-found: warn
