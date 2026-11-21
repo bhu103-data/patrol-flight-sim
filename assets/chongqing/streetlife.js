@@ -177,6 +177,15 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     light.position.set(x,ground(x,z)+12,z);
     scene.add(light);streetLights.push(light);
   }
+  // Only one nearby moving vehicle receives actual headlight cones at a time.
+  // Two physically directed SpotLights are far cheaper than lighting all ten cars.
+  const headlightCones=[];
+  let allowDynamicHeadlights=true;
+  for(let n=0;n<2;n++){
+    const lamp=new THREE.SpotLight(0xffeac8,36,56,Math.PI/7,.62,2);
+    lamp.visible=false;lamp.castShadow=false;
+    scene.add(lamp,lamp.target);headlightCones.push(lamp);
+  }
   const buffer={body:bodies,glass:windows,tires,hubs,fronts,backs,checker,checkerLight,taxiSigns,sideMirror,bumper};
   function update(dt,player){
     for(const v of vehicles){
@@ -226,10 +235,30 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       mesh.instanceMatrix.needsUpdate=true;
       mesh.frustumCulled=false;
     }
+    let nearest=null,nearDist=7200;
+    if(player&&allowDynamicHeadlights)for(const v of vehicles){
+      const dx=v.x-player.x,dz=v.z-player.z;
+      const d2=dx*dx+dz*dz;
+      if(d2<nearDist){nearest=v;nearDist=d2;}
+    }
+    for(let i=0;i<headlightCones.length;i++){
+      const lamp=headlightCones[i];
+      lamp.visible=!!nearest;
+      if(!nearest)continue;
+      const dirX=Math.cos(nearest.heading),dirZ=Math.sin(nearest.heading);
+      const sideX=-dirZ,sideZ=dirX;
+      const side=i===0?-.73:.73;
+      lamp.position.set(nearest.x+dirX*2.9+sideX*side,
+        nearest.y+1.05,nearest.z+dirZ*2.9+sideZ*side);
+      lamp.target.position.set(nearest.x+dirX*27+sideX*side,
+        nearest.y+.36,nearest.z+dirZ*27+sideZ*side);
+    }
   }
   update(0,null);
   function setQuality(mode){
     const low=mode==='low';
+    allowDynamicHeadlights=!low;
+    if(low)for(const lamp of headlightCones)lamp.visible=false;
     curbs.visible=!low;brightGlints.visible=!low;
     checker.visible=!low;checkerLight.visible=!low;hubs.visible=!low;
     // The vehicle silhouettes, roads, headlamps and pole lamps always remain.
@@ -238,7 +267,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   return {
     update,setQuality,
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
-      streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,drawGroups:Object.keys(buffer).length+5},
+      streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,movingHeadlights:headlightCones.length,drawGroups:Object.keys(buffer).length+5},
     // For collision avoidance, external consumers can check an individual 3m footprint.
     nearby(x,z,y,radius=3.8){
       return vehicles.some(v=>Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
