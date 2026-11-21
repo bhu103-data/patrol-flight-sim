@@ -47,7 +47,7 @@ class Attr{constructor(array,size){this.array=array;this.itemSize=size}}
 class Mat{constructor(props={}){Object.assign(this,props)}clone(){return new Mat(this)}}
 class Mesh extends Obj{constructor(g,m){super();this.geometry=g;this.material=m}}
 class Instanced extends Mesh{
-  constructor(g,m,c){super(g,m);this.capacity=c;this.count=0;this.writes=0;this.instanceMatrix={setUsage(){},needsUpdate:false,array:new Float32Array(c*16)}}
+  constructor(g,m,c){super(g,m);this.capacity=c;this.count=0;this.visible=true;this.writes=0;this.instanceMatrix={setUsage(){},needsUpdate:false,array:new Float32Array(c*16)}}
   setMatrixAt(i){assert.ok(i<this.capacity,'GPU instance overflow');this.writes++}
   setColorAt(i){assert.ok(i<this.capacity,'color buffer overflow')}
   computeBoundingSphere(){}

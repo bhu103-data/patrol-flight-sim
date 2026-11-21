@@ -90,4 +90,9 @@ test('main Chongqing map actually installs dry-end guards after tributary clippi
   assert.match(game,/const dryRoads=clipChongqingDryRoadSegments/);
   assert.match(game,/shorelineRoadEnds\.push/);
   assert.match(game,/buildChongqingShorelineBarriers\(\{/);
+  assert.match(game,/Digit5:\{name:'支流护栏与山城道路'/,
+    'the user must be able to inspect the actual riverbank by scenic shortcut');
+  const smoke=readFileSync(new URL('../scripts/chongqing-browser-smoke.mjs',import.meta.url),'utf8');
+  assert.match(smoke,/capture\('03b-tributary-safety-guards'\)/,
+    'headless WebGL must photograph the riverbank guards');
 });

@@ -32,7 +32,7 @@ class Instanced{
 }
 class Mesh {constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true}}
 const THREE={
- BoxGeometry:Geo,CylinderGeometry:Geo,BufferGeometry:Geo,
+ BoxGeometry:Geo,CylinderGeometry:Geo,SphereGeometry:Geo,BufferGeometry:Geo,
  Float32BufferAttribute:class{constructor(array,size){this.array=array;this.itemSize=size}},
  Object3D:Obj,InstancedMesh:Instanced,Mesh,Color,
  MeshBasicMaterial:Mat,MeshStandardMaterial:Mat,MeshPhysicalMaterial:Mat,
@@ -85,6 +85,21 @@ test('batched lane paint, curbs and street lamps do not occupy building sites',(
      'street decoration inside building footprint');
  }
 });
+test('mounted traffic signal poles and support arms stay outside buildings',()=>{
+ const {traffic,objects}=streetFixture();
+ const signalMasts=objects.filter(m=>m instanceof Instanced&&
+   m.capacity===8&&m.material.metalness===.62);
+ assert.equal(signalMasts.length,2,'shared steel posts and cantilevers');
+ const [posts,arms]=signalMasts;
+ assert.ok(posts.count>=2,'blocked hotpot frontage leaves other valid crossings');
+ assert.equal(posts.count,arms.count,'each cantilever has a supporting pole');
+ assert.equal(traffic.stats.trafficSignals,posts.count);
+ for(const p of posts.matrices.values()){
+   assert.equal(isRoadClear(p.x,p.z,p.y,1),true,
+     'a traffic mast cannot be rooted inside an occupied shop or tower');
+ }
+});
+
 test('wet road decals are omitted from building interiors',()=>{
  const old=globalThis.document;
  globalThis.document={createElement(){return {getContext(){return {

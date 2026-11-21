@@ -110,3 +110,43 @@ test('initial Alaska ice anchorage reserves full mesh radius',()=>{
   assert.notDeepEqual(coast[0].anchor,first.anchor,
     'initial placement must avoid terrain under a diagonal hull corner');
 });
+
+test('an interior shoal between center and rim cannot carry drifting ice',()=>{
+  const actor={kind:'floe',anchor:[0,0],radius:4,phase:0,yaw:0};
+  const inner=actor.radius*1.12*.66,angle=Math.PI/4;
+  const shoal=[Math.cos(angle)*inner,5.1+Math.sin(angle)*inner];
+  const terrain=(x,z)=>Math.hypot(x-shoal[0],z-shoal[1])<.19?21:11.7;
+  const pose=poseAlaskaIce(actor,0,terrain,12.2);
+  assert.equal(pose.visible,true);
+  assert.deepEqual([pose.x,pose.z],actor.anchor,
+    'floe must fall back to its verified anchor when an internal shoal is hit');
+});
+
+test('unknown DEM values are never assumed to mean open water',()=>{
+  const actor={kind:'floe',anchor:[0,0],radius:4,phase:0,yaw:0};
+  const missing=(x,z)=>Math.abs(x)<.01&&Math.abs(z-5.1)<.01?NaN:11.7;
+  const pose=poseAlaskaIce(actor,0,missing,12.2);
+  assert.deepEqual([pose.x,pose.z],actor.anchor,
+    'a no-data drift position cannot be treated as safe water');
+  const valid=createAlaskaIceActors({
+    makeMesh:testMeshFactory(),terrainAt:flatWater,waterY:12.2
+  });
+  const first=valid[0];
+  const corrupted=(x,z)=>Math.hypot(x-first.anchor[0],
+    z-first.anchor[1])<.2?Infinity:11.7;
+  const relocated=createAlaskaIceActors({
+    makeMesh:testMeshFactory(),terrainAt:corrupted,waterY:12.2
+  });
+  assert.ok(relocated.length>2);
+  assert.notDeepEqual(relocated[0].anchor,first.anchor,
+    'initial ice placement must reject invalid terrain samples as well');
+});
+
+test('ice drift interior terrain checks stay within a fixed frame budget',()=>{
+  const actor={kind:'floe',anchor:[0,0],radius:4,phase:0,yaw:0};
+  let probes=0;
+  const pose=poseAlaskaIce(actor,0,()=>{probes++;return 11.7;},12.2);
+  assert.equal(pose.visible,true);
+  assert.ok(probes>=33,'center, perimeter and interior rings were all checked');
+  assert.ok(probes<=33,'each ice actor must use a bounded terrain query budget');
+});

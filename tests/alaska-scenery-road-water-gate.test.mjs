@@ -47,3 +47,15 @@ test('Alaska paths clip wet strips but preserve dry pieces',()=>{
     assert.ok(terrain(p[0],p[2])>13.12,'no road vertex may touch the fjord');
   assert.match(html,/ALASKA_SAFE_ROAD_GATE_V1/);
 });
+test('Alaska quarter-strip water gap never receives asphalt',()=>{
+  // The 0.75-m inlet is invisible to the old corner/midpoint survey.
+  // The production mesh may keep the second dry 3-m strip.
+  const terrain=(x,z)=>Math.abs(x-.75)<.08&&Math.abs(z)<.12?12.2:18;
+  const quads=[];pathFor(terrain,quads)([[0,0],[6,0]],4,[.5,.5,.5]);
+  assert.equal(quads.length,1,
+    'first road segment must be clipped where a narrow inlet bisects its middle');
+  for(const quad of quads){
+    assert.ok(quad.every(p=>p[0]>=3-1e-8),
+      'only the safely grounded segment after the inlet may survive');
+  }
+});
