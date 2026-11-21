@@ -31,6 +31,16 @@ test('surveyor-grade lake/water detection disallows roads above fjord',()=>{
   assert.doesNotMatch(game,/pushRoadStrip\(addQuad,dockRamp\(/);
 });
 
+test('thin flooded inlet cannot pass unseen between nine cabin samples',()=>{
+  // Old corner/center sampling accepted this strip of water under a cabin.
+  // A single flooded point in the larger parcel must reject the site.
+  const narrowInlet=(x,z)=>x>3.2&&x<3.9&&Math.abs(z)<9?12.2:15;
+  const sampler=new Function('sampleTerrainHeight','WATER_H','alaskaObstacles',
+    game.slice(start,end)+';return dryPad;')(narrowInlet,12.2,[]);
+  assert.equal(sampler(0,0,10,16,0,1.8),null,
+    'do not build across a narrow inlet despite dry corners and center');
+});
+
 test('all six hillside houses occupy dry, non-overlapping terrain',()=>{
   const huts=[[132,-538,10,16],[146,-518,11,14],[164,-531,12,12],
     [135,-499,9,12],[166,-502,8,12],[177,-549,10,15]];
@@ -38,8 +48,9 @@ test('all six hillside houses occupy dry, non-overlapping terrain',()=>{
     const site=dryPad(x,z,w,d,126,3.9);
     assert.ok(site,'no house near '+x+','+z+' may float or disappear');
     const h=[];
-    for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
-      h.push(grid(site.x+ux*(w+.65),site.z+uz*(d+.65)));
+    for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++)
+      h.push(grid(site.x+(ix/6-.5)*(w+.65),
+        site.z+(iz/6-.5)*(d+.65)));
     assert.ok(Math.min(...h)>13.2,'all cabin footprint samples must be dry');
     assert.ok(Math.max(...h)-Math.min(...h)<=3.9,'reject unbuildable cliff');
     assert.ok(site.top>=Math.max(...h)-1e-6,'floor covers highest corner');
