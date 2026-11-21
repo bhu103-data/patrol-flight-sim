@@ -4,7 +4,8 @@
 import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
-const output='artifacts/vegas';await mkdir(output,{recursive:true});
+const qaTag=process.env.PATROL_QA_TAG||'candidate';
+const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
@@ -15,7 +16,7 @@ const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFa
 page.on('pageerror',e=>errors.push(e.message));
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
-let result={status:'failed',errors,screenshots,shots};
+let result={status:'failed',qaTag,errors,screenshots,shots};
 try {
  const navStarted=Date.now();
  const response=await page.goto(base+'/index.html?graphics=compat',{waitUntil:'domcontentloaded',timeout:60000});
@@ -63,6 +64,8 @@ try {
    el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
   });
   for(const [view,zoom] of [['near','70'],['far','24']]){
+   const expectedTarget=view==='near'?'Strip Street View':'Bellagio';
+   await page.locator('#hotelTarget').selectOption({label:expectedTarget});
    await page.locator('#hotelZoom').evaluate((el,v)=>{
     el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
    },zoom);
@@ -77,7 +80,7 @@ try {
       zoom:document.getElementById('hotelZoom')?.value};
    });
    assert(telemetry.webgl2&&telemetry.error===0,'Vegas WebGL2/context error');
-   assert(telemetry.selected==='vegas'&&telemetry.target==='Strip Street View',
+   assert(telemetry.selected==='vegas'&&telemetry.target===expectedTarget,
     'Vegas scenic camera not selected');
    const shotName='vegas-core-'+view+'-'+preset+'.png';
    await page.evaluate(()=>document.body.classList.add('vegas-qa-canvas'));
@@ -100,7 +103,7 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',loadMs,errors,screenshots,shots,startupSnapshots,
+ result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,
    frameSampling,incrementalGeometry:{triangles:234,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
