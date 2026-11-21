@@ -22,6 +22,14 @@ const triArea=(a,b,c)=>{
   const u=[b[0]-a[0],b[2]-a[2]],v=[c[0]-a[0],c[2]-a[2]];
   return Math.abs(u[0]*v[1]-u[1]*v[0])*.5;
 };
+const triArea3D=(a,b,c)=>{
+  const u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);
+  return .5*Math.hypot(
+    u[1]*v[2]-u[2]*v[1],
+    u[2]*v[0]-u[0]*v[2],
+    u[0]*v[1]-u[1]*v[0]
+  );
+};
 
 test('NYC government provenance, schema, unique building identifiers and bounded input',()=>{
   assert.equal(snapshot.schema,'patrol-nyc-oti-footprints-v1');
@@ -46,7 +54,7 @@ test('all official roof geometries are finite and cover the actual polygon (incl
     const stats=mesh((a,b,c,color)=>{[a,b,c].forEach(check);
       const area=triArea(a,b,c);assert.ok(area>.000001,'nondegenerate roof');fill+=area;triangles++;
     },(a,b,c,d,color)=>{[a,b,c,d].forEach(check);
-      assert.ok(triArea(a,b,c)>.000001,'nondegenerate wall/ornament');
+      assert.ok(triArea3D(a,b,c)>.000001,'nondegenerate wall/ornament');
     },[x,z,w,d,h,(id%101)/101,false,poly,id],14.58,3);
     assert.ok(Math.abs(fill-area(poly))<Math.max(.04,area(poly)*.015),
       'roof triangles cover municipal outline '+id);
