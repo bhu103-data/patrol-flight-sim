@@ -1122,11 +1122,24 @@ const CENTRAL_PARK_SITES=[
             return dx*dx+dz*dz<zone[3]*zone[3];
           }))continue;
           const width=8.5+hash(ix,iz,144)*2;
-          const length=14+hash(ix,iz,449)*3;
           const options=[[0,0],[-4.5,0],[4.5,0],[0,-5],[0,5],[-4,-4],[4,4]];
           for(const [du,dz] of options){
+            // Shorten lots near a cross-street, maintaining full sidewalks.
+            const length=Math.abs(dz)>1?
+              11.4+hash(ix,iz,449)*1.2:14+hash(ix,iz,449)*3;
             // Maintain the grid cell used by the terrain heightfield lookup.
             const x=x0+du+city.tilt*dz,z=z0+dz;
+            // Local NYC grid roads are generated separately from CITY_STREETS.
+            // Reserve both asphalt and 1.42-wide raised pedestrian sidewalks.
+            const su=(x-city.tilt*z-city.offset)/city.blockWidth;
+            const sz=z/city.blockLength;
+            const fu=su-Math.floor(su),fz=sz-Math.floor(sz);
+            const tiltMag=Math.hypot(1,city.tilt);
+            const avenueSpace=Math.min(fu,1-fu)*city.blockWidth/tiltMag;
+            const avenueExtent=(width+Math.abs(city.tilt)*length)*.5/tiltMag;
+            const crossSpace=Math.min(fz,1-fz)*city.blockLength;
+            if(avenueSpace<avenueExtent+4.65 ||
+               crossSpace<length*.5+4.35)continue;
             const base=cityHeight(x,z)*scale;
             if(base<=water+1.2)continue;
             if(![[-1,-1],[-1,1],[1,-1],[1,1]].every(([a,b])=>
