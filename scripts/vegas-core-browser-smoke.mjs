@@ -7,6 +7,7 @@ const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,
 const qaTag=process.env.PATROL_QA_TAG||'candidate';
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
+const ridgeLoadMessages=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -14,6 +15,11 @@ const browser=await chromium.launch({headless:true,args:[
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
+page.on('console',msg=>{
+ const line=msg.text();
+ if(line.includes('[PATROL] Vegas USGS measured ridge profile loaded'))
+   ridgeLoadMessages.push(line);
+});
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
 let result={status:'failed',qaTag,errors,screenshots,shots};
@@ -46,6 +52,14 @@ try {
  if(!loaded)throw Error('Vegas startup failed or timed out: '+
    JSON.stringify(startupSnapshots.slice(-8)));
  const loadMs=Date.now()-navStarted;
+ // The candidate is only accepted as survey-backed if the actual game
+ // reports it decoded the committed profile. The untouched baseline is
+ // intentionally NOT required to load the new Vegas file.
+ if(qaTag==='candidate'){
+   assert(ridgeLoadMessages.some(line=>
+     line.includes('856259460e4e687285eb40949ab8764e7543ccf09e9f81177a8d2152bdb8046d')),
+     'Vegas scene fell back to procedural ridges instead of verified USGS 3DEP');
+ }
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
@@ -103,12 +117,12 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,
+ result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
    frameSampling,incrementalGeometry:{triangles:786,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
- result={...result,status:'failed',errors,startupSnapshots};
+ result={...result,status:'failed',errors,startupSnapshots,ridgeLoadMessages};
  process.exitCode=1;
 }finally{
  await writeFile(output+'/vegas-core-report.json',JSON.stringify(result,null,2));
