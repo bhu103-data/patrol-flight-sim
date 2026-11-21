@@ -15,19 +15,21 @@ test('experimental lower triangle count retains original UV atlas, provenance an
   'export_texcoords=True','export_normals=True'])
   assert.ok(bake.includes(gate),'Missing geometry or atlas gate '+gate);
  assert.equal(manifest.landmarks.liberty.enabled,false);
- // Original source branch now has an explicitly guarded staging-to-QA step.
- // A lower-LOD experiment MUST NOT push to the original QA branch, because
- // the exact HEAD comparison requires a source-branch commit.
+ // The experiment branch now has an explicitly guarded staging-to-QA step.
+ // It MUST NOT push to the original QA branch, because
+ // the exact HEAD comparison requires its OWN branch commit.
  const push=workflow.indexOf('git push origin HEAD:refs/heads/');
  assert.ok(push>=0,'the upstream staging destination needs an explicit gate');
  assert.match(workflow.slice(push,push+120),
-  /git push origin HEAD:refs\/heads\/qa\/nyc-liberty-cc0-glb-20261121/);
+  /git push origin HEAD:refs\/heads\/qa\/nyc-liberty-cc0-light-lod-20261121/);
  assert.ok(!workflow.includes('git push origin HEAD:refs/heads/main'),
   'never commit to production main');
+ assert.ok(!workflow.includes('git push origin HEAD:refs/heads/qa/nyc-liberty-cc0-glb-20261121'),
+  'never overwrite the original 24.4k source candidate branch');
  assert.ok(workflow.includes('git rev-parse HEAD'),
   'QA model commits require a freshness/branch identity comparison');
- assert.ok(workflow.includes('git rev-parse refs/remotes/origin/qa/nyc-liberty-cc0-glb-20261121'),
-  'experimental branches cannot write the original model branch');
+ assert.ok(workflow.includes('git rev-parse refs/remotes/origin/qa/nyc-liberty-cc0-light-lod-20261121'),
+  'a model write requires exact identity with the trial branch');
 });
 test('the same real WebGL candidate and fallback are captured without committing binary',()=>{
  for(const t of ['scripts/nyc-liberty-static-webgl.mjs','check-liberty-glb.mjs',
