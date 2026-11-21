@@ -63,6 +63,23 @@ try {
       throw new Error('Blender GLB not activated on '+map+': '+JSON.stringify({responses,messages:messages.slice(-20)}));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-webgl.png',animations:'disabled'});
     report.maps.push({map,...state,glb:true});
+    if(map==='alaska'){
+      // Real keyboard, real flight loop: accelerate both pontoons on water,
+      // rotate above on-step speed, then observe climb from actual camera.
+      await page.keyboard.down('Shift');
+      await page.keyboard.down('w');
+      await page.waitForTimeout(4400);
+      await page.keyboard.up('w');
+      await page.keyboard.up('Shift');
+      const climbed=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+      const status=await page.locator('#gearStatus').textContent();
+      if(!climbed?.playing||climbed.aircraft!=='seaplane'||
+         climbed.speed<17.5||climbed.altitude<15.0||
+         status?.includes('WATER TAXI'))
+        throw new Error('Floatplane failed water takeoff rotation: '+JSON.stringify({climbed,status}));
+      await page.screenshot({path:'artifacts/cessna185-alaska-liftoff.png',animations:'disabled'});
+      report.maps.push({map:'alaska-water-takeoff',...climbed,status,glb:true});
+    }
     await page.close();
   }
   console.log('PASS global C185 Blender floatplane WebGL2: '+JSON.stringify(report));
