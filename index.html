@@ -8964,6 +8964,10 @@ const CENTRAL_PARK_SITES=[
   // Vegas core visual acceptance sample: original triangulated mountain
   // ridges and asphalt surface breakup. No third-party models, textures,
   // GIS-derived coordinates, collider additions or flight-physics changes.
+  // Verified USGS 3DEP-derived ridge profiles are staged only for Vegas.
+  // Remain on the original procedural flight-scale fallback when the data
+  // is absent, malformed, incorrectly georeferenced or not yet published.
+  let vegasMeasuredRidges=null;
   function buildVegasCoreRidgeSample(geometry) {
     const {addTri,addQuad}=geometry;
     // Original, editable earth-toned silhouette geometry. The shape is
@@ -8975,6 +8979,15 @@ const CENTRAL_PARK_SITES=[
     // Combine non-repeating long ridges, secondary crests and smaller
     // weathered outcrops; avoid the former five-sample sawtooth skyline.
     const ridgeHeight=(i,side)=>{
+      if(vegasMeasuredRidges){
+        const data=vegasMeasuredRidges.elevationMeters;
+        // USGS elevations are meters above datum. The existing gameplay
+        // has a deliberately compressed horizontal map and flight ceiling,
+        // so only the *shape* of source-derived relative relief is mapped
+        // to distant display geometry (not a 1:1 elevation model).
+        const relative=data[side<0?'west':'east'][i]-data.center[i];
+        return Math.max(12,Math.min(160,relative*.23));
+      }
       const phase=side===1?.35:1.47;
       return Math.max(28,61+17*Math.sin(i*.17+phase)+
         10*Math.sin(i*.39+phase*.7)+
@@ -12781,6 +12794,19 @@ const CENTRAL_PARK_SITES=[
       }catch(error){
         console.warn('[PATROL] NYC official footprint fallback:',error);
         selectedMap.city.officialFootprints=[];
+      }
+    }
+    // USGS asset is vetted locally before it can change Vegas skyline.
+    // Any failed download leaves the original fully flyable terrain.
+    vegasMeasuredRidges=null;
+    if(selectedMap.vegas){
+      try{
+        const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
+        vegasMeasuredRidges=await loadVegasRidgeDEM();
+        console.info('[PATROL] Vegas USGS measured ridge profile loaded',
+          vegasMeasuredRidges.source.rawGeoTiffSHA256);
+      }catch(error){
+        console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
       }
     }
     const terrainOptions={
