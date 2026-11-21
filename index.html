@@ -12320,15 +12320,34 @@ const CENTRAL_PARK_SITES=[
       }
       return true;
     };
+    // A valid starting point is not enough: the C185 needs a full clear
+    // water runway to accelerate, rotate and climb away from shore.
+    // The original Alaska spawn faces dry USGS land just ~40 units ahead;
+    // try perpendicular headings before relocating the aircraft.
+    const runwayClear=(x,z,yaw)=>{
+      const fx=Math.sin(yaw),fz=Math.cos(yaw);
+      for(const advance of [0,18,36,54,76,94]){
+        const px=x+fx*advance,pz=z+fz*advance;
+        if(!safe(px,pz,yaw))return false;
+      }
+      return true;
+    };
+    const headings=primary=>[primary,primary+Math.PI/2,
+      primary-Math.PI/2,primary+Math.PI];
     // Test the actual published spawn first; outward rings avoid random respawn.
-    if(safe(start[0],start[2],0))return [start[0],start[2],0];
+    for(const yaw of headings(0)){
+      if(runwayClear(start[0],start[2],yaw))
+        return [start[0],start[2],yaw];
+    }
     for(const radius of [24,48,80,120,180,250,350,470,600]){
       for(let i=0;i<24;i++){
         const angle=i*Math.PI/12+radius*.001;
         const x=start[0]+radius*Math.cos(angle);
         const z=start[2]+radius*Math.sin(angle);
-        const yaw=Math.atan2(-x,-z);
-        if(safe(x,z,yaw))return [x,z,yaw];
+        const preferred=Math.atan2(-x,-z);
+        for(const yaw of headings(preferred)){
+          if(runwayClear(x,z,yaw))return [x,z,yaw];
+        }
       }
     }
     return null;
