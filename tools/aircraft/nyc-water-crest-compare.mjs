@@ -1,6 +1,5 @@
-// Test-only A/B water color: same NYC camera, same shader time, same
-// game version. The reference shader restores only the old teal crest term.
-// No code/model changes are shipped by this script.
+// Test-only same-camera A/B for NYC water, foam and sky. The baseline disables
+// only the selected visual branch; no code/model changes are shipped by this script.
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 
@@ -37,23 +36,33 @@ const inject=html=>html.replace(camera,`
     read(){
       const [x,y,z]=plane.pos;
       const pose=floatOceanPose(x,z,plane.yaw,20.0,selectedMap,WATER_H,sampleFloatOceanFloor);
+      const environment=sampleFlightEnvironment(0);
       return {x,y,z,sceneWave:pose.height,
         waterborne,crashed:Boolean(crash),camera:[...camPos],fixed:this.fixed,
+        sky:{time:skyTime.value,season:skySeason.value,weather:skyWeather.value,
+          sun:environment.sun,atmosphere:environment.atmosphere},
         contextLost:gl.isContextLost()};
     }
   };
 `+bridge).replace(clock,'gl.uniform1f(uWorld.time, 20.0);')
     .replace(aircraftClock,'plane.yaw,20.0,');
-const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
+const compareMode=process.env.PATROL_COMPARE_MODE||'crest';
+const seaDetailAB=compareMode==='sea-detail';
+const skyAtmosphereAB=compareMode==='sky-atmosphere';
 const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
 const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
+const skyEnabled='const bool NYC_TIDEWATER_SKY = true;';
+const skyDisabled='const bool NYC_TIDEWATER_SKY = false;';
 if(seaDetailAB&&src.split(detailEnabled).length!==2)
   throw Error('Missing reversible NYC sea detail marker');
-const sourceBefore=inject(seaDetailAB
-  ?src.replace(detailEnabled,detailDisabled):src.replace(modern,old));
+if(skyAtmosphereAB&&src.split(skyEnabled).length!==2)
+  throw Error('Missing reversible NYC sky marker');
+const beforeHtml=skyAtmosphereAB?src.replace(skyEnabled,skyDisabled):
+  seaDetailAB?src.replace(detailEnabled,detailDisabled):src.replace(modern,old);
+const sourceBefore=inject(beforeHtml);
 const sourceAfter=inject(src);
 const origin=new URL(url).origin,report={
-  mode:seaDetailAB?'sea-detail':'crest',
+  mode:skyAtmosphereAB?'sky-atmosphere':seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
   note:'Test-only fixed shader time, not a runtime setting'};
 const browser=await chromium.launch({headless:true,args:[
@@ -77,6 +86,11 @@ try{
       await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
       await page.locator('input[name="aircraft"][value="seaplane"]').check({force:true});
       await page.locator('input[name="waterStart"]').check({force:true});
+      if(skyAtmosphereAB)await page.evaluate(()=>{
+        document.getElementById('skyTime').value='7';
+        document.getElementById('skySeason').value='2';
+        document.getElementById('skyWeather').value='Clear';
+      });
       await page.locator('#startFlight').click({force:true});
       await page.waitForFunction(()=>document.getElementById('titleOverlay')?.hidden &&
         document.getElementById('loadOverlay')?.classList.contains('done')&&
@@ -119,6 +133,8 @@ try{
      Math.abs(a.stage.z-b.stage.z)>.0001 ||
      Math.abs(a.stage.yaw-b.stage.yaw)>.0001)
     throw Error('Water-start state differs between paired scenes');
+  if(skyAtmosphereAB&&JSON.stringify(a.state.sky)!==JSON.stringify(b.state.sky))
+    throw Error('Sky time, sun direction or weather differs between paired scenes');
   report.passed=true;
 }catch(e){report.passed=false;report.failure=String(e.stack||e);process.exitCode=1;}
 finally{
