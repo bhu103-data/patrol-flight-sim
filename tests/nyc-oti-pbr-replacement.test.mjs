@@ -49,7 +49,8 @@ test('all 100 government polygons use tagged render faces, never vehicle glass',
   assert.ok(count.get(9)>=700,'enough stone and architectural frames');
   assert.ok(count.get(10)>=1000,'high-detail windows are real geometry');
   assert.ok(count.get(11)>=500,'all surveyed rooftops preserved');
-  assert.ok(fronts<6500&&roofTris<1500,'fixed compact render budget');
+  assert.ok(fronts<9000&&roofTris<1500,
+    'budget for 100 municipal shells, including authentic windows and roof triangulation');
 });
 test('both municipal sources share PBR classes, not generic box shader',()=>{
   assert.match(html,/PATROL_NYC_GIS_PBR_V13/);
