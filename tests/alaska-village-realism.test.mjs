@@ -77,10 +77,13 @@ test('actual geometry includes distinct siding, metal gables, windows and anchor
   const counts=JSON.parse(audit[1]);
   assert.equal(counts.cabins,6);
   assert.equal(counts.sidingRows,72);
+  assert.ok(counts.undergrowth>=100 && counts.undergrowth<=270,
+    'live native harbor must retain many short bushes without flooding foundations');
   assert.ok(counts.roofSeams>=45);
   assert.ok(scene.boxes.length>400,'not six single giant rectangular blocks');
   assert.ok(scene.bridges.length>50,'physically traced roof seams and railings');
-  assert.ok(scene.surfaces.length>25,'roof gable and lighthouse are true mesh faces');
+  assert.ok(scene.surfaces.length>1000,
+    'ferns and lodged roof gables must be real 3D triangles in a single batch');
   assert.match(html,/const porchTerrain=\[-1\.1,0,1\.1\]\.map/);
   assert.match(html,/if\(Math\.min\(\.\.\.porchTerrain\)>WATER_H\+\.95/);
 });
