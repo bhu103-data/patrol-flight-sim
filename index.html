@@ -5683,6 +5683,38 @@ const CENTRAL_PARK_SITES=[
           }
         }
       }
+      // PATROL_DUMBO_WATER_TANK_V1 — an occasional timber roof tank breaks
+      // the repeated rectangular block silhouette without importing a
+      // cartoon tower. Every curved face shares the existing city mesh.
+      // Fit entirely inside an established Brooklyn building footprint.
+      if(bridgeheadBrooklyn && !destroyed && detailBand===3 &&
+         h>12 && w>7 && d>10 && archType%5===2){
+        const tx=x+w*.16,tz=z+d*.12,roofY=y+h;
+        const n=16,r=.76+(archType%3)*.055;
+        const lower=roofY+1.13,upper=lower+1.43;
+        const woodTones=[[.37,.29,.21],[.34,.27,.20],[.40,.31,.23],
+          [.32,.25,.19]];
+        const darkHoop=[.21,.24,.26],cap=[.30,.32,.33];
+        const p=(k,yy,rad=r)=>{
+          const ang=k*Math.PI*2/n;
+          return [tx+Math.cos(ang)*rad,yy,tz+Math.sin(ang)*rad];
+        };
+        for(let k=0;k<n;k++){
+          addQuad(p(k,lower),p(k+1,lower),p(k+1,upper),p(k,upper),
+            woodTones[(archType+k)%woodTones.length]);
+          addTri([tx,upper+.21,tz],p(k,upper),p(k+1,upper),cap);
+          for(const yy of [lower+.18,upper-.18])
+            addRideBeam(addQuad,p(k,yy,r+.019),
+              p(k+1,yy,r+.019),.024,darkHoop);
+        }
+        // Open steel trestle below the barrel; supports are roof-anchored.
+        for(let k=0;k<4;k++){
+          const at=p(k*4,lower,r*.79);
+          addRideBeam(addQuad,[at[0],roofY+.15,at[2]],at,.074,darkHoop);
+          addRideBeam(addQuad,[at[0],roofY+.62,at[2]],
+            [tx,roofY+.77,tz],.034,darkHoop);
+        }
+      }
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
