@@ -46,10 +46,23 @@ test('missing source aperture edge fails even if glass is high contrast',()=>{
  assert.equal(result.topEdgeCoverage,0);
  assert.equal(result.valid,false);
 });
-test('other NYC and Brooklyn views retain their original strict color-bin gate',()=>{
+test('ALL NYC and Brooklyn views retain the original strict color-bin gate',()=>{
  assert.match(script,/stats\.colorBins>32/);
  assert.match(script,/stats\.nearBlackFraction<\.97/);
  assert.match(script,/name==='12-oti-doorway-street\.png'/);
  assert.match(script,/stats\.otiSourceWindow=otiSourceWindowProbe\(image\)/);
  assert.match(script,/result=\{passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings\}/);
+});
+
+test('single-window fixture cannot pass whole-scene validation despite ROI match',()=>{
+ const sample=image({enabled:true,left:430,right:850,top:150,bottom:465});
+ assert.equal(probe(sample).valid,true,'the ROI alone falsely accepts this flat-wall fixture');
+ const bins=new Set;
+ for(let y=0;y<720;y+=10)for(let x=0;x<1280;x+=10){
+  const i=(y*1280+x)*4,d=sample.data;
+  bins.add(((d[i]>>4)<<8)|((d[i+1]>>4)<<4)|(d[i+2]>>4));
+ }
+ assert.ok(bins.size<=32,'one window cannot meet the canvas diversity gate');
+ assert.match(script,/check\(stats\.width>=640&&stats\.height>=360&&stats\.colorBins>32&&/);
+ assert.doesNotMatch(script,/check\(stats\.otiSourceWindow\.valid,/);
 });
