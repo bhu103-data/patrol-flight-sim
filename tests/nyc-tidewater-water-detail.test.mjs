@@ -63,3 +63,11 @@ test('long-crest A/B disables CPU and GLSL together rather than changing only sh
   assert.match(tool,/const NYC_CREST_BEND = 0\.00;/);
   assert.match(tool,/src\.replace\(warpEnabled,warpDisabled\)/);
 });
+test('browser water A/B asserts actual form values before starting flight',()=>{
+  const script=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(script,/v=new FormData\(document\.getElementById\('flightSetup'\)\)/);
+  assert.match(script,/v\.get\('flightMap'\)/);
+  assert.match(script,/v\.get\('aircraft'\)/);
+  assert.match(script,/v\.has\('waterStart'\)/);
+  assert.match(script,/Water QA form selection not stable/);
+});

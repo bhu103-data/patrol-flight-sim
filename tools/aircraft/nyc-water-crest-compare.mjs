@@ -85,9 +85,30 @@ try{
     });
     try{
       await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-      await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
-      await page.locator('input[name="aircraft"][value="seaplane"]').check({force:true});
-      await page.locator('input[name="waterStart"]').check({force:true});
+      // CI software browsers occasionally synthesize a click without
+      // committing styled radio state. Select through real form properties,
+      // dispatch the app's change handler, and assert FormData before launch.
+      const selected=await page.evaluate(()=>{
+        const select=(selector)=>{
+          const el=document.querySelector(selector);
+          if(!el)throw Error('Missing flight form input '+selector);
+          el.checked=true;
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        };
+        select('input[name="flightMap"][value="manhattan"]');
+        select('input[name="aircraft"][value="seaplane"]');
+        select('input[name="waterStart"]');
+        const v=new FormData(document.getElementById('flightSetup'));
+        const state={map:v.get('flightMap'),aircraft:v.get('aircraft'),
+          afloat:v.has('waterStart'),
+          enabled:!document.getElementById('waterStart').disabled};
+        if(state.map!=='manhattan'||state.aircraft!=='seaplane'||
+           !state.afloat||!state.enabled)
+          throw Error('Water QA form selection not stable: '+JSON.stringify(state));
+        return state;
+      });
+      report.form=selected;
       await page.locator('#startFlight').click({force:true});
       await page.waitForFunction(()=>document.getElementById('titleOverlay')?.hidden &&
         document.getElementById('loadOverlay')?.classList.contains('done')&&
