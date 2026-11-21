@@ -32,7 +32,7 @@ class Instanced{
 }
 class Mesh {constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true}}
 const THREE={
- BoxGeometry:Geo,CylinderGeometry:Geo,BufferGeometry:Geo,
+ BoxGeometry:Geo,CylinderGeometry:Geo,SphereGeometry:Geo,BufferGeometry:Geo,
  Float32BufferAttribute:class{constructor(array,size){this.array=array;this.itemSize=size}},
  Object3D:Obj,InstancedMesh:Instanced,Mesh,Color,
  MeshBasicMaterial:Mat,MeshStandardMaterial:Mat,MeshPhysicalMaterial:Mat,
