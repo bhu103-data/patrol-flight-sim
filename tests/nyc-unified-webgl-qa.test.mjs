@@ -58,3 +58,15 @@ test('same workflow installs the screenshot analyzer and triggers on NYC visuals
 test('Playwright browser script parses as valid JavaScript',()=>{
  execFileSync(process.execPath,['--check',fileURLToPath(scriptUrl)],{stdio:'pipe'});
 });
+
+test('NYC PR visual workflow covers production visuals before merge',()=>{
+ const pr=workflow.split('  pull_request:\n')[1]?.split('  push:\n')[0];
+ assert.ok(pr,'NYC screenshot QA must trigger on pull requests');
+ for(const changed of [
+  'index.html','assets/nyc/**','scripts/nyc-road-browser-smoke.mjs',
+  'tests/nyc-times-ground-storefronts.test.mjs',
+  'tests/nyc-oti-harbor-window-depth.test.mjs'
+ ]){
+  assert.ok(pr.includes('- "'+changed+'"'),'PR misses visual path '+changed);
+ }
+});

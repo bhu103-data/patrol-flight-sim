@@ -2,6 +2,13 @@ name: Chongqing WebGL visual regression
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "chongqing.html"
+      - "assets/chongqing/**"
+      - "tests/chongqing-*.test.mjs"
+      - "scripts/chongqing-browser-smoke.mjs"
+      - ".github/workflows/chongqing-visual.yml"
   push:
     branches: [main]
     paths:
@@ -37,7 +44,7 @@ jobs:
         run: node --test tests/chongqing-*.test.mjs
       - name: Install headless Chromium
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
           npx playwright install --with-deps chromium
       - name: Start isolated static test server
         run: |

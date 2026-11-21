@@ -26,3 +26,16 @@ test('Chongqing screenshots are isolated from Manhattan browser work',()=>{
    'Manhattan/Brooklyn still have independent actual WebGL screenshot QA');
  assert.match(ny,/node --test tests\/nyc-road-clearance\.test\.mjs/);
 });
+
+test('Chongqing PRs capture actual WebGL pixels without Manhattan dependencies',()=>{
+ const pr=cq.split('  pull_request:\n')[1]?.split('  push:\n')[0];
+ assert.ok(pr,'Chongqing visual QA must run before feature PRs merge');
+ for(const path of [
+   'chongqing.html','assets/chongqing/**','scripts/chongqing-browser-smoke.mjs'
+ ])assert.ok(pr.includes('- "'+path+'"'),'missing PR path '+path);
+ const script=readFileSync(new URL('../scripts/chongqing-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(script,/page\.locator\('#world'\)\.screenshot/);
+ assert.match(script,/PNG\.sync\.read\(raw\)/);
+ assert.match(script,/pixels\.nearBlackFraction<0\.985/);
+ assert.match(cq,/playwright pngjs@7\.0\.0/);
+});
