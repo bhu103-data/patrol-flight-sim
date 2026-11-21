@@ -5794,6 +5794,12 @@ const CENTRAL_PARK_SITES=[
       walls++;
       if(destroyed||length<1.4||detailBand<2)continue;
       const normal=[sign*dz/length,-sign*dx/length];
+      // OTI public polygons: focus physical window depth on the
+      // harbor-facing side of near-camera downtown buildings only.
+      // The source supplies footprint topology, not exact window surveys.
+      const detailedHarborFront=detailBand===3 && y<20 &&
+        x>-110 && x<-60 && z>-500 && z<-400 && h>14 &&
+        normal[1]<-.15 && length>=3.6 && i%2===0;
       const at=(t,yy,offset)=>[
         a[0]+dx*t+normal[0]*offset,yy,
         a[1]+dz*t+normal[1]*offset
@@ -5811,6 +5817,45 @@ const CENTRAL_PARK_SITES=[
             at(right,top,.062),at(left,top,.062),tint,10);
           face(at(left,bottom+.05,.071),at(right,bottom+.05,.071),
             at(right,bottom+.095,.071),at(left,bottom+.095,.071),frameTint,9);
+          // PATROL_NYC_OTI_WINDOW_REVEALS_V1: three-dimensional jambs,
+          // lintels and window sills on selected near-harbor polygon edges.
+          // Bounded to four low floors and alternating bays for GPU budget.
+          if(detailedHarborFront && floor<4 && bay%2===0){
+            const lip=Math.min(.040/length,(right-left)*.09);
+            const l=left-lip,r=right+lip;
+            const back=.070,front=.132,ledge=.163;
+            const dark=[.12,.16,.18],lintel=isGlass?
+              [.39,.44,.46]:[.62,.59,.53];
+            // Inner window reveal walls; glass stays at original .062,
+            // and metallic surrounds sit in front to create genuine depth.
+            face(at(left,bottom,back),at(left,bottom,front),
+              at(left,top,front),at(left,top,back),dark,9);
+            face(at(right,bottom,front),at(right,bottom,back),
+              at(right,top,back),at(right,top,front),dark,9);
+            face(at(left,top,back),at(right,top,back),
+              at(right,top,front),at(left,top,front),dark,9);
+            face(at(left,bottom,front),at(right,bottom,front),
+              at(right,bottom,back),at(left,bottom,back),dark,9);
+            // Two steel jambs, upper masonry/metal cap and lower sill.
+            for(const edge of [[l,left],[right,r]])
+              face(at(edge[0],bottom-.045,front),
+                at(edge[1],bottom-.045,front),
+                at(edge[1],top+.055,front),
+                at(edge[0],top+.055,front),frameTint,9);
+            face(at(l,top-.012,front),at(r,top-.012,front),
+              at(r,top+.055,front),at(l,top+.055,front),lintel,9);
+            face(at(l,bottom-.061,ledge),at(r,bottom-.061,ledge),
+              at(r,bottom+.014,ledge),at(l,bottom+.014,ledge),
+              lintel,9);
+            // Physically connect the projecting sill to the face;
+            // otherwise it would be another hovering rectangle.
+            face(at(l,bottom+.014,front),at(r,bottom+.014,front),
+              at(r,bottom+.014,ledge),at(l,bottom+.014,ledge),
+              lintel,9);
+            face(at(l,bottom-.061,ledge),at(r,bottom-.061,ledge),
+              at(r,bottom-.061,front),at(l,bottom-.061,front),
+              frameTint,9);
+          }
           windows++;
         }
       }
