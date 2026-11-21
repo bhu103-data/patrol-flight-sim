@@ -59,3 +59,20 @@ Central QA must compare the same four settings against baseline `6d50bfd` and in
 - Both cameras have baseline `6d50bfd` screenshots captured by an identical script and 1280×720 screenshot viewport (software 704×396 render canvas observed).
 - The west/east geometry now has **768 total mountain triangles, 384 per wing**, with enforced upward-facing normals; 9 pavement quads are unchanged.
 - Six-image pixel differences are evidence of changed pixels only; animation, lighting progression, and moving vehicles can also differ. **Neither true DEM accuracy nor 30 FPS hardware performance is established.**
+
+## Windows Chrome hardware acceptance (manual, not yet executed)
+- CI captures continue using ANGLE SwiftShader and `?graphics=compat` by default. Windows Chrome testing is an **explicit opt-in**; it does not change production flight controls or the CI default.
+- From the repository root in **PowerShell**, with Google Chrome, Node 22 and Playwright installed:
+```powershell
+npm install --no-save --no-package-lock playwright
+python -m http.server 8765 --bind 127.0.0.1
+# In a second PowerShell window:
+$env:PATROL_BROWSER_CHANNEL='chrome'
+$env:PATROL_GRAPHICS_PROFILE='default'
+$env:PATROL_HEADFUL='1'
+$env:PATROL_QA_TAG='windows-chrome-hardware'
+node scripts/vegas-core-browser-smoke.mjs
+```
+- Results are written to `artifacts/vegas/windows-chrome-hardware/`; examine the JSON `shots[].renderer` and `shots[].vendor` before calling the run hardware-accelerated. If either is `unavailable`, hardware GPU identity is unverified.
+- Compare the six camera screenshots with the matching integrated baseline using the same Chrome, viewport and graphics profile. `frameSampling.meanFrameIntervalMs` measures browser requestAnimationFrame pacing, **not a hardware GPU timer**. Prefer real Chrome DevTools GPU timings for final performance certification.
+- Do not claim the 30 FPS hardware target until actually measured. Flight takeoff/landing, map switching, low-end graphics fallback and close-up asset realism still require hands-on inspection.

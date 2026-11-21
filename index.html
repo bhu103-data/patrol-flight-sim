@@ -8994,8 +8994,9 @@ const CENTRAL_PARK_SITES=[
           const x=side*depth;
           return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
         };
-        return [point(686,.018),point(720,.25),point(754,.59),
-          point(811,1),point(847,.12)];
+        // Anchor both visual ridge edges to real sampled terrain height.
+        return [point(686,0),point(720,.25),point(754,.59),
+          point(811,1),point(847,0)];
       };
       const a=profile(z,h0),b=profile(zn,h1);
       for(let band=0;band<4;band++){
