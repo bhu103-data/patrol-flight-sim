@@ -1911,6 +1911,8 @@ const CENTRAL_PARK_SITES=[
         if (th <= WATER_H + 0.04) {
           // Swell, chop and capillary ripples share world coordinates; the
           // analytic slopes affect shading only, not collision or water level.
+          // Reversible compile-time NYC visual detail switch (QA A/B only).
+          const bool NYC_TIDEWATER_DETAIL = true;
           float depth = max(WATER_H - th, 0.0);
           float pixel = pixelAngle * length(p - ro) / max(abs(rd.y), 0.10);
           float localDetail = 1.0 - smoothstep(0.18, 1.1, pixel);
@@ -1972,6 +1974,19 @@ const CENTRAL_PARK_SITES=[
           float meanSquareSlope = (0.003 + 0.00512 * (4.0 + wind * 6.0)) * mix(0.5,1.0,openWater);
           float unresolved = smoothstep(0.05, 1.3, pixel);
           float roughness = 0.028 + sqrt(meanSquareSlope) * unresolved;
+          // Wind-driven, low-frequency sea patches are anchored to world
+          // coordinates and stay independent of C185's ocean wave height.
+          float nycGustPatch = 0.0;
+          if(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 14.0) {
+            float gustField=vnoise(xz*0.0068+
+              vec2(-uTime*0.0042,uTime*0.0025));
+            float gustDetail=clamp((gust-0.82)/0.36,0.0,1.0);
+            nycGustPatch=smoothstep(0.36,0.76,
+              0.74*gustField+0.26*gustDetail)*
+              (1.0-smoothstep(4.0,14.0,pixel));
+            roughness=clamp(roughness*(1.0+0.20*nycGustPatch),
+              0.025,0.48);
+          }
           vec3 roughRefl = normalize(mix(reflDir, vec3(reflDir.x, max(reflDir.y,0.19), reflDir.z), roughness * 1.7));
           vec3 reflectedSky = getSky(roughRefl);
           // Exact dielectric air-to-water Fresnel with rough-slope grazing correction.
@@ -1980,6 +1995,8 @@ const CENTRAL_PARK_SITES=[
              smoothstep(0.08,1.1,pixel),0.0001,1.0));
            float waterReflectance=clamp(mix(fresnel,filteredFresnel,0.48),0.02,0.975);
            waterCol=mix(waterCol,reflectedSky,waterReflectance);
+           if(uManhattan && NYC_TIDEWATER_DETAIL)
+             waterCol *= 1.0-0.058*nycGustPatch;
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
           if(hasOceanCascades()){
@@ -1993,7 +2010,11 @@ const CENTRAL_PARK_SITES=[
             float shallowFloor=(1.0-fresnel)*exp(-depth*0.42)*floorMask;
             float focus=0.0;
             if(depth<3.2 && localDetail>0.03 && uSun.y>0.08){
-              focus=oceanCaustic(floorXZ,depth)*localDetail*sunAbove*clearSky*litFactor;
+              // Filter unresolved NYC focusing instead of shimmering lines.
+              float causticFootprint=(uManhattan && NYC_TIDEWATER_DETAIL)
+                ?1.0-smoothstep(0.24,0.86,pixel):1.0;
+              focus=oceanCaustic(floorXZ,depth)*localDetail*
+                causticFootprint*sunAbove*clearSky*litFactor;
             }
             waterCol=mix(waterCol,bottom*waterTransmission*(0.72+focus*0.62),shallowFloor*0.76);
             float back=pow(max(dot(normalize(uSun.xz+vec2(0.0001)),normalize(rd.xz+vec2(0.0001))),0.0),4.0);
@@ -2044,6 +2065,17 @@ const CENTRAL_PARK_SITES=[
                       * (1.0 - fresnel) * sunAbove * clearSky * litFactor;
           }
 
+          if(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 2.0){
+            // Tear caps and nearshore foam into patches using already
+            // sampled advected noise; unresolved detail fades to a mean.
+            float foamFragment=smoothstep(0.30,0.70,
+              breakup*0.64+foamCells*0.36);
+            float foamResolve=1.0-smoothstep(0.42,2.0,pixel);
+            float fragmented=mix(1.0,0.52+0.48*foamFragment,
+              foamResolve*0.78);
+            caps *= fragmented;
+            shore *= fragmented;
+          }
           waterCol = mix(waterCol, vec3(0.78,0.88,0.89), clamp(caps + shore, 0.0, 0.85));
 
           // Bow pressure, hull wash and broken Kelvin crests are evaluated over the water surface.
