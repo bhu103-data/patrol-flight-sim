@@ -37,6 +37,38 @@ function screenshotPixels(bytes){
   nearBlackFraction:black/Math.max(count,1),
   upperSkyFraction:visibleHarborSkyFraction(img)};
 }
+// Diagnostic only: count nearly uniform 64px wall-sized tiles in the
+// right foreground of the street-level Times Square view. This exposes
+// persistent blank facade regions without treating a flat wall as a
+// WebGL failure or requiring a particular color/material.
+function timesSquareFlatWallProbe(bytes){
+ const img=PNG.sync.read(bytes),tile=64;
+ const bounds={x0:Math.floor(img.width*.55),x1:Math.floor(img.width*.98),
+  y0:Math.floor(img.height*.25),y1:Math.floor(img.height*.90)};
+ let totalTiles=0,flatTiles=0;
+ const candidates=[];
+ for(let y=bounds.y0;y+tile<=bounds.y1;y+=tile){
+  for(let x=bounds.x0;x+tile<=bounds.x1;x+=tile){
+   let n=0,sr=0,sg=0,sb=0,s2=0;
+   for(let yy=y;yy<y+tile;yy+=8)for(let xx=x;xx<x+tile;xx+=8){
+    const p=(yy*img.width+xx)*4,r=img.data[p],
+     g=img.data[p+1],b=img.data[p+2];
+    sr+=r;sg+=g;sb+=b;s2+=r*r+g*g+b*b;n++;
+   }
+   const mean=[sr/n,sg/n,sb/n];
+   const variance=Math.max(0,s2/n-mean.reduce((a,v)=>a+v*v,0));
+   totalTiles++;
+   if(variance<72){
+    flatTiles++;
+    candidates.push({x,y,rgb:mean.map(v=>Math.round(v)),
+     variance:Math.round(variance)});
+   }
+  }
+ }
+ return {region:bounds,tilePx:tile,totalTiles,flatTiles,
+  flatTileFraction:flatTiles/Math.max(totalTiles,1),
+  candidates:candidates.slice(0,40)};
+}
 // HUD panels overlap the canvas in the browser compositor. Even an
 // element.screenshot() includes those overlays unless we hide them.
 // The temporary class preserves canvas visibility and is always removed,
@@ -76,7 +108,9 @@ async function capture(name){
   if(name==='09-manhattan-window-facades.png')
    check(stats.upperSkyFraction>=MIN_HARBOR_SKY_FRACTION,
     'NYC facade camera is still hidden by nearby building walls: '+JSON.stringify(stats));
-  screenshots.push(name);pixels[name]=stats;
+  screenshots.push(name);
+  pixels[name]=name==='05-times-square-street.png'
+   ? {...stats,flatWallProbe:timesSquareFlatWallProbe(image)} : stats;
   pendingShot=null;
   console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
  }finally{

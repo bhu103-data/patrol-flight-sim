@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "scripts/nyc-road-browser-smoke.mjs"
       - "tests/nyc-roof-setback-grounding.test.mjs"
       - ".github/workflows/nyc-bridgehead-browser.yml"
   push:
