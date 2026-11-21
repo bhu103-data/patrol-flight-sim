@@ -35,14 +35,27 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.36;
+// Single localized soft shadow pass: tuned for the active sightseeing corridor,
+// not the whole 2-kilometre city. Auto/High only; battery saver turns it off.
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
 const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.15, 4000);
 const atmosphere=createChongqingAtmosphere(THREE,scene,camera);
 const hemi = new THREE.HemisphereLight(0x879ec1, 0x534b48, 1.18);
 scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xc3d0e8, 1.03);
-moon.position.set(-280,520,-420);
-scene.add(moon);
+moon.position.set(-110,170,-135);
+moon.castShadow=true;
+moon.shadow.mapSize.set(1024,1024);
+moon.shadow.camera.left=-145;moon.shadow.camera.right=145;
+moon.shadow.camera.top=145;moon.shadow.camera.bottom=-145;
+moon.shadow.camera.near=1;moon.shadow.camera.far=490;
+moon.shadow.camera.updateProjectionMatrix();
+moon.shadow.bias=-.00012;
+moon.shadow.normalBias=.035;
+moon.shadow.radius=2;
+scene.add(moon,moon.target);
 const glow = new THREE.PointLight(0xffbd76, 170, 235, 2);
 glow.position.set(160,105,125);
 scene.add(glow);
@@ -137,7 +150,9 @@ worldGeometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
 worldGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
 worldGeometry.computeVertexNormals();
 const groundMaterial=pbr.hillside.clone();groundMaterial.vertexColors=true;groundMaterial.side=THREE.DoubleSide;
-scene.add(new THREE.Mesh(worldGeometry,groundMaterial));
+const terrainMesh=new THREE.Mesh(worldGeometry,groundMaterial);
+terrainMesh.receiveShadow=true;
+scene.add(terrainMesh);
 
 const waterUniforms={uTime:{value:0}};
 const waterMaterial=new THREE.ShaderMaterial({
@@ -249,6 +264,8 @@ towerMesh.count=towerCount;windowMesh.count=windowCount;
 towerMesh.instanceMatrix.needsUpdate=true;windowMesh.instanceMatrix.needsUpdate=true;
 if(towerMesh.instanceColor)towerMesh.instanceColor.needsUpdate=true;
 if(windowMesh.instanceColor)windowMesh.instanceColor.needsUpdate=true;
+towerMesh.castShadow=true;
+  towerMesh.receiveShadow=true;
 scene.add(towerMesh,windowMesh);
 
 // Roads are swept strips following terraces, not an infinite grid.
@@ -268,6 +285,7 @@ function road(points,width,material=M.road){
   g.setAttribute('uv',new THREE.Float32BufferAttribute(roadUV,2));
   g.setIndex(ind);g.computeVertexNormals();
   const o=new THREE.Mesh(g,material);
+  o.receiveShadow=true;
   scene.add(o);return o;
 }
 for(const side of [-1,1])for(let l=0;l<3;l++){
@@ -520,7 +538,10 @@ let renderRatio=qualityMode==='low'?minRatio:qualityMode==='high'?maxRatio:budge
 let measuredFPS=0,sampleTime=0,sampleFrames=0,autoCycles=0;
 function applyQuality(){
   renderer.setPixelRatio(renderRatio);
-  detailBuild.setQuality(qualityMode==='low'?'low':'normal');
+  const low=qualityMode==='low';
+  renderer.shadowMap.enabled=!low;
+  moon.castShadow=!low;
+  detailBuild.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
@@ -605,6 +626,9 @@ for(const dir of [-1,1]){
 }
 pilotMesh(new THREE.BoxGeometry(.25,.32,.07),pilotCloth,0,-.74,.84);
 avatar.rotation.order='YXZ';
+// Only the nearby player and coherent roof silhouettes are shadow casters;
+// every window/window-frame should not get its own costly shadow draw.
+avatar.traverse(mesh=>{if(mesh.isMesh)mesh.castShadow=true;});
 
 const state={
   pos:new THREE.Vector3(285,ground(285,265)+2.7,265),
@@ -946,6 +970,14 @@ function frame(){
   time+=dt;
   waterUniforms.uTime.value=time;
   streetBuild.update(dt,state.pos);
+  // Move the directional shadow camera with the avatar, limited to ~290m square.
+  // Coarse world-space snapping keeps the shadow image from crawling on wet stone.
+  moon.target.position.set(
+    Math.round(state.pos.x*.5)*2,
+    Math.round(state.pos.y*.5)*2,
+    Math.round(state.pos.z*.5)*2
+  );
+  moon.position.copy(moon.target.position).add(new THREE.Vector3(-110,170,-135));
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
