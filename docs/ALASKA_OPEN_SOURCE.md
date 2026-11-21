@@ -3,8 +3,8 @@
 ## 2026-11-20/21 — Near-field glacier relief and forest silhouette pass
 
 The existing Alaska-only `alaska-fjord-detail.js` GPU batch now creates a
-**42-segment irregular glacial calving front**, each with three-dimensional
-facing geometry and three stratified ice/sediment color bands (126 bounded
+**28-segment non-repeating glacial calving front**, each with three-dimensional
+facing geometry and three stratified ice/sediment color bands (62 irregularly spaced bounded
 bands). The blue-black fracture gaps and ice overhangs are original authored
 visual geometry. The measured USGS DEM remains the only terrain collision
 source. The exact glacier face is not photogrammetrically scanned or mapped.
