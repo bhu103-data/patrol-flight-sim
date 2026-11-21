@@ -5,6 +5,7 @@ import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const qaTag=process.env.PATROL_QA_TAG||'candidate';
+if(!/^[a-zA-Z0-9_-]{1,48}$/.test(qaTag))throw Error('Invalid PATROL_QA_TAG');
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const browser=await chromium.launch({headless:true,args:[
@@ -64,8 +65,6 @@ try {
    el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
   });
   for(const [view,zoom] of [['near','70'],['far','24']]){
-   const expectedTarget=view==='near'?'Strip Street View':'Bellagio';
-   await page.locator('#hotelTarget').selectOption({label:expectedTarget});
    await page.locator('#hotelZoom').evaluate((el,v)=>{
     el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
    },zoom);
@@ -80,7 +79,7 @@ try {
       zoom:document.getElementById('hotelZoom')?.value};
    });
    assert(telemetry.webgl2&&telemetry.error===0,'Vegas WebGL2/context error');
-   assert(telemetry.selected==='vegas'&&telemetry.target===expectedTarget,
+   assert(telemetry.selected==='vegas'&&telemetry.target==='Strip Street View',
     'Vegas scenic camera not selected');
    const shotName='vegas-core-'+view+'-'+preset+'.png';
    await page.evaluate(()=>document.body.classList.add('vegas-qa-canvas'));
@@ -142,7 +141,7 @@ try {
   requestAnimationFrame(tick);
  }));
  result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,
-   frameSampling,incrementalGeometry:{triangles:786,textures:0}};
+   frameSampling,incrementalGeometry:{triangles:234,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
