@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - 'tools/blender/**'
+      - 'assets/chongqing/**'
+      - 'tests/chongqing-scenario.test.mjs'
+      - 'tests/chongqing-detail.test.mjs'
+      - 'chongqing.html'
       - '.agents/skills/scenario-blender/**'
       - '.agents/skills/patrol-scenario-chongqing/**'
       - '.github/workflows/scenario-blender-static.yml'
@@ -43,7 +47,7 @@ jobs:
           python3 -m py_compile tools/scenario_blender_export.py
       - name: Check existing Chongqing landmarks and visual interfaces
         run: |
-          node --test tests/chongqing-landmarks.test.mjs tests/chongqing-visual.test.mjs
+          node --test tests/chongqing-landmarks.test.mjs tests/chongqing-detail.test.mjs tests/chongqing-visual.test.mjs tests/chongqing-scenario.test.mjs
       - name: Test Scenario glTF importer with embedded atlas and hostile URLs
         run: |
           node --test tests/scenario-glb.test.mjs
