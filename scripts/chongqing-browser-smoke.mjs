@@ -67,8 +67,12 @@ async function capture(name){
   check(pixels.width>=640&&pixels.height>=360&&pixels.colorBins>20&&
     pixels.nearBlackFraction<0.985,
     'Blank Chongqing WebGL frame at '+name+': '+JSON.stringify(pixels));
+  const render=state.game.renderMetrics;
+  check(render&&Number.isFinite(render.drawCalls)&&
+    Number.isFinite(render.triangles)&&Number.isFinite(render.pixelRatio),
+    'No live draw/triangle/pixel-ratio counters at '+name);
   screenshots.push({name,width:state.width,height:state.height,
-    altitude:state.game.altitude,pixels});
+    altitude:state.game.altitude,pixels,render});
 }
 let report;
 try{
