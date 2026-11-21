@@ -5956,10 +5956,12 @@ const CENTRAL_PARK_SITES=[
         const start=.035,end=.965,back=.018,front=.073;
         face(at(start,lower,front),at(end,lower,front),
           at(end,upper,front),at(start,upper,front),frameTint,9);
-        face(at(start,upper,back),at(end,upper,back),
-          at(end,upper,front),at(start,upper,front),frameTint,9);
-        face(at(start,lower,front),at(end,lower,front),
-          at(end,lower,back),at(start,lower,back),frameTint,9);
+        // The upper and lower caps wind opposite to the vertical face:
+        // with back-face culling enabled top faces up, underside faces down.
+        face(at(start,upper,front),at(end,upper,front),
+          at(end,upper,back),at(start,upper,back),frameTint,9);
+        face(at(start,lower,back),at(end,lower,back),
+          at(end,lower,front),at(start,lower,front),frameTint,9);
         face(at(start,lower,back),at(start,lower,front),
           at(start,upper,front),at(start,upper,back),frameTint,9);
         face(at(end,lower,front),at(end,lower,back),
