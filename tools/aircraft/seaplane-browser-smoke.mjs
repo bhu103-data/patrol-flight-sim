@@ -68,7 +68,12 @@ try {
       // rotate above on-step speed, then observe climb from actual camera.
       await page.keyboard.down('Shift');
       await page.keyboard.down('w');
-      await page.waitForTimeout(4400);
+      // Software WebGL on CI may render at one frame per wall-clock second.
+      // Wait for simulated physics, not a fixed 4.4 seconds of wall time.
+      await page.waitForFunction(()=>{
+        const s=window.PatrolSpaceBridge?.getState?.();
+        return !!(s?.playing && s.speed>17.5 && s.altitude>15.0);
+      },null,{timeout:180000,polling:750});
       await page.keyboard.up('w');
       await page.keyboard.up('Shift');
       const climbed=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
