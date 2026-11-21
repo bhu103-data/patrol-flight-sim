@@ -1,0 +1,55 @@
+name: C185 Floatplane browser WebGL2 smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/aircraft/**'
+      - 'tools/aircraft/floatplane-browser-smoke.mjs'
+      - '.github/workflows/floatplane-browser-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/aircraft/**'
+      - 'tools/aircraft/floatplane-browser-smoke.mjs'
+      - '.github/workflows/floatplane-browser-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c185-live-webgl-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  c185-live-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the pinned Chromium harness
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve the actual flight project locally
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-c185-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Render NYC and Alaska with the published C185 GLB
+        run: node tools/aircraft/floatplane-browser-smoke.mjs
+      - name: Keep real browser screenshots for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c185-floatplane-live-webgl
+          path: artifacts/floatplane-*.png
+          if-no-files-found: ignore
+          retention-days: 10
