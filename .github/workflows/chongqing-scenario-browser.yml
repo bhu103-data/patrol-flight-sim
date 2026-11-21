@@ -79,19 +79,30 @@ jobs:
               if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/triangles:\s*15996.*images:\s*4/.test(t))) {
                 throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
               }
-              // Same cinematic camera on the ordinary unmodified production map:
-              // a live A/B screenshot, with no Scenario query or hidden art.
-              await page.goto('http://127.0.0.1:8127/chongqing.html',
+              // Explicit rollback: user must be able to switch to the legacy
+              // facade without affecting bridge, river, vehicles or terrain.
+              await page.goto('http://127.0.0.1:8127/chongqing.html?scenario=original',
                 {waitUntil:'domcontentloaded',timeout:30000});
               await page.waitForFunction(()=>
                 document.documentElement.dataset.scenarioHongyadong==='off',
                 null,{timeout:65000});
               await page.keyboard.press('1');
-              await page.waitForTimeout(1500);
+              await page.waitForTimeout(1200);
               await page.keyboard.press('h');
-              await page.waitForTimeout(500);
-              await page.screenshot({path:'artifacts/chongqing-default-clean.png'});
-              console.log('Production fallback scene also loaded and screenshot captured');
+              await page.screenshot({path:'artifacts/chongqing-original-clean.png'});
+              // Production path itself (no scenario query) must now load the
+              // licensed and browser-verified Blender facade by default.
+              await page.goto('http://127.0.0.1:8127/chongqing.html',
+                {waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForFunction(()=>
+                document.documentElement.dataset.scenarioHongyadong==='ready',
+                null,{timeout:65000});
+              await page.keyboard.press('1');
+              await page.waitForTimeout(1200);
+              await page.keyboard.press('h');
+              await page.screenshot({path:'artifacts/chongqing-default-hd.png'});
+              console.log('Production Blender PBR and explicit legacy rollback both loaded successfully');
+
             }finally{await browser.close()}
           })().catch(e=>{console.error(e);process.exitCode=1});
           NODE
