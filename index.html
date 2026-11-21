@@ -10799,9 +10799,19 @@ const CENTRAL_PARK_SITES=[
 
   async function launchFlight(event) {
     event.preventDefault();
-    // Chongqing is an isolated, additive 3D pilot level; existing maps keep their renderer.
+    // PATROL_CQ_CINEMATIC_V3: carry Manhattan's selected environment from
+    // the shared PATROL launcher into the independent Chongqing Three.js scene.
+    // No flight/control or approved Blender asset behavior is changed.
     if (new FormData(flightSetup).get('flightMap') === 'chongqing') {
-      window.location.assign('./chongqing.html');
+      const rawHour=document.getElementById('skyTime')?.value||'auto';
+      const hour=Number(rawHour);
+      const time=rawHour==='auto'?'dusk':
+        hour>=6&&hour<16?'day':
+        hour>=16&&hour<20?'dusk':'night';
+      const quality=document.getElementById('nyStreetQuality')?.value;
+      const query=new URLSearchParams({time});
+      if(quality==='0')query.set('quality','low');
+      window.location.assign('./chongqing.html?'+query);
       return;
     }
     if (loading) return;
