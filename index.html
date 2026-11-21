@@ -5950,8 +5950,20 @@ const CENTRAL_PARK_SITES=[
       // no floating rooftop cuboid, no change to roof clipping/collisions.
       if(downtownRelief && corniceBands<8 && length>=2.2 && i%2===0){
         const lower=roofY-.30,upper=roofY-.19;
-        face(at(.035,lower,.053),at(.965,lower,.053),
-          at(.965,upper,.053),at(.035,upper,.053),frameTint,9);
+        // PATROL_OTI_DOWNTOWN_CORNICE_SOLID_V3: five joined faces form a
+        // shallow solid projection instead of a floating front-only ribbon.
+        // The rear sits against the original wall; no roof/collision change.
+        const start=.035,end=.965,back=.018,front=.073;
+        face(at(start,lower,front),at(end,lower,front),
+          at(end,upper,front),at(start,upper,front),frameTint,9);
+        face(at(start,upper,back),at(end,upper,back),
+          at(end,upper,front),at(start,upper,front),frameTint,9);
+        face(at(start,lower,front),at(end,lower,front),
+          at(end,lower,back),at(start,lower,back),frameTint,9);
+        face(at(start,lower,back),at(start,lower,front),
+          at(start,upper,front),at(start,upper,back),frameTint,9);
+        face(at(end,lower,front),at(end,lower,back),
+          at(end,upper,back),at(end,upper,front),frameTint,9);
         corniceBands++;
       }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
