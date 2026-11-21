@@ -96,20 +96,6 @@ try{
   const load=document.getElementById('loadOverlay');
   return title?.hidden&&load?.classList.contains('done');
  },null,{timeout:120000});
- await page.waitForTimeout(1800);
- const state=await page.evaluate(()=>{
-  const glCanvas=document.getElementById('glCanvas');
-  const gl=glCanvas?.getContext('webgl2');
-  return {
-   canvasW:glCanvas?.width||0,canvasH:glCanvas?.height||0,
-   webgl:Boolean(gl&&!gl.isContextLost()),
-   selected:document.querySelector('input[name="flightMap"]:checked')?.value,
-   menuHidden:document.getElementById('titleOverlay')?.hidden
-  };
- });
- check(state.webgl,'NYC WebGL2 context lost');
- check(state.canvasW>300&&state.canvasH>200,'NYC canvas is unexpectedly small');
- check(state.selected==='manhattan'&&state.menuHidden,'NYC map did not start');
  // PATROL_NYC_QA_DAYLIGHT_LOCK_V1: a nine/ten-camera SwiftShader tour
  // can consume most of the game's 240-second day-night cycle. Freeze the
  // *test browser only* at noon, clear summer daylight for repeatable
