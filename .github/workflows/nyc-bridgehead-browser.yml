@@ -39,14 +39,14 @@ jobs:
           node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-liberty-crown-volume.test.mjs
       - name: Install Chromium with software WebGL
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
           npx playwright install --with-deps chromium
       - name: Serve the actual game
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-http.log 2>&1 &
           sleep 3
           curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
-      - name: Render NYC spawn and Brooklyn Bridge close-up
+      - name: Render NYC harbor, Brooklyn, Liberty and Times Square close-ups
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-road-browser-smoke.mjs
