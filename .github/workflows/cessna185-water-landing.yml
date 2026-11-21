@@ -1,0 +1,48 @@
+name: C185 real-physics water touchdown browser smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/aircraft/seaplane-water-landing-browser-smoke.mjs'
+      - '.github/workflows/cessna185-water-landing.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c185-water-touchdown-webgl
+  cancel-in-progress: true
+
+jobs:
+  water-touchdown:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium software WebGL2
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve actual PATROL game
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 > /tmp/patrol-c185-water.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8766/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify water touchdown on Alaska and Manhattan with loaded GLB
+        run: node tools/aircraft/seaplane-water-landing-browser-smoke.mjs
+      - name: Archive water touchdown frames and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c185-water-touchdown-webgl
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
