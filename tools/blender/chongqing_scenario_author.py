@@ -40,12 +40,13 @@ PALETTE = {
 def args_from_cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="assets/chongqing/generated/hongyadong-study.glb")
-    parser.add_argument("--materials", default="tools/blender/scenario-material-inputs.json")
+    parser.add_argument("--materials", default="tools/blender/chongqing-material-inputs.json")
+    parser.add_argument("--require-materials", action="store_true", help="Fail if approved PBR images are missing")
     parser.add_argument("--floors", type=int, default=11)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
 
-def material(name, color, roughness, metallic, settings, base_path):
+def material(name, color, roughness, metallic, settings, base_path, require_materials=False):
     m = bpy.data.materials.new("PATROL_" + name)
     m.use_nodes = True
     principled = m.node_tree.nodes.get("Principled BSDF")
@@ -64,13 +65,20 @@ def material(name, color, roughness, metallic, settings, base_path):
         if not filename:
             continue
         texture_path = (base_path / filename).resolve()
+        if texture_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+            raise ValueError("Unapproved photo texture extension: " + str(texture_path))
         if not texture_path.is_file():
-            raise FileNotFoundError("Missing reviewed Scenario texture: " + str(texture_path))
+            if require_materials:
+                raise FileNotFoundError("Missing approved PBR image: " + str(texture_path))
+            print("CC0/Scenario photo absent; using offline fallback:", texture_path)
+            continue
+        if texture_path.stat().st_size > 4 * 1024 * 1024:
+            raise ValueError("PBR photo exceeds 4 MiB: " + str(texture_path))
         image = bpy.data.images.load(str(texture_path), check_existing=True)
         image.pack()
         tex = m.node_tree.nodes.new("ShaderNodeTexImage")
         tex.image = image
-        tex.label = "Scenario " + channel
+        tex.label = "Approved PBR " + channel
         if channel != "basecolor":
             image.colorspace_settings.name = "Non-Color"
         if channel == "normal":
@@ -176,11 +184,13 @@ def construct(floors):
         for n in range(52):
             x = -width/2+n*(width/51)
             a.block(x,front,height+.87,.105,.13,1.00,mid["metal"])
-        # Each level has a real sloped multi-bay roof section.
-        if floor in (2,5,8,floors-1):
-            for lane in range(4):
-                xx = -width/2+(lane+.5)*width/4
-                a.roof(xx,center_depth,height+level_height,width/4+.85,depth+4,2.3,mid["terracotta"])
+        # A separate trio of tiled sloping roofs on each of eleven visible floors.
+        for lane in range(3):
+            xx = -width/2+(lane+.5)*width/3
+            a.roof(xx,center_depth,height+level_height,width/3+.95,depth+4,
+                   2.0+(floor%3)*.3,mid["terracotta"])
+            a.block(xx,center_depth+depth/2+1.5,height+level_height-.15,
+                    width/3+.6,.45,.46,mid["timber"])
     # Rooftop stepped silhouette rather than an isolated low-poly block.
     top = floors*level_height
     upper_center = -(floors-1)*8.3
@@ -206,7 +216,7 @@ def run():
     bpy.ops.object.delete(use_global=False)
     collection = bpy.data.collections.new(COLLECTION)
     bpy.context.scene.collection.children.link(collection)
-    mats = [material(name,*values,settings,config.parent)
+    mats = [material(name,*values,settings,config.parent,options.require_materials)
             for name,values in PALETTE.items()]
     author = construct(options.floors)
     triangle_count = sum(len(face)-2 for face in author.faces)
