@@ -40,6 +40,7 @@ a{color:#7cbdef}@media(max-width:740px){.layout{grid-template-columns:1fr}}
 <input id="modelFile" type="file" accept=".glb,model/gltf-binary,application/octet-stream"></div>
 <button id="sample" type="button">Load existing Liberty GLB sample</button>
 <button id="tradeSample" type="button">Preview generated One World Trade Center GLB</button>
+<button id="empireSample" type="button">Preview generated Empire State Building GLB</button>
 <button id="capture" type="button" disabled>Save review screenshot (PNG)</button>
 <div><label for="angle">Model rotation: <output id="angleText">0°</output></label>
 <input id="angle" type="range" min="-180" max="180" step="1" value="0"></div>
@@ -228,6 +229,15 @@ async function loadTrade(){
   await loadBuffer(await response.arrayBuffer(),'Original One World Trade Center');
  }catch(error){status(false,error.message);console.error(error)}
 }
+async function loadEmpire(){
+ status(null,'Fetching original authored Empire State Building GLB');
+ try{
+  landmark.value='empire';
+  const response=await fetch('../assets/nyc/scenario/empire.glb',{cache:'no-store'});
+  if(!response.ok)throw Error('Empire GLB HTTP '+response.status);
+  await loadBuffer(await response.arrayBuffer(),'Original Empire State Building');
+ }catch(error){status(false,error.message);console.error(error)}
+}
 async function init(){
  if(!gl)throw Error('WebGL2 unavailable');
  const res=await fetch('../assets/nyc/scenario-manifest.json');
@@ -249,6 +259,7 @@ async function init(){
  program=programForPreview();
  $('#sample').addEventListener('click',loadSample);
  $('#tradeSample').addEventListener('click',loadTrade);
+ $('#empireSample').addEventListener('click',loadEmpire);
  file.addEventListener('change',async()=>{
   const entry=file.files?.[0];
   if(!entry)return;
@@ -293,7 +304,9 @@ async function init(){
   },'image/png');
  });
  window.addEventListener('beforeunload',()=>release(mesh),{once:true});
- if(new URLSearchParams(location.search).get('asset')==='trade') await loadTrade();
+ const chosen=new URLSearchParams(location.search).get('asset');
+ if(chosen==='empire')await loadEmpire();
+ else if(chosen==='trade')await loadTrade();
  else await loadSample();
 }
 init().catch(error=>{status(false,error.message);console.error(error)});
