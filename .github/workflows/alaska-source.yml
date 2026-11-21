@@ -10,7 +10,7 @@ on:
       - 'index.html'
       - '.github/workflows/alaska-source.yml'
   push:
-    branches: [main]
+    branches: [main, feature/alaska-glacier-face-cc0-pbr-validated]
     paths:
       - 'assets/alaska/**'
       - 'tests/alaska-fjords.test.mjs'
