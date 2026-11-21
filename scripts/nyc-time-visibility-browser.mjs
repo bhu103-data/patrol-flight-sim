@@ -10,8 +10,12 @@ const version=process.env.PATROL_ENV_VARIANT||'local';
 const out='artifacts/nyc-time-visibility/'+version;
 const camera='Lower Manhattan · Window Facades';
 await mkdir(out,{recursive:true});
+// Keep the existing 18:30 UI preset for regression, but also capture the
+// near-horizon solar dusk. In summer the game's latitude/declination model
+// places the sun about +8.9° at 18:30 and -1.3° at 19:30, so testing only
+// the preset would miss the actual Manhattan sunset fog transition.
 const times=[{name:'noon',value:'12'},{name:'dusk',value:'18.5'},
- {name:'midnight',value:'0'}];
+ {name:'solar-dusk',value:'19.5'},{name:'midnight',value:'0'}];
 const problems=[],shots=[],started=Date.now();
 let browser;
 function imageMetrics(buffer){
@@ -76,6 +80,15 @@ try{
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
+ // QA-only extra option: the game has no public 19:30 preset. This
+ // operates on the test browser's DOM; production controls remain unchanged.
+ await page.evaluate(()=>{
+  const select=document.getElementById('skyTime');
+  if(!select)throw Error('Time control not found');
+  const o=document.createElement('option');
+  o.value='19.5';o.textContent='QA solar horizon 19:30';
+  select.appendChild(o);
+ });
  await page.locator('#hotelTarget').selectOption({label:camera});
  await page.locator('#hotelZoom').evaluate(el=>{
   el.value='42';el.dispatchEvent(new Event('input',{bubbles:true}));
