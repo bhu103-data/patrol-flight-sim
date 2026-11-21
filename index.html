@@ -820,6 +820,20 @@
     const { span, landmarks, scale, water, airfield, city, alaska, vegas, dc, chongqing } = options;
     const last = N - 1;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // A bounded, south-first georeferenced DEM, baked offline from public-domain
+    // USGS 3DEP data. The exact same height samples feed CPU collisions and the
+    // GPU height atlas. No runtime requests are made by the terrain worker.
+    const measured = alaska && options.alaskaDEM && options.alaskaDEM.heights;
+    function measuredHeight(u,v) {
+      const dem=options.alaskaDEM;
+      const x=clamp(u*dem.width-.5,0,dem.width-1);
+      const z=clamp(v*dem.height-.5,0,dem.height-1);
+      const x0=Math.floor(x),z0=Math.floor(z);
+      const x1=Math.min(x0+1,dem.width-1),z1=Math.min(z0+1,dem.height-1);
+      const tx=x-x0,tz=z-z0,h=dem.heights,w=dem.width;
+      return (h[z0*w+x0]*(1-tx)+h[z0*w+x1]*tx)*(1-tz)
+            +(h[z1*w+x0]*(1-tx)+h[z1*w+x1]*tx)*tz;
+    }
     function oval(x, z, cx, cz, width, depth) {
       return Math.exp(-(((x - cx) / width) ** 2 + ((z - cz) / depth) ** 2));
     }
@@ -1026,6 +1040,14 @@
           const edge=clamp(Math.min(street,runway)/97,0,1);
           const ridges=0.283+peaks*(0.54+ridge*0.57)+(detail-0.5)*0.066;
           height[idx]=clamp(0.283+(ridges-0.283)*edge*edge*(3-2*edge),0.257,0.98);
+        } else if (alaska && measured) {
+          // Measured terrain: land heights in metres above local mean sea level.
+          // Vertical scale is compressed for this game's Y=100 flight ceiling;
+          // never describe the result as survey-grade 1:1 gameplay.
+          const metres=measuredHeight(u,v);
+          height[idx]=clamp((metres>1
+            ? water+metres*options.alaskaDEM.verticalScale
+            : water-4.5)/scale,0.02,0.96);
         } else if (alaska) {
           const center = 38*Math.sin((north + 55)/176) + 22*Math.sin(north/380);
           const halfWidth = 74 + 22*Math.cos(north/250) + 39*clamp((-north-360)/300,0,1);
@@ -10437,7 +10459,7 @@
   flightSetup.addEventListener('change',updateFlightOptions);
   updateFlightOptions();
 
-  function launchFlight(event) {
+  async function launchFlight(event) {
     event.preventDefault();
     // Chongqing is an isolated, additive 3D pilot level; existing maps keep their renderer.
     if (new FormData(flightSetup).get('flightMap') === 'chongqing') {
@@ -10543,7 +10565,15 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-      tourStops=mode==='tour' && selectedMap.tour ? selectedMap.tour : [];
+      tourStops=mode==='tour' && selectedMap.tour ? (
+        selectedMap.alaska && terrainOptions.alaskaDEM
+          ? selectedMap.tour.map(stop=>({
+              ...stop,pos:[stop.pos[0],
+                Math.max(stop.pos[1],sampleGroundHeight(stop.pos[0],stop.pos[2])+9),
+                stop.pos[2]]
+            }))
+          : selectedMap.tour
+        ) : [];
       route=tourStops.length ? tourStops.map(stop=>stop.pos) : mode==='route'
         ? selectedMap.checkpoints.map(([x,z])=>[x,Math.max(40,sampleGroundHeight(x,z)+12),z])
         : [];
@@ -10557,7 +10587,12 @@
       brakes=false;
       Object.assign(plane, {
         pos: runway ? [runway.x,sampleTerrainHeight(runway.x,runway.z)+GEAR_CLEARANCE,runway.z]
-          : [...(selectedMap.spawn || [30,40,-185])],
+          : (selectedMap.alaska && terrainOptions.alaskaDEM
+              ? [selectedMap.spawn[0],
+                 Math.max(selectedMap.spawn[1],
+                   sampleGroundHeight(selectedMap.spawn[0],selectedMap.spawn[2])+12),
+                 selectedMap.spawn[2]]
+              : [...(selectedMap.spawn || [30,40,-185])]),
         yaw: runway ? runway.yaw : 0, pitch: 0, bank: 0, rollAnim: 0,
         speed: grounded ? 0 : AIRCRAFT[selectedAircraft].cruise, afterburner: false
       });
@@ -10632,6 +10667,30 @@
       airfield:selectedMap.airfield,city:selectedMap.city,alaska:selectedMap.alaska,
       vegas:selectedMap.vegas,dc:selectedMap.dc,chongqing:selectedMap.chongqing
     };
+    if(selectedMap.alaska &&
+       new URLSearchParams(location.search).get('alaskaTerrain')!=='legacy'){
+      // The baked public-domain heightmap is fetched once at level start,
+      // decoded and handed to the Web Worker. If missing or unavailable,
+      // automatically retain the original, fully playable fjord level.
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),6500);
+      try {
+        loadStep.textContent='Loading surveyed Tracy Arm elevations…';
+        const {loadAlaskaDEM}=await import('./assets/alaska/usgs-dem.js');
+        const dem=await loadAlaskaDEM(
+          './assets/alaska/tracy-arm-3dep.json',fetch,controller.signal);
+        const highest=dem.heights.reduce((max,value)=>Math.max(max,value),0);
+        dem.verticalScale=Math.min(.04,
+          (terrainScaleFor(selectedMap)*.90-WATER_H)/Math.max(highest,1));
+        terrainOptions.alaskaDEM=dem;
+        console.info('[PATROL] Alaska measured USGS terrain loaded',
+          {bbox:dem.bbox,highest,verticalScale:dem.verticalScale});
+      }catch(error){
+        console.warn('[PATROL] Alaska USGS DEM fallback to legacy terrain:',error);
+      }finally{
+        clearTimeout(timer);
+      }
+    }
     function acceptTerrain(data) {
       if(gl.isContextLost()){
         cleanup();
