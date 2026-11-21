@@ -2680,7 +2680,19 @@
       }
       addQuad(ptsR[0], ptsR[1], ptsR[2], ptsR[3], [0.98, 0.45, 0.16]);
     }
-
+    // PATROL_NYC_HERO_TRANSPORT_V5: structural seams and cockpit hardware.
+    const seal=[.23,.26,.30],trim=[.55,.60,.66];
+    for(const side of [-1,1]){
+      addQuad([side*.66,.086,-.35],[side*1.88,.003,-.90],
+        [side*1.72,.003,-1.01],[side*.67,.086,-.49],seal);
+      box(side*.50,-.035,.33,.15,.20,.62,trim);
+      box(side*.58,-.01,.45,.055,.14,.40,[.10,.15,.20]);
+      box(side*2.12,.01,-.92,.10,.035,.12,
+        side>0?[.19,.75,.41]:[.88,.20,.16]);
+      for(const z of [-.72,-1.05])box(side*1.19,.074,z,.40,.011,.025,seal);
+    }
+    box(0,.37,.92,.40,.038,.055,trim);
+    box(0,.34,.33,.42,.027,.12,seal);
     return upload();
   }
 
@@ -3157,7 +3169,41 @@
       const containers = [red,[0.25,0.43,0.55],[0.67,0.48,0.21],[0.29,0.48,0.36]];
       for (let i=0;i<5;i++) for (const side of [-1,1]) {
         box(side*1.76,3.5,-6+i*4.5,3.33,2.2,4.1,containers[(i+Number(side>0))%containers.length]);
+        for(let rib=-1.58;rib<1.59;rib+=.32)
+          box(side*3.447,3.54,-6+i*4.5+rib,.045,1.91,.053,[.26,.30,.34]);
       }
+    }
+    // Ship deck equipment: safety railings, hatch trim, mooring fittings.
+    const rail=[.61,.65,.65],hardware=[.27,.31,.33];
+    for(const side of [-1,1]){
+      for(let zz=-length*.80;zz<length*.75;zz+=2.35)
+        box(side*(width-.17),2.72,zz,.07,.85,.07,rail);
+      box(side*(width-.17),3.09,-length*.035,.055,.075,length*1.53,rail);
+      box(side*(width-.17),2.72,-length*.035,.046,.052,length*1.53,rail);
+      for(const zz of [-length*.74,length*.65]){
+        box(side*(width*.69),2.49,zz,.29,.20,.28,hardware);
+        box(side*(width*.69),2.63,zz,.43,.06,.34,rail);
+      }
+    }
+    for(let k=0;k<6;k++){
+      const z=-length*.63+k*length*.24;
+      box(0,2.41,z,width*.72,.055,.08,[.50,.52,.50]);
+      box(0,2.44,z,width*.43,.012,.034,hardware);
+    }
+    if(kind==='ferry'){
+      for(const side of [-1,1])for(let z=-9;z<9;z+=1.65)
+        box(side*(width*.9+.10),4.12,z,.043,.40,1.11,windows);
+      box(0,7.59,-3,.32,.50,.32,hardware);
+    } else if(kind==='cruise'){
+      for(let k=0;k<5;k++){
+        const z=-length*.56+k*length*.24;
+        box(-1.52,8.72,z,.56,.10,1.24,ivory);
+        box(-1.52,8.84,z-.35,.56,.10,.10,rail);
+      }
+    }else{
+      for(let k=0;k<3;k++)
+        box(0,5.0,-length*.7+1.1+k*.64,1.20,.06,.09,hardware);
+      box(0,8.67,-length*.72,.48,.43,.48,rail);
     }
     return upload();
   }
@@ -3248,6 +3294,24 @@
         pushRoadStrip(addQuad,[a,ya,zz],[b,yb,zz],0.09,[0.81,0.80,0.75],0.030);
       }
       a=b;
+    }
+    // Brooklyn Bridge: pedestrian boardwalk, stringers and bolted rails.
+    const timber=[.42,.33,.24],steelFrame=[.32,.35,.37];
+    for(let bx=x-halfLength+2;bx<x+halfLength-2;bx+=3.2){
+      const y=bridgeRoadHeight(bx);
+      box(bx,y+.13,z,3.0,.23,1.40,timber);
+      box(bx,y+.252,z,.055,.012,1.39,[.24,.23,.22]);
+      for(const side of [-1,1]){
+        const zRail=z+side*.72;
+        box(bx,y+.95,zRail,.075,1.45,.075,steelFrame);
+        box(bx,y+1.66,zRail,3.1,.068,.070,steelFrame);
+      }
+    }
+    // Stone cable-anchor housings flank each shore approach.
+    for(const side of [-1,1])for(const ax of [x-halfLength-9,x+halfLength+9]){
+      const y=bridgeRoadHeight(ax),az=z+side*3.67;
+      box(ax,y-.34,az,3.35,1.21,1.56,[.51,.49,.45]);
+      box(ax,y+.20,az,3.52,.21,1.72,[.59,.57,.51]);
     }
     // Piers stop where the ramps meet the street. The river span remains open.
     for(const side of [-1,1]){
@@ -3471,14 +3535,24 @@
   }
 
   function buildStreetVehicle(kind,clothing=[0.27,0.37,0.52],skin=[0.69,0.51,0.39]) {
-    const { addQuad, upload }=createTriangleMesh();
+    const { addTri,addQuad,upload }=createTriangleMesh();
     const box=(...args)=>addModelBox(addQuad,...args);
     const glass=[0.25,0.39,0.44], rubber=[0.12,0.14,0.15];
     if(kind==='taxi'||kind==='police') {
       const police=kind==='police',body=police?[0.80,0.83,0.86]:[0.96,0.66,0.11];
       box(0,0.69,0,1.67,0.76,3.8,body);
-      box(0,1.30,-0.17,1.43,0.59,1.54,glass);
-      box(0,1.62,-0.17,1.43,0.10,1.62,body);
+      // Sloped sedan glazing replaces the rectangular greenhouse.
+      const low=[[-.72,1.01,.70],[.72,1.01,.70],
+        [.72,1.01,-1.04],[-.72,1.01,-1.04]];
+      const high=[[-.59,1.59,.47],[.59,1.59,.47],
+        [.59,1.59,-.77],[-.59,1.59,-.77]];
+      for(let k=0;k<4;k++)addQuad(low[k],low[(k+1)%4],
+        high[(k+1)%4],high[k],glass);
+      addQuad(high[0],high[1],high[2],high[3],body);
+      for(const side of [-1,1]){
+        box(side*.665,1.30,-.24,.052,.53,.055,body);
+        box(side*.665,1.04,-.18,.045,.044,1.61,body);
+      }
       if(police){
         const ink=[0.13,0.21,0.34];
         box(0,1.73,-0.22,1.25,0.12,0.26,ink);
@@ -3491,8 +3565,38 @@
       }else{
         box(0,1.76,-0.22,0.62,0.18,0.29,[0.97,0.84,0.36]);
       }
+      const ink=[.13,.23,.36],chrome=[.51,.55,.56];
+      for(const side of [-1,1]){
+        // Door handles and mirrors at physically plausible car dimensions.
+        for(const z of [-.67,.78]){
+          box(side*.849,.89,z,.028,.045,.20,chrome);
+          box(side*.842,.66,z,.029,.36,.012,ink);
+        }
+        box(side*.90,1.13,.64,.21,.12,.27,ink);
+        box(side*.985,1.13,.64,.021,.088,.23,glass);
+        if(police)box(side*.845,.70,-.22,.032,.13,2.02,[.15,.32,.62]);
+      }
+      box(0,.62,1.944,1.08,.22,.075,ink);
+      box(0,.41,1.976,1.44,.12,.072,chrome);
+      box(0,.43,-1.958,1.44,.12,.084,chrome);
+      for(const side of [-1,1]){
+        box(side*.65,.78,1.958,.31,.14,.041,[.97,.95,.79]);
+        box(side*.65,.79,-1.956,.33,.15,.045,[.78,.18,.13]);
+      }
       for(const x of [-0.76,0.76]) {
-        for(const z of [-1.14,1.14]) box(x,0.35,z,0.25,0.66,0.65,rubber);
+        for(const z of [-1.14,1.14]){
+          // Twelve-sided rubber tires and metallic wheel hubs.
+          const side=Math.sign(x),inner=x-side*.17,outer=x+side*.15;
+          for(let k=0;k<12;k++){
+            const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+            const point=(p,t,r)=>[p,.345+Math.sin(t)*r,z+Math.cos(t)*r];
+            addQuad(point(inner,a,.335),point(inner,b,.335),
+              point(outer,b,.335),point(outer,a,.335),rubber);
+            addTri([outer+side*.005,.345,z],point(outer,b,.235),
+              point(outer,a,.235),[.53,.56,.58]);
+          }
+          box(outer+side*.01,.345,z,.022,.13,.13,[.34,.37,.39]);
+        }
         box(x*0.8,0.83,1.92,0.35,0.17,0.08,[0.94,0.94,0.83]);
         box(x*0.8,0.78,-1.93,0.31,0.19,0.07,[0.71,0.18,0.13]);
       }
@@ -3545,6 +3649,24 @@
     }
     addModelBox(trim.addQuad,0,0.53,0.30,0.06,0.08,4.6,stripe);
     addModelBox(trim.addQuad,0,0.31,-2.98,0.32,0.08,0.42,stripe);
+    // Multi-part engine intake fan, swept winglets and cockpit eyebrows.
+    for(const side of [-1,1]){
+      const cx=side*1.62,cy=-.23;
+      for(let k=0;k<12;k++){
+        const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+        const p=(ang,r,z)=>[cx+Math.cos(ang)*r,cy+Math.sin(ang)*r,z];
+        trim.addQuad(p(a,.235,.636),p(b,.235,.636),
+          p(b,.155,.661),p(a,.155,.661),[.60,.63,.66]);
+        trim.addTri([cx,cy,.665],p(b,.14,.665),p(a,.14,.665),dark);
+      }
+      body.addQuad([side*3.91,.05,-.13],[side*4.09,.52,-.29],
+        [side*3.80,.52,-.43],[side*3.42,.02,-.45],stripe);
+      body.addTri([side*.41,.31,2.58],[side*.11,.45,2.82],
+        [side*.52,.31,2.15],window);
+      addModelBox(trim.addQuad,side*.66,.34,1.13,.025,.15,.026,dark);
+      addModelBox(lights.addQuad,side*4.03,.06,-.20,.06,.05,.07,
+        side>0?[.22,.84,.45]:[.94,.24,.20]);
+    }
     addModelBox(lights.addQuad,-0.06,0.20,3.39,0.12,0.08,0.10,glow);
     addModelBox(lights.addQuad,0.06,0.20,3.39,0.12,0.08,0.10,glow);
     for(const side of [-1,1])addModelBox(lights.addQuad,side*3.42,0.05,-0.20,0.07,0.06,0.18,glow);
