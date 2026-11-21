@@ -29,7 +29,38 @@ export function decodeVegasRidgeDEM(payload){
     if(Math.max(...values)-Math.min(...values)<6)
       throw new Error('Vegas '+key+' profile lacks measured relief');
   }
-  return {source,boundsWgs84:[...bbox],sampleLatitudesNorthing:[...latitudes],
+  let ridgeSurface=null;
+  if(payload.ridgeSurface){
+    const g=payload.ridgeSurface,rows=49,cols=9;
+    if(g.gridRows!==rows||g.gridColumns!==cols||
+      g.encoding!=='uint16_le_base64_decimeters'||
+      g.rowOrdering!=='south_to_north'||
+      g.columnOrdering!=='near_valley_to_outer_ridge')
+      throw new Error('Invalid Vegas gridded DEM layout');
+    const decode=(side)=>{
+      const lon=g[side+'LongitudeWgs84'];
+      const encoded=g[side+'ElevationDecimetersBase64'];
+      if(!Array.isArray(lon)||lon.length!==cols||
+        !lon.every((x,i)=>Number.isFinite(x)&&
+          (i===0||((side==='west'?x<lon[i-1]:x>lon[i-1])))&&
+          x>=bbox[0]&&x<=bbox[2])||
+        typeof encoded!=='string')
+        throw new Error('Invalid Vegas USGS surface longitude metadata');
+      const binary=atob(encoded);
+      if(binary.length!==rows*cols*2)
+        throw new Error('USGS grid byte length mismatch');
+      const values=new Uint16Array(rows*cols);
+      for(let i=0;i<values.length;i++){
+        const dm=binary.charCodeAt(i*2)|(binary.charCodeAt(i*2+1)<<8);
+        if(dm<1000||dm>45000)throw new Error('Invalid USGS surface elevation value');
+        values[i]=dm;
+      }
+      return {longitudeWgs84:[...lon],elevationDecimeters:values};
+    };
+    ridgeSurface={gridRows:rows,gridColumns:cols,
+      west:decode('west'),east:decode('east')};
+  }
+  return {source,boundsWgs84:[...bbox],sampleLatitudesNorthing:[...latitudes],ridgeSurface,
     elevationMeters:{
       west:[...elevationMeters.west],
       center:[...elevationMeters.center],
