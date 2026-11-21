@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'assets/cosmos/**'
+      - 'assets/nyc/**'
       - 'assets/chongqing/chongqing.js'
       - 'index.html'
       - 'space.html'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'assets/cosmos/**'
+      - 'assets/nyc/**'
       - 'assets/chongqing/chongqing.js'
       - 'index.html'
       - 'space.html'

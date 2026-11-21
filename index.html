@@ -409,7 +409,9 @@
     [-140,-611,50,78],    // Liberty Island
     [-124,-603,103,180],  // Harbor entry and Liberty sight corridor
     [82,-342,78,118],     // Brooklyn Bridge and waterfront
-    [79,206,50,100],     // Central Park edge
+    [62,103,64,122],    // Central Park South / 59th Street
+    [79,206,65,123],    // The Lake, Bethesda & Great Lawn
+    [105,305,67,128],   // Upper Reservoir / Harlem Meer
     [354,-389,35,77]     // Harbor runway approach
   ];
   function nycDetailBand(x,z){
@@ -578,8 +580,28 @@
     [[253,-342],[245,-319],[232,-300],[254,-266],[292,-251],[333,-244],[367,-217],[426,-205]],
     [[266,-409],[301,-409],[323,-421],[370,-421]]
   ];
+const CENTRAL_PARK_WATERS=[
+  {name:'Reservoir',cx:0,cz:245,rx:29.5,rz:28.0,phase:.45},
+  {name:'The Lake',cx:-14,cz:150,rx:24.0,rz:16.2,phase:1.15},
+  {name:'The Pond',cx:21,cz:73,rx:12.4,rz:8.6,phase:2.75},
+  {name:'Harlem Meer',cx:17,cz:339,rx:16.5,rz:10.2,phase:1.7},
+  {name:'Turtle Pond',cx:6,cz:177,rx:7.7,rz:5.3,phase:3.85},
+  {name:'Conservatory Water',cx:26,cz:146,rx:9.2,rz:6.7,phase:0.85}
+];
+const CENTRAL_PARK_SITES=[
+  {name:'Central Park Pond',u:21,z:73},
+  {name:'The Mall / Literary Walk',u:7,z:111},
+  {name:'Bethesda Terrace',u:5,z:134},
+  {name:'The Lake / Bow Bridge',u:-17,z:151},
+  {name:'Belvedere Castle',u:-15,z:178},
+  {name:'Great Lawn',u:6,z:196},
+  {name:'Jacqueline Kennedy Onassis Reservoir',u:0,z:245},
+  {name:'North Meadow',u:-9,z:303},
+  {name:'Harlem Meer',u:18,z:338}
+];
   const MANHATTAN_GRID = {
     tilt: 0.24, offset: 30, parkCenter: 206, parkHalfLength: 151, parkHalfWidth: 43,
+    parkWaters:CENTRAL_PARK_WATERS,
     blockWidth: 24, blockLength: 33, landmarks: NEW_YORK_LANDMARKS, timesSquareBounds:TIMES_SQUARE.bounds, streets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],runway:HARBOR_RUNWAY, railway:BROOKLYN_RAIL,focusZones:NYC_FOCUS_ZONES
   };
   const ALASKA_PLACES = {
@@ -902,7 +924,23 @@
       if (!island && !jersey && !outerBoroughs) return (water - 4.4) / scale;
       if (island && Math.abs(localX) < city.parkHalfWidth &&
           Math.abs(north - city.parkCenter) < city.parkHalfLength) {
-        return (elevation + 1.0 + 0.6 * Math.sin(north / 22) * Math.cos(localX / 14)) / scale;
+        const lawnHeight=elevation+1.0+
+          .6*Math.sin(north/22)*Math.cos(localX/14);
+        // Share curved shoreline masks with the Central Park mesh, and gently
+        // carve the 1024² terrain before drawing the water polygons.
+        let nearest=Infinity;
+        for(const lake of city.parkWaters||[]){
+          const dx=(localX-lake.cx)/lake.rx,dz=(north-lake.cz)/lake.rz;
+          const angle=Math.atan2(dz,dx);
+          const shoreline=1+.055*Math.sin(3*angle+lake.phase)+
+            .025*Math.cos(7*angle-lake.phase);
+          nearest=Math.min(nearest,Math.hypot(dx,dz)/shoreline);
+        }
+        if(nearest<1.13){
+          const t=clamp((nearest-.91)/.22,0,1),smooth=t*t*(3-2*t);
+          return (elevation+.17+(lawnHeight-elevation-.17)*smooth)/scale;
+        }
+        return lawnHeight/scale;
       }
       if (!includeBuildings) return elevation / scale;
       const gx = localX / city.blockWidth;
@@ -5833,7 +5871,7 @@
 
   let mapScenery=null;
   let alaskaDetailMesh=null;
-  let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycHeroEpoch=0;
+  let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -5910,7 +5948,8 @@
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
     disposeSceneMesh(nycGisMesh);
-    nycHeroScenery=nycStreetMesh=nycGisMesh=null;
+    disposeSceneMesh(nycParkMesh);
+    nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
     const heroEpoch=++nycHeroEpoch;
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
@@ -6001,11 +6040,44 @@
         else nycHeroScenery=uploaded;
       }).catch(error=>console.warn('[PATROL] Harbor detail fallback:',error));
     }
+    // Park geometry uses a separate, bounded triangle batch, but the same
+    // WebGL renderer as Manhattan. Load only when the city is active.
+    if(selectedMap.city && !graphicsCompat && smoothScenery()){
+      import('./assets/nyc/central-park.js').then(({buildCentralPark})=>{
+        if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+        const detail=createTriangleMesh();
+        const stats=buildCentralPark({
+          addQuad:detail.addQuad,addTri:detail.addTri,
+          box:(...args)=>addModelBox(detail.addQuad,...args),
+          beam:(a,b,w,color)=>addRideBeam(detail.addQuad,a,b,w,color),
+          ribbon:(a,b,w,color)=>pushRoadStrip(detail.addQuad,a,b,w,color),
+          terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+          waterY:WATER_H,streetY:STREET_Y,grid:MANHATTAN_GRID,
+          quality:window.matchMedia('(max-width:760px), (pointer:coarse)').matches?'low':'high'
+        });
+        const uploaded=detail.upload();
+        if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
+          disposeSceneMesh(uploaded);return;
+        }
+        nycParkMesh=uploaded;
+        // Only the substantial castle is a flight collision obstacle.
+        // Tree crowns stay visual-only to avoid expensive hitbox scans.
+        const bx=MANHATTAN_GRID.tilt*181+MANHATTAN_GRID.offset-16;
+        const by=sampleTerrainHeight(bx,181);
+        sceneryObjects.push({name:'Belvedere Castle',x:bx,z:181,y:by,
+          top:by+7.4,halfX:5,halfZ:5});
+        console.info('[PATROL] Central Park',stats);
+      }).catch(error=>console.warn('[PATROL] Central Park fallback:',error));
+    }
     const box=(...args)=>addModelBox(solid.addQuad,...args);
     const lamp=(...args)=>addModelBox(lights.addQuad,...args);
     const iron=[0.30,0.35,0.38], pale=[0.79,0.80,0.74], red=[0.64,0.24,0.18];
     const timber=[0.41,0.32,0.24], amber=[0.95,0.71,0.38];
     const place=(name,site)=>sceneryPlaces.push({name,x:site.x,z:site.z});
+    if(selectedMap.city)for(const site of CENTRAL_PARK_SITES){
+      place(site.name,{x:MANHATTAN_GRID.tilt*site.z+MANHATTAN_GRID.offset+site.u,
+        z:site.z});
+    }
     const solidAt=(name,x,z,y,top,halfX,halfZ,roofSlope=0,roofSlopeZ=0)=>
       sceneryObjects.push({name,x,z,y,top,halfX,halfZ,roofSlope,roofSlopeZ});
 
@@ -7163,32 +7235,8 @@
         cylinder(x+dx,z+6,[[y,0.48],[y+1.28,0.48]],dx<-4?[0.53,0.24,0.18]:concrete,9);
       }
     }else if(selectedMap.city){
-      const site=findScenerySite(81,257,{footprint:12,range:36,avoid:(x,z)=>
-        Math.abs(x-(z*MANHATTAN_GRID.tilt+MANHATTAN_GRID.offset))>20||z<228||z>284});
-      if(!site)return;
-      const {x,y,z}=site;
-      place('Central Park Pond',site);
-      const outer=9.4, inner=8.85;
-      const rim=angle=>[x+Math.cos(angle)*outer,y+0.53,z+Math.sin(angle)*outer*0.69];
-      const water=angle=>[x+Math.cos(angle)*inner,y+0.37,z+Math.sin(angle)*inner*0.69];
-      for(let i=0;i<32;i++){
-        const a=i*Math.PI/16,b=(i+1)*Math.PI/16, p=rim(a),q=rim(b);
-        addQuad(water(b),rim(b),rim(a),water(a),concrete);
-        addQuad([p[0],level(p[0],p[2])-0.1,p[2]],[q[0],level(q[0],q[2])-0.1,q[2]],q,p,concrete);
-        addQuad([x,y+0.37,z],water(b),water(a),[x,y+0.37,z],
-          i%3===0?[0.19,0.34,0.38]:[0.17,0.29,0.34]);
-      }
-      terrainPath([[x-19,z-15],[x-14,z-7],[x-12,z+7],[x-6,z+12],[x+11,z+10],[x+18,z-2]],2.1,[0.59,0.54,0.47]);
-      for(const [dx,dz] of [[-14,-6],[-6,13],[5,12],[14,7]]){
-        const px=x+dx,pz=z+dz,gy=level(px,pz);
-        if(cityLotAt(px,pz))continue;
-        box(px,gy+0.45,pz,2.03,0.1,0.54,agedWood);
-        box(px,gy+0.68,pz+0.21,2.0,0.35,0.09,agedWood);
-        for(const side of [-1,1])box(px+side*0.7,gy+0.24,pz,0.10,0.50,0.39,asphalt);
-        box(px+1.65,gy+1.40,pz,0.095,2.8,0.095,asphalt);
-        lamp(px+1.65,gy+2.83,pz,0.25,0.21,0.25,amber);
-      }
-      planted(x+12,z-7,4.7);
+      // Old small Pond was located by mistake in the Reservoir section.
+      // The six actual water features are now part of central-park.js.
     }else if(selectedMap.alaska){
       const site=findScenerySite(-146,-253,{footprint:7,range:81})||
         findScenerySite(135,-141,{footprint:7,range:81});
@@ -8618,6 +8666,7 @@
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
+    if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
       if(textured){
@@ -10424,6 +10473,24 @@
       ctx.fillRect(mapWidth/2+(strip.x-strip.halfLength)*mapScale,
         mapWidth/2-(strip.z+strip.halfWidth)*mapScale,
         strip.halfLength*2*mapScale,strip.halfWidth*2*mapScale);
+      // Blue curved water footprints also appear on the radar map/preview.
+      for(const lake of city.parkWaters||[]){
+        ctx.beginPath();
+        for(let n=0;n<=64;n++){
+          const a=n/64*Math.PI*2;
+          const r=1+.055*Math.sin(3*a+lake.phase)+
+            .025*Math.cos(7*a-lake.phase);
+          const z=lake.cz+Math.sin(a)*lake.rz*r;
+          const u=lake.cx+Math.cos(a)*lake.rx*r;
+          const x=u+city.offset+city.tilt*z;
+          const px=mapWidth/2+x*mapScale,py=mapWidth/2-z*mapScale;
+          if(n===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+        }
+        ctx.closePath();
+        ctx.fillStyle='#19475b';ctx.fill();
+        ctx.lineWidth=Math.max(.7,mapScale*1.5);
+        ctx.strokeStyle='#c1bca5';ctx.stroke();
+      }
     }
     if(vegas){
       const center=mapWidth/2;
