@@ -17,6 +17,7 @@ on:
       - "scripts/nyc-road-browser-smoke.mjs"
       - "tests/nyc-road-clearance.test.mjs"
       - "tests/nyc-authored-road-shoreline.test.mjs"
+      - "tests/nyc-oti-harbor-window-depth.test.mjs"
       - "tests/nyc-road-coastline.test.mjs"
       - "tests/nyc-intersection-*.test.mjs"
       - ".github/workflows/nyc-bridgehead-browser.yml"
@@ -41,7 +42,7 @@ jobs:
           node-version: "22"
       - name: Validate NYC road and waterfront clearance
         run: |
-          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
+          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-oti-harbor-window-depth.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
       - name: Install Chromium with software WebGL
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
