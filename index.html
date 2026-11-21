@@ -8961,6 +8961,58 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
+  // Vegas core visual acceptance sample: original triangulated mountain
+  // ridges and asphalt surface breakup. No third-party models, textures,
+  // GIS-derived coordinates, collider additions or flight-physics changes.
+  function buildVegasCoreRidgeSample(geometry) {
+    const {addTri,addQuad}=geometry;
+    const stone=[[.43,.38,.34],[.37,.33,.30],[.32,.30,.29],
+      [.48,.43,.38],[.39,.36,.33]];
+    let triangles=0;
+    const face=(a,b,c,color)=>{
+      addTri(a,b,c,color);triangles++;
+    };
+    const ridgeHeight=(i,side)=>{
+      const uneven=Math.sin(i*1.73+side*.6)*.27+
+        Math.sin(i*.67+side*1.4)*.19;
+      return 47+(i%5)*7+uneven*28;
+    };
+    // Distant western/eastern Mojave-style silhouette; scenic-only geometry.
+    // Deliberately NOT advertised as a surveyed Spring Mountains / Sunrise
+    // Mountain DEM until an actual USGS 3DEP raster is projected and checked.
+    const rows=18,dz=74,z0=-666;
+    for(const side of [-1,1])for(let i=0;i<rows;i++){
+      const z=z0+i*dz,zn=z+dz;
+      const height0=ridgeHeight(i,side),height1=ridgeHeight(i+1,side);
+      const section=(zz,height,depth)=> {
+        const x=side*depth,ground=sampleTerrainHeight(x,zz);
+        return [x,ground+height,zz];
+      };
+      const a=section(z,1,686),b=section(zn,1,686);
+      const c=section(z,height0*.49,744),d=section(zn,height1*.49,744);
+      const e=section(z,height0,811),g=section(zn,height1,811);
+      const h=section(z,height0*.14,847),j=section(zn,height1*.14,847);
+      const tint=stone[(i+(side===1?2:0))%stone.length];
+      const lit=stone[(i+3)%stone.length];
+      face(a,b,c,tint);face(b,d,c,tint);
+      face(c,d,e,lit);face(d,g,e,lit);
+      face(e,g,h,tint);face(g,j,h,tint);
+    }
+    // Small-scale parallel pavement joints and tonal repair strips along
+    // the *existing* straight Strip between Harmon and Flamingo; flush
+    // overlays create no new blocking collider or new vehicle route.
+    const roadX=VEGAS_BOULEVARD, asphalt=[.19,.20,.21],
+      joint=[.34,.33,.32];
+    for(let z=-210;z<=-122;z+=11){
+      const y=sampleTerrainHeight(roadX,z)+.332;
+      const dark=(z%3===0)?joint:asphalt;
+      addQuad([roadX-8.46,y,z],[roadX-8.46,y,z+.095],
+        [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
+      triangles+=2;
+    }
+    return {mountainTriangles:rows*2*6,roadTriangles:18,triangles};
+  }
+
   function buildVegasStrip(geometry) {
     const {box,lamp,cylinder,solidAt,place,addQuad}=geometry;
     const hotelDistricts=[
@@ -8979,6 +9031,8 @@ const CENTRAL_PARK_SITES=[
     const roadway=[0.25,0.26,0.27];
     const roadX=VEGAS_BOULEVARD;
     buildVegasRoads(box,lamp,addQuad);
+    // Geometry is batched with the existing Strip; no new loader or shader.
+    buildVegasCoreRidgeSample(geometry);
     place('Sands Avenue',{x:126,z:-20});
     place('Tropicana Avenue',{x:81,z:-323});
     buildVegasHotels(geometry);
