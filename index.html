@@ -8994,24 +8994,54 @@ const CENTRAL_PARK_SITES=[
         5.5*Math.sin(i*1.21+phase*2.3));
     };
     const rows=48,dz=1332/rows,z0=-666;
-    for(const side of [-1,1])for(let i=0;i<rows;i++){
-      const z=z0+i*dz,zn=z+dz;
-      const h0=ridgeHeight(i,side),h1=ridgeHeight(i+1,side);
-      const profile=(zz,h)=>{
-        const point=(depth,fraction)=> {
-          const x=side*depth;
-          return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
+    if(vegasMeasuredRidges?.ridgeSurface){
+      // Two independent 49x9 meter-elevation grids from the same official
+      // USGS GeoTIFF. This is an actual two-dimensional DEM surface,
+      // spatially compressed into distant game scenery; city ground and
+      // physics/collisions remain unchanged.
+      const grid=vegasMeasuredRidges.ridgeSurface;
+      const cols=grid.gridColumns;
+      for(const side of [-1,1]){
+        const source=side<0?grid.west:grid.east;
+        const vertices=Array.from({length:rows+1},(_,i)=>{
+          const z=z0+i*dz;
+          return Array.from({length:cols},(_,j)=>{
+            const x=side*(686+(847-686)*j/(cols-1));
+            const meters=source.elevationDecimeters[i*cols+j]/10;
+            const relief=meters-vegasMeasuredRidges.elevationMeters.center[i];
+            const y=sampleTerrainHeight(x,z)+
+              Math.max(0,Math.min(160,relief*.23));
+            return [x,y,z];
+          });
+        });
+        for(let i=0;i<rows;i++)for(let j=0;j<cols-1;j++){
+          const a=vertices[i][j],b=vertices[i+1][j],
+            c=vertices[i][j+1],d=vertices[i+1][j+1];
+          // Broad patches rather than repeated high-contrast bands.
+          const color=stone[(Math.floor(i/9)+j+(side>0?1:0))%stone.length];
+          face(a,b,c,color);face(b,d,c,color);
+        }
+      }
+    }else{
+      // This procedural/four-band geometry remains a fully working
+      // fallback if the local measured JSON is unavailable or invalid.
+      for(const side of [-1,1])for(let i=0;i<rows;i++){
+        const z=z0+i*dz,zn=z+dz;
+        const h0=ridgeHeight(i,side),h1=ridgeHeight(i+1,side);
+        const profile=(zz,h)=>{
+          const point=(depth,fraction)=> {
+            const x=side*depth;
+            return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
+          };
+          return [point(686,.018),point(720,.25),point(754,.59),
+            point(811,1),point(847,.12)];
         };
-        return [point(686,.018),point(720,.25),point(754,.59),
-          point(811,1),point(847,.12)];
-      };
-      const a=profile(z,h0),b=profile(zn,h1);
-      for(let band=0;band<4;band++){
-        // Adjacent slopes use different earth tones, like weathered gravel
-        // and exposed ridge stone; no repeated billboard/photo texture.
-        const color=stone[(band+i%3+(side===1?1:0))%stone.length];
-        face(a[band],b[band],a[band+1],color);
-        face(b[band],b[band+1],a[band+1],color);
+        const a=profile(z,h0),b=profile(zn,h1);
+        for(let band=0;band<4;band++){
+          const color=stone[(band+i%3+(side===1?1:0))%stone.length];
+          face(a[band],b[band],a[band+1],color);
+          face(b[band],b[band+1],a[band+1],color);
+        }
       }
     }
     // Small-scale parallel pavement joints and tonal repair strips along
@@ -9026,7 +9056,7 @@ const CENTRAL_PARK_SITES=[
         [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
       triangles+=2;
     }
-    return {mountainTriangles:rows*2*8,roadTriangles:18,triangles};
+    return {mountainTriangles:triangles-18,roadTriangles:18,triangles};
   }
 
   function buildVegasStrip(geometry) {
