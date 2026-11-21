@@ -94,6 +94,7 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
     const width=i<6?31:35,depth=i<6?27:31;
     const geometry=sailGeometry(width,depth,height,lean);
     const tower=new THREE.Mesh(geometry,sailGlass);
+    tower.castShadow=true;tower.receiveShadow=true;
     tower.position.set(x,podiumY,z);scene.add(tower);
     // The collision envelope includes the gentle curvature but not the surrounding plaza.
     obstacles.push({x:x+lean*.35,z:z+2,w:width+20,d:depth+17,base:podiumY,top:podiumY+height+2});
