@@ -739,16 +739,16 @@
         {name:'Kittiwake Harbor',pos:[34,35,-525]},
         {name:'Twin Falls',pos:[-109,41,-398]},
         {name:'Fjord Narrows',pos:[-3,43,-139]},
-        {name:'Glacier Head',pos:[10,51,396]}
+        {name:'Glacier Head',pos:[128,51,441]}
       ],
       spawn: [-19,33,-667],
       landmarks: [
-        { name: 'Glacier Head', x: -40, z: 558, width: 195, depth: 220, elevation: 0.61 },
+        { name: 'Glacier Head', x: 130, z: 558, width: 195, depth: 220, elevation: 0.61 },
         { name: 'West Ridge', x: -435, z: -90, width: 245, depth: 422, elevation: 0.74 },
         { name: 'Mount Alder', x: 388, z: 144, width: 260, depth: 383, elevation: 0.76 },
         { name: 'South Meadow', x: -125, z: -450, width: 120, depth: 180, elevation: 0.13 }
       ],
-      checkpoints: [[-19,-574],[-54,-410],[-45,-230],[-17,-45],[24,168]]
+      checkpoints: [[-19,-574],[-54,-410],[-45,-230],[-17,-45],[121,373]]
     },
     vegas: {
       name: 'Las Vegas',
@@ -1919,7 +1919,7 @@
             vec3 snowpack=mix(vec3(.70,.80,.84),vec3(.94,.96,.97),grain*.55+fleck*.45);
             albedo=mix(albedo,snowpack,clamp(frost*(.84+.16*wind),0.0,1.0));
             // Flight-scale glacier extent; never presented as surveyed GIS.
-            float iceAxis=-34.0+21.0*sin(clamp((p.z-449.0)/148.0,0.0,1.0)*3.9);
+            float iceAxis=130.0+12.0*sin(clamp((p.z-449.0)/148.0,0.0,1.0)*3.9);
             float glacier=1.0-smoothstep(63.0,92.0,abs(p.x-iceAxis));
             glacier*=smoothstep(422.0,460.0,p.z)
                       *(1.0-smoothstep(590.0,647.0,p.z));
@@ -5242,7 +5242,7 @@
       function glacierPoint(col,row) {
         const across = 2*col/columns - 1;
         const t = row/rows;
-        const x = -34 + across*(78-28*t) + Math.sin(t*3.9)*21;
+        const x = 130 + across*(66-24*t) + Math.sin(t*3.9)*12;
         const z = 449 + t*148 - (1-across*across)*17 + Math.sin(col*1.8)*2.3;
         const edge = 1 - Math.abs(across)**8;
         const ice = (4.6 + 5.8*edge)*Math.min(1,(1-t)*5.8);
@@ -5262,8 +5262,8 @@
         }
       }
       for (let i=0;i<25;i++) {
-        const x = -66 + (i*37)%102;
-        const z = 332 + (i*29)%113;
+        const x = 75 + (i*37)%110;
+        const z = 290 + (i*29)%167;
         if (sampleGroundHeight(x,z)>WATER_H) continue;
         const size = 1.8+(i%5)*0.86;
         const tint = i%2 ? [0.70,0.86,0.92] : [0.85,0.93,0.94];
