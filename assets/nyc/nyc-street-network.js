@@ -230,6 +230,7 @@ export function buildNycStreetNetwork({
     }
     return true;
   }
+  const visibleStreetSegments=new Set();
   function streetSegment(a,b,kind,i,j){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
@@ -318,6 +319,7 @@ export function buildNycStreetNetwork({
       stats.streetFixtures++;
     }
     if(kind==='avenue')stats.avenues++;else stats.streets++;
+    visibleStreetSegments.add((kind==='avenue'?'a':'s')+i+':'+j);
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
@@ -452,6 +454,21 @@ export function buildNycStreetNetwork({
     // Extra conservative building/bridge and Times Square safety margin.
     if(!permitted(x,z)||nearOld(x,z,11.2)||
       !permitted(x-4,z-4)||!permitted(x+4,z+4))continue;
+    // An intersection cannot have painted zebra stripes unless both the
+    // approaching avenue AND cross street survived full-footprint clearance.
+    const hasAvenue=visibleStreetSegments.has('a'+i+':'+j)||
+      visibleStreetSegments.has('a'+i+':'+(j-1));
+    const hasStreet=visibleStreetSegments.has('s'+i+':'+j)||
+      visibleStreetSegments.has('s'+(i-1)+':'+j);
+    if(!hasAvenue||!hasStreet)continue;
+    // Crossings are drawn independently of road strips, so they must also
+    // reserve the full intersection box. Otherwise zebra paint and yellow
+    // signal supports could still be rendered inside a corner building.
+    let freeIntersection=true;
+    for(const dx of [-5,-2.5,0,2.5,5])for(const dz of [-5,-2.5,0,2.5,5]){
+      if(!isClear(x+dx,z+dz,.45)){freeIntersection=false;break;}
+    }
+    if(!freeIntersection){stats.skippedRoadFootprints++;continue;}
     crosswalk(x,z,i,j);
   }
   // Hot-dog sidewalk cart — visibly stainless steel with under-counter

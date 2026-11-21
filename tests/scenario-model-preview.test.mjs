@@ -41,6 +41,11 @@ test('viewer audits polygon count, footprint, embedded atlas and orientation',()
   assert.match(script,/canvas\.toBlob\(blob/);
 });
 test('preview never enables unreviewed models or edits manifests',()=>{
-  assert.ok(Object.values(manifest.landmarks).every(asset=>asset.enabled===false));
+  for(const [kind,asset] of Object.entries(manifest.landmarks)){
+    if(kind==='trade'){
+      assert.equal(asset.enabled,true,'reviewed One WTC original model is activated');
+      assert.match(asset.license,/Original/);
+    }else assert.equal(asset.enabled,false,'other landmarks retain their original models');
+  }
   assert.doesNotMatch(script,/PUT|POST|PATCH|--activate|writeFile|gh api/);
 });

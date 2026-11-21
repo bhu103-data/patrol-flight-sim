@@ -98,7 +98,18 @@ class Mesh:
             m.visual=TextureVisuals(uv=np.array(self.uv,dtype="float32"),material=material)
         else:
             m.visual=ColorVisuals(mesh=m,vertex_colors=np.array(self.colors,dtype=np.uint8))
-        if not np.isfinite(m.vertices).all():raise ValueError(self.name+" non-finite geometry")
+        if not np.isfinite(m.vertices).all():
+            raise ValueError(self.name+" non-finite geometry")
+        # Some tiny louvre triangles are degenerate under Trimesh's vertex
+        # normal averaging on different NumPy versions. Never serialize NaN
+        # normals: the browser's JSON.parse rejects the entire GLB.
+        normals=np.nan_to_num(np.asarray(m.vertex_normals,dtype=np.float64),
+            nan=0.0,posinf=0.0,neginf=0.0)
+        lengths=np.linalg.norm(normals,axis=1)
+        invalid=(lengths<1.0e-12) | ~np.isfinite(lengths)
+        normals[invalid]=[0.0,1.0,0.0]
+        lengths[invalid]=1.0
+        m.vertex_normals=normals/lengths[:,None]
         return m
     @property
     def triangles(self):return len(self.faces)
@@ -221,6 +232,13 @@ for part in parts:
                        node_name=part.name,geom_name=part.name)
 # Export explicit normals so glass facet lighting follows outward geometry.
 data=trimesh.exchange.gltf.export_glb(scene,include_normals=True)
+# Python's json parser allows NaN, but browsers do not: validate the exported
+# JSON chunk in STRICT mode before publishing.
+import struct
+json_length=struct.unpack_from("<I",data,12)[0]
+def reject_nonfinite(value):
+    raise ValueError("Non-finite GLB metadata: "+value)
+json.loads(data[20:20+json_length],parse_constant=reject_nonfinite)
 GLB.write_bytes(data)
 triangles=sum(part.triangles for part in parts)
 if not 600<triangles<=25000:raise ValueError("Invalid triangle budget "+str(triangles))

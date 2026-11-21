@@ -1,0 +1,45 @@
+name: NYC Times Square WebGL photographic QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nyc-times-browser.yml'
+      - 'tests/nyc-times-browser-smoke.cjs'
+permissions:
+  contents: read
+jobs:
+  real-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless Chromium and screenshot PNG reader
+        shell: bash
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1 pngjs@7.0.0
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Host checked-out PATROL game locally
+        shell: bash
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 >/tmp/patrol-nyc-times-http.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8127/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Fly Manhattan and capture Times Square / LED / One Times screenshots
+        run: node tests/nyc-times-browser-smoke.cjs
+        timeout-minutes: 6
+      - name: Upload WebGL2 screenshots and per-view analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-square-survey-webgl-qa
+          path: artifacts/nyc-times/
+          retention-days: 14
+          if-no-files-found: warn

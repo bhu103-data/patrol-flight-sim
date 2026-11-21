@@ -182,12 +182,13 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      const h=(heightBand+rand()*(business?165:76))*(rand()<.20?.52:1);
      // Reject the entire footprint, not just the center. A building cannot
      // extend into an asphalt ribbon, the bridge deck, or the next tower.
-     const site={x,z,w,d};
+     // Preserve road-free collision footprint including 2-unit facade clearance.
+     const site={x,z,w:w+2,d:d+2};
      if(roadReserveAtSite(site,plannedRoads,0,2.2)){
        stats.skippedRoadOverlap++;continue;
      }
-     if([40,470].some(bx=>Math.abs(x-bx)<(w+17)*.5+2.5&&
-       Math.abs(z)<(d+335)*.5+2.5)){
+     if([40,470].some(bx=>Math.abs(x-bx)<(w+2+17)*.5+2.5&&
+       Math.abs(z)<(d+2+335)*.5+2.5)){
        stats.skippedBridgeOverlap++;continue;
      }
      if(obstacles.some(o=>Math.abs(x-o.x)<(w+o.w)*.5+2.0&&

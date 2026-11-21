@@ -1,11 +1,28 @@
 // Chongqing: damp asphalt, puddle micro-roughness, and soft streetlight streaks.
 // Authored procedurally, no remote photos or third-party scene assets.
 // Two small batched meshes across the entire city; no RTT / expensive SSR.
-export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
+export function buildChongqingWetStreets({THREE,scene,ground,riverCenter,isRoadClear=()=>true}) {
   const puddlePositions=[],puddleUvs=[],puddleIndices=[];
   const glowPositions=[],glowUvs=[],glowIndices=[];
   const roadZ=(x,side,tier)=>
     riverCenter(x)+side*(145+tier*105+14*Math.sin(x/115+tier));
+  let skippedBuildingPuddles=0,skippedBuildingReflections=0;
+  // Test every relevant part of each decal against the same building footprints
+  // as the asphalt mesh. This prevents puddles floating across shop interiors.
+  function patchClear(x,side,tier,lane,halfLength,halfWidth){
+    for(const dx of [-halfLength,0,halfLength]){
+      const xx=x+dx,centerZ=roadZ(xx,side,tier);
+      const y=ground(xx,centerZ)+1.73;
+      // Also verify the actual asphalt ribbon was not clipped at this location.
+      if(!isRoadClear(xx,centerZ,y,(13-tier*1.5)*.5+1.15))
+        return false;
+      for(const offset of [-halfWidth,0,halfWidth]){
+        if(!isRoadClear(xx,centerZ+lane+offset,y,1.05))
+          return false;
+      }
+    }
+    return true;
+  }
   // Stable wetness pattern: fixed, nonrepeating per-location irregular edges.
   let seed=113831;
   const rand=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -62,6 +79,9 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
         // Avoid perfect repetition or overlaying the entire asphalt surface.
         const lane=(rand()>.5?1:-1)*(1.5+rand()*2.15);
         const length=2.8+rand()*5.5,width=.5+rand()*1.2;
+        if(!patchClear(x,side,tier,lane,length,width)){
+          skippedBuildingPuddles++;continue;
+        }
         puddle(x,side,tier,lane,length,width);
       }
       // Light ribbons appear only where streetlight geometry already exists.
@@ -69,7 +89,11 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
         const x=-875+i*107;
         const z=roadZ(x,side,tier);
         if(z<-615||z>615)continue;
-        lampStreak(x,side,tier,(i%2===0?1:-1)*4.5);
+        const lane=(i%2===0?1:-1)*4.5;
+        if(!patchClear(x,side,tier,lane,8.0,1.1)){
+          skippedBuildingReflections++;continue;
+        }
+        lampStreak(x,side,tier,lane);
       }
     }
   }
@@ -129,6 +153,7 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
   }
   return {
     update,setQuality,setTimeOfDay,
-    stats:{puddles:puddleIndices.length/54,reflectionStrips:glowIndices.length/6,drawGroups:2}
+    stats:{puddles:puddleIndices.length/54,reflectionStrips:glowIndices.length/6,drawGroups:2,
+      skippedBuildingPuddles,skippedBuildingReflections}
   };
 }

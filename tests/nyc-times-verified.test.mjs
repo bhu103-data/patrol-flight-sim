@@ -20,7 +20,8 @@ test('13 address-verified official Times Square building shells',()=>{
   assert.ok(!ids.has(r.fid));ids.add(r.fid);
   assert.ok(r.uv.length>=4&&r.uv.length<=30);
  }
- assert.equal(sites.find(x=>x.name==='7 Times Square').z,-58);
+ assert.equal(sites.find(x=>x.name==='7 Times Square').z,-80);
+ assert.equal(sites.find(x=>x.name==='7 Times Square').x,32);
 });
 test('surveyed roofs and windows preserve genuine bounded geometry',()=>{
  let roofs=0,glazing=0;
