@@ -251,6 +251,17 @@ export function buildNycStreetNetwork({
         // A conservative .95-unit square probe closes gaps between samples.
         if(!isClear(sx,sz,.95))return false;
       }
+      // Heightmap texels are wider than some shore cuts. Re-check water at
+      // longitudinal half-steps across the entire sidewalk + asphalt width.
+      // The collision-lot tests above already cover the gap via .95 padding,
+      // so these extra probes only sample terrain to keep startup affordable.
+      if(step<steps){
+        const t=(step+.5)/steps,mx=a[0]+dx*t,mz=a[1]+dz*t;
+        for(const across of [-1,-.73,-.39,0,.39,.73,1]){
+          if(terrainAt(mx+nx*margin*across,mz+nz*margin*across)
+              <waterY+1.58)return false;
+        }
+      }
     }
     return true;
   }
