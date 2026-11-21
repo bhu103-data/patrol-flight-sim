@@ -11,6 +11,10 @@ on:
       - "scripts/chongqing-browser-smoke.mjs"
       - ".github/workflows/chongqing-visual.yml"
 
+concurrency:
+  group: chongqing-visual-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
