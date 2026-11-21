@@ -12,7 +12,7 @@ const patched=realism.replace(
   "import('./scenario-textures.js')", "import('"+atlasURL+"')");
 assert.notEqual(patched,realism,'real importer must reference its texture module');
 const loaderURL='data:text/javascript;base64,'+Buffer.from(patched).toString('base64');
-const {decodeGLB}=await import(loaderURL);
+const {decodeGLB,loadNycRealism}=await import(loaderURL);
 const png=Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==',
   'base64'
@@ -63,6 +63,47 @@ function fixture(modify=()=>{}){
   bytes.set(bin,at+8);
   return full;
 }
+
+test('rejects GLBs outside the triangle budget before touching GPU resources',async()=>{
+  await assert.rejects(decodeGLB(null,fixture(),20,2),/Not enough triangles/);
+  const oversized=fixture(doc=>{doc.accessors[2].count=80001;});
+  await assert.rejects(decodeGLB(null,oversized,20),/too large/);
+});
+
+test('landmark requests start without waiting for the bundled Liberty mesh',async t=>{
+  let finishLiberty,signalTrade,readOversized=false,timer;
+  const liberty=new Promise(resolve=>{finishLiberty=resolve;});
+  const trade=new Promise(resolve=>{signalTrade=resolve;});
+  t.mock.method(globalThis,'fetch',async url=>{
+    if(url.endsWith('/statue-of-liberty.glb'))return liberty;
+    if(url.endsWith('/scenario/trade.glb')){
+      signalTrade();
+      return {ok:true,headers:new Headers({'Content-Length':'8388609'}),
+        arrayBuffer:async()=>{readOversized=true;return fixture();}};
+    }
+    return {ok:true,json:async()=>({schema_version:1,max_glb_bytes:8388608,landmarks:{
+      trade:{enabled:true,file:'scenario/trade.glb',target_height:77,
+        min_triangles:600,license:'Original fixture'}
+    }})};
+  });
+  let result;
+  const pending=loadNycRealism(mockGL());
+  try{
+    await Promise.race([trade,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(Error('trade waited for Liberty')),1500);
+    })]);
+  }finally{
+    clearTimeout(timer);
+    finishLiberty({ok:true,arrayBuffer:async()=>fixture(doc=>{
+      delete doc.meshes[0].primitives[0].material;
+    })});
+    result=await pending;
+  }
+  assert.equal(readOversized,false);
+  assert.ok(result.models.liberty);
+  assert.equal(result.models.trade,undefined);
+  assert.ok(result.failures.includes('scenario trade: GLB exceeds import limit'));
+});
 function mockGL(){
   const calls=[],textures=new Map();
   let active=0x84c0,id=0;
