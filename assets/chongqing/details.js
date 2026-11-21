@@ -169,33 +169,51 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     put('amber',83.9,ground(80,z)+2.25,z,0.22,.25,4);
   }
 
-  // The Qiansimen crossing uses an arched crimson truss silhouette with diagonal web members.
-  // Unlike the second stylized cable-stayed crossing it is no longer dominated by pylons.
-  const by=59, bx=40;
+  // Qiansimen Jialing River Bridge — SINGLE PYLON, SINGLE CENTRAL CABLE PLANE.
+  // Reference: Chongqing Municipal Urban Management Bureau (official description).
+  // Red deck-side steel lattice sits below a pale inverted-V cable tower; NOT an arch bridge.
+  // Game-space span is deliberately compressed and is not a surveyed 720 m model.
+  const by=59,bx=40,bridgeMin=-168,bridgeMax=168;
   for(const side of [-1,1]){
-    const xx=bx+side*9.7;
+    const xx=bx+side*8.8;
+    beam('bridge',[xx,by+1.9,bridgeMin],[xx,by+1.9,bridgeMax],1.05,1.1);
+    beam('bridge',[xx,by-12,bridgeMin],[xx,by-12,bridgeMax],1.45,1.4);
     for(let i=0;i<28;i++){
-      const z0=-168+i*12,z1=z0+12;
-      const archZ=z=>by+13+48*Math.sqrt(Math.max(0,1-(z/184)**2));
-      const a=[xx,archZ(z0),z0],b=[xx,archZ(z1),z1];
-      beam('bridge',a,b,1.8,1.8);
-      beam('bridge',[xx,by+2,z0],[xx,by+2,z1],1.35,1.2);
-      if(i<27){
-        beam('bridge',[xx,by+2,z0],a,.64,.64);
-        if(i%2===0)beam('bridge',[xx,by+2,z0],b,.67,.67);
-        else beam('bridge',a,[xx,by+2,z1],.67,.67);
-      }
+      const z0=bridgeMin+i*12,z1=z0+12;
+      beam('bridge',[xx,by+1.9,z0],[xx,by-12,z0],.6,.62);
+      beam('bridge',[xx,by-12,z0],[xx,by+1.9,z1],.56,.61);
+      if(i%2===0)beam('bridge',[xx,by+1.9,z0],[xx,by-12,z1],.46,.48);
       if(i%2===0){
-        put('red',xx,by+4,z0,.62,.34,1.7);
-        put('amber',xx,by+1.35,z0,.35,.15,1.8);
+        put('red',xx,by+2.5,z0,.45,.4,1.6);
+        put('amber',xx,by-10.5,z0,.46,.16,1.2);
       }
     }
   }
-  for(let i=0;i<15;i++){
-    const z=-158+i*23;
-    put('bridge',bx,by+17,z,21.5,.6,.6);
-    beam('bridge',[bx-9.7,by+13,z],[bx+9.7,by+13,z],.5,.55);
+  for(let i=0;i<13;i++){
+    const z=bridgeMin+12+i*25;
+    beam('bridge',[bx-8.8,by-10,z],[bx+8.8,by-10,z],.72,.78);
   }
+  // The tower is set toward one side of the span: two tapered pale legs converge near the crown.
+  // Cable anchors remain in a single vertical plane on the bridge centerline.
+  const mastZ=-94,mastTop=by+132;
+  beam('stone',[bx-13,by-23,mastZ],[bx,mastTop,mastZ],4.3,4.1);
+  beam('stone',[bx+13,by-23,mastZ],[bx,mastTop,mastZ],4.3,4.1);
+  beam('stone',[bx,mastTop,mastZ],[bx,by+2,mastZ],2.8,2.8);
+  beam('stone',[bx-12,by+17,mastZ],[bx+12,by+17,mastZ],2.5,2.5);
+  put('blue',bx,mastTop+2,mastZ,2.1,2.4,2.1);
+  for(let i=1;i<=11;i++){
+    const z=mastZ+i*22;
+    if(z>bridgeMax-8)break;
+    const anchorY=mastTop-5-(i-1)*4.3;
+    beam('rail',[bx,anchorY,mastZ],[bx,by+4,z],.24,.24);
+    put('amber',bx,by+3.4,z,.42,.16,.7);
+  }
+  for(let i=1;i<=4;i++){
+    const z=mastZ-i*18;
+    beam('rail',[bx,mastTop-9-i*7,mastZ],[bx,by+4,z],.23,.23);
+  }
+  // Concrete footing to visually join the bridge support to the river.
+  put('stone',bx,by-48,mastZ,25,58,23);
 
   // Layered roads: limestone parapets, guide stripes, lamp heads and zebra crossings.
   for(const side of [-1,1])for(let band=0;band<2;band++){
