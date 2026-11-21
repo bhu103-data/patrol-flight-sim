@@ -142,8 +142,8 @@ test('front grille and license plate detail remains instanced and low-quality aw
   const {traffic,objects}=setup();
   const meshes=objects.filter(x=>x instanceof InstancedMesh);
   const grille=meshes.find(x=>x.capacity===12&&x.count===10&&x.material.roughness===.82);
-  const plates=meshes.find(x=>x.capacity===24&&x.count===20&&x.material.color===0xe4e7d8);
-  const rearTrims=meshes.find(x=>x.capacity===24&&x.count===20&&x.material.color===0xa92a21);
+  const plates=meshes.filter(x=>x.capacity===24&&x.count===20&&x.material.color===0xe4e7d8).at(-1);
+  const rearTrims=meshes.filter(x=>x.capacity===24&&x.count===20&&x.material.color===0xa92a21).at(-1);
   assert.ok(grille,'one GPU batch covers all ten front grilles');
   assert.ok(plates,'one GPU batch covers front and rear plates');
   assert.ok(rearTrims,'one GPU batch covers rear marker trim');
