@@ -4004,7 +4004,7 @@ const CENTRAL_PARK_SITES=[
             const wave=.81+.18*Math.sin(u*6.3+phase)+
               .10*Math.cos(u*13.7+phase*.37);
             const gradient=tint.map((v,ch)=>Math.max(.08,Math.min(.94,
-              v*wave+(ch===stripe%3?.035:.0))));
+              v*wave+(ch === (stripe % 3) ? .035 : 0.0))));
             light((u-.5)*7.66,mid,face+side*.292,
               7.66/22+.006,height-.31,.014,gradient);
           }
