@@ -6012,7 +6012,7 @@ const CENTRAL_PARK_SITES=[
     const glass=variant===0?[.17,.25,.28]:[.15,.23,.27];
     const stories=Math.max(5,Math.min(7,Math.round(h/2.75)));
     const spacing=h/stories;
-    let openings=0,arcs=0,quads=0,headerStones=0;
+    let openings=0,arcs=0,quads=0,headerStones=0,shutters=0,sashMullions=0,roofPiers=0;
     for(const axis of ['x','z'])for(const side of [-1,1]){
       const span=axis==='x'?w:d,half=span*.5,edge=.12;
       const bays=Math.max(axis==='x'?2:3,
@@ -6088,6 +6088,23 @@ const CENTRAL_PARK_SITES=[
               const v=bottom+(crown-bottom)*k/4;
               rect(left+.05,right-.05,v,v+.03,steel,12,-.06);
             }
+            // PATROL_DUMBO_LOADING_SHUTTER_V3: physical metal rolling door
+            // over the already-inset service-bay backing. Reuse existing
+            // material tags; a single authored loading opening per warehouse.
+            const shutterBottom=bottom+.09,shutterTop=crown-.12;
+            const shutterTone=variant===0?[.29,.36,.35]:[.38,.38,.34];
+            rect(left+.09,right-.09,shutterBottom,shutterTop,
+              shutterTone,12,-.082);
+            for(let slat=1;slat<=9;slat++){
+              const v=shutterBottom+(shutterTop-shutterBottom)*slat/10;
+              rect(left+.105,right-.105,v,v+.028,
+                slat%2?steel:stone,12,-.056);
+            }
+            for(const u of [left+.08,right-.08])
+              rect(u-.035,u+.035,shutterBottom,shutterTop,steel,12,.027);
+            rect(left+.04,right+.04,shutterTop,shutterTop+.09,
+              stone,12,.042);
+            shutters++;
           }else{
             rect(left-.03,right+.03,sill-.065,sill+.027,stone,12,.048);
             const mid=(left+right)*.5;
@@ -6095,6 +6112,19 @@ const CENTRAL_PARK_SITES=[
               steel,12,-.06);
             const v=bottom+(crown-bottom)*.52;
             rect(left+.025,right-.025,v,v+.032,steel,12,-.06);
+            if(floor===0){
+              // Solid masonry knee-wall and two framed workshop transoms,
+              // replacing the appearance of uninterrupted blue storefront
+              // glass without changing the road-cleared building footprint.
+              const knee=bottom+(crown-bottom)*.25;
+              rect(left+.048,right-.048,bottom+.035,knee,
+                [.34,.29,.25],12,-.068);
+              rect(left+.045,right-.045,knee,knee+.07,stone,12,.035);
+              for(const u of [left+width*.32,right-width*.32]){
+                rect(u-.032,u+.032,knee+.07,crown-.14,steel,12,-.062);
+                sashMullions++;
+              }
+            }
           }
           openings++;
         }
@@ -6104,10 +6134,20 @@ const CENTRAL_PARK_SITES=[
       rect(-half,half,h-.27,h-.18,mortar,12,.065);
       rect(-half,half,h-.18,h-.055,stone,12,.083);
     }
-    // Roof parapet + small anchored bulkhead, no new collision footprint.
+    // PATROL_DUMBO_ROOF_PARAPET_V3: visible masonry upstand, stone
+    // coping and four brick piers. Every solid stays within the already
+    // reserved warehouse roof/parcel outline; no new collision objects.
     for(const side of [-1,1]){
-      box(x,y+h-.18,z+side*(d*.5-.17),w-.24,.26,.16,stone,12);
-      box(x+side*(w*.5-.17),y+h-.18,z,.16,.26,d-.24,stone,12);
+      box(x,y+h+.065,z+side*(d*.5-.17),w-.24,.50,.16,brick,12);
+      box(x+side*(w*.5-.17),y+h+.065,z,.16,.50,d-.24,brick,12);
+      box(x,y+h+.343,z+side*(d*.5-.17),w-.24,.085,.205,stone,12);
+      box(x+side*(w*.5-.17),y+h+.343,z,.205,.085,d-.24,stone,12);
+    }
+    for(const sx of [-1,1])for(const sz of [-1,1]){
+      const px=x+sx*(w*.5-.20),pz=z+sz*(d*.5-.20);
+      box(px,y+h+.205,pz,.32,.70,.32,brick,12);
+      box(px,y+h+.585,pz,.39,.09,.39,stone,12);
+      roofPiers++;
     }
     const bw=Math.min(1.7,w*.25),bd=Math.min(2.1,d*.21);
     box(x-w*.20,y+h+.23,z+d*.1,bw,.46,bd,brick,12);
@@ -6117,7 +6157,7 @@ const CENTRAL_PARK_SITES=[
       if(yy>y+.4)beam([x+u-.12,yy,z+d*.5+.052],
         [x+u+.12,yy,z+d*.5+.052],.034,steel);
     }
-    return {variant,stories,openings,arcs,quads,headerStones};
+    return {variant,stories,openings,arcs,quads,headerStones,shutters,sashMullions,roofPiers};
   }
 
   function buildCityBuildings(parcels,local=false) {
