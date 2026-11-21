@@ -41,3 +41,12 @@ node --test tests/vegas-strip-core-ridge.test.mjs
 node scripts/vegas-core-browser-smoke.mjs
 ```
 Central QA must compare the same four settings against baseline `6d50bfd` and inspect live navigation, vehicles, lod, night lighting, water start and flight controls. Do not call this an accurate real-city map until legally sourced coordinate/DEM/footprint datasets and camera-matched WebGL evidence have been integrated.
+
+## Additional landscape-facing QA (stacked PR #108)
+- The primary four screenshots look along the Strip, **not at either distant ridge**; passing them does not establish mountain visibility.
+- Two additional fixed cameras use existing Vegas scenic targets, no new map markers or game cameras:
+  - `vegas-ridge-west-noon.png`: Bellagio view, bearing 70°, zoom 24, noon/clear; sightline west.
+  - `vegas-ridge-east-noon.png`: The Venetian view, bearing -58°, zoom 24, noon/clear; sightline east.
+- These are city-scale visual probes of the added original ridge geometry, **not real surveyed DEM, licensed photographs, or a GPU timing test**.
+- Corrected upward triangle winding must be confirmed with `tests/vegas-strip-core-ridge.test.mjs` on the same SHA.
+- Central visual QA must inspect whether hills actually project within the view, are not hidden by buildings/fog, and do not show black/inverted lighting. If these two views fail to expose hills, do not assert that the mountains passed visual QA.
