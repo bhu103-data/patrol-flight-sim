@@ -158,7 +158,7 @@ const terrainMesh=new THREE.Mesh(worldGeometry,groundMaterial);
 terrainMesh.receiveShadow=true;
 scene.add(terrainMesh);
 
-const waterUniforms={uTime:{value:0}};
+const waterUniforms={uTime:{value:0},uDaylight:{value:.38}};
 const waterMaterial=new THREE.ShaderMaterial({
   uniforms:waterUniforms,depthWrite:true,side:THREE.DoubleSide,
   vertexShader:[
@@ -167,11 +167,12 @@ const waterMaterial=new THREE.ShaderMaterial({
     'vec4 world=modelMatrix*vec4(p,1.);vWorld=world.xyz;vNormalW=vec3(0.,1.,0.);gl_Position=projectionMatrix*viewMatrix*world; }'
   ].join('\n'),
   fragmentShader:[
-    'uniform float uTime; varying vec3 vWorld;varying vec3 vNormalW;',
+    'uniform float uTime;uniform float uDaylight; varying vec3 vWorld;varying vec3 vNormalW;',
     'void main(){vec3 n=normalize(vNormalW+vec3(.075*sin(vWorld.x*.095+uTime),0.,.065*cos(vWorld.z*.13-uTime)));',
     'float fresnel=pow(1.-max(dot(n,normalize(cameraPosition-vWorld)),0.),3.0);',
     'float wave=sin(vWorld.x*.17+uTime*2.)*cos(vWorld.z*.11-uTime)*.5+.5;',
-    'vec3 deep=vec3(.013,.06,.088), reflection=vec3(.14,.22,.28);',
+    'vec3 deep=mix(vec3(.013,.06,.088),vec3(.063,.19,.22),uDaylight);',
+    'vec3 reflection=mix(vec3(.14,.22,.28),vec3(.35,.47,.54),uDaylight);',
     'vec3 rgb=mix(deep,reflection,clamp(.13+fresnel*.83+wave*.08,0.,1.));',
     '// Moving ribbons approximate warm reflections from landmark windows and bridge.',
     'float nearHong=exp(-pow((vWorld.x-155.)/110.,2.))*exp(-pow((vWorld.z-20.)/160.,2.));',
@@ -199,6 +200,41 @@ function riverStrip(main=true){
   scene.add(new THREE.Mesh(geometry,waterMaterial));
 }
 riverStrip();riverStrip(false);
+// PATROL_CQ_CINEMATIC_V2: One shared ACES tone map and graded atmosphere,
+// matching the visual language of PATROL's NYC rather than a separate arcade UI.
+// The map still uses its own Three.js scene, so renderer parity is visual,
+// not a claim of engine or flight-control identity.
+const cqTimeSelect=document.getElementById('cqTime');
+const cqTimeOptions=['day','dusk','night'];
+const entryTime=new URLSearchParams(location.search).get('time');
+cqTimeSelect.value=cqTimeOptions.includes(entryTime)?entryTime:'dusk';
+function applyCinematicEnvironment(preset){
+  const table={
+    day:{light:1,fog:'#72818d',density:.00047,
+      sky:'#b5c6d2',ambient:1.92,main:1.66,exposure:1.20,
+      glow:50,sun:'#f9ebd2',shadow:[-85,210,-105]},
+    dusk:{light:.38,fog:'#394452',density:.00061,
+      sky:'#435264',ambient:1.47,main:1.28,exposure:1.31,
+      glow:150,sun:'#efc3a3',shadow:[-110,170,-135]},
+    night:{light:0,fog:'#202b3a',density:.00073,
+      sky:'#152235',ambient:1.10,main:1.04,exposure:1.37,
+      glow:210,sun:'#c3d0e8',shadow:[-110,170,-135]}
+  };
+  const p=table[preset]||table.dusk;
+  atmosphere.setDaylight(p.light);
+  waterUniforms.uDaylight.value=p.light;
+  scene.background.set(p.sky);
+  scene.fog.color.set(p.fog);scene.fog.density=p.density;
+  hemi.intensity=p.ambient;
+  moon.intensity=p.main;moon.color.set(p.sun);
+  localShadowOffset.set(...p.shadow);
+  glow.intensity=p.glow;
+  renderer.toneMappingExposure=p.exposure;
+}
+applyCinematicEnvironment(cqTimeSelect.value);
+cqTimeSelect.addEventListener('change',()=>applyCinematicEnvironment(cqTimeSelect.value));
+
+
 
 // PATROL_CQ_CINEMATIC_V2: five profile/extrusion families replace the one
 // repeated concrete box tower. Shared meshes retain low GPU draw-call cost.
@@ -698,6 +734,10 @@ window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if(!e.repeat&&scenicView(e.code))return;
   if(!e.repeat&&e.code==='KeyH'){document.body.classList.toggle('cinematic');return;}
+  if(!e.repeat&&e.code==='KeyT'){
+    cqTimeSelect.value=cqTimeOptions[(cqTimeOptions.indexOf(cqTimeSelect.value)+1)%cqTimeOptions.length];
+    applyCinematicEnvironment(cqTimeSelect.value);return;
+  }
   if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
 });
