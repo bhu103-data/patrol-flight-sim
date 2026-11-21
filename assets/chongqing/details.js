@@ -292,6 +292,79 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     }
   }
 
+  // A small set of distinctive landmark-adjacent silhouettes uses true layered volumes.
+  // Distant generic towers remain instanced and do not get unnecessary facade geometry.
+  const skyline=[
+    {x:-72,z:280,w:30,d:26,h:174,accent:'blue'},
+    {x:390,z:170,w:34,d:30,h:185,accent:'neon'},
+    {x:458,z:366,w:38,d:29,h:214,accent:'amber'},
+    {x:-65,z:405,w:27,d:26,h:161,accent:'blue'},
+    {x:525,z:235,w:39,d:33,h:232,accent:'neon'}
+  ];
+  for(const [index,t] of skyline.entries()){
+    const y=ground(t.x,t.z), top=y+t.h;
+    box(t.x,y+t.h/2,t.z,t.w,t.h,t.d,
+      new THREE.MeshStandardMaterial({color:index%2?0x344a62:0x465362,metalness:.36,roughness:.31}));
+    obstacles.push({x:t.x,z:t.z,w:t.w,d:t.d,top});
+    for(let floor=1;floor<Math.floor(t.h/7);floor++){
+      const fy=y+floor*7;
+      put(t.accent,t.x,fy,t.z+t.d/2+.12,t.w+.2,.34,.14);
+      if(floor%3===0)put(t.accent,t.x+t.w/2+.15,fy,t.z,.15,.3,t.d);
+    }
+    for(const dx of [-1,1]){
+      put(t.accent,t.x+dx*t.w*.43,y+t.h*.5,t.z+t.d/2+.22,.28,t.h*.96,.28);
+      put('rail',t.x+dx*t.w*.37,top+2,t.z,1.1,4,1.1);
+    }
+    const crown=top+7;
+    put('terra',t.x,top+2.4,t.z,t.w*.78,4.8,t.d*.71);
+    put(t.accent,t.x,crown,t.z,t.w*.6,1.2,t.d*.53);
+    if(index%2===0){
+      put('rail',t.x,top+16,t.z,.65,24,.65);
+      put('red',t.x,top+28.2,t.z,1.8,1.6,1.8);
+    }
+  }
+
+  // Layered leafy trees replace flat cone silhouettes at the walkable tourist scale.
+  const leafMaterial=new THREE.MeshStandardMaterial({color:0x486955,roughness:1});
+  const barkMaterial=new THREE.MeshStandardMaterial({color:0x695048,roughness:1});
+  const leafMesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),leafMaterial,198);
+  const barkMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.4,.48,1,6),barkMaterial,70);
+  leafMesh.count=0;barkMesh.count=0;
+  for(let i=0;i<66;i++){
+    const district=i%3;
+    const x=district===0?210+rand()*255:district===1?-90+rand()*155:30+rand()*240;
+    const z=district===0?365+rand()*180:district===1?240+rand()*235:230+rand()*80;
+    if(obstacles.some(o=>Math.abs(o.x-x)<o.w/2+6&&Math.abs(o.z-z)<o.d/2+6))continue;
+    const y=ground(x,z),h=5+rand()*2.6;
+    dummy.position.set(x,y+h/2,z);dummy.rotation.set(0,0,0);dummy.scale.set(.9,h,1);
+    dummy.updateMatrix();barkMesh.setMatrixAt(barkMesh.count++,dummy.matrix);
+    for(let j=0;j<3;j++){
+      dummy.position.set(x+(j-1)*2.2,y+h+1.2+(j===1?1.5:0),z+(j-1)*.8);
+      const r=3.5+rand()*.75;
+      dummy.scale.set(r,r*.9,r);dummy.updateMatrix();
+      leafMesh.setMatrixAt(leafMesh.count++,dummy.matrix);
+    }
+  }
+  leafMesh.instanceMatrix.needsUpdate=true;barkMesh.instanceMatrix.needsUpdate=true;
+  scene.add(leafMesh,barkMesh);
+
+  // Illuminated river cruises: glass saloons, tiered decks and individual cabin windows.
+  for(const [x,length] of [[-65,39],[210,52],[550,46]]){
+    const z=riverCenter(x);
+    put('stone',x,-.35,z,length,3.3,12.8);
+    put('window',x,4.6,z+6.6,length*.73,6,.2);
+    put('window',x,4.6,z-6.6,length*.73,6,.2);
+    put('stone',x,8.4,z,length*.83,1.7,11);
+    put('window',x,10.7,z+4.4,length*.53,3.4,.2);
+    put('amber',x,12.85,z,length*.7,.3,11.8);
+    for(let col=0;col<9;col++){
+      const wx=x-length*.35+col*(length*.7)/8;
+      put('timber',wx,5,z+6.8,.3,5,.3);
+      put('amber',wx,8.8,z+6.8,.7,.34,.4);
+      put('window',wx,10.5,z+4.65,1.4,1.8,.21);
+    }
+  }
+
   // Water glints are instanced transparent strips. No real-time reflection render target.
   const glints=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),
     new THREE.MeshBasicMaterial({color:0xffb96f,transparent:true,opacity:.23,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}),560);
