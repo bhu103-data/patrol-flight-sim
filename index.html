@@ -6865,7 +6865,7 @@ const CENTRAL_PARK_SITES=[
   let sceneryObjects=[];
   let sceneryMovers=[];
 
-  function findScenerySite(x,z,{water=false,footprint=7,range=90,avoid}={}) {
+  function findScenerySite(x,z,{water=false,footprint=7,range=90,avoid,validate}={}) {
     let nearest=null, best=Infinity;
     for(let dx=-range;dx<=range;dx+=9) for(let dz=-range;dz<=range;dz+=9){
       const score=dx*dx+dz*dz;
@@ -6893,6 +6893,7 @@ const CENTRAL_PARK_SITES=[
         }
         if(!valid)continue;
       }
+      if(validate&&!validate(east,north))continue;
       nearest={x:east,z:north,y};
       best=score;
     }
@@ -7091,15 +7092,32 @@ const CENTRAL_PARK_SITES=[
       for(let i=0;i<sides;i++)mesh.addTri([x,tip[0],z],point(tip,i),point(tip,i+1),color);
     }
 
+    // Alaska-only surveyed foundation: reject submerged inlets and steep
+    // slopes across the complete cabin footprint, not only the corners.
+    function alaskaShedPad(x,z,w,d){
+      const heights=[];
+      for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++){
+        const px=x+(ix/6-.5)*(w+.8),pz=z+(iz/6-.5)*(d+.8);
+        heights.push(sampleTerrainHeight(px,pz));
+      }
+      if(!heights.every(Number.isFinite))return null;
+      const low=Math.min(...heights),high=Math.max(...heights);
+      if(low<=WATER_H+1.0||high-low>2.15)return null;
+      return {low,top:high+.12};
+    }
     function shed(site,w,l,body,roofHeight,name){
-      const {x,y,z}=site;
-      // A sea-clamped terrain value cannot support an Alaska cabin.
+      let {x,y,z}=site;
       if(selectedMap.alaska){
-        const samples=[];
-        for(const sx of [-.5,0,.5])for(const sz of [-.5,0,.5])
-          samples.push(sampleTerrainHeight(x+sx*(w+.8),z+sz*(l+.8)));
-        if(Math.min(...samples)<=WATER_H+.82 ||
-           Math.max(...samples)-Math.min(...samples)>2.15)return false;
+        const pad=alaskaShedPad(x,z,w,l);
+        if(!pad)return false;
+        // Raise the foundation to the highest surveyed terrain sample and
+        // visibly support its lower corners instead of floating on the slope.
+        y=pad.top;
+        for(const dx of [-.4,.4])for(const dz of [-.4,.4]){
+          const sx=x+dx*w,sz=z+dz*l,base=sampleTerrainHeight(sx,sz);
+          const height=Math.max(.25,y-base);
+          box(sx,base+height*.5,sz,.27,height,.27,[.36,.31,.26]);
+        }
       }
       box(x,y+1.8,z,w,3.7,l,body);
       const a=x-w/2-.35,b=x+w/2+.35,f=z-l/2-.3,k=z+l/2+.3;
@@ -7115,12 +7133,16 @@ const CENTRAL_PARK_SITES=[
     }
 
     if(selectedMap.alaska) {
-      const camp=findScenerySite(150,314,{footprint:13});
+      // The original small search has no buildable full-footprint site in
+      // the actual USGS DEM; retain the glacier corridor with a bounded search.
+      const camp=findScenerySite(150,314,{footprint:8,range:180,
+        validate:(x,z)=>Boolean(alaskaShedPad(x,z,10,13))});
       if(camp && shed(camp,10,13,[0.80,0.45,0.21],1.5,'research cabin')){
         place('Glacier Research Camp',camp);
         // A second building gets its own land-clearance/spacing survey.
         const annex=findScenerySite(camp.x+17,camp.z+7,{
           footprint:5,range:27,
+          validate:(x,z)=>Boolean(alaskaShedPad(x,z,8,9)),
           avoid:(x,z)=>Math.abs(x-camp.x)<11&&Math.abs(z-camp.z)<12
         });
         if(annex)shed(annex,8,9,[0.62,0.68,0.69],1.1,'research cabin');
