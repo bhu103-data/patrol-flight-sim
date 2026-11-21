@@ -18,7 +18,7 @@ class Object3D {
 class Geometry {
   constructor(){this.attributes={}}
   rotateX(){return this}
-  rotateZ(){return this}
+  rotateZ(angle){this.zRotation=(this.zRotation??0)+angle;return this}
   setAttribute(k,v){this.attributes[k]=v}
   setIndex(idx){this.index=idx}
   computeVertexNormals(){}
@@ -154,6 +154,23 @@ test('four real crossing sites are spaced apart and serve the actual car route',
   const heads=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8);
   assert.ok(heads.length>=9,'batched masts, overhead arms and pedestrian heads');
   assert.ok(heads.every(m=>m.count===8));
+});
+
+test('round signal visors surround lit lenses within one bounded GPU batch',()=>{
+  const {traffic,objects}=setup();
+  assert.equal(traffic.stats.signalHoods,traffic.stats.trafficSignals*3);
+  assert.equal(traffic.stats.signalSideTrim,traffic.stats.trafficSignals*2);
+  const hood=objects.find(o=>o instanceof InstancedMesh&&
+    o.capacity===24&&o.material.color===0x181e23);
+  assert.ok(hood,'one shared metal visor batch covers every red/yellow/green lamp');
+  assert.equal(hood.count,24);
+  assert.ok(Math.abs(hood.geometry.zRotation-Math.PI/2)<1e-8,
+    'the cylindrical apertures point into oncoming traffic, not at the sky');
+  const trim=objects.find(o=>o instanceof InstancedMesh&&
+    o.capacity===16&&o.material.color===0x64737a);
+  assert.ok(trim,'one shared metallic housing-edge batch');
+  assert.equal(trim.count,16);
+  assert.ok(hood.count<=hood.capacity&&trim.count<=trim.capacity);
 });
 
 test('red or amber holds traffic approaching from BOTH directions, then green releases it',()=>{
