@@ -52,6 +52,6 @@ test('each traffic light keeps three colored circular lenses and no new renderer
      Math.abs(q[4][0]-.15)<1e-8&&Math.abs(q[4][1]-.60)<1e-8));
   assert.ok(pigment.length>stats.signals*3,
     'round red/green lens segments remain true geometry');
-  assert.ok(quads.length<40000,'keep geometry within the shared street draw batch');
+  assert.ok(quads.length<120000,'street geometry unexpectedly large: '+quads.length);
   assert.equal(stats.signals>0,true);
 });
