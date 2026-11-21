@@ -342,6 +342,30 @@ const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,
 // Build after the hero-zone shops and towers append their collision volumes.
 const obstacleIndex=new SpatialObstacleIndex(obstacles);
 
+// Player-selectable quality, with conservative automatic resolution scaling.
+const qualityBtn=document.getElementById('qualityBtn');
+const perfHud=document.getElementById('perfHud');
+const qualityLabels={auto:'画质：自动',high:'画质：高清',low:'画质：省电'};
+const qualityParam=new URLSearchParams(location.search).get('quality');
+let qualityMode=Object.hasOwn(qualityLabels,qualityParam)?qualityParam:'auto';
+const coarsePointer=matchMedia('(pointer:coarse)').matches;
+const maxRatio=Math.min(devicePixelRatio||1,coarsePointer?1.25:1.6);
+const minRatio=Math.min(maxRatio,.75);
+let renderRatio=qualityMode==='low'?minRatio:maxRatio;
+let measuredFPS=0,sampleTime=0,sampleFrames=0,autoCycles=0;
+function applyQuality(){
+  renderer.setPixelRatio(renderRatio);
+  detailBuild.setQuality(qualityMode==='low'?'low':'normal');
+  qualityBtn.textContent=qualityLabels[qualityMode];
+  qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
+}
+qualityBtn.addEventListener('click',()=>{
+  qualityMode=qualityMode==='auto'?'high':qualityMode==='high'?'low':'auto';
+  renderRatio=qualityMode==='low'?minRatio:maxRatio;
+  applyQuality();
+});
+applyQuality();
+
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
 for(let i=0;i<380;i++){
@@ -404,6 +428,32 @@ const state={
 };
 const keys=new Set();
 let jumpQueued=false;
+let touchForward=0,touchSideways=0;
+const joystick=document.getElementById('joystick');
+const joystickKnob=document.getElementById('joystickKnob');
+let joystickPointer=null;
+function updateJoystick(e){
+  const r=joystick.getBoundingClientRect();
+  const x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;
+  const distance=Math.max(1,Math.hypot(x,y));
+  const fraction=Math.min(distance/42,1);
+  touchSideways=x/distance*fraction;
+  touchForward=-y/distance*fraction;
+  joystickKnob.style.transform='translate('+Math.round(touchSideways*42)+'px,'+Math.round(-touchForward*42)+'px)';
+}
+function stopJoystick(e){
+  if(joystickPointer!==e.pointerId)return;
+  joystickPointer=null;touchForward=0;touchSideways=0;
+  joystickKnob.style.transform='translate(0,0)';
+}
+joystick.addEventListener('pointerdown',e=>{
+  if(joystickPointer!==null)return;
+  e.preventDefault();joystickPointer=e.pointerId;
+  joystick.setPointerCapture(e.pointerId);updateJoystick(e);
+});
+joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
+joystick.addEventListener('pointerup',stopJoystick);
+joystick.addEventListener('pointercancel',stopJoystick);
 let viewYaw=0,viewPitch=.25,camDistance=14,dragging=false,mouseX=0,mouseY=0,toastUntil=0;
 const temp=new THREE.Vector3();
 const cameraAim=new THREE.Vector3();
@@ -432,10 +482,11 @@ function press(key,once=false){
 }
 window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
-window.addEventListener('blur',()=>keys.clear());
+window.addEventListener('blur',()=>{keys.clear();touchForward=touchSideways=0;joystickPointer=null;joystickKnob.style.transform='translate(0,0)';});
 canvas.addEventListener('pointerdown',e=>{dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',()=>dragging=false);
 canvas.addEventListener('pointercancel',()=>dragging=false);
@@ -491,8 +542,8 @@ function intersectsBuilding(x,y,z){
   return obstacleIndex.collides(x,y,z);
 }
 function move(dt){
-  const forward=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
-  const sideways=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
+  const forward=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)+touchForward;
+  const sideways=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touchSideways;
   const motion=temp.set(
     Math.sin(viewYaw)*forward+Math.cos(viewYaw)*sideways,0,
     -Math.cos(viewYaw)*forward+Math.sin(viewYaw)*sideways
@@ -632,7 +683,7 @@ function frame(){
 }
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));
+  renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);
 });
 document.getElementById('loading').remove();
 message('欢迎来到重庆！走近火锅店按 E 开吃',4);
