@@ -1,0 +1,58 @@
+name: Publish reviewed Hongyadong GLB preview (disabled by default)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-chongqing-glb-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-reviewed-asset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Download exact verified Blender CI model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets/chongqing/generated
+          gh run download 44853187676 -R bhu103-data/patrol-flight-sim \
+            --name hongyadong-blender-glb-review \
+            --dir assets/chongqing/generated
+          echo "2998ef1a88ce3065ad94528152911af286b507f796e69756f4da3b6f6fed41c9  assets/chongqing/generated/hongyadong-study.glb" | sha256sum -c -
+      - name: Recheck using the production WebGL gate
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const src=readFileSync('assets/chongqing/scenario-assets.js','utf8');
+          const {validateScenarioGLB}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+          const b=readFileSync('assets/chongqing/generated/hongyadong-study.glb');
+          console.log(validateScenarioGLB(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength)));
+          NODE
+      - name: Commit preview-only model without activating game
+        run: |
+          set -euo pipefail
+          cp assets/chongqing/generated/hongyadong-study.glb /tmp/hongyadong-study.glb
+          git fetch origin main
+          git checkout -B main origin/main
+          mkdir -p assets/chongqing/generated
+          cp /tmp/hongyadong-study.glb assets/chongqing/generated/hongyadong-study.glb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/chongqing/generated/hongyadong-study.glb
+          if git diff --cached --quiet; then
+            echo "Verified artifact already present."
+          else
+            git commit -m "Add Blender-authored Hongyadong GLB as opt-in preview"
+            git push origin HEAD:main
+          fi
+          echo "Production manifest remains disabled by default."
