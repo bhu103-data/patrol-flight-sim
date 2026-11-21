@@ -1988,6 +1988,13 @@
     uniform sampler2D uNyAsphaltPhoto;
     uniform sampler2D uNyConcretePhoto;
     uniform float uNyPhotoReady;
+    // PATROL_NYC_MATERIAL_ATLAS_V5: independent building-type materials.
+    uniform sampler2D uNyWallDiffuse;
+    uniform sampler2D uNyWallNormal;
+    uniform sampler2D uNyWallARM;
+    uniform sampler2D uNyAsphaltNormal;
+    uniform sampler2D uNyAsphaltARM;
+    uniform int uNySurfaceClass;
     uniform highp sampler2DArray uDcMaps;
     uniform int uDcSurface;
 
@@ -2086,7 +2093,7 @@
       return mix(mix(nyStreetHash(i),nyStreetHash(i+vec2(1,0)),f.x),
                  mix(nyStreetHash(i+vec2(0,1)),nyStreetHash(i+vec2(1,1)),f.x),f.y);
     }
-    void nyStreetMaterial(inout vec3 albedo, inout float roughness, vec3 normal,
+    void nyStreetMaterial(inout vec3 albedo, inout float roughness, inout vec3 normal,
                           out float road, out float puddle) {
       road=0.0; puddle=0.0;
       // Original NYC mesh colors identify asphalt; no second scene render.
@@ -2119,6 +2126,14 @@
       albedo*=1.0-damp*0.29-puddle*0.10;
       roughness=mix(0.78,0.33,damp);
       roughness=mix(roughness,0.075,puddle);
+      if(uNyPhotoReady>0.5){
+        vec2 uv=vWorld.xz*0.38;
+        vec3 bump=texture(uNyAsphaltNormal,uv).xyz*2.0-1.0;
+        float r=texture(uNyAsphaltARM,uv).g;
+        float near=1.0-smoothstep(90.0,255.0,distance(vWorld,uEye));
+        normal=normalize(normal+vec3(bump.x,0.0,bump.y)*road*near*0.10);
+        roughness=mix(roughness,clamp(r,0.38,0.95),road*near*0.25*(1.0-wet));
+      }
     }
     vec3 nyStreetReflection(vec3 worldPos,vec3 normal,vec3 toEye,
                             float road,float puddle) {
@@ -2193,6 +2208,60 @@
       }
     }
 
+
+    // PATROL_NYC_MATERIAL_ATLAS_V5: actual material types rather than grey boxes.
+    // 1 Empire limestone/granite, 2 Liberty oxidized copper + granite pedestal,
+    // 3 Chrysler brick/metal, 4 One WTC prismatic glass, 5 Flatiron terracotta,
+    // 6 One Times Square curtain wall; 0 anonymous city block.
+    void nyBuildingPbr(inout vec3 albedo,inout vec3 normal,inout float roughness){
+      if(!uManhattanView || !uSmooth || uNyStreetQuality<1.5)return;
+      int cls=uNySurfaceClass;
+      float near=1.0-smoothstep(105.0,360.0,distance(vWorld,uEye));
+      if(near<0.002)return;
+      if(cls==2){
+        bool patina=vWorld.y>26.0 && vColor.g>vColor.r*1.12;
+        if(patina){
+          vec2 u=vec2(vWorld.x+vWorld.z*.12,vWorld.y)*1.7;
+          float grain=nyStreetNoise(u)*.40+nyStreetNoise(u*3.6+11.0)*.17;
+          vec3 copper=mix(vec3(.18,.40,.34),vec3(.37,.59,.49),grain+.15);
+          albedo=mix(albedo,copper,near*.64);
+          roughness=mix(roughness,.83,near*.73);
+        }
+        bool gildedFlame=vWorld.y>40.0 && vColor.r>vColor.g*1.07 &&
+                          vColor.r>vColor.b*1.25;
+        if(gildedFlame){
+          albedo=mix(albedo,vec3(.94,.64,.17),near*.63);
+          roughness=mix(roughness,.27,near*.70);
+        }
+      }
+      if(uNyPhotoReady<0.5 || abs(normal.y)>.34)return;
+      bool stone=cls==1 || cls==5 || (cls==2 && vWorld.y<27.0);
+      bool metal=cls==3;
+      bool glass=cls==4 || cls==6;
+      bool commonWall=cls==0 && uCityFacade;
+      if(!(stone||metal||glass||commonWall))return;
+      vec2 uv=vec2(abs(normal.x)>abs(normal.z)?vWorld.z:vWorld.x,vWorld.y);
+      uv*=stone?0.27:0.40;
+      vec3 photo=texture(uNyWallDiffuse,uv).rgb;
+      vec3 arm=texture(uNyWallARM,uv).rgb;
+      vec3 nmap=texture(uNyWallNormal,uv).rgb*2.0-1.0;
+      float aggregate=dot(photo,vec3(.2126,.7152,.0722));
+      float strength=stone?0.73:metal?0.18:glass?0.08:0.38;
+      float modulation=clamp(.58+aggregate*1.25,.56,1.44);
+      // Preserve limestone, greenish glass and brick tone identity.
+      albedo*=mix(1.0,modulation,near*strength);
+      roughness=mix(roughness,clamp(arm.g,.27,.99),
+        near*(stone?.68:metal?.45:glass?.19:.51));
+      vec3 tangent=normalize(vec3(-normal.z,0.0,normal.x));
+      normal=normalize(normal+(tangent*nmap.x+vec3(0.0,nmap.y,0.0))*
+        near*(stone?.085:metal?.040:glass?.009:.063));
+      if(glass){
+        float fresnel=pow(1.0-clamp(abs(dot(normalize(uEye-vWorld),normal)),0.0,1.0),5.0);
+        vec3 sky=mix(vec3(.11,.22,.31),vec3(.42,.58,.66),uAtmosphere.x);
+        albedo=mix(albedo,sky,near*fresnel*.48);
+        roughness=mix(roughness,.24,near*.30);
+      }
+    }
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2235,6 +2304,7 @@
         nyStreetMaterial(material,surfaceRoughness,n,nyRoad,nyPuddle);
         nyFacadeRainStreaks(material,n);
         nyLayeredMaterial(material,n);
+        nyBuildingPbr(material,n,surfaceRoughness);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
@@ -9191,6 +9261,12 @@
     nyAsphaltPhoto:gl.getUniformLocation(meshProg,'uNyAsphaltPhoto'),
     nyConcretePhoto:gl.getUniformLocation(meshProg,'uNyConcretePhoto'),
     nyPhotoReady:gl.getUniformLocation(meshProg,'uNyPhotoReady'),
+    nyWallDiffuse:gl.getUniformLocation(meshProg,'uNyWallDiffuse'),
+    nyWallNormal:gl.getUniformLocation(meshProg,'uNyWallNormal'),
+    nyWallARM:gl.getUniformLocation(meshProg,'uNyWallARM'),
+    nyAsphaltNormal:gl.getUniformLocation(meshProg,'uNyAsphaltNormal'),
+    nyAsphaltARM:gl.getUniformLocation(meshProg,'uNyAsphaltARM'),
+    nySurfaceClass:gl.getUniformLocation(meshProg,'uNySurfaceClass'),
     viewProj: gl.getUniformLocation(meshProg, 'uViewProj'),
     model: gl.getUniformLocation(meshProg, 'uModel'),
     outline: gl.getUniformLocation(meshProg, 'uOutline'),
@@ -10196,6 +10272,7 @@
     const usePhoto=Boolean(selectedMap.city && smoothScenery() && !graphicsCompat &&
       !directRendering && nycPhotos && Number(nyStreetQuality.value)>0);
     gl.uniform1f(uMesh.nyPhotoReady,usePhoto?1:0);
+    gl.uniform1i(uMesh.nySurfaceClass,0);
     if(usePhoto){
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D,nycPhotos.asphalt);
@@ -10203,6 +10280,18 @@
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D,nycPhotos.concrete);
       gl.uniform1i(uMesh.nyConcretePhoto,4);
+      // Real CC0 stone wall, asphalt bump and roughness maps, only in NYC.
+      for(const [unit,tex,location] of [
+        [5,nycPhotos.wallDiffuse,uMesh.nyWallDiffuse],
+        [6,nycPhotos.wallNormal,uMesh.nyWallNormal],
+        [7,nycPhotos.wallARM,uMesh.nyWallARM],
+        [8,nycPhotos.asphaltNormal,uMesh.nyAsphaltNormal],
+        [9,nycPhotos.asphaltARM,uMesh.nyAsphaltARM]
+      ]){
+        gl.activeTexture(gl.TEXTURE0+unit);
+        gl.bindTexture(gl.TEXTURE_2D,tex);
+        gl.uniform1i(location,unit);
+      }
       gl.activeTexture(gl.TEXTURE0);
     }
 
@@ -10251,8 +10340,14 @@
         const origin = [mark.x, sampleGroundHeight(mark.x, mark.z) - 0.03, mark.z];
         const model = mat4FromBasis(origin, [1,0,0], [0,1,0], [0,0,1], 1);
         const meshes=newYorkMeshes[mark.kind];
-        const photoModel=smoothScenery()&&!graphicsCompat?
+        const imported=smoothScenery()&&!graphicsCompat?
           nycRealismAssets?.models[mark.kind]:null;
+        // The old 13K low-poly Empire GLB does not supersede the
+        // more detailed Art Deco mesh. Imported models must earn the switch.
+        const photoModel=imported && imported.count>meshes.body.count*1.33
+          ?imported:null;
+        const classId=({empire:1,liberty:2,chrysler:3,trade:4,flatiron:5,times:6})[mark.kind]||0;
+        gl.uniform1i(uMesh.nySurfaceClass,classId);
         drawMeshWithOutline(photoModel||meshes.body,model,false,mark.kind==='flatiron');
         gl.uniform1f(uMesh.dimLights,mark.kind==='times'?0:1);
         // The procedural lights follow the old model, so do not overlay them
@@ -10261,6 +10356,7 @@
           drawMeshWithOutline(meshes.lights,model,true);
         gl.uniform1f(uMesh.dimLights,0);
       }
+      gl.uniform1i(uMesh.nySurfaceClass,0);
     }
 
     if(alaskaHarbor && alaskaFalls) {

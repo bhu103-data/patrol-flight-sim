@@ -1,6 +1,6 @@
-// PATROL NYC realism asset adapter v4 (native WebGL2, not Three.js)
+// PATROL NYC realism asset adapter v5 — source-backed architectural materials (native WebGL2, not Three.js)
 // Sources and licensing: assets/nyc/THIRD_PARTY_NOTICES.md
-// Deliberately limited to inline GLB 2.0 meshes and two 512x512 textures.
+// Restricted GLB 2.0 loader; seven CC0 512x512 diffuse/normal/ARM textures.
 function product(a,b){
   const v=new Float32Array(16);
   for(let c=0;c<4;c++)for(let r=0;r<4;r++)
@@ -131,16 +131,22 @@ function imageFile(filename){
   });
 }
 async function photos(gl){
-  const [asphaltImage,concreteImage]=await Promise.all([
-    imageFile('asphalt_04_diff_1k.jpg'),
-    imageFile('concrete_floor_damaged_01_diff_1k.jpg')
-  ]);
+  const names=[
+    'asphalt_04_diff_1k.jpg',
+    'concrete_floor_damaged_01_diff_1k.jpg',
+    'concrete_wall_008_diff_1k.jpg',
+    'concrete_wall_008_nor_gl_1k.jpg',
+    'concrete_wall_008_arm_1k.jpg',
+    'asphalt_04_nor_gl_1k.jpg',
+    'asphalt_04_arm_1k.jpg'
+  ];
+  const images=await Promise.all(names.map(imageFile));
   if(gl.isContextLost())return null;
   const textures=[];
   const flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
   try{
-    for(const image of [asphaltImage,concreteImage]){
+    for(const image of images){
       const c=document.createElement('canvas');
       c.width=c.height=512;
       c.getContext('2d').drawImage(image,0,0,512,512);
@@ -153,7 +159,11 @@ async function photos(gl){
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
       gl.generateMipmap(gl.TEXTURE_2D);
     }
-    return {asphalt:textures[0],concrete:textures[1]};
+    return {
+      asphalt:textures[0],concrete:textures[1],
+      wallDiffuse:textures[2],wallNormal:textures[3],wallARM:textures[4],
+      asphaltNormal:textures[5],asphaltARM:textures[6]
+    };
   }catch(error){
     for(const texture of textures)gl.deleteTexture(texture);
     throw error;
@@ -165,7 +175,9 @@ async function photos(gl){
 export async function loadNycRealism(gl){
   const models=Object.create(null),failures=[];
   const modelsReady=Promise.all([
-    ['empire','empire-state.glb',79],
+    // The original Empire State Building mesh has significantly more
+    // distinctive facade geometry than the 13 KB approximate GLB.
+    // Keep it instead of replacing it with an even simpler block.
     ['liberty','statue-of-liberty.glb',31]
   ].map(async ([kind,filename,height])=>{
     try{

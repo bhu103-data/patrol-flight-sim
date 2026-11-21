@@ -1,0 +1,328 @@
+{
+  "schema": "patrol-nyc-landmark-reference-v1",
+  "coordinateSystem": "WGS84 / GPS; current PATROL x,z are nonuniform fictional compression, not survey scale",
+  "builtFrom": "Published public landmark references; not copied or traced from Google Maps imagery",
+  "sourceGuides": [
+    "https://www.esbnyc.com/about/facts-figures",
+    "https://www.nps.gov/stli/learn/statue-of-liberty-facts.htm",
+    "https://data.cityofnewyork.us/d/3g6p-4u5s",
+    "https://whc.unesco.org/en/tentativelists/6232/"
+  ],
+  "landmarks": [
+    {
+      "id": "times-square",
+      "name": "Times Square",
+      "lat": 40.758,
+      "lon": -73.9855,
+      "game": {
+        "x": 13,
+        "z": 4
+      },
+      "material": [
+        "glass-curtainwall",
+        "LED-video-wall-static-texture",
+        "steel-and-aluminum",
+        "asphalt",
+        "concrete-pavers"
+      ],
+      "assets": [
+        "ads",
+        "storefronts",
+        "crosswalks",
+        "taxi",
+        "police"
+      ]
+    },
+    {
+      "id": "empire",
+      "name": "Empire State Building",
+      "lat": 40.748441,
+      "lon": -73.985664,
+      "game": {
+        "x": -7,
+        "z": -117
+      },
+      "heightMeters": {
+        "roof": 381,
+        "antenna": 443.2
+      },
+      "material": [
+        "Indiana-limestone",
+        "granite",
+        "brick",
+        "aluminum",
+        "stainless-steel",
+        "original-red-window-frames"
+      ],
+      "assets": [
+        "terraced-crown",
+        "art-deco-vertical-bays",
+        "setbacks",
+        "entry-canopy"
+      ]
+    },
+    {
+      "id": "chrysler",
+      "name": "Chrysler Building",
+      "lat": 40.75162,
+      "lon": -73.9755,
+      "game": {
+        "x": 65,
+        "z": -46
+      },
+      "heightMeters": {
+        "architectural": 318.9
+      },
+      "material": [
+        "brick",
+        "stainless-steel-crown",
+        "glass",
+        "metal-mullions"
+      ],
+      "assets": [
+        "radiating-crown",
+        "setbacks",
+        "gargoyles"
+      ]
+    },
+    {
+      "id": "flatiron",
+      "name": "Flatiron Building",
+      "lat": 40.74106,
+      "lon": -73.98971,
+      "game": {
+        "x": -30,
+        "z": -180
+      },
+      "heightMeters": {
+        "approximate": 86.9
+      },
+      "material": [
+        "limestone",
+        "glazed-terracotta",
+        "brick",
+        "glass"
+      ],
+      "assets": [
+        "triangular-footprint",
+        "setbacks",
+        "cornice"
+      ]
+    },
+    {
+      "id": "trade",
+      "name": "One World Trade Center",
+      "lat": 40.71274,
+      "lon": -74.01338,
+      "game": {
+        "x": -85,
+        "z": -398
+      },
+      "heightMeters": {
+        "architectural": 541.3
+      },
+      "material": [
+        "low-iron-glass",
+        "stainless-steel",
+        "aluminum"
+      ],
+      "assets": [
+        "tapered-facade",
+        "spire",
+        "plaza"
+      ]
+    },
+    {
+      "id": "liberty",
+      "name": "Statue of Liberty",
+      "lat": 40.68925,
+      "lon": -74.0445,
+      "game": {
+        "x": -140,
+        "z": -611
+      },
+      "heightMeters": {
+        "statue": 46.05,
+        "groundToTorch": 92.99
+      },
+      "material": [
+        "oxidized-copper",
+        "granite-pedestal",
+        "gold-leaf-torch-flame"
+      ],
+      "assets": [
+        "7-crown-rays",
+        "tablet",
+        "robe-folds",
+        "torch",
+        "pedestal",
+        "Fort-Wood-star-base"
+      ]
+    },
+    {
+      "id": "brooklyn-bridge",
+      "name": "Brooklyn Bridge",
+      "lat": 40.70569,
+      "lon": -73.99639,
+      "game": {
+        "x": 82,
+        "z": -342
+      },
+      "dimensionsMeters": {
+        "mainSpan": 486.3
+      },
+      "material": [
+        "limestone",
+        "granite",
+        "steel-cables",
+        "timber-walkway",
+        "deck-asphalt"
+      ],
+      "assets": [
+        "gothic-arches",
+        "stone-piers",
+        "4-main-cables",
+        "hangers",
+        "pedestrian-walkway",
+        "anchorages"
+      ]
+    },
+    {
+      "id": "central-park",
+      "name": "Central Park southern edge",
+      "lat": 40.768,
+      "lon": -73.9819,
+      "game": {
+        "x": 79,
+        "z": 206
+      },
+      "material": [
+        "granite",
+        "asphalt",
+        "soil",
+        "trees"
+      ],
+      "assets": [
+        "plazas",
+        "vegetation",
+        "pedestrian-paths"
+      ]
+    },
+    {
+      "id": "harbor",
+      "name": "Upper New York Bay",
+      "lat": 40.69,
+      "lon": -74.03,
+      "game": {
+        "x": 354,
+        "z": -389
+      },
+      "material": [
+        "water-fresnel",
+        "marine-painted-steel",
+        "wood-deck"
+      ],
+      "assets": [
+        "ferries",
+        "cargo",
+        "passenger-ships",
+        "piers"
+      ]
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "fighter",
+      "reference": "original fictional twin-tail jet (not a named licensed airframe)",
+      "materials": [
+        "painted-aluminum",
+        "composites",
+        "glass-canopy",
+        "titanium-exhaust"
+      ],
+      "modelPriority": [
+        "wing-silhouette",
+        "cockpit",
+        "intake",
+        "gear",
+        "panel-lines"
+      ]
+    },
+    {
+      "id": "civil-airliner",
+      "reference": "generic twin-engine narrowbody, not branded",
+      "materials": [
+        "painted-aluminum",
+        "composites",
+        "glass",
+        "rubber"
+      ],
+      "modelPriority": [
+        "correct-fuselage-contour",
+        "engines",
+        "wings",
+        "landing-gear",
+        "tail",
+        "windows"
+      ]
+    },
+    {
+      "id": "taxi",
+      "reference": "NYC yellow licensed vehicle appearance; generic non-branded body",
+      "materials": [
+        "automotive-clearcoat",
+        "glass",
+        "rubber",
+        "plastic"
+      ],
+      "modelPriority": [
+        "correct-proportions",
+        "wheel-geometry",
+        "roof-sign",
+        "livery",
+        "grille"
+      ]
+    },
+    {
+      "id": "police",
+      "reference": "NYPD-inspired generic patrol car",
+      "materials": [
+        "painted-steel",
+        "retroreflective-stripes",
+        "glass",
+        "rubber"
+      ],
+      "modelPriority": [
+        "headlights",
+        "lightbar",
+        "livery",
+        "grille"
+      ]
+    },
+    {
+      "id": "ship",
+      "reference": "generic NYC harbor ferry/cruise/cargo classes",
+      "materials": [
+        "marine-painted-steel",
+        "decking",
+        "glass",
+        "rubber"
+      ],
+      "modelPriority": [
+        "hull",
+        "deck",
+        "railings",
+        "windows",
+        "mooring",
+        "navigation"
+      ]
+    }
+  ],
+  "outstanding": [
+    "Not accurate 1:1 scale; current game uses compressed non-georeferenced layout",
+    "No Google imagery or Maps tiles are bundled",
+    "Photorealistic 3D Tiles would require a licensed live 3D Tiles renderer, attributions, Google key and billing",
+    "Generic building parcel positions are not yet replaced by municipal footprint geometry",
+    "Current GLB models are low-poly; higher-detail rights-cleared architectural assets needed"
+  ]
+}
