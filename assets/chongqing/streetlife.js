@@ -1,6 +1,49 @@
 // PATROL Chongqing: compact animated street layer.
 // Original geometry only: yellow taxis, civilian cars, asphalt markings and streetlights.
 // Yellow center-city taxis and checker waistlines match the city's official road transport guide.
+// Small solid silhouette for the red WAIT / green WALK pedestrian heads.
+// Original triangles, no external textures or per-frame canvas upload.
+// Local 2D shape lives in YZ, facing the traffic lanes along +/-X.
+export function chongqingPedestrianGlyph(THREE,walking=false){
+  const pos=[],ind=[];
+  const tri=(a,b,c)=>{
+    const i=pos.length/3;
+    for(const p of [a,b,c])pos.push(0,p[0],p[1]);
+    ind.push(i,i+1,i+2);
+  };
+  const strip=(a,b,width)=>{
+    const dy=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dy,dz)||1;
+    const ny=-dz*width*.5/len,nz=dy*width*.5/len;
+    const p=[a[0]+ny,a[1]+nz],q=[a[0]-ny,a[1]-nz],
+      r=[b[0]+ny,b[1]+nz],t=[b[0]-ny,b[1]-nz];
+    tri(p,q,r);tri(q,t,r);
+  };
+  const center=walking?.035:0,radius=.095;
+  for(let k=0;k<12;k++){
+    const angle=k*Math.PI/6,next=(k+1)*Math.PI/6;
+    tri([.32,center],
+      [.32+Math.cos(angle)*radius,center+Math.sin(angle)*radius],
+      [.32+Math.cos(next)*radius,center+Math.sin(next)*radius]);
+  }
+  if(walking){
+    strip([.18,.025],[-.12,.075],.135);
+    strip([.08,.05],[.005,-.215],.075);
+    strip([.08,.05],[.005,.28],.075);
+    strip([-.12,.075],[-.36,-.19],.088);
+    strip([-.12,.075],[-.33,.30],.088);
+  }else{
+    strip([.18,0],[-.13,0],.14);
+    strip([.07,-.07],[-.15,-.19],.073);
+    strip([.07,.07],[-.15,.19],.073);
+    strip([-.12,-.05],[-.37,-.085],.092);
+    strip([-.12,.05],[-.37,.085],.092);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setIndex(ind);geo.computeVertexNormals();
+  return geo;
+}
+
 export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadClear=()=>true}) {
   const unit=new THREE.BoxGeometry(1,1,1);
   const temp=new THREE.Object3D();
@@ -277,8 +320,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   const inactiveLenses=pool(lensGeo,new THREE.MeshStandardMaterial({
     color:0x232b30,roughness:.24,metalness:.18
   }),signalMax*3);
-  const pedestrianWait=pool(unit,new THREE.MeshBasicMaterial({color:0xf45b4e}),signalMax);
-  const pedestrianWalk=pool(unit,new THREE.MeshBasicMaterial({color:0x48dc94}),signalMax);
+  const pedestrianWait=pool(chongqingPedestrianGlyph(THREE,false),
+    new THREE.MeshBasicMaterial({color:0xf45b4e,side:THREE.DoubleSide}),signalMax);
+  const pedestrianWalk=pool(chongqingPedestrianGlyph(THREE,true),
+    new THREE.MeshBasicMaterial({color:0x48dc94,side:THREE.DoubleSide}),signalMax);
   let signalCount=0;
   for(const cx of crossingSites)for(const side of [-1,1]){
     // Two approaches face opposite travel directions. The eastbound head
@@ -307,10 +352,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     pose(signalAmber,idx,at,0,[face*.51,6.52,bulbZ],[.24,.43,.43],0);
     pose(signalGreen,idx,at,0,[face*.51,5.91,bulbZ],[.24,.43,.43],0);
     pose(signalPedHeads,idx,at,0,[0,3.73,-side*.10],[.43,1.02,.62],0);
-    pose(pedestrianWait,idx,at,0,[face*.23,3.96,-side*.10],
-      [.05,.30,.37],0);
-    pose(pedestrianWalk,idx,at,0,[face*.23,3.52,-side*.10],
-      [.05,.30,.37],0);
+    pose(pedestrianWait,idx,at,0,[face*.27,3.73,-side*.10],
+      [1,.95,.83],0);
+    pose(pedestrianWalk,idx,at,0,[face*.27,3.73,-side*.10],
+      [1,.95,.83],0);
   }
   for(const item of [signalPosts,signalArms,signalHeads,signalPedHeads,
     signalRed,signalAmber,signalGreen,pedestrianWait,pedestrianWalk]){
