@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "description": "Reviewed same-origin landmark GLB replacements; only original audited assets are enabled. Remaining landmarks use procedural fallback.",
+  "description": "Reviewed same-origin landmark GLB replacements; the licensed 3Dystopia Liberty candidate is enabled on this review branch. Remaining landmarks keep their existing production assets or procedural fallback.",
   "source_plugin": "https://github.com/scenario-labs/blender-plugin",
   "max_glb_bytes": 8388608,
   "landmarks": {
     "liberty": {
-      "enabled": false,
-      "file": "scenario/liberty.glb",
+      "enabled": true,
+      "file": "scenario/liberty-3dystopia-1k.glb",
       "target_height": 31.3,
-      "min_triangles": 500,
-      "license": ""
+      "min_triangles": 5000,
+      "license": "CC BY 4.0; 3Dystopia (@Dystopia); author attribution required; commercial use allowed."
     },
     "trade": {
       "enabled": true,

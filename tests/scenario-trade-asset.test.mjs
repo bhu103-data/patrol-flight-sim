@@ -68,7 +68,7 @@ test('the activated original GLB is present, licensed and within budget',()=>{
   assert.match(manifest.landmarks.trade.license,/Original/);
   assert.equal(manifest.landmarks.trade.file,'scenario/trade.glb');
   for(const [name,entry] of Object.entries(manifest.landmarks)){
-    if(!['trade','empire','chrysler'].includes(name))assert.equal(entry.enabled,false);
+    if(!['liberty','trade','empire','chrysler'].includes(name))assert.equal(entry.enabled,false);
   }
   assert.equal(manifest.landmarks.empire.enabled,true);
   assert.match(manifest.landmarks.empire.license,/Original/);

@@ -23,12 +23,13 @@ test('uses the production GLB parser and local-only file input',()=>{
   assert.match(script,/MAX_BYTES=8388608/);
   assert.doesNotMatch(script,/fetch\([^)]*(?:scenario\.com|scenario\.ai|api\.scenario)/i);
 });
-test('viewer can preview existing bundled Liberty GLB without activation',async()=>{
+test('viewer can preview the imported bundled Liberty GLB',async()=>{
   const binary=new URL('assets/nyc/statue-of-liberty.glb',root);
   const file=await stat(binary);
   assert.ok(file.size>100&&file.size<8388608);
   assert.match(script,/\.\.\/assets\/nyc\/statue-of-liberty\.glb/);
-  assert.equal(manifest.landmarks.liberty.enabled,false);
+  assert.equal(manifest.landmarks.liberty.enabled,true);
+  assert.equal(manifest.landmarks.liberty.file,'scenario/liberty-3dystopia-1k.glb');
   assert.match(script,/targetHeight=Number\(/);
 });
 test('viewer audits polygon count, footprint, embedded atlas and orientation',()=>{
@@ -40,11 +41,11 @@ test('viewer audits polygon count, footprint, embedded atlas and orientation',()
   assert.match(script,/gl\.drawArrays\(gl\.TRIANGLES/);
   assert.match(script,/canvas\.toBlob\(blob/);
 });
-test('preview never enables unreviewed models or edits manifests',()=>{
+test('preview does not edit the imported replacement manifest',()=>{
   for(const [kind,asset] of Object.entries(manifest.landmarks)){
-    if(kind==='trade'||kind==='empire'||kind==='chrysler'){
+    if(kind==='liberty'||kind==='trade'||kind==='empire'||kind==='chrysler'){
       assert.equal(asset.enabled,true,'reviewed original GLB is activated');
-      assert.match(asset.license,/Original/);
+      assert.ok(asset.license.trim());
     }else assert.equal(asset.enabled,false,'other landmarks retain their original models');
   }
   assert.doesNotMatch(script,/PUT|POST|PATCH|--activate|writeFile|gh api/);

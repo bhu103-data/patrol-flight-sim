@@ -12854,10 +12854,16 @@ const CENTRAL_PARK_SITES=[
     ];
   }
 
+  // 64 samples keep the route arc-length approximation smooth while cutting
+  // per-boat setup work by one third from the previous 96-sample path.
+  const BOAT_ROUTE_SAMPLES=64;
+  const BOAT_WAKE_FULL_DISTANCE=150;
+  const BOAT_WAKE_FOAM_DISTANCE=226;
+
   function setBoatPace(boat, phase, speed) {
     const lengths = [0];
     let prev = routePose(boat,0);
-    const divisions = 96;
+    const divisions = BOAT_ROUTE_SAMPLES;
     for (let i=1;i<=divisions;i++) {
       const next = routePose(boat,i * Math.PI * 2 / divisions);
       lengths.push(lengths[i-1]+Math.hypot(next[0]-prev[0],next[1]-prev[1]));
@@ -13041,14 +13047,18 @@ const CENTRAL_PARK_SITES=[
   })();
 
   function drawHullWash(drawMesh,boat,x,z,front,right){
-    if(Math.hypot(x-camPos[0],z-camPos[2])>226)return;
+    const distance=Math.hypot(x-camPos[0],z-camPos[2]);
+    if(distance>BOAT_WAKE_FOAM_DISTANCE)return;
     const width=boat.halfWidth,length=boat.halfLength;
     const lift=(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
     const transform=mat4FromBasis([x,WATER_H+0.027,z],right.map(v=>v*width),
       [0,lift,0],front.map(v=>v*length));
     drawMesh(bowWaveMeshes.water,transform);
     drawMesh(bowWaveMeshes.foam,transform);
-    for(const side of [-1,1])for(let i=0;i<4;i++){
+    // Keep the broad wake visible at medium range, but avoid sixteen spray
+    // uploads per frame when the boat is too far away for that detail to read.
+    const sprayPieces=distance<BOAT_WAKE_FULL_DISTANCE?4:distance<190?2:0;
+    for(const side of [-1,1])for(let i=0;i<sprayPieces;i++){
       const t=(sceneryTime*(0.72+0.14*i)+boat.phase+i*0.27)%1;
       const across=side*width*(0.67+t*0.70);
       const along=length*(0.83-i*0.16-t*0.30);
