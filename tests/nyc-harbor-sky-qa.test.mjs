@@ -72,3 +72,24 @@ test('full ten-view tour inspects OTI facades in daylight before bridge zoom',as
   assert.match(script,/facadeView\.zoom==='42'/,
     'the smoke must verify the correct camera zoom before screenshot');
 });
+
+
+test('single-view harbor inspection matches ten-view daylight and zoom',async()=>{
+  const script=await readFile(new URL('../scripts/nyc-harbor-facade-browser-smoke.mjs',import.meta.url),'utf8');
+  for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
+    assert.ok(script.includes("['"+id+"','"+value+"']"),
+      'single camera must use same daylight preset: '+id);
+  }
+  const loaded=script.indexOf("},null,{timeout:180000});");
+  const daylight=script.indexOf("['skyTime','12']");
+  const menu=script.indexOf("await page.keyboard.press('h')");
+  const zoom=script.indexOf("el.value='42'");
+  const select=script.indexOf("label:'Lower Manhattan · Window Facades'");
+  const shot=script.indexOf("path:dest+'/09-manhattan-window-facades.png'");
+  assert.ok(loaded>=0&&daylight>loaded&&menu>daylight&&
+    zoom>menu&&select>zoom&&shot>select,
+    'consistent daylight and zoom must be set before the real WebGL image');
+  assert.match(script,/state\.zoom==='42'/);
+  assert.match(script,/new Event\('change',\{bubbles:true\}\)/);
+  assert.match(script,/new Event\('input',\{bubbles:true\}\)/);
+});

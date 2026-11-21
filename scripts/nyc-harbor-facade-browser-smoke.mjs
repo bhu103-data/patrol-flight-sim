@@ -29,9 +29,25 @@ try{
   return document.getElementById('titleOverlay')?.hidden&&
     overlay?.classList.contains('done');
  },null,{timeout:180000});
+ // Pin this standalone camera to the ten-view tour's clear noon preset.
+ // The game itself retains its user-selected default environment.
+ await page.evaluate(()=>{
+  for(const [id,value] of [
+   ['skyTime','12'],['skySeason','1'],['skyWeather','Clear']
+  ]){
+   const el=document.getElementById(id);
+   if(!el)throw Error('Missing flight environment control: '+id);
+   el.value=value;
+   el.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+ });
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
+ await page.locator('#hotelZoom').evaluate(el=>{
+  el.value='42';
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
  await page.locator('#hotelTarget').selectOption({
   label:'Lower Manhattan · Window Facades'
  });
@@ -41,10 +57,12 @@ try{
   const gl=canvas?.getContext('webgl2');
   return {view:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.text,
     webgl:!!gl&&!gl.isContextLost(),error:gl?.getError()??null,
-    width:canvas?.width||0,height:canvas?.height||0};
+    width:canvas?.width||0,height:canvas?.height||0,
+    zoom:document.getElementById('hotelZoom')?.value};
  });
  check(state.webgl&&state.error===0,'Invalid WebGL: '+JSON.stringify(state));
- check(state.view===report.camera,'Wrong scenic view: '+state.view);
+ check(state.view===report.camera&&state.zoom==='42',
+   'Wrong harbor view or zoom: '+JSON.stringify(state));
  await page.addStyleTag({content:
    'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
    'body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'});
