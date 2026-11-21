@@ -3,10 +3,38 @@
  * Screenshot differences are evidence, not an automated realism verdict.
  */
 import {chromium} from 'playwright';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 const root='http://127.0.0.1:8765';
 const baselineSha='6d50bfda4b2d3837e550751ede49b200b140bc72';
-const browser=await chromium.launch({headless:true,args:[
+// Add the SAME QA-only camera hook to both documents in temporary copies.
+ // Neither the actual game source nor the benchmark geometry is changed.
+ function cameraQAPage(input,output){
+   let html=readFileSync(input,'utf8');
+   const marker='  window.PatrolSpaceBridge = {getState: () => ({';
+   if(html.split(marker).length!==2)throw Error('QA bridge anchor missing: '+input);
+   const hook=`  window.PatrolHarborNearQA = () => {
+     if(!selectedMap.alaska)throw Error('Near QA requires Alaska');
+     window.__patrolQaHold=true;
+     plane.pos=[106,28,-557]; plane.yaw=.91; plane.pitch=-.18;
+     plane.bank=0; plane.speed=0; plane.throttle=0; plane.vsi=0;
+     camInitialized=false;
+   };
+ `;
+   html=html.replace(marker,hook+marker);
+   const movement=/    }else{\\r?\\n      flightStep=advanceFlight\\(dt\\);\\r?\\n    }/g;
+   const sites=[...html.matchAll(movement)];
+   if(sites.length!==1)throw Error('QA flight freeze anchor missing: '+input);
+   const eol=html.includes('\\r\\n')?'\\r\\n':'\\n';
+   html=html.replace(movement,[
+     '    }else if(window.__patrolQaHold){',
+     '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
+     '    }else{','      flightStep=advanceFlight(dt);','    }'
+   ].join(eol));
+   writeFileSync(output,html);
+ }
+ cameraQAPage('alaska-baseline.html','alaska-qa-baseline.html');
+ cameraQAPage('index.html','alaska-qa-updated.html');
+ const browser=await chromium.launch({headless:true,args:[
   '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
 ]});
@@ -50,19 +78,30 @@ async function capture(label,file){
   await page.addStyleTag({content:
     '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
   await page.screenshot({path:'artifacts/alaska-pr92-'+label+'-harbor.png'});
-  records[label]={...state.flight,
-    after:await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.()),
-    pageErrors:errors};
+  const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+  await page.evaluate(()=>{
+    if(typeof window.PatrolHarborNearQA!=='function')
+      throw Error('Near camera hook missing');
+    window.PatrolHarborNearQA();
+  });
+  await page.waitForTimeout(950);
+  await page.screenshot({path:'artifacts/alaska-pr92-'+label+'-near.png'});
+  const near=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+  records[label]={...state.flight,after,near,pageErrors:errors};
   if(errors.length)throw Error(label+' JS errors: '+errors.join('; '));
   await page.close();
 }
 try{
-  await capture('baseline','alaska-baseline.html');
-  await capture('updated','index.html');
+  await capture('baseline','alaska-qa-baseline.html');
+  await capture('updated','alaska-qa-updated.html');
   const old=records.baseline.after,newer=records.updated.after;
   const displacement=Math.hypot(...old.position.map((p,i)=>p-newer.position[i]));
   const yawDelta=Math.abs(old.yaw-newer.yaw);
-  records.cameraDrift={displacement,yawDelta};
+  const nearPos=records.baseline.near.position;
+  const updatedNearPos=records.updated.near.position;
+  const nearDrift=Math.hypot(...nearPos.map((v,i)=>v-updatedNearPos[i]));
+  records.cameraDrift={displacement,yawDelta,nearDrift};
+  if(nearDrift>.5)throw Error('Near-view QA pose is not identical');
   console.log('Alaska paired screenshot state:',JSON.stringify(records));
   if(displacement>9||yawDelta>.20)
     throw Error('Baseline/updated harbor camera moved too far for visual comparison');
