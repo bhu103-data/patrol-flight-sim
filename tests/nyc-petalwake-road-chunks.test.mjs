@@ -3,8 +3,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {buildNycBridgeheadDetailChunks,selectNycRoadChunkLod} from
-  '../assets/nyc/petalwake-road-chunks.js';
+// PATROL has no package.json type=module, so import the browser ES module
+// through a data URL for Node 18/20 compatibility (same as existing road tests).
+const moduleSource=await readFile(new URL(
+  '../assets/nyc/petalwake-road-chunks.js',import.meta.url),'utf8');
+const {buildNycBridgeheadDetailChunks,selectNycRoadChunkLod}=await import(
+  'data:text/javascript;base64,'+Buffer.from(moduleSource).toString('base64'));
 
 const grid={
   tilt:.24,offset:30,blockWidth:24,blockLength:33,
