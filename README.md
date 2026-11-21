@@ -21,6 +21,12 @@ Choose **Chongqing · Hotpot Pilot** on the map selection screen, or open [the C
 [Chongqing technical notes and Petalwake credits](docs/CHONGQING_HOTPOT_PILOT.md)
 
 
+## Alaska Fjords — surveyed Tracy Arm terrain
+
+The Alaska map now uses a compact **USGS 3DEP public-domain bare-earth elevation grid** sampled around Tracy Arm / North Sawyer Glacier. The 256×256 local grid is roughly 30–31 m between samples, with real mountain and water-channel terrain from the source, compressed vertically to fit PATROL's flight ceiling. Game north is rotated 90° relative to geographic north to keep the original fictional harbor and spawn on the fjord. This **is not a 1:1 georeferenced replica**. Glacier crevasses, irregular floating ice, coastal spruce silhouettes, and the existing slow auroral curtains accompany the new topography. The original Alaska terrain loads automatically if the local data is missing; add `?alaskaTerrain=legacy` to the game URL to compare the original version.
+
+[USGS Alaska data source, format, build instructions, and limitations](docs/ALASKA_OPEN_SOURCE.md).
+
 ## Controls
 
 - **Mouse**, **WASD**, or the **arrow keys** steer.

@@ -1,5 +1,51 @@
 # Alaska Fjords — open-source research and implementation record
 
+## 2026-11-20/21 — Actual USGS Tracy Arm elevation integrated
+
+The Alaska flight menu now loads `assets/alaska/tracy-arm-3dep.json` (a baked,
+**real** USGS 3DEP Bare Earth ImageServer grid). The original procedural terrain
+remains a fallback if the local asset cannot be decoded or fetched. To force
+that fallback, open `?alaskaTerrain=legacy` in the game URL.
+
+- **Region:** Tracy Arm / North Sawyer Glacier, Alaska. WGS84 bounds
+  longitude **-133.265 to -133.135**, latitude **57.851 to 57.923**.
+- **Raster:** 256×256 cells, approximately **30.1×31.3 m** spacing in the
+  downloaded raster (not native 5 m resolution). Measured maximum 1,836 m,
+  ≈90.4% above 3 m altitude. Heights rounded to whole metres.
+- **Source:** [USGS 3DEP public-domain dynamic service](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer)
+  requested as float32 GeoTIFF. The build script is
+  `tools/alaska/build_usgs_dem.py` and only requires `numpy`, `tifffile`,
+  and Python 3. The source and bounding box are embedded in the output metadata.
+- **Orientation:** Source stays WGS84 / north-up in the baked data. In the game
+  the grid is **rotated 90°**: game north (+Z) corresponds to geographic east,
+  aligning the real fjord water corridor with the existing fictional harbor
+  and flight-tour axis. This is declared rather than disguised as real compass
+  bearings. Game coordinates cannot be used as GPS without reversing this mapping.
+- **Scale:** Horizontal approximately 4.1–4.2 real metres per game unit.
+  Vertical heights are deliberately compressed into the 75-unit terrain
+  range and 100-unit flight ceiling (`min(0.04, (0.9*75-12.2)/maxElevation)`
+  game units per real metre). **Not an accurate physical 1:1 map.**
+- **Collision:** CPU height sample, GPU terrain atlas, nav-map and route/spawn
+  altitude use the exact same resampled elevation field. The Alaska harbor and
+  spawn lie over sampled fjord water after the rotation; the glacier/falls lie
+  on measured uplands. Unchanged flight physics.
+- **Assets:** ~175 KB of base64-encoded 16-bit heights in a JSON file, only
+  fetched when Alaska starts. No runtime request to USGS, no Google Maps
+  photogrammetry or third-party proprietary imagery. The source is public
+  domain; source URL and metadata are retained.
+- **Vegetation:** Original batched procedural coast evergreens were augmented
+  with bounded nonrepeating slope-aware spruce/hemlock silhouettes. Those
+  trees are generated art, not measured tree locations.
+- **Safety:** The source generator refuses flat/empty/wrong-shaped data and
+  checks elevation. `node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs`
+  validates the baked dataset and placement contracts.
+
+This introduces **real mountains and coastline topology**, but the authored
+harbor, glacier mesh, decorative trees and ice floes remain artistic. Actual
+PBR imagery, detailed ice fields, high-resolution LOD terrain and surveyed
+buildings/ports require separate source and performance work.
+
+
 Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene, existing `FLIGHT_MAPS.alaska`. Do not add a duplicate map or silently change New York, DC, Chongqing or the universe portal.
 
 ## What this change actually implements
@@ -8,7 +54,7 @@ Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene,
 - Alaska-only surface shader: multi-scale spruce, slate/strata, snowpack, glacier-blue ice.
 - An optional one-batch original mesh under `assets/alaska/alaska-fjord-detail.js`: glacier crevasses, fractured drift ice, sparse cliff strata. GPU resources are disposed on map switches; low-fidelity mode does not load this mesh.
 - All original flight physics, existing procedural terrain, Alaska landmarks, harbor, routes and boundary are preserved.
-- The glacier and fjord positions are **stylized flight-scale geometry, not surveyed Alaska**. No USGS raster has been imported in this patch. No third-party source code, imagery, meshes, textures, or new runtime network request is copied or bundled.
+- The Alaska heightfield now has a **real USGS Tracy Arm DEM** when the baked local asset loads, while its authored harbor, glacier decoration and fauna remain artistic. The map is rotated and vertically compressed as described above; it is not 1:1 georeferenced gameplay. No third-party source code, imagery or meshes are copied or bundled. The game fetches its own lightweight local DEM JSON only when Alaska starts.
 
 ## Verified upstream references and rights
 
@@ -32,7 +78,7 @@ Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene,
 
 1. Choose **one** real bounded area (for example Juneau/Mendenhall or a Glacier Bay flight corridor) rather than claiming Denali, Fairbanks, and Juneau appear at true relative distances inside a 1,920-unit arena.
 2. Fetch USGS public-domain IfSAR/3DEP DEM and its CRS/vertical-datum metadata; derive low/medium/high LOD tiles offline with GDAL. Preserve the original source attribution and acquisition date.
-3. Define a documented WGS84 -> local tangent-plane transform; convert real horizontal meters and heights into *one explicit flight game scale*, and use that exact transform in terrain mesh, shader, collision, nav-map, waterline and spawn.
+3. Improve the already documented WGS84 -> game-space rotation with a formal ENU transform and geospatial metadata for every authored landmark; preserve consistent terrain, collision, nav-map, waterline and spawn sampling.
 4. Create real-world water masks/shoreline from licensed sources (USGS/OSM with attribution) and photographic landscape textures with their own credits. Avoid Google Maps 3D/photogrammetry scraping or ambiguous model licensing.
 5. Stream/cull only visible bounded tiles and pre-compress assets so GitHub Pages loads promptly; keep coarse procedural fallback for offline/slow connections.
 6. Validate low-altitude flight, waterline, crash detection, spawn and map switching on mobile and desktop GPU. Compare a fixed set of surveyed reference points; never market the result as a 1:1 map until those checks pass.

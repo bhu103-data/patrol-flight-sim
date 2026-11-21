@@ -16,7 +16,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   const cols=20,rows=17;
   function glacierPoint(col,row) {
     const across=2*col/cols-1, t=row/rows;
-    const x=-34+across*(78-28*t)+Math.sin(t*3.9)*21;
+    const x=130+across*(66-24*t)+Math.sin(t*3.9)*12;
     const z=449+t*148-(1-across*across)*17+Math.sin(col*1.8)*2.3;
     const edge=1-Math.pow(Math.abs(across),8);
     const ice=(4.6+5.8*edge)*Math.min(1,(1-t)*5.8);
@@ -47,8 +47,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // No shoreline changes or terrain tessellation.
   for (let i=0;i<86;i++) {
     const h=hash(i*11+17),j=hash(i*13+37);
-    const north= i<56 ? 260+h*187 : -600+h*215;
-    const east= i<56 ? -118+j*212 : -43+j*157;
+    const north= i<56 ? 250+h*195 : -600+h*215;
+    const east= i<56 ? 28+j*152 : 38+j*137;
     const radius=1.35+3.9*hash(i*19+3);
     if(terrainAt(east,north)>waterY+.12 ||
        terrainAt(east+radius,north)>waterY+.12 ||
@@ -83,6 +83,51 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const ca=[a[0],a[1]+.24,a[2]+.9],cb=[b[0],b[1]+.24,b[2]+.9];
     addQuad(a,b,cb,ca,i%3?[.36,.41,.43]:[.50,.53,.53]);
     stats.rockBands++;
+  }
+  // Alaska coastal spruce/hemlock silhouettes: one batched draw call, no
+  // cloned cuboids or unique textures. Geographically sampled ground altitude
+  // and slope determine placement, rather than repeating six tree clusters.
+  // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
+  stats.conifers=0;
+  for(let i=0;i<1380 && stats.conifers<270;i++){
+    const x=-735+hash(i*71+53)*1470;
+    const z=-735+hash(i*107+19)*1470;
+    if(Math.hypot(x,z)>750 || Math.hypot(x-151,z+525)<75 ||
+       Math.hypot(x+155,z+610)<28 || z>390&&Math.abs(x-130)<95)continue;
+    const y=terrainAt(x,z);
+    if(y<waterY+1.5||y>waterY+26)continue;
+    const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
+                           terrainAt(x,z+4)-terrainAt(x,z-4))/8;
+    if(slope>.29)continue;
+    const seed=hash(i*149+9),treeH=2.6+5.5*seed;
+    const winter=Math.max(0,Math.min(1,(y-waterY-15)/11));
+    const trunk=[.25+.07*seed,.22+.05*seed,.18+.035*seed];
+    const dark=[.065+.045*seed,.14+.065*seed,.11+.034*seed];
+    const bright=[.11+.065*seed,.23+.085*seed,.16+.040*seed];
+    const trunkBase=[x,y+.1,z],trunkTop=[x,y+treeH*.55,z],stem=.075+.028*seed;
+    addQuad([x-stem,y,z],[x+stem,y,z],
+      [x+stem,y+treeH*.57,z],[x-stem,y+treeH*.57,z],trunk);
+    addQuad([x,y,z-stem],[x,y,z+stem],
+      [x,y+treeH*.57,z+stem],[x,y+treeH*.57,z-stem],trunk);
+    for(let layer=0;layer<3;layer++){
+      const start=y+treeH*(.11+.175*layer),tip=start+treeH*(.45-.038*layer);
+      const radius=treeH*(.20-.033*layer),phase=seed*6.28+layer*.36;
+      const tone=layer%2===0?dark:bright;
+      for(let j=0;j<6;j++){
+        const a=phase+j*Math.PI/3,b=a+Math.PI/3;
+        const r1=radius*(.84+.26*hash(i*11+j*7+layer*9));
+        const r2=radius*(.83+.27*hash(i*19+j*13+layer*17));
+        const faceTint=1-(j%3)*.055;
+        const iceDust=winter*(j%5===0?.42:.16);
+        const color=tone.map((value,k)=>
+          Math.min(1,value*faceTint*(1-iceDust)+[.76,.86,.87][k]*iceDust));
+        addTri([x+Math.cos(a)*r1,start,z+Math.sin(a)*r1],
+               [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
+               [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
+               color);
+      }
+    }
+    stats.conifers++;
   }
   return stats;
 }

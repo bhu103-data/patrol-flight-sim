@@ -1,0 +1,43 @@
+name: Bake Alaska USGS 3DEP terrain
+
+on:
+  push:
+    branches: [feature/alaska-usgs-dem-tracy-arm]
+    paths:
+      - 'tools/alaska/build_usgs_dem.py'
+      - '.github/workflows/alaska-dem-bake.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bake-alaska-dem:
+    if: github.repository == 'bhu103-data/patrol-flight-sim' && github.ref == 'refs/heads/feature/alaska-usgs-dem-tracy-arm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install TIFF decoder
+        run: python -m pip install --disable-pip-version-check numpy tifffile
+      - name: Download and validate public-domain USGS DEM
+        run: |
+          python tools/alaska/build_usgs_dem.py
+          python tools/alaska/build_usgs_dem.py --check
+      - name: Commit data only if valid
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add assets/alaska/tracy-arm-3dep.json
+          if git diff --cached --quiet; then
+            echo 'DEM is unchanged'
+          else
+            git commit -m 'data(alaska): add real USGS 3DEP Tracy Arm elevation grid'
+            git push origin HEAD:feature/alaska-usgs-dem-tracy-arm
+          fi
