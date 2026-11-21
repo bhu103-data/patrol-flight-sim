@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>PATROL | Blender GLB Model Review</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 system-ui,Segoe UI,sans-serif;background:#0d1621;color:#e3ebf3}
+*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}
+h1{font-size:1.55rem;margin:0 0 5px}p{color:#acbdcb;margin:5px 0 18px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px}
+#preview{display:block;width:100%;height:auto;aspect-ratio:16/10;background:linear-gradient(#192c3f,#121d27);border:1px solid #385065;border-radius:12px;touch-action:none}
+aside{display:flex;flex-direction:column;gap:14px;background:#142231;border:1px solid #30475a;border-radius:12px;padding:16px}
+label{display:block;font-size:.87rem;color:#bfd0dc;margin-bottom:5px}
+input,select,button{width:100%;color:#eef6fb;background:#22394b;border:1px solid #3f5a6b;border-radius:7px;font:inherit;padding:10px}
+button{cursor:pointer}button:hover{background:#315169}input[type=range]{padding:0}
+small{color:#96abbc}#state{padding:11px 14px;border-radius:8px;background:#1c2f41;margin-top:14px;overflow-wrap:anywhere}
+#state[data-status=PASS]{color:#7ff0ad}#state[data-status=FAIL]{color:#ff9c9c}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:4px}
+dt{color:#9bafbd}dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+section.note{border-top:1px solid #34495d;padding-top:12px;color:#b6c4d0;font-size:.85rem}
+footer{margin-top:14px;color:#98afbf}
+a{color:#7cbdef}@media(max-width:740px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<h1>Scenario × Blender — PATROL GLB Review</h1>
+<p>Preview a landmark before publishing it into Manhattan. All selected files stay in your browser; no cloud upload, paid generation or API key.</p>
+<div class="layout">
+<div>
+<canvas id="preview" width="960" height="600" aria-label="Rotatable WebGL2 model preview"></canvas>
+<div id="state" data-status="RUNNING" role="status" aria-live="polite">Loading an existing bundled model for a real WebGL2 smoke test…</div>
+<small>Drag to rotate • Mouse wheel to zoom • The original game keeps its own landmark models until you explicitly enable replacements.</small>
+</div>
+<aside>
+<div><label for="landmark">Target game landmark / normalized height</label>
+<select id="landmark"><option value="liberty">Statue of Liberty · 31.3 units</option></select></div>
+<div><label for="modelFile">Preview your exported GLB (up to 8 MiB)</label>
+<input id="modelFile" type="file" accept=".glb,model/gltf-binary,application/octet-stream"></div>
+<button id="sample" type="button">Load existing Liberty GLB sample</button>
+<button id="capture" type="button" disabled>Save review screenshot (PNG)</button>
+<div><label for="angle">Model rotation: <output id="angleText">0°</output></label>
+<input id="angle" type="range" min="-180" max="180" step="1" value="0"></div>
+<div><label for="zoom">Camera distance</label>
+<input id="zoom" type="range" min="1.1" max="3.7" step=".05" value="2.1"></div>
+<dl>
+<dt>Source</dt><dd id="source">—</dd>
+<dt>Size</dt><dd id="bytes">—</dd>
+<dt>Triangles</dt><dd id="triangles">—</dd>
+<dt>Height</dt><dd id="height">—</dd>
+<dt>Footprint (W×D)</dt><dd id="footprint">—</dd>
+<dt>Diffuse atlas</dt><dd id="atlas">—</dd>
+<dt>Decode + upload</dt><dd id="duration">—</dd>
+</dl>
+<section class="note">The preview uses PATROL's production GLB decoder and renders embedded Base Color PNG/JPEG via its UV attribute. Normal, roughness and metallic texture maps are not rendered. This is a visual QA tool, <strong>not</strong> 1:1 survey verification.</section>
+</aside>
+</div>
+<footer><a href="../index.html">Return to game</a> ·
+<a href="../docs/SCENARIO_BLENDER_INTEGRATION.md">Blender workflow / licensing notes</a> ·
+<a href="scenario_glb_selftest.html">WebGL2 pixel test</a></footer>
+</main>
+<script type="module">
+const $=selector=>document.querySelector(selector);
+const gl=$('#preview').getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
+const state=$('#state'),landmark=$('#landmark'),file=$('#modelFile');
+const label=(id,value)=>{document.getElementById(id).textContent=value;};
+let decodeGLB=null,mesh=null,program=null,sourceBytes=null,sourceName='',height=31.3;
+let autoRotate=0,orbitYaw=.75,orbitPitch=.23,drag=null,raf=0;
+const MAX_BYTES=8388608;
+function status(ok,message){
+ state.dataset.status=ok===null?'RUNNING':ok?'PASS':'FAIL';
+ state.textContent=(ok===null?'LOADING':ok?'PASS':'FAIL')+' — '+message;
+}
+function shader(type,body){
+ const shader=gl.createShader(type);
+ gl.shaderSource(shader,body);gl.compileShader(shader);
+ if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)){
+  const error=gl.getShaderInfoLog(shader);gl.deleteShader(shader);
+  throw Error(error||'Cannot compile shader');
+ }
+ return shader;
+}
+function programForPreview(){
+ const vs=shader(gl.VERTEX_SHADER,[
+  '#version 300 es',
+  'layout(location=0) in vec3 position;',
+  'layout(location=1) in vec3 normal;',
+  'layout(location=2) in vec3 color;',
+  'layout(location=4) in vec3 uvMask;',
+  'uniform mat4 uProjection,uView,uModel;',
+  'out vec3 vColor,vNormal,vPosition,vUvMask;',
+  'void main(){',
+  'vec4 world=uModel*vec4(position,1.0);',
+  'vPosition=world.xyz;',
+  'vNormal=mat3(uModel)*normal;',
+  'vColor=color;vUvMask=uvMask;',
+  'gl_Position=uProjection*uView*world;',
+  '}'].join('\n'));
+ const fs=shader(gl.FRAGMENT_SHADER,[
+  '#version 300 es',
+  'precision highp float;',
+  'in vec3 vColor,vNormal,vPosition,vUvMask;',
+  'uniform sampler2D uDiffuse;',
+  'uniform bool uTextured;',
+  'uniform vec3 uEye;',
+  'out vec4 frag;',
+  'void main(){',
+  'vec3 base=vColor;',
+  'if(uTextured&&vUvMask.z>.5)base*=texture(uDiffuse,vUvMask.xy).rgb;',
+  'vec3 n=normalize(vNormal);',
+  'vec3 light=normalize(vec3(.48,.83,.37));',
+  'float key=max(dot(n,light),0.0);',
+  'vec3 eyeDir=normalize(uEye-vPosition);',
+  'float spec=pow(max(dot(n,normalize(eyeDir+light)),0.0),54.0);',
+  'float hemisphere=.21+.22*max(n.y,0.0);',
+  'vec3 result=base*(.39+.52*key+hemisphere)+vec3(.22,.24,.27)*spec*.26;',
+  'result=result/(1.0+result*.17);',
+  'frag=vec4(pow(clamp(result,0.0,1.0),vec3(1.0/2.2)),1.0);',
+  '}'].join('\n'));
+ const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,fs);
+ gl.linkProgram(p);gl.deleteShader(vs);gl.deleteShader(fs);
+ if(!gl.getProgramParameter(p,gl.LINK_STATUS)){
+  const error=gl.getProgramInfoLog(p);gl.deleteProgram(p);
+  throw Error(error||'Cannot link preview shaders');
+ }
+ return p;
+}
+const normalize=a=>{const n=Math.hypot(...a)||1;return a.map(v=>v/n)};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+function perspective(fov,aspect,near,far){
+ const f=1/Math.tan(fov/2),r=1/(near-far);
+ return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*r,-1,0,0,2*far*near*r,0]);
+}
+function lookAt(eye,target){
+ const z=normalize(eye.map((v,i)=>v-target[i]));
+ const x=normalize(cross([0,1,0],z)),y=cross(z,x);
+ return new Float32Array([
+ x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,
+ -dot(x,eye),-dot(y,eye),-dot(z,eye),1]);
+}
+function render(){
+ raf=0;
+ if(!gl||!program)return;
+ gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);
+ gl.clearColor(.055,.089,.125,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(!mesh)return;
+ const yaw=(Number($('#angle').value)*Math.PI/180);
+ const c=Math.cos(yaw),s=Math.sin(yaw);
+ const rotation=new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1]);
+ const target=[0,height*.50,0];
+ const distance=Math.max(30,height*Number($('#zoom').value));
+ const eye=[Math.sin(orbitYaw)*Math.cos(orbitPitch)*distance,
+  target[1]+Math.sin(orbitPitch)*distance,Math.cos(orbitYaw)*Math.cos(orbitPitch)*distance];
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
+ gl.useProgram(program);
+ gl.uniformMatrix4fv(gl.getUniformLocation(program,'uProjection'),false,
+  perspective(.85,gl.drawingBufferWidth/gl.drawingBufferHeight,.03,distance*8));
+ gl.uniformMatrix4fv(gl.getUniformLocation(program,'uView'),false,lookAt(eye,target));
+ gl.uniformMatrix4fv(gl.getUniformLocation(program,'uModel'),false,rotation);
+ gl.uniform3fv(gl.getUniformLocation(program,'uEye'),eye);
+ gl.uniform1i(gl.getUniformLocation(program,'uTextured'),Boolean(mesh.texture));
+ gl.activeTexture(gl.TEXTURE0);
+ gl.bindTexture(gl.TEXTURE_2D,mesh.texture);
+ gl.uniform1i(gl.getUniformLocation(program,'uDiffuse'),0);
+ gl.bindVertexArray(mesh.vao);
+ gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+ gl.bindVertexArray(null);
+ const error=gl.getError();
+ if(error!==gl.NO_ERROR)status(false,'WebGL error 0x'+error.toString(16));
+}
+function requestRender(){if(!raf)raf=requestAnimationFrame(render)}
+function release(old){
+ if(!old)return;
+ old.buffers?.forEach(buffer=>gl.deleteBuffer(buffer));
+ gl.deleteVertexArray(old.vao);
+ if(old.texture)gl.deleteTexture(old.texture);
+}
+let loadEpoch=0;
+async function loadBuffer(buffer,name){
+ if(!gl)throw Error('WebGL2 unavailable');
+ if(buffer.byteLength<64||buffer.byteLength>MAX_BYTES)
+  throw Error('GLB must be between 64 bytes and 8 MiB');
+ sourceBytes=buffer;sourceName=name;
+ const epoch=++loadEpoch;
+ status(null,'Decoding '+name);
+ const start=performance.now();
+ const targetHeight=Number(landmark.selectedOptions[0].dataset.height||31.3);
+ try{
+  const incoming=await decodeGLB(gl,buffer,targetHeight);
+  if(epoch!==loadEpoch){release(incoming);return;}
+  const duration=(performance.now()-start).toFixed(0);
+  const old=mesh;mesh=incoming;height=targetHeight;release(old);
+  label('source',name.length>26?name.slice(0,23)+'…':name);
+  label('bytes',(buffer.byteLength/1024).toFixed(1)+' KiB');
+  label('triangles',incoming.triangleCount.toLocaleString());
+  label('height',targetHeight.toFixed(1)+' units');
+  const dim=incoming.dimensions;
+  label('footprint',dim.width.toFixed(1)+' × '+dim.depth.toFixed(1));
+  label('atlas',incoming.texture?'Embedded PNG/JPEG':'Material colors');
+  label('duration',duration+' ms');
+  $('#capture').disabled=false;
+  status(true,'Rendered '+name+' ('+incoming.triangleCount.toLocaleString()+' triangles)');
+  requestRender();
+ }catch(error){
+  if(epoch===loadEpoch)status(false,error.message);
+  console.error('Scenario GLB preview:',error);
+ }
+}
+async function loadSample(){
+ status(null,'Fetching bundled public-domain test model');
+ try{
+  landmark.value='liberty';
+  const url='../assets/nyc/statue-of-liberty.glb';
+  const response=await fetch(url,{cache:'no-store'});
+  if(!response.ok)throw Error('Bundled demo GLB HTTP '+response.status);
+  await loadBuffer(await response.arrayBuffer(),'Bundled Liberty GLB');
+ }catch(error){status(false,error.message)}
+}
+async function init(){
+ if(!gl)throw Error('WebGL2 unavailable');
+ const res=await fetch('../assets/nyc/scenario-manifest.json');
+ if(!res.ok)throw Error('Manifest HTTP '+res.status);
+ const manifest=await res.json();
+ const names={liberty:'Statue of Liberty',trade:'One World Trade Center',
+  empire:'Empire State Building',chrysler:'Chrysler Building',
+  flatiron:'Flatiron Building',times:'One Times Square'};
+ landmark.innerHTML='';
+ for(const [id,spec] of Object.entries(manifest.landmarks||{})){
+  if(!(spec.target_height>0))continue;
+  const option=document.createElement('option');
+  option.value=id;option.dataset.height=spec.target_height;
+  option.textContent=(names[id]||id)+' · '+spec.target_height+' units';
+  landmark.append(option);
+ }
+ const library=await import('../assets/nyc/nyc-realism.js');
+ decodeGLB=library.decodeGLB;
+ program=programForPreview();
+ $('#sample').addEventListener('click',loadSample);
+ file.addEventListener('change',async()=>{
+  const entry=file.files?.[0];
+  if(!entry)return;
+  if(entry.size>MAX_BYTES){status(false,'File over 8 MiB limit');return;}
+  try{await loadBuffer(await entry.arrayBuffer(),entry.name)}
+  catch(error){status(false,error.message)}
+ });
+ landmark.addEventListener('change',()=>{
+  if(sourceBytes)loadBuffer(sourceBytes,sourceName);
+ });
+ $('#angle').addEventListener('input',()=>{
+  $('#angleText').textContent=$('#angle').value+'°';requestRender();
+ });
+ $('#zoom').addEventListener('input',requestRender);
+ const canvas=$('#preview');
+ canvas.addEventListener('pointerdown',ev=>{
+  drag={x:ev.clientX,y:ev.clientY};canvas.setPointerCapture(ev.pointerId);
+ });
+ canvas.addEventListener('pointermove',ev=>{
+  if(!drag)return;
+  const dx=ev.clientX-drag.x,dy=ev.clientY-drag.y;drag={x:ev.clientX,y:ev.clientY};
+  orbitYaw-=dx*.009;orbitPitch=Math.max(-.75,Math.min(1.15,orbitPitch+dy*.008));
+  requestRender();
+ });
+ const endDrag=()=>{drag=null};
+ canvas.addEventListener('pointerup',endDrag);
+ canvas.addEventListener('pointercancel',endDrag);
+ canvas.addEventListener('wheel',ev=>{
+  ev.preventDefault();
+  $('#zoom').value=Math.max(1.1,Math.min(3.7,
+    Number($('#zoom').value)+Math.sign(ev.deltaY)*.12));
+  requestRender();
+ },{passive:false});
+ $('#capture').addEventListener('click',()=>{
+  requestRender();
+  canvas.toBlob(blob=>{
+   if(!blob){status(false,'Cannot capture WebGL screenshot');return;}
+   const url=URL.createObjectURL(blob);
+   const anchor=document.createElement('a');
+   anchor.download='PATROL-GLB-review.png';anchor.href=url;anchor.click();
+   setTimeout(()=>URL.revokeObjectURL(url),1500);
+  },'image/png');
+ });
+ window.addEventListener('beforeunload',()=>release(mesh),{once:true});
+ await loadSample();
+}
+init().catch(error=>{status(false,error.message);console.error(error)});
+</script>
+</body>
+</html>
