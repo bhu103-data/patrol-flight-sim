@@ -55,13 +55,45 @@ function timesWallDetail(bytes){
  return {bounds,samples,coolGlassFraction:coolGlass/Math.max(1,samples),
    colorStdDev:Math.sqrt(Math.max(0,sum2/Math.max(1,samples)-mean*mean))};
 }
+// Diagnostic only: count nearly uniform 64px wall-sized tiles in the
+// right foreground of the street-level Times Square view. This exposes
+// persistent blank facade regions without treating a flat wall as a
+// WebGL failure or requiring a particular color/material.
+function timesSquareFlatWallProbe(bytes){
+ const img=PNG.sync.read(bytes),tile=64;
+ const bounds={x0:Math.floor(img.width*.55),x1:Math.floor(img.width*.98),
+  y0:Math.floor(img.height*.25),y1:Math.floor(img.height*.90)};
+ let totalTiles=0,flatTiles=0;
+ const candidates=[];
+ for(let y=bounds.y0;y+tile<=bounds.y1;y+=tile){
+  for(let x=bounds.x0;x+tile<=bounds.x1;x+=tile){
+   let n=0,sr=0,sg=0,sb=0,s2=0;
+   for(let yy=y;yy<y+tile;yy+=8)for(let xx=x;xx<x+tile;xx+=8){
+    const p=(yy*img.width+xx)*4,r=img.data[p],
+     g=img.data[p+1],b=img.data[p+2];
+    sr+=r;sg+=g;sb+=b;s2+=r*r+g*g+b*b;n++;
+   }
+   const mean=[sr/n,sg/n,sb/n];
+   const variance=Math.max(0,s2/n-mean.reduce((a,v)=>a+v*v,0));
+   totalTiles++;
+   if(variance<72){
+    flatTiles++;
+    candidates.push({x,y,rgb:mean.map(v=>Math.round(v)),
+     variance:Math.round(variance)});
+   }
+  }
+ }
+ return {region:bounds,tilePx:tile,totalTiles,flatTiles,
+  flatTileFraction:flatTiles/Math.max(totalTiles,1),
+  candidates:candidates.slice(0,40)};
+}
 // HUD panels overlap the canvas in the browser compositor. Even an
 // element.screenshot() includes those overlays unless we hide them.
 // The temporary class preserves canvas visibility and is always removed,
 // so scenic view controls still work for subsequent camera selections.
-const screenshots=[],pixels={},captureTimings={};
+const screenshots=[],pixels={},captureTimings={},controlPixels={};
 let pendingShot=null,hudStyleInstalled=false;
-async function capture(name){
+async function capture(name,{control=false}={}){
  // Navigation replaces document styles, so install the UI-hiding style
  // lazily on the loaded game page, not on Playwright's blank startup tab.
  if(!hudStyleInstalled){
@@ -101,7 +133,12 @@ async function capture(name){
   if(name==='09-manhattan-window-facades.png')
    check(stats.upperSkyFraction>=MIN_HARBOR_SKY_FRACTION,
     'NYC facade camera is still hidden by nearby building walls: '+JSON.stringify(stats));
-  screenshots.push(name);pixels[name]=stats;
+  if(control)controlPixels[name]=stats;
+  else {
+   screenshots.push(name);
+   pixels[name]=name==='05-times-square-street.png'
+    ? {...stats,flatWallProbe:timesSquareFlatWallProbe(image)} : stats;
+  }
   pendingShot=null;
   console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
  }finally{
@@ -254,10 +291,43 @@ try{
 
 
 
+ // Matched diagnostic control: use the engine's existing GIS-off switch
+ // rather than guessing which Times Square geometry owns a flat wall.
+ // Capture after the normal ten views, at the same noon/clear + zoom 68.
+ if(process.env.PATROL_NYC_QA_GIS_CONTROL==='1'){
+  console.log('[PATROL QA] matched Times Square GIS-off control');
+  const res=await page.goto(base+'/index.html?nycGIS=off',
+   {waitUntil:'domcontentloaded',timeout:60000});
+  check(res?.ok(),'NYC GIS-off launcher did not respond');
+  hudStyleInstalled=false;
+  await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
+  await page.locator('#startFlight').click({force:true});
+  await page.waitForFunction(()=>{
+   const title=document.getElementById('titleOverlay');
+   const load=document.getElementById('loadOverlay');
+   return title?.hidden&&load?.classList.contains('done');
+  },null,{timeout:120000});
+  await page.evaluate(()=>{
+   for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
+    const el=document.getElementById(id);
+    if(!el)throw Error('Missing GIS-off environment control '+id);
+    el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));
+   }
+  });
+  await page.keyboard.press('h');
+  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
+   null,{timeout:15000});
+  await page.locator('#hotelZoom').evaluate(el=>{
+   el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('#hotelTarget').selectOption({label:'Times Square Street Level'});
+  await page.waitForTimeout(1800);
+  await capture('10-times-square-no-gis.png',{control:true});
+ }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings};
+ result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings};
 }catch(e){
- result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,
+ result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
    captureTimings,errors,warnings};
  // Avoid another potentially stalled screenshot when the failure itself was
  // a SwiftShader capture timeout. Partial completed images stay in artifacts.
