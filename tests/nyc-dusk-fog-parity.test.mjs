@@ -11,6 +11,11 @@ const oldMeshExtinction=(fog)=>0.00096+0.009*fog;
 const worldExtinction=(fog)=>0.0008+0.009*fog;
 const nyMeshExtinction=(fog,twilight)=>oldMeshExtinction(fog)*(1-twilight)+
   worldExtinction(fog)*twilight;
+const nyFogBlend=(fog,twilight,dist)=>{
+  const raw=1-Math.exp(-dist*nyMeshExtinction(fog,twilight));
+  return raw*(1-twilight)+Math.min(raw,.96)*twilight;
+};
+const worldFogBlend=(fog,dist)=>Math.min(1-Math.exp(-dist*worldExtinction(fog)),.96);
 const mix=(a,b,t)=>a.map((v,i)=>v*(1-t)+b[i]*t);
 const origin=(day)=>mix([.084,.10,.17],[.64,.73,.79],day);
 const oldMeshTint=(day,twilight)=>mix(origin(day),[.48,.33,.35],twilight*.58);
@@ -42,6 +47,24 @@ test('at peak dusk Manhattan fog matches at near and far ranges',()=>{
     assert.ok(sceneTint(.4,1,1)[0]>sceneTint(.4,1,0)[0],
       'sun-facing dusk mist must be warmer than anti-solar mist');
   }
+});
+
+test('dense twilight fog retains the same 96% visibility floor as terrain and harbor',()=>{
+  assert.match(world,/return mix\(col,haze,min\(fogAmt,0\.96\)\)/);
+  assert.match(mesh,/haze=mix\(haze,min\(haze,0\.96\),clamp\(uAtmosphere\.y,0\.0,1\.0\)\)/);
+  for(const fog of [0,.12,.88]){
+    for(const distance of [20,80,220,450,700,820]){
+      assert.ok(Math.abs(nyFogBlend(fog,1,distance)-worldFogBlend(fog,distance))<1e-12,
+       'Manhattan peak twilight fog must match raymarched world fog');
+    }
+  }
+  const thickFog=.88,far=700;
+  assert.ok(1-Math.exp(-far*worldExtinction(thickFog))>.96,
+    'far thick fog must exceed the previous unmatched mesh/world mixing cap');
+  assert.equal(nyFogBlend(thickFog,1,far),.96,
+    'retain 4% distant building contrast instead of fog-color clipping');
+  assert.ok(nyFogBlend(thickFog,0,far)>.96,
+    'noon and midnight must preserve original Manhattan mesh shader behavior');
 });
 
 test('noon, midnight and non-Manhattan shaders keep their original result',()=>{
