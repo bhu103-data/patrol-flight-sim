@@ -67,7 +67,7 @@ test('water taxi, rotation, land/water checks and touchdown are separate from je
   assert.match(html,/function usableFloatWater\(/);
   assert.match(html,/const floatRotate=waterborne/);
   assert.match(html,/if\(floatplane && !crash\)/);
-  assert.match(html,/Hard water landing/);
+  assert.match(html,/plane.speed=Math.min\(9,plane.speed\*\.55\)/);
   assert.match(html,/Float hit shoreline/);
   assert.match(html,/selectedAircraft!=='seaplane' && trailAccum/);
   assert.match(chongqing,/floatWaterSite\(x,z,heading\)/);

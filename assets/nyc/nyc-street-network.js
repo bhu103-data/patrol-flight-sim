@@ -4,7 +4,7 @@
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, addParkedCar, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -18,7 +18,8 @@ export function buildNycStreetNetwork({
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
     preservedRoadSections:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
-    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
+    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0,
+    multiLaneSegments:0,oneWaySideStreets:0,signalizedIntersections:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -271,7 +272,10 @@ export function buildNycStreetNetwork({
   }
   // An intersection exists only if painted asphalt actually reaches the node.
   // Clipped remote portions must not count as connected streets.
-  const connectedStreetNodes=new Set();
+  const connectedStreetNodes=new Map();
+  function connect(key,approach){
+    connectedStreetNodes.set(key,(connectedStreetNodes.get(key)??0)|approach);
+  }
   // Track only road pieces that were really emitted (including clipped spans),
   // so sidewalk vendors cannot overlap asphalt in the final scene.
   const activeRoadSegments=[];
@@ -379,15 +383,53 @@ export function buildNycStreetNetwork({
         }
       }
     }
-    const lines=kind==='avenue'?2:1;
-    for(let along=4;along<distance-1.5;along+=7.4){
-      const t=along/distance,u=Math.min(1,(along+2.6)/distance);
-      const p=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],
-        q=[a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u];
-      slab(p,q,.105,lines===2?yellow:paint,markY);
-      if(lines===2){
-        const off=shift(p,q,.20);
-        slab(off[0],off[1],.065,yellow,markY);
+    // Game-grid lane layouts, not surveyed lane counts. Reuse the approved
+    // asphalt footprint: avenue trunk = 2+1; special corridors = one lane
+    // each way plus the existing bus/bike lane; numbered streets = one way.
+    const arterial=kind==='avenue',special=greenBike||redBus;
+    const divider=arterial?(greenBike?-.65:redBus?1.00:-half/3):0;
+    const line=(from,to,offset,w,color)=>{
+      if(to<=from)return;
+      const p=[a[0]+dx*from/distance,a[1]+dz*from/distance];
+      const q=[a[0]+dx*to/distance,a[1]+dz*to/distance];
+      const [m,n]=shift(p,q,offset);
+      slab(m,n,w,color,markY);
+    };
+    const end=distance-5.6;
+    if(arterial){
+      line(5.6,end,divider-.08,.062,yellow);
+      line(5.6,end,divider+.08,.062,yellow);
+      if(!special){
+        stats.multiLaneSegments++;
+        for(let pos=5.6;pos<end;pos+=5.1)
+          line(pos,Math.min(end,pos+2.25),half/3,.080,paint);
+      }
+    }else{
+      stats.oneWaySideStreets++;
+      // A single offset separator leaves a curbside parking strip.
+      const curb=j%2===0?-1:1;
+      for(let pos=5.6;pos<end;pos+=6)
+        line(pos,Math.min(end,pos+2),curb*(half-1.43),.065,paint);
+      if(distance>=20&&end>12){
+        const heading=j%2===0?1:-1,pointAt=(u,v)=>[
+          mid[0]+normal[0]*(-curb*.47+u)+dx/distance*v*heading,
+          markY+.010,
+          mid[1]+normal[1]*(-curb*.47+u)+dz/distance*v*heading];
+        const arrow=[pointAt(-.40,.22),pointAt(0,.86),pointAt(.40,.22)];
+        const shaft=[pointAt(-.10,-.72),pointAt(-.10,.23),
+          pointAt(.10,.23),pointAt(.10,-.72)];
+        addTri(...(heading>0?arrow:arrow.reverse()),paint);
+        addQuad(...(heading>0?shaft:shaft.reverse()),paint);
+        // Sparse curbside traffic uses the existing shared vehicle renderer.
+        // Never place a parked car on an authored traffic route or junction.
+        const x=mid[0]+normal[0]*curb*(half-.72);
+        const z=mid[1]+normal[1]*curb*(half-.72);
+        if(addParkedCar&&stats.civilianCars<34&&detailBand(...mid)>=3&&
+          hash(i,j,105)>.64&&!nearOld(x,z,10)&&siteClear(x,z,1.65)){
+          addParkedCar({kind:hash(i,j,106)>.85?'taxi':'sedan',
+            parked:{x,y:roadY+.012,z,yaw:Math.atan2(dx*heading,dz*heading)}});
+          stats.civilianCars++;
+        }
       }
     }
     if(hash(i,j,9)>.65){
@@ -410,11 +452,9 @@ export function buildNycStreetNetwork({
       ?[avenueX(i,(j+1)*grid.blockLength),(j+1)*grid.blockLength]
       :[avenueX(i+1,j*grid.blockLength),j*grid.blockLength];
     const closeTo=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1])<1.35;
-    if(closeTo(a,startNode))connectedStreetNodes.add(
-      (kind==='avenue'?'a':'s')+i+':'+j);
-    if(closeTo(b,endNode))connectedStreetNodes.add(
-      (kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
-      (kind==='avenue'?j+1:j));
+    if(closeTo(a,startNode))connect((kind==='avenue'?'a':'s')+i+':'+j,1);
+    if(closeTo(b,endNode))connect((kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
+      (kind==='avenue'?j+1:j),2);
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
@@ -446,13 +486,13 @@ export function buildNycStreetNetwork({
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
-  function signal(x,z,phase=0,i=0,j=0){
+  function signal(x,z,phase=0,i=0,j=0,forward=ave,inward=-1){
     const base=streetY+.16;
     // Align the physical signal head and its circular lens normals to the
     // slanted avenue bearing. Axis-aligned X/Z cubes looked sideways relative
     // to Manhattan traffic and made the lights look like rectangular stickers.
-    const sideways=cross,forward=ave;
-    const hx=x-sideways[0]*.96,hz=z-sideways[1]*.96;
+    const sideways=[forward[1],-forward[0]];
+    const hx=x+sideways[0]*inward*.96,hz=z+sideways[1]*inward*.96;
     const at=(u,v,depth)=>[
       hx+sideways[0]*u+forward[0]*depth,
       base+3.59+v,
@@ -509,7 +549,7 @@ export function buildNycStreetNetwork({
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
     // Retain the budgeted street blades and original readable labels.
-    if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
+    if(forward===ave && lettering && stats.streetNamePlates<88 && (i+j)%2===0){
       const named=j===-1?'W 42 ST':j===0?'W 44 ST':
         j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
       box(x,base+4.65,z+.025,1.62,.32,.12,[.055,.31,.22]);
@@ -519,13 +559,14 @@ export function buildNycStreetNetwork({
     }
     stats.signals++;
   }
-  function crosswalk(x,z,i,j){
+  function crosswalk(x,z,i,j,avenueArms,streetArms){
     const s=grid.blockWidth;
     // Opposing ladder crosswalks plus recessed stop bars.
     for(const side of [-1,1]){
       // Avenue crosses this junction on a slight diagonal. All ladder bars
       // and stop bars follow that road bearing, avoiding the previous
       // axis-aligned, visibly pasted-on road markings.
+      if(avenueArms&(side>0?1:2)){
       const c=[x+ave[0]*side*3.75,z+ave[1]*side*3.75];
       for(let k=-3;k<=3;k++){
         orientedRect(c[0]+cross[0]*k*.77,
@@ -533,10 +574,11 @@ export function buildNycStreetNetwork({
         stats.crosswalks++;
       }
       orientedRect(x+ave[0]*side*5,z+ave[1]*side*5,
-        s*.32,.10,ave,paint,markY+.004);
+        Math.min(6,s*.26),.10,ave,paint,markY+.004);
+      }
       // Second pedestrian crossing, across the numbered east-west side street
       // where the narrow side-road corridor is present.
-      if(detailBand(x,z)>=3 && hash(i,j,31)>.30){
+      if(streetArms&(side>0?1:2)){
         for(let k=-3;k<=3;k++){
           orientedRect(x+side*4.20,z+k*.73,
             .46,1.21,[1,0],paint,markY+.009);
@@ -559,12 +601,19 @@ export function buildNycStreetNetwork({
       for(let k=-2;k<=2;k++)
         rect(xx+k*.115,zz,.034,.41,steel,markY+.010);
     }
+    stats.intersections++;
+    // Signal only where the grid reaches both ends of the avenue and the
+    // one-way street actually enters the junction. Snapshot, not AI control.
+    const fromEast=j%2!==0;
+    const side=fromEast?1:-1;
     const cornerX=x+4.48,cornerZ=z+4.55;
-    if(hash(i,j,3)>.40 && siteClear(cornerX,cornerZ,.30)){
-      // Alternating red and green visual state, rather than random yellow
-      // at most corners. Still static, not a vehicle control simulation.
-      signal(cornerX,cornerZ,(Math.abs(i+j)%2)?2:0,i,j);
-      stats.intersections++;
+    if(avenueArms===3&&(streetArms&(fromEast?1:2))&&
+       stats.signalizedIntersections<220&&
+       siteClear(cornerX,cornerZ,.30)&&siteClear(x+side*4.48,z-4.55,.30)){
+      const phase=(Math.abs(i+j)%2)?2:0;
+      signal(cornerX,cornerZ,phase,i,j);
+      signal(x+side*4.48,z-4.55,2-phase,i,j,[side,0],-side);
+      stats.signalizedIntersections++;
     }
     // Pedestrian tactile curb ramp pads; restricted to featured intersections.
     if(stats.accessibleCorners<65 && detailBand(x,z)>=3 &&
@@ -603,8 +652,8 @@ export function buildNycStreetNetwork({
       !permitted(x-4,z-4)||!permitted(x+4,z+4))continue;
     // An intersection cannot have painted zebra stripes unless both the
     // approaching avenue AND cross street survived full-footprint clearance.
-    const hasAvenue=connectedStreetNodes.has('a'+i+':'+j);
-    const hasStreet=connectedStreetNodes.has('s'+i+':'+j);
+    const hasAvenue=connectedStreetNodes.get('a'+i+':'+j);
+    const hasStreet=connectedStreetNodes.get('s'+i+':'+j);
     if(!hasAvenue||!hasStreet)continue;
     // Crossings are drawn independently of road strips, so they must also
     // reserve the full intersection box. Otherwise zebra paint and yellow
@@ -631,7 +680,7 @@ export function buildNycStreetNetwork({
       else stats.skippedRoadFootprints++;
       continue;
     }
-    crosswalk(x,z,i,j);
+    crosswalk(x,z,i,j,hasAvenue,hasStreet);
   }
   // Hot-dog sidewalk cart — visibly stainless steel with under-counter
   // storage, 10-sided umbrella, menu, condiment bottles and a small wheelbase.

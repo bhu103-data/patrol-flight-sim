@@ -13,14 +13,14 @@ if(!html.includes(anchor))throw new Error('PATROL physics hook location changed'
 const fixture=[
   '  // Test-only fixture, not part of the shipped PATROL source.',
   '  window.PatrolSeaplaneSmoke={',
-  '    stageSafeWaterApproach:()=>{',
+  '    stageSafeWaterApproach:(hard=false)=>{',
   '      if(!flying||selectedAircraft!=="seaplane"||!waterborne)return {ok:false,why:"not afloat"};',
   '      const [x,,z]=plane.pos,yaw=plane.yaw;',
   '      if(!usableFloatWater(x,z,yaw))return {ok:false,why:"unsafe pontoon footprint"};',
   '      waterborne=false;grounded=false;gearDown=false;brakes=false;',
-  '      plane.afterburner=false;plane.speed=14.5;',
-  '      plane.pitch=-.045;plane.bank=0;plane.rollAnim=0;',
-  '      plane.pos[1]=WATER_H+FLOAT_CLEARANCE+1.10;',
+  '      plane.afterburner=false;plane.speed=hard?25:14.5;',
+  '      plane.pitch=hard?-.46:-.045;plane.bank=hard?.38:0;plane.rollAnim=0;',
+  '      plane.pos[1]=WATER_H+FLOAT_CLEARANCE+(hard?.025:1.10);',
   '      return {ok:true,x,z,yaw,altitude:plane.pos[1],waterHeight:WATER_H};',
   '    },',
   '    read:()=>({waterborne,grounded,crashed:Boolean(crash),',
@@ -77,7 +77,7 @@ try {
     if(!before.status.includes('WATER TAXI'))throw new Error(map+' no initial water taxi: '+JSON.stringify(before));
     if(!glbResponses.includes(200)||!glbConsole.length)
       throw new Error(map+' no published Blender asset: '+JSON.stringify({glbResponses,glbConsole}));
-    const staged=await page.evaluate(()=>window.PatrolSeaplaneSmoke.stageSafeWaterApproach());
+    const staged=await page.evaluate(()=>window.PatrolSeaplaneSmoke.stageSafeWaterApproach(true));
     if(!staged?.ok)throw new Error(map+' invalid approach fixture: '+JSON.stringify(staged));
     await page.waitForFunction(()=>{
       const q=window.PatrolSeaplaneSmoke.read();
@@ -90,9 +90,9 @@ try {
         webglLost:document.querySelector('#glCanvas')?.getContext('webgl2')?.isContextLost()};
     });
     if(after.physics.crashed||!after.physics.waterborne||!after.physics.valid||
-       !after.flight.playing||!/FLOATS · (WATER TAXI|ON STEP|DOCKING BRAKE)/.test(after.status)||
+       after.physics.speed>10||!after.flight.playing||!/FLOATS · (WATER TAXI|ON STEP|DOCKING BRAKE)/.test(after.status)||
        after.webglLost||Math.abs(after.physics.altitude-(staged.waterHeight+1.50))>0.12)
-      throw new Error(map+' failed controlled safe-water touchdown: '+JSON.stringify({staged,after}));
+      throw new Error(map+' failed assisted hard-water touchdown: '+JSON.stringify({staged,after}));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-touchdown.png',animations:'disabled'});
     // G toggles the real docking brake in the shipped game, unlike
     // B which only brakes while held. Complete the water landing lifecycle.
