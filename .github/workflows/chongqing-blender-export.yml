@@ -28,13 +28,21 @@ jobs:
           tar -xf "$PACKAGE"
           ./blender-5.2.1-linux-x64/blender --version | head -n 2
 
+      - name: Fetch allowlisted Poly Haven CC0 roof and timber photography
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/blender/prepare_chongqing_cc0.py
+
       - name: Export original eleven-level Hongyadong study via real Blender
         shell: bash
         run: |
           set -euo pipefail
           ./blender-5.2.1-linux-x64/blender -b --python-exit-code 1 \
             --python tools/blender/chongqing_scenario_author.py -- \
-            --output assets/chongqing/generated/hongyadong-study.glb
+            --output assets/chongqing/generated/hongyadong-study.glb \
+            --materials tools/blender/chongqing-material-inputs.json \
+            --require-materials
           test -s assets/chongqing/generated/hongyadong-study.glb
           sha256sum assets/chongqing/generated/hongyadong-study.glb
 
@@ -54,7 +62,7 @@ jobs:
       - name: Save review-only asset (not deployed to PATROL)
         uses: actions/upload-artifact@v4
         with:
-          name: hongyadong-blender-glb-review
+          name: hongyadong-blender-pbr-review
           path: assets/chongqing/generated/hongyadong-study.glb
           retention-days: 30
           if-no-files-found: error
