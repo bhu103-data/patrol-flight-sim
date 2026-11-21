@@ -34,7 +34,8 @@ test('actual USGS asset is compact, georeferenced and non-flat',()=>{
 test('DEM is rotated to keep the original harbor and respawn on navigable water',()=>{
   assert.ok(gameSample(-19,-667)<=3,'respawn belongs in the fjord');
   assert.ok(gameSample(151,-525)<=3,'harbor belongs beside fjord water');
-  assert.ok(gameSample(-40,558)>400,'glacier destination should be elevated');
+  assert.ok(gameSample(130,558)>200,'glacier upper tongue is inland and elevated');
+  assert.ok(gameSample(130,449)<=5,'glacier face reaches measured fjord water');
   assert.ok(gameSample(-140,-406)>300,'falls belong on upland slope');
   const scale=Math.min(.04,(75*.90-12.2)/file.maxElevationMeters);
   assert.ok(12.2+file.maxElevationMeters*scale<=75*.90+.001);
