@@ -15,7 +15,7 @@ test('the global launcher offers a waterborne start only with appropriate aircra
   assert.match(game,/const waterAvailable=settings\.get\('aircraft'\)==='seaplane'/);
   assert.match(game,/!map\.vegas && !map\.chongqing/);
   assert.match(game,/const waterStartRequested=selectedAircraft==='seaplane' && settings\.has\('waterStart'\)/);
-  assert.match(game,/if\(waterStartRequested && !resumedFromCosmos && !alaskaGlacierView\)/);
+  assert.match(game,/if\(waterStartRequested && !resumedFromCosmos &&\s*!alaskaGlacierView && !alaskaHarborView\)/);
   assert.match(game,/waterborne=true;\s*console\.info\('\[PATROL\] Water launch validated'/);
 });
 
