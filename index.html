@@ -2829,6 +2829,40 @@ const CENTRAL_PARK_SITES=[
       material+=vec3(.025,.075,.095)*frostFresnel*near;
     }
 
+    // PATROL_ALASKA_LODGE_WOOD_V1: a locally-bounded surface model for real
+    // lodge cladding and standing-seam roof panels, without new downloads.
+    // Surface 15 marks timber walls, 16 marks dark metal gables. Geometry
+    // still follows the surveyed USGS foundations (not over the water).
+    void alaskaLodgeCladding(inout vec3 material,inout vec3 n,
+                             inout float roughness){
+      if(!uAlaskaMesh || vHarborSurface<14.5 ||
+          vHarborSurface>16.5)return;
+      float near=1.0-smoothstep(105.0,315.0,distance(vWorld,uEye));
+      if(near<.003)return;
+      if(vHarborSurface<15.5){
+        // World-space longitudinal fibers, subtle knots and sawmill ripples.
+        // Unlike noise per object this has a stable, visible real-world scale.
+        vec2 uv=abs(n.x)>abs(n.z)?vWorld.zy:vWorld.xy;
+        float bend=sin(uv.y*.77+uv.x*.49)*1.75;
+        float fine=sin(uv.x*15.7+bend+sin(uv.x*3.1)*.85);
+        float fibers=sin(uv.x*42.3+bend*1.4)*.34+fine*.66;
+        float knots=pow(max(0.0,sin(uv.x*3.4+sin(uv.y*1.6)*1.5)),18.0);
+        float age=.92+.090*fibers-.075*knots+
+          .030*sin(uv.y*2.5+uv.x*.37);
+        material*=mix(1.0,clamp(age,.72,1.15),near*.83);
+        roughness=mix(roughness,.82,near*.85);
+        if(abs(n.y)<.64){
+          vec3 across=normalize(vec3(-n.z,0.0,n.x)+vec3(.001,0.0,.001));
+          n=normalize(n+across*fibers*.020*near);
+        }
+      }else{
+        // Dark painted aluminium has narrow longitudinal mill marks rather
+        // than reflective plastic/specular ice or a solid black slab.
+        float grain=.5+.5*sin(vWorld.z*7.2+vWorld.x*.26);
+        material*=mix(1.0,.91+.13*grain,near*.72);
+        roughness=mix(roughness,.39,near*.89);
+      }
+    }
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2881,6 +2915,7 @@ const CENTRAL_PARK_SITES=[
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       alaskaGlacierFace(material,n,surfaceRoughness);
+      alaskaLodgeCladding(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
         float wind=uSceneTime*1.28;
         float a=dot(vWorld.xz,vec2(0.33,1.47))+wind;
@@ -6120,13 +6155,13 @@ const CENTRAL_PARK_SITES=[
         box(sx,base+h*.5,sz,.34,h,.34,[.29,.24,.19]);
       }
       box(x,floor-0.05,z,w+0.3,0.42,l+0.3,wood);
-      box(x,floor+1.75,z,w,3.5,l,color);
+      box(x,floor+1.75,z,w,3.5,l,color,15);
       const a=x-w/2-0.24,b=x+w/2+0.24,c=z-l/2-0.31,d=z+l/2+0.31;
       const ridge=wallTop+1.45;
-      addQuad([a,wallTop,c],[a,wallTop,d],[x,ridge,d],[x,ridge,c],roof);
-      addQuad([b,wallTop,d],[b,wallTop,c],[x,ridge,c],[x,ridge,d],[0.28,0.32,0.35]);
-      addTri([a,wallTop,c],[x,ridge,c],[b,wallTop,c],color);
-      addTri([b,wallTop,d],[x,ridge,d],[a,wallTop,d],color);
+      addQuad([a,wallTop,c],[a,wallTop,d],[x,ridge,d],[x,ridge,c],roof,16);
+      addQuad([b,wallTop,d],[b,wallTop,c],[x,ridge,c],[x,ridge,d],[0.28,0.32,0.35],16);
+      addTri([a,wallTop,c],[x,ridge,c],[b,wallTop,c],color,15);
+      addTri([b,wallTop,d],[x,ridge,d],[a,wallTop,d],color,15);
       box(x-w/2-0.035,floor+1.17,z,0.09,2.32,1.42,wood);
       for(const dz of [-l*0.30,l*0.30]) {
         box(x-w/2-0.061,floor+2.19,z+dz,0.13,1.28,1.53,ivory);
