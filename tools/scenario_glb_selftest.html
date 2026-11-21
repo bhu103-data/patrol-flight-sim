@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scenario GLB test | PATROL</title>
+<style>body{background:#0e1722;color:#dcecf7;font:16px system-ui;padding:2rem;max-width:660px;margin:auto}
+canvas{background:#0d1320;border:1px solid #576b77;max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+[data-status=PASS]{color:#6deba5}[data-status=FAIL]{color:#ff9696}</style></head>
+<body><h1>Scenario → Blender → GLB → WebGL2</h1>
+<p>Production loader test with an original in-memory 2-triangle GLB containing an embedded green PNG. No Scenario cloud requests or paid work.</p>
+<p id="result" role="status" data-status="RUNNING">RUNNING…</p>
+<canvas id="surface" width="192" height="192"></canvas><pre id="log"></pre>
+<script type="module">
+const result=document.querySelector('#result'),log=document.querySelector('#log');
+const print=t=>log.textContent+=t+'\n';
+const check=(v,msg)=>{if(!v)throw Error(msg)};
+const align=n=>(n+3)&~3;
+function shader(gl,type,source){
+ const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
+ check(gl.getShaderParameter(s,gl.COMPILE_STATUS),gl.getShaderInfoLog(s));
+ return s;
+}
+function makeProgram(gl){
+ const v=shader(gl,gl.VERTEX_SHADER,[
+ '#version 300 es',
+ 'layout(location=0) in vec3 p;',
+ 'layout(location=2) in vec3 color;',
+ 'layout(location=4) in vec3 uvMask;',
+ 'out vec3 c;out vec3 uv;',
+ 'void main(){c=color;uv=uvMask;gl_Position=vec4(p.x*0.82,(p.y-1.0)*0.82,0.0,1.0);}'
+ ].join('\n'));
+ const f=shader(gl,gl.FRAGMENT_SHADER,[
+ '#version 300 es',
+ 'precision highp float;',
+ 'in vec3 c;in vec3 uv;',
+ 'uniform sampler2D atlas;',
+ 'out vec4 frag;',
+ 'void main(){vec3 tone=c;if(uv.z>0.5)tone*=texture(atlas,uv.xy).rgb;frag=vec4(tone,1.0);}'
+ ].join('\n'));
+ const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+ check(gl.getProgramParameter(p,gl.LINK_STATUS),gl.getProgramInfoLog(p));
+ gl.deleteShader(v);gl.deleteShader(f);return p;
+}
+async function fixture(external=false){
+ const c=document.createElement('canvas');c.width=c.height=32;
+ const ctx=c.getContext('2d');ctx.fillStyle='rgb(22,194,75)';ctx.fillRect(0,0,32,32);
+ const png=await new Promise((resolve,reject)=>c.toBlob(b=>b?b.arrayBuffer().then(
+  ab=>resolve(new Uint8Array(ab)),reject):reject(Error('PNG export unavailable')),'image/png'));
+ const positions=new Float32Array([-1,-1,0,1,-1,0,1,1,0,-1,1,0]);
+ const uv=new Float32Array([0,0,1,0,1,1,0,1]);
+ const inds=new Uint16Array([0,1,2,0,2,3]);
+ const offPNG=positions.byteLength+uv.byteLength+inds.byteLength;
+ const bin=new Uint8Array(align(offPNG+png.length));
+ bin.set(new Uint8Array(positions.buffer),0);
+ bin.set(new Uint8Array(uv.buffer),positions.byteLength);
+ bin.set(new Uint8Array(inds.buffer),positions.byteLength+uv.byteLength);
+ bin.set(png,offPNG);
+ const doc={
+  asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],
+  meshes:[{primitives:[{attributes:{POSITION:0,TEXCOORD_0:1},indices:2,material:0}]}],
+  materials:[{pbrMetallicRoughness:{baseColorFactor:[1,1,1,1],baseColorTexture:{index:0}}}],
+  textures:[{source:0}],
+  images:[external?{uri:'https://example.com/remote.png',mimeType:'image/png'}:{bufferView:3,mimeType:'image/png'}],
+  buffers:[{byteLength:bin.length}],
+  bufferViews:[
+   {buffer:0,byteOffset:0,byteLength:positions.byteLength},
+   {buffer:0,byteOffset:positions.byteLength,byteLength:uv.byteLength},
+   {buffer:0,byteOffset:positions.byteLength+uv.byteLength,byteLength:inds.byteLength},
+   {buffer:0,byteOffset:offPNG,byteLength:png.length}
+  ],
+  accessors:[
+   {bufferView:0,componentType:5126,count:4,type:'VEC3'},
+   {bufferView:1,componentType:5126,count:4,type:'VEC2'},
+   {bufferView:2,componentType:5123,count:6,type:'SCALAR'}
+  ]
+ };
+ const json=new TextEncoder().encode(JSON.stringify(doc)),jp=align(json.length);
+ const glb=new Uint8Array(12+8+jp+8+bin.length),dv=new DataView(glb.buffer);
+ dv.setUint32(0,0x46546c67,true);dv.setUint32(4,2,true);
+ dv.setUint32(8,glb.length,true);dv.setUint32(12,jp,true);
+ dv.setUint32(16,0x4e4f534a,true);glb.set(json,20);
+ glb.fill(32,20+json.length,20+jp);
+ const at=20+jp;dv.setUint32(at,bin.length,true);
+ dv.setUint32(at+4,0x004e4942,true);glb.set(bin,at+8);
+ return glb.buffer;
+}
+async function run(){
+ const gl=document.querySelector('#surface').getContext('webgl2',
+  {antialias:false,preserveDrawingBuffer:true});
+ check(!!gl,'WebGL2 unavailable');
+ const {decodeGLB}=await import('../assets/nyc/nyc-realism.js');
+ print('Imported production decoder');
+ const mesh=await decodeGLB(gl,await fixture(),2);
+ check(mesh.count===6 && mesh.texture,'GLB should contain a textured quad');
+ print('GLB PNG + UV + GPU buffer upload: OK');
+ const program=makeProgram(gl);
+ gl.useProgram(program);gl.viewport(0,0,192,192);
+ gl.clearColor(.02,.03,.05,1);gl.clear(gl.COLOR_BUFFER_BIT);
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,mesh.texture);
+ gl.uniform1i(gl.getUniformLocation(program,'atlas'),0);
+ gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+ gl.finish();
+ const pixel=new Uint8Array(4);
+ gl.readPixels(96,96,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+ print('WebGL center pixel: '+Array.from(pixel).join(', '));
+ check(pixel[1]>130 && pixel[1]>pixel[0]*2 &&
+  pixel[1]>pixel[2]*1.5,'Expected actual green PNG on quad');
+ print('PASS: real embedded PNG appears in WebGL pixel output');
+ let blocked=false;
+ try{await decodeGLB(gl,await fixture(true),2);}
+ catch(error){blocked=/embedded/i.test(error.message);print('Rejected external URL: '+error.message);}
+ check(blocked,'Untrusted external PNG URL was not rejected');
+ print('PASS: remote image URLs cannot be loaded');
+ result.dataset.status='PASS';
+ result.textContent='PASS — GLB texture rendered, remote URL rejected';
+ document.title='PASS — Scenario GLB Self Test';
+ gl.bindVertexArray(null);
+ mesh.buffers.forEach(b=>gl.deleteBuffer(b));
+ gl.deleteVertexArray(mesh.vao);gl.deleteTexture(mesh.texture);gl.deleteProgram(program);
+}
+run().catch(e=>{
+ result.dataset.status='FAIL';result.textContent='FAIL — '+e.message;
+ document.title='FAIL — Scenario GLB Self Test';
+ print(e.stack||e.message);console.error(e);
+});
+</script>
+</body></html>
