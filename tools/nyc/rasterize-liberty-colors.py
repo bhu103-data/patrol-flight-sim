@@ -104,7 +104,9 @@ for index, (src, dst, material_index) in enumerate(zip(uv_src, uv_atlas, ids)):
     painted[dst_y, dst_x] = True
 
 coverage = float(np.mean(painted))
-if coverage < 0.08 or triangles_with_coverage < 1000:
+# Four isolated 512x512 material quadrants scale initial coverage by ~1/4.
+# Final full-coverage and per-material checks run after filling.
+if coverage < 0.015 or triangles_with_coverage < 1000:
     raise RuntimeError(f"Insufficient UV atlas coverage: {coverage:.3%}; triangles {triangles_with_coverage}")
 # Enforce MATERIAL-AWARE fill: each source material has its own half-size
 # quadrant. Never let stone, copper and flame colors bleed across quadrants.
