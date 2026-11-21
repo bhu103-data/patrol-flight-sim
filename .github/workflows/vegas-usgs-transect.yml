@@ -1,0 +1,28 @@
+name: Vegas public-domain USGS 3DEP point transect
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/vegas-usgs-elevation-sample.mjs"
+      - ".github/workflows/vegas-usgs-transect.yml"
+permissions:
+  contents: read
+jobs:
+  usgs-points:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Sample two real USGS 3DEP elevation transects (read only)
+        run: node scripts/vegas-usgs-elevation-sample.mjs
+      - name: Preserve raw point samples and failures as provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-usgs-epqs-exploratory
+          path: artifacts/vegas-usgs/
+          retention-days: 14
+          if-no-files-found: warn
