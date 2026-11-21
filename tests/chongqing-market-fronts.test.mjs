@@ -92,6 +92,20 @@ test('real gallery deck, posts, roof, glass and bracing use six bounded batches'
   assert.equal(objects[4].visible,true);
 });
 
+test('market materials reuse the game CC0 PBR instances, not new downloads',()=>{
+  const pbr={wood:{id:'cc0-wood'},cutStone:{id:'cc0-stone'},
+    glass:{id:'game-glass'},carvedWood:{id:'cc0-carving'},roof:{id:'cc0-tiles'}};
+  const objects=[];
+  const detail=buildChongqingMarketFronts({
+    THREE,scene:{add:x=>objects.push(x)},ground,riverDist:()=>100,obstacles:[],pbr
+  });
+  assert.equal(detail.stats.sites,3);
+  for(const [mesh,index] of [['wood',0],['wood',1],['cutStone',2],
+    ['glass',3],['carvedWood',4],['roof',5]]){
+    assert.equal(objects[index].material,pbr[mesh]);
+  }
+});
+
 test('physical balcony and all six timber posts are correctly grounded',()=>{
   const {result,obstacles}=generated(),sites=result.snapshot();
   for(const s of sites){
