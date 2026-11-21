@@ -2,6 +2,7 @@
 // Flight feel is informed by Petalwake (Jacob Miller, MIT), but this implementation is original.
 // https://github.com/jjcm/petalwake — original license retained in docs/chongqing-credits.md.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { buildChongqingDetails } from './details.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -232,7 +233,8 @@ function bridge(x,style=0){
   const y=59+style*13;
   box(x,y,-1,17,2.4,335,M.road);
   box(x-9,y+1.2,-1,1,1,335,M.rail);box(x+9,y+1.2,-1,1,1,335,M.rail);
-  for(const z of [-83,83]){
+  // The red Qiansimen arch/truss is detailed by the additive hero-zone module.
+  if(style!==0)for(const z of [-83,83]){
     const top=y+52;
     for(const ox of [-10,10])box(x+ox,(top+y-13)/2,z,4,top-y+13,4,M.stone);
     box(x,top,z,27,2.8,5,M.stone);
@@ -251,9 +253,9 @@ bridge(-230,0);bridge(470,1);
 
 // Warm, stacked Hongyadong-style architecture. An intentionally compressed artistic reconstruction.
 const hong=new THREE.Group();scene.add(hong);
-for(let level=0;level<9;level++){
-  const z=112+level*10, y=13+level*11;
-  const w=128-level*4;
+for(let level=0;level<11;level++){
+  const z=112+level*8.3, y=13+level*10.25;
+  const w=128-level*4.1;
   box(155,y+5.1,z,w,9.5,23,M.beam,hong);
   box(155,y+5.3,z+12.0,w*.93,7.4,1.0,M.gold,hong);
   for(let col=0;col<11;col++){
@@ -284,7 +286,7 @@ function sign(text,x,y,z,w=44,h=11,ink='#ffe3a4',bg='#58202a'){
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));
   plane.position.set(x,y,z);scene.add(plane);return plane;
 }
-sign('洪崖洞',155,116,224,52,14);
+sign('洪崖洞',155,133,215,48,13);
 sign('千厮门大桥',-230,82,40,40,10);
 sign('解放碑',-153,130,275,38,11);
 
@@ -351,6 +353,10 @@ for(let i=0;i<380;i++){
 trees.count=stems.count=treeCount;trees.instanceMatrix.needsUpdate=true;stems.instanceMatrix.needsUpdate=true;
 scene.add(trees,stems);
 
+// Detailed foreground is isolated in one lightweight, heavily instanced module.
+// Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
+const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles });
+
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
 for(let i=0;i<380;i++){
@@ -381,6 +387,7 @@ const state={
   spicy:0,boosting:false,jumpCount:0,seenHong:false,seenBridge:false,seenHotpot:false
 };
 const keys=new Set();
+let jumpQueued=false;
 let viewYaw=0,viewPitch=.25,camDistance=14,dragging=false,mouseX=0,mouseY=0,toastUntil=0;
 const temp=new THREE.Vector3();
 const cameraAim=new THREE.Vector3();
@@ -404,6 +411,7 @@ function toggleFlight(){
 function press(key,once=false){
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
+  if(once&&key==='Space')jumpQueued=true;
   keys.add(key);
 }
 window.addEventListener('keydown',e=>{
@@ -497,12 +505,13 @@ function move(dt){
     if(spicyBoost)state.spicy=Math.max(0,state.spicy-dt*6.5);
     else if(state.spicy>0)state.spicy=Math.max(0,state.spicy-dt*.55);
   }else{
-    if(keys.has('Space')&&state.onGround){
-      state.vel.y=24;state.onGround=false;state.jumpCount++;
+    if(jumpQueued&&state.onGround){
+      state.vel.y=39;state.onGround=false;state.jumpCount++;
     }
     state.vel.y-=29*dt;
     if(state.spicy>0)state.spicy=Math.max(0,state.spicy-dt*.35);
   }
+  jumpQueued=false;
   const px=state.pos.x,pz=state.pos.z,py=state.pos.y;
   state.pos.addScaledVector(state.vel,dt);
   state.pos.x=clamp(state.pos.x,-935,935);state.pos.z=clamp(state.pos.z,-635,635);
@@ -566,6 +575,16 @@ function updateCamera(dt){
     state.pos.y+4.7+sp*distance,
     state.pos.z+Math.cos(viewYaw)*cp*distance
   );
+  // Camera blocking: keep the chase view from passing through buildings or the hillside.
+  const focus=new THREE.Vector3(state.pos.x,state.pos.y+1,state.pos.z);
+  const ray=desired.clone().sub(focus);
+  for(let n=1;n<=14;n++){
+    const t=n/14, sample=focus.clone().addScaledVector(ray,t);
+    if(intersectsBuilding(sample.x,sample.y,sample.z)||sample.y<ground(sample.x,sample.z)+.9){
+      desired.copy(focus).addScaledVector(ray,Math.max(.13,(n-1)/14));
+      break;
+    }
+  }
   cameraPos.lerp(desired,1-Math.exp(-dt*4.1));
   camera.position.copy(cameraPos);
   cameraAim.set(state.pos.x,state.pos.y+1.0,state.pos.z);
