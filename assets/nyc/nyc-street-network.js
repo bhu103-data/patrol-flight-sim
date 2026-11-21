@@ -39,7 +39,9 @@ export function buildNycStreetNetwork({
     intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0,
     multiLaneSegments:0,oneWaySideStreets:0,signalizedIntersections:0,
     dumboSurfaceRepairs:0,dumboTarSeams:0,dumboCrackRuns:0,
-    dumboSidewalkPanels:0,dumboCurbStains:0};
+    dumboSidewalkPanels:0,dumboCurbStains:0,
+    bridgeheadEdgeGuides:0,bridgeheadGuardrailSpans:0,
+    bridgeheadSignalTrims:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -370,6 +372,52 @@ export function buildNycStreetNetwork({
       stats.dumboCrackRuns++;
     }
   }
+  // PATROL_NYC_BRIDGEHEAD_APPROACH_FINISH_V1
+  // Reuse only the already accepted DUMBO grid street at z=-330.
+  // i=13..14 lies east of the Brooklyn Bridge terminal (253,-342).
+  // All road topology and clearance gates remain in streetSegment().
+  function bridgeheadApproachFinish(a,b,width,kind,i,j){
+    if(kind!=='street'||j!==-10||i<13||i>14)return;
+    const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    if(length<14)return;
+    const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
+    if(detailBand(...mid)<2)return;
+    // A restrained road-edge stripe, inset from the existing curb. It
+    // cannot generate an unconnected lane or alter vehicle routing.
+    for(const side of [-1,1]){
+      const start=.17,end=.83;
+      const p=[a[0]+(b[0]-a[0])*start,a[1]+(b[1]-a[1])*start];
+      const q=[a[0]+(b[0]-a[0])*end,a[1]+(b[1]-a[1])*end];
+      const [u,v]=shift(p,q,side*(width*.5-.43));
+      slab(u,v,.055,[.68,.71,.69],markY+.005);
+      stats.bridgeheadEdgeGuides++;
+    }
+    // A short pedestrian-side guardrail at the OUTER sidewalk edge on the
+    // bridge-facing side. Keep both intersections open (18% end insets),
+    // verify all post footprints before adding any rail, and never extend
+    // beyond the full-footprint dry/collision-clear swept road corridor.
+    const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+    const nx=dz,nz=-dx,offset=width*.5+1.16;
+    const at=t=>[
+      a[0]+(b[0]-a[0])*t+nx*offset,
+      a[1]+(b[1]-a[1])*t+nz*offset
+    ];
+    const feet=[.18,.50,.82].map(at);
+    if(!feet.every(([x,z])=>siteClear(x,z,.16)&&!nearOld(x,z,3.0)))return;
+    const footY=paveY+.025,postH=1.00,rail=[.365,.83];
+    const darkSteel=[.305,.336,.345],cap=[.53,.56,.56];
+    for(const [x,z] of feet){
+      beam([x,footY,z],[x,footY+postH,z],.057,darkSteel);
+      const crown=[x,footY+postH+.035,z];
+      box(crown[0],crown[1],crown[2],.12,.07,.12,cap);
+    }
+    for(let k=0;k<feet.length-1;k++)
+      for(const h of rail)
+        beam([feet[k][0],footY+h,feet[k][1]],
+          [feet[k+1][0],footY+h,feet[k+1][1]],
+          h>.8?.052:.045,darkSteel);
+    stats.bridgeheadGuardrailSpans+=feet.length-1;
+  }
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(mid[0],mid[1],true)||
@@ -593,6 +641,7 @@ export function buildNycStreetNetwork({
     if(closeTo(a,startNode))connect((kind==='avenue'?'a':'s')+i+':'+j,1);
     if(closeTo(b,endNode))connect((kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
       (kind==='avenue'?j+1:j),2);
+    bridgeheadApproachFinish(a,b,width,kind,i,j);
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
@@ -647,6 +696,17 @@ export function buildNycStreetNetwork({
       at(u0,v0,d0),at(u1,v0,d1),at(u1,v1,d1),at(u0,v1,d0),color);
     q(-.18,-.42,.18,.42,housingBack,housingBack,signalYellow);
     q(-.18,-.42,.18,.42,housingFront,housingFront,iron);
+    // Small retroreflective yellow rim ONLY on the connected Brooklyn
+    // bridgehead signals. It is forward of the existing black front,
+    // not a coincident face, and does not modify signal phases.
+    if(i>=12&&i<=15&&j>=-11&&j<=-9){
+      const rimDepth=housingFront+.018,reflective=[.86,.76,.37];
+      q(-.195,-.435,.195,-.395,rimDepth,rimDepth,reflective);
+      q(-.195,.395,.195,.435,rimDepth,rimDepth,reflective);
+      q(-.195,-.395,-.155,.395,rimDepth,rimDepth,reflective);
+      q(.155,-.395,.195,.395,rimDepth,rimDepth,reflective);
+      stats.bridgeheadSignalTrims++;
+    }
     for(const side of [-1,1]){
       const u=side*.18;
       addQuad(at(u,-.42,housingBack),at(u,-.42,housingFront),
