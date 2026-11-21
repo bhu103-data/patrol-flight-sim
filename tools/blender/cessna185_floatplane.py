@@ -90,16 +90,23 @@ def wing(name,sign,mat):
     # High-wing Skywagon: actual half-span reaches 5.461m.
     root=0.54;tip=SPAN/2
     vertices=[]
-    for x,chord,lead,y in ((root,1.72,0.69,0.91),(2.6,1.48,0.60,0.99),(tip,1.02,0.29,1.12)):
-        for z,dy in ((lead,0.04),(lead-chord*0.28,0.11),(lead-chord,0.025),
-                     (lead-chord,-0.055),(lead-chord*0.28,-0.074),(lead,-0.055)):
-            vertices.append((sign*x,y+dy,z))
+    # Profiled ten-point airfoil and four-span stations keep the outboard
+    # aileron taper readable close-up instead of a flat triangular wing.
+    stations=((root,1.72,.69,.91),(2.00,1.59,.65,.96),
+              (3.68,1.31,.44,1.045),(tip,1.02,.29,1.12))
+    section=((0,.020),(.12,.073),(.37,.095),(.67,.073),(1,.011),
+             (1,-.034),(.67,-.068),(.37,-.063),(.12,-.042),(0,-.019))
+    n=len(section)
+    for x,chord,lead,y in stations:
+        for u,dy in section:
+            vertices.append((sign*x,y+dy,lead-chord*u))
     faces=[]
-    for i in range(2):
-        for j in range(6):
-            a=i*6+j;b=i*6+(j+1)%6
-            faces.append((a,b,b+6,a+6))
-    faces.extend([tuple(reversed(range(6))),tuple(range(12,18))])
+    for i in range(len(stations)-1):
+        for j in range(n):
+            a=i*n+j;b=i*n+(j+1)%n
+            faces.append((a,b,b+n,a+n))
+    faces.extend([tuple(reversed(range(n))),
+                  tuple(range((len(stations)-1)*n,len(stations)*n))])
     return mesh(name,vertices,faces,mat)
 
 def float_hull(name,sign,mat):
@@ -108,16 +115,47 @@ def float_hull(name,sign,mat):
     stations=[(-2.83,.03,-1.13),(-2.48,.42,-1.10),(-1.55,.51,-1.06),
               (-0.35,.51,-1.03),(0.15,.48,-1.00),(1.40,.43,-1.02),
               (2.42,.32,-1.01),(3.02,.03,-0.96)]
+    # Fourteen-sided hydrodynamic section: curved bow cheeks, a true keel,
+    # rounded gunwales and cambered deck. Flat seven-sided hulls looked boxy.
+    section=((-0.88,.35),(-1.00,.17),(-1.00,-.05),(-.94,-.21),
+             (-.75,-.38),(-.39,-.47),(0,-.50),(.39,-.47),
+             (.75,-.38),(.94,-.21),(1.00,-.05),(1.00,.17),
+             (.88,.35),(0,.44))
+    n=len(section)
     for z,w,cy in stations:
-        for px,py in ((-1,-.04),(-.72,-.37),(0,-.48),(.72,-.37),(1,-.04),(.82,.42),(-.82,.42)):
+        for px,py in section:
             verts.append((cx+w*px,cy+py,z))
     faces=[]
     for k in range(len(stations)-1):
-        for j in range(7):
-            a=k*7+j;b=k*7+(j+1)%7
-            faces.append((a,b,b+7,a+7))
-    faces.extend([tuple(reversed(range(7))),tuple(range((len(stations)-1)*7,len(stations)*7))])
+        for j in range(n):
+            a=k*n+j;b=k*n+(j+1)%n
+            faces.append((a,b,b+n,a+n))
+    faces.extend([tuple(reversed(range(n))),
+                  tuple(range((len(stations)-1)*n,len(stations)*n))])
     return mesh(name,verts,faces,mat)
+
+
+def propeller_blade(name,sign,mat,tip_mat):
+    """Original tapered and pitched propeller blade, 1.08m radius each."""
+    stations=((.13,.13,.005),(.30,.22,.016),(.50,.25,.023),
+              (.72,.205,.015),(.91,.135,.002),(1.08,.045,-.010))
+    verts=[]
+    for radius,chord,pitch in stations:
+        y=.07+sign*radius
+        for x,z in ((-chord*.5,3.945+pitch), (chord*.5,3.945-pitch),
+                    (-chord*.5,3.921+pitch),(chord*.5,3.921-pitch)):
+            verts.append((x,y,z))
+    faces=[]
+    for i in range(len(stations)-1):
+        a=i*4;b=(i+1)*4
+        faces.extend([(a,b,b+1,a+1),(a+2,a+3,b+3,b+2),
+                      (a,a+2,b+2,b),(a+1,b+1,b+3,a+3)])
+    faces.extend([(0,1,3,2),
+                  tuple((len(stations)-1)*4+i for i in (0,2,3,1))])
+    mesh(name,verts,faces,mat)
+    # Yellow tip stripe is embedded within the measured spinner envelope.
+    box(name+" high visibility tip",(0,.07+sign*.993,3.947),
+        (.091,.063,.045),tip_mat)
 
 def run(output):
     bpy.ops.object.select_all(action="SELECT")
@@ -183,14 +221,23 @@ def run(output):
             (side*1.27,-1.47,-2.54),(.055,.18,.27),marker)
         beam("forward float reinforcement "+str(side),
              (side*.89,-.16,1.13),(side*1.27,-.70,1.73),.047,silver)
-        for index in range(11):
-            z=-2.10+index*.40
-            box("float rivet "+str(side)+" "+str(index),
-                (side*1.67,-1.10,z),(.026,.024,.027),silver)
-    # Total aircraft length includes the forward spinner AND the aft fin.
-    # With the fin aft at -3.755m, spinner reaches +4.055m: 7.810m overall.
-    beam("propeller vertical blade",(0,.07,3.95),(0,1.15,3.95),.09,black)
-    beam("propeller opposing blade",(0,.07,3.95),(0,-1.01,3.95),.09,black)
+        # Close-range float fastener lines and deck perimeter seams. Only
+        # small original opaque geometry is added, never image decals.
+        for index in range(28):
+            z=-2.28+index*.17
+            box("float lower rivet "+str(side)+" "+str(index),
+                (side*1.67,-1.10,z),(.022,.018,.021),silver)
+            box("float upper rivet "+str(side)+" "+str(index),
+                (side*1.60,-.66,z),(.017,.015,.017),marker)
+        for index in range(20):
+            z=-1.75+index*.16
+            box("cabin sill fastener "+str(side)+" "+str(index),
+                (side*.73,-.37,z),(.015,.020,.022),marker)
+    # Aerodynamic propeller replaces two round pole blades. The spinner is
+    # still the forward-most real dimension gate at +4.055m.
+    yellow=material("propeller high visibility tip",(.93,.71,.19),.16,.44)
+    propeller_blade("starboard propeller blade",1,black,yellow)
+    propeller_blade("port propeller blade",-1,black,yellow)
     box("propeller spinner",(0,.07,3.925),(.30,.30,.26),float_mat)
     bpy.context.scene.unit_settings.system="METRIC"
     bpy.context.scene.unit_settings.scale_length=1
