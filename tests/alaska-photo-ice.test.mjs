@@ -68,13 +68,13 @@ test('low-quality Alaska keeps procedural fallback without runtime image fetch',
   assert.ok(main.includes('alaska-photo-albedo.webp'));
   assert.ok(main.includes("img.src='./assets/alaska/'+name"));
 });
-test('two bounded, licensed photographic PBR source atlases are present',()=>{
+test('four bounded CC0 photographic PBR materials are present',()=>{
   assert.equal(manifest.format,'patrol-alaska-pbr-atlas-v1');
-  assert.deepEqual(manifest.columns,['rock_01','snow_02']);
+  assert.deepEqual(manifest.columns,['rock_01','snow_02','forest_ground_04','forrest_ground_03']);
   assert.equal(manifest.license,'CC0');
   assert.equal(manifest.normalConvention,'OpenGL');
   assert.equal(manifest.roughnessChannel,'A');
-  assert.equal(manifest.width,512);
+  assert.equal(manifest.width,1024);
   assert.equal(manifest.height,256);
   for(const filename of Object.values(manifest.maps)){
     assert.ok(/\.webp$/.test(filename),'encoded WebP');
