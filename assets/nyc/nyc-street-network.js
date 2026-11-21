@@ -41,7 +41,7 @@ export function buildNycStreetNetwork({
     dumboSurfaceRepairs:0,dumboTarSeams:0,dumboCrackRuns:0,
     dumboSidewalkPanels:0,dumboCurbStains:0,
     bridgeheadEdgeGuides:0,bridgeheadGuardrailSpans:0,
-    bridgeheadSignalTrims:0};
+    bridgeheadSignalTrims:0,bridgeheadSignalizedJunctions:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -396,6 +396,9 @@ export function buildNycStreetNetwork({
     // bridge-facing side. Keep both intersections open (18% end insets),
     // verify all post footprints before adding any rail, and never extend
     // beyond the full-footprint dry/collision-clear swept road corridor.
+    // Match streetFurniture's per-block hash to avoid placing a rail
+    // through a same-side bike rack or shelter at this bridgehead.
+    if(hash(i,j,49)>=.76)return;
     const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
     const nx=dz,nz=-dx,offset=width*.5+1.16;
     const at=t=>[
@@ -805,13 +808,19 @@ export function buildNycStreetNetwork({
     const fromEast=j%2!==0;
     const side=fromEast?1:-1;
     const cornerX=x+4.48,cornerZ=z+4.55;
+    // Manhattan's 220 pair budget is exhausted before Brooklyn runs.
+    // Add at most 12 more at already connected, clearance-checked
+    // bridgehead junctions; other districts keep their previous limit.
+    const bridgeheadSignal=i>=12&&i<=15&&j>=-11&&j<=-9;
+    const signalQuota=bridgeheadSignal?232:220;
     if(avenueArms===3&&(streetArms&(fromEast?1:2))&&
-       stats.signalizedIntersections<220&&
+       stats.signalizedIntersections<signalQuota&&
        siteClear(cornerX,cornerZ,.30)&&siteClear(x+side*4.48,z-4.55,.30)){
       const phase=(Math.abs(i+j)%2)?2:0;
       signal(cornerX,cornerZ,phase,i,j);
       signal(x+side*4.48,z-4.55,2-phase,i,j,[side,0],-side);
       stats.signalizedIntersections++;
+      if(bridgeheadSignal)stats.bridgeheadSignalizedJunctions++;
     }
     // Pedestrian tactile curb ramp pads; restricted to featured intersections.
     if(stats.accessibleCorners<65 && detailBand(x,z)>=3 &&
