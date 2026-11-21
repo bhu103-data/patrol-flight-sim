@@ -1553,6 +1553,7 @@ const CENTRAL_PARK_SITES=[
 
     ${VEGAS_LIGHTING}
     uniform bool uManhattan;
+    uniform bool uNYCSeaDetail;
     uniform mat4 uWorldViewProj;
     uniform vec3 uCamPos;
     uniform vec3 uCamFwd;
@@ -1977,7 +1978,7 @@ const CENTRAL_PARK_SITES=[
           // Wind-driven, low-frequency sea patches are anchored to world
           // coordinates and stay independent of C185's ocean wave height.
           float nycGustPatch = 0.0;
-          if(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 14.0) {
+          if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 14.0) {
             float gustField=vnoise(xz*0.0068+
               vec2(-uTime*0.0042,uTime*0.0025));
             float gustDetail=clamp((gust-0.82)/0.36,0.0,1.0);
@@ -1995,7 +1996,7 @@ const CENTRAL_PARK_SITES=[
              smoothstep(0.08,1.1,pixel),0.0001,1.0));
            float waterReflectance=clamp(mix(fresnel,filteredFresnel,0.48),0.02,0.975);
            waterCol=mix(waterCol,reflectedSky,waterReflectance);
-           if(uManhattan && NYC_TIDEWATER_DETAIL)
+           if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL)
              waterCol *= 1.0-0.058*nycGustPatch;
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
@@ -2011,7 +2012,7 @@ const CENTRAL_PARK_SITES=[
             float focus=0.0;
             if(depth<3.2 && localDetail>0.03 && uSun.y>0.08){
               // Filter unresolved NYC focusing instead of shimmering lines.
-              float causticFootprint=(uManhattan && NYC_TIDEWATER_DETAIL)
+              float causticFootprint=(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL)
                 ?1.0-smoothstep(0.24,0.86,pixel):1.0;
               focus=oceanCaustic(floorXZ,depth)*localDetail*
                 causticFootprint*sunAbove*clearSky*litFactor;
@@ -2065,7 +2066,7 @@ const CENTRAL_PARK_SITES=[
                       * (1.0 - fresnel) * sunAbove * clearSky * litFactor;
           }
 
-          if(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 2.0){
+          if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 2.0){
             // Tear caps and nearshore foam into patches using already
             // sampled advected noise; unresolved detail fades to a mean.
             float foamFragment=smoothstep(0.30,0.70,
@@ -12920,6 +12921,7 @@ const CENTRAL_PARK_SITES=[
     uWorld = {
     sun:gl.getUniformLocation(worldProg,'uSun'), moon:gl.getUniformLocation(worldProg,'uMoon'),
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
+    nycSeaDetail:gl.getUniformLocation(worldProg,'uNYCSeaDetail'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
@@ -14177,6 +14179,10 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.sun,environment.sun);
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
+    // Compatibility mode and NYC Basic avoid the extra water shading.
+    gl.uniform1i(uWorld.nycSeaDetail,
+      Boolean(selectedMap.city && !graphicsCompat &&
+        nyStreetQuality.value !== '1')?1:0);
     gl.uniform4fv(uWorld.climate,environment.climate);
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);

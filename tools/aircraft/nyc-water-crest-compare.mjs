@@ -56,9 +56,13 @@ const origin=new URL(url).origin,report={
   mode:seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
   note:'Test-only fixed shader time, not a runtime setting'};
-const browser=await chromium.launch({headless:true,args:[
-  '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
+const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';
+report.browser=chrome?'installed Chrome':'Chromium SwiftShader';
+const browser=await chromium.launch({headless:true,
+  ...(chrome?{channel:'chrome'}:{}),
+  args:chrome?['--ignore-gpu-blocklist']:[
+    '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
 try{
   for(const [version,html] of [['before',sourceBefore],['after',sourceAfter]]){
     const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -82,6 +86,17 @@ try{
         document.getElementById('loadOverlay')?.classList.contains('done')&&
         window.PatrolCrestCompare&&window.PatrolSpaceBridge?.getState()?.playing,
         null,{timeout:150000,polling:450});
+      // Pin game weather/time and NYC graphics quality, not just shader phase.
+      await page.evaluate(()=>{
+        for(const [id,value] of [
+          ['skyTime','12'],['skySeason','1'],['skyWeather','Clear'],
+          ['nyStreetQuality','2']]){
+          const control=document.getElementById(id);
+          if(!control)throw Error('Missing QA control '+id);
+          control.value=value;
+          control.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+      });
       const stage=await page.evaluate(()=>window.PatrolCrestCompare.lock());
       await page.waitForTimeout(1200);
       await page.addStyleTag({content:'body.crest-only *{visibility:hidden!important;} '+
