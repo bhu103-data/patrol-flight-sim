@@ -1,0 +1,33 @@
+name: Vegas Census TIGER Strip centerline provenance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/fetch-vegas-tiger-strip.py"
+      - ".github/workflows/vegas-tiger-strip.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install lightweight open shapefile decoder
+        run: python -m pip install --quiet --disable-pip-version-check pyshp
+      - name: Verify public-domain TIGER 2026 core Strip centerline
+        run: python scripts/fetch-vegas-tiger-strip.py
+      - name: Save raw source and GIS trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-tiger-strip-provenance
+          path: artifacts/vegas-tiger/
+          if-no-files-found: ignore
+          retention-days: 7
