@@ -80,6 +80,8 @@ test('upper and lower boat decks accept descending pilot but not upward teleport
   const topY=a.y+5.7+2.35;
   const lowerY=a.y+1.755+2.35;
   assert.ok(Math.abs(river.deckSurface(a.x-2.2,a.z,topY+1,topY-.2)-topY)<1e-6);
+  assert.equal(river.isAboard(a.x-2.2,a.z,topY),true);
+  assert.equal(river.isAboard(a.x-2.2,a.z,topY+8),false);
   assert.ok(Math.abs(river.deckSurface(a.x+10,a.z,lowerY+.8,lowerY-.3)-lowerY)<1e-6);
   assert.equal(river.deckSurface(a.x-2.2,a.z,topY-3,topY-2),-Infinity);
   assert.equal(river.deckSurface(a.x+100,a.z,topY+1,topY-1),-Infinity);
@@ -114,6 +116,8 @@ test('main game updates ferry animation, deck contact and quality',async()=>{
   assert.ok(main.includes('riverBuild.update(dt)'));
   assert.ok(main.includes('riverBuild.deckSurface('));
   assert.ok(main.includes('riverBuild.deckDrift('));
+  assert.ok(main.includes('riverBuild.isAboard('));
+  assert.ok(main.includes("document.getElementById('questFerry')"));
   assert.ok(main.includes('riverBuild.setQuality('));
 });
 
