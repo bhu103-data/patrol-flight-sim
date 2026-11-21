@@ -6077,6 +6077,7 @@ const CENTRAL_PARK_SITES=[
     const wood=[0.43,0.32,0.24], roof=[0.24,0.29,0.32], glass=[0.28,0.47,0.52];
     const ivory=[0.89,0.88,0.81], red=[0.66,0.26,0.19];
     const harbor=ALASKA_PLACES.harbor;
+    const alaskaVillageAudit={cabins:0,sidingRows:0,roofSeams:0};
     const cape=ALASKA_PLACES.beacon;
     const waterline=WATER_H;
     const deck=waterline+1.60;
@@ -6132,6 +6133,102 @@ const CENTRAL_PARK_SITES=[
         box(x-w/2-0.127,floor+2.19,z+dz,0.085,1.07,1.28,glass);
         box(x-w/2-0.175,floor+2.19,z+dz,0.06,1.06,0.09,ivory);
       }
+      // Terrain-grounded coastal lodge detail: original geometry, all batched
+      // into the harbor's existing single WebGL mesh (no clone/box skyline).
+      // Thin boards follow the outer timber walls; deep glazed panes remain
+      // further out so the horizontal siding never covers the windows.
+      const baseTint=Array.isArray(color)?color:[.55,.45,.34];
+      const sidingTones=[.91,1.03,.96,1.08,.88,1.0,.93,1.04];
+      for(let row=0;row<12;row++){
+        const y=floor+.20+row*.276;
+        const shade=sidingTones[(row+Math.round(Math.abs(x+z)))%sidingTones.length];
+        const plank=baseTint.map((v,k)=>Math.min(.89,v*shade*(k===1?1.018:1)));
+        for(const side of [-1,1]){
+          box(x+side*(w/2+.054),y,z,.063,.038,l-.32,plank);
+          box(x,y,z+side*(l/2+.054),w-.27,.038,.063,plank);
+        }
+      }
+      // Four exposed structural corner posts and raised eave fascia.
+      for(const sx of [-1,1])for(const sz of [-1,1])
+        box(x+sx*(w/2+.075),floor+1.78,z+sz*(l/2+.075),
+          .14,3.56,.14,[.39,.33,.27]);
+      for(const sx of [-1,1]){
+        box(x+sx*(w/2+.20),wallTop-.035,z,.13,.20,l+.61,[.27,.29,.30]);
+      }
+      // Standing-seam roof strips follow the real sloped gable instead of
+      // a second roof cuboid. Limited repeated seams for GPU efficiency.
+      for(let k=0;k<Math.ceil(l/1.48);k++){
+        const zz=c+.26+k*1.48;
+        if(zz>d-.16)break;
+        for(const edge of [a,b]){
+          addRideBeam(addQuad,[edge,wallTop+.022,zz],
+            [x,ridge+.04,zz],.031,[.39,.43,.45]);
+        }
+      }
+      addRideBeam(addQuad,[x,ridge+.075,c],[x,ridge+.075,d],
+        .068,[.30,.34,.36]);
+      // Paneled east wall, north gable and doors replace blank solid facades.
+      // Each pane sits outside the cladding; window trim is framed explicitly.
+      function glazedEast(cz){
+        const wallX=x+w/2+.115,y=floor+2.18;
+        box(wallX,y,cz,.048,1.25,1.39,[.14,.27,.30]);
+        for(const dz of [-.74,.74])
+          box(wallX+.035,y,cz+dz,.095,1.42,.068,ivory);
+        for(const dy of [-.69,.69])
+          box(wallX+.035,y+dy,cz,.095,.073,1.55,ivory);
+        box(wallX+.057,y,cz,.073,1.27,.054,ivory);
+        box(wallX+.067,y-.025,cz,.074,.055,1.33,ivory);
+      }
+      for(const zz of [-l*.25,l*.25])glazedEast(z+zz);
+      const north=z+l/2+.115,ny=floor+2.13;
+      for(const xx of [-w*.25,w*.25]){
+        box(x+xx,ny,north,1.20,1.16,.055,[.12,.25,.30]);
+        for(const ox of [-.65,.65])
+          box(x+xx+ox,ny,north+.024,.075,1.31,.075,ivory);
+        for(const oy of [-.65,.65])
+          box(x+xx,ny+oy,north+.035,1.33,.075,.075,ivory);
+        box(x+xx,ny,north+.065,.055,1.15,.075,ivory);
+      }
+      const south=z-l/2-.115,doorX=x+.12*w;
+      box(doorX,floor+1.12,south,1.18,2.23,.06,[.27,.32,.31]);
+      box(doorX,floor+1.62,south-.055,.76,.82,.058,[.11,.21,.25]);
+      for(const ox of [-.65,.65])
+        box(doorX+ox,floor+1.13,south-.08,.09,2.31,.075,ivory);
+      box(doorX,floor+2.30,south-.09,1.39,.105,.092,ivory);
+      box(doorX+.39,floor+1.05,south-.085,.083,.075,.083,[.74,.66,.44]);
+      // A porch may extend from the house only where its OWN footprint has
+      // surveyed dry ground; support posts terminate at terrain height.
+      const porchZ=z-l/2-1.10;
+      const porchTerrain=[-1.1,0,1.1].map(dx=>
+        sampleTerrainHeight(doorX+dx,porchZ));
+      if(Math.min(...porchTerrain)>WATER_H+.95 &&
+          Math.max(...porchTerrain)-Math.min(...porchTerrain)<2.4){
+        const porch=floor+.05;
+        box(doorX,porch-.11,porchZ,2.66,.22,1.88,[.42,.33,.24]);
+        for(const dx of [-1.08,1.08]){
+          const px=doorX+dx,ground=sampleTerrainHeight(px,porchZ);
+          const postHeight=Math.max(.25,porch-ground);
+          box(px,ground+postHeight*.5,porchZ,.20,postHeight,.20,[.33,.27,.21]);
+        }
+        // Offset treads follow the downhill elevation, never hang over water.
+        const stepZ=porchZ-1.02,stepGround=sampleTerrainHeight(doorX,stepZ);
+        if(stepGround>WATER_H+.95 && porch-stepGround<2.5){
+          const levels=Math.max(1,Math.ceil((porch-stepGround)/.29));
+          for(let n=0;n<levels;n++){
+            const treadY=porch-(n+1)*(porch-stepGround)/levels;
+            box(doorX,treadY-.07,stepZ-.25*n/levels,1.72,.14,.35,[.49,.40,.30]);
+          }
+        }
+      }
+      // One stone flue is partially embedded in the pitched roof, not floating
+      // above its ridge. Use a fixed proportional roof height in local space.
+      const chimneyX=x+w*.13,chimneyZ=z+l*.18;
+      const roofAt=wallTop+(ridge-wallTop)*(1-Math.abs(w*.13)/(w*.5+.24));
+      box(chimneyX,roofAt+.55,chimneyZ,.69,1.10,.70,[.39,.39,.37]);
+      box(chimneyX,roofAt+1.10,chimneyZ,.91,.15,.94,[.25,.28,.29]);
+      alaskaVillageAudit.cabins++;
+      alaskaVillageAudit.sidingRows+=12;
+      alaskaVillageAudit.roofSeams+=Math.ceil(l/1.48);
       alaskaObstacles.push({x,z,y:floor,halfX:w/2,halfZ:l/2,top:ridge,name:'harbor building'});
     }
 
@@ -6236,6 +6333,7 @@ const CENTRAL_PARK_SITES=[
     box(capeX,foot+15.2,capeZ,0.20,0.63,0.20,roof);
     alaskaObstacles.push({x:capeX,z:capeZ,y:foot,halfX:2.6,halfZ:2.6,top:foot+15.5,name:'Cape Beacon'});
     }
+    console.info('[PATROL] Alaska surveyed village',JSON.stringify(alaskaVillageAudit));
     return upload();
   }
 
