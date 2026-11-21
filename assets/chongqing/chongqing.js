@@ -3,6 +3,7 @@
 // https://github.com/jjcm/petalwake — credits in docs/CHONGQING_HOTPOT_PILOT.md.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
+import { SpatialObstacleIndex } from './spatial.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -338,6 +339,8 @@ scene.add(trees,stems);
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles });
+// Build after the hero-zone shops and towers append their collision volumes.
+const obstacleIndex=new SpatialObstacleIndex(obstacles);
 
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
@@ -485,10 +488,7 @@ function updateFlames(dt){
   fire.instanceMatrix.needsUpdate=true;
 }
 function intersectsBuilding(x,y,z){
-  for(const b of obstacles){
-    if(y<b.top+1&&Math.abs(x-b.x)<b.w/2+1&&Math.abs(z-b.z)<b.d/2+1)return true;
-  }
-  return false;
+  return obstacleIndex.collides(x,y,z);
 }
 function move(dt){
   const forward=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
@@ -526,13 +526,17 @@ function move(dt){
   }
   jumpQueued=false;
   const px=state.pos.x,pz=state.pos.z,py=state.pos.y;
-  state.pos.addScaledVector(state.vel,dt);
-  state.pos.x=clamp(state.pos.x,-935,935);state.pos.z=clamp(state.pos.z,-635,635);
-  state.pos.y=clamp(state.pos.y,-1.0,310);
-  if(intersectsBuilding(state.pos.x,state.pos.y,state.pos.z)){
-    state.pos.x=px;state.pos.z=pz;state.vel.x*=.15;state.vel.z*=.15;
-  }
-  const floor=ground(state.pos.x,state.pos.z)+2.35;
+  const nx=clamp(px+state.vel.x*dt,-935,935);
+  const nz=clamp(pz+state.vel.z*dt,-635,635);
+  state.pos.y=clamp(py+state.vel.y*dt,-.25,310);
+  // Resolve axes separately so the pilot can slide along facades instead of sticking.
+  if(!intersectsBuilding(nx,state.pos.y,pz))state.pos.x=nx;
+  else state.vel.x=0;
+  if(!intersectsBuilding(state.pos.x,state.pos.y,nz))state.pos.z=nz;
+  else state.vel.z=0;
+  // Distinguish walkable roofs from solid walls; the water surface is also walkable.
+  const floor=obstacleIndex.landingSurface(state.pos.x,state.pos.z,py,state.pos.y,
+    Math.max(ground(state.pos.x,state.pos.z),-2.0));
   if(state.pos.y<floor&&state.vel.y<=0){
     state.pos.y=floor;state.vel.y=0;state.onGround=true;
     if(state.flying){state.flying=false;message('安全降落');}
