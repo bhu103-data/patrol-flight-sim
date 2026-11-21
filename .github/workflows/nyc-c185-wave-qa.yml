@@ -6,6 +6,8 @@ on:
       - 'index.html'
       - 'tests/floatplane-wave-pose.test.mjs'
       - 'tools/aircraft/nyc-ocean-wave-qa.mjs'
+      - 'tests/nyc-tidewater-water-detail.test.mjs'
+      - 'tools/aircraft/nyc-water-crest-compare.mjs'
       - 'tools/aircraft/nyc-water-crest-compare.mjs'
       - '.github/workflows/nyc-c185-wave-qa.yml'
 permissions:
@@ -20,7 +22,7 @@ jobs:
         with:
           node-version: '22'
       - name: Local flight/float regression
-        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs
+        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs tests/nyc-tidewater-water-detail.test.mjs
       - name: Install software WebGL2 browser
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1

@@ -43,3 +43,8 @@
 - 执行 `node --test tests/nyc-tidewater-water-detail.test.mjs` 和现有 C185/全图回归；Actions 产出游戏内相同机位 `nyc-water-sea-detail-before/after.png` 与可检查的 JSON。
 - 低帧率软件 SwiftShader 结果不得冒充硬件 FPS；60fps 和高档 WebGPU 不是当前补丁的验收结论。
 - 该分支从 PR #105 的 HEAD 创建，建议草稿 PR 的 base 指向 `codex/nyc-c185-wave-buoyancy-20261121`；避免改动共享整合分支和 `main`。
+
+## 第二轮兼容模式与 A/B 固定条件
+- `uNYCSeaDetail` 是原生 WebGL2 uniform；当 `?graphics=compat` 或 `NYC Street FX=Basic (1)` 时自动关闭新色彩、泡沫、焦散调节。不影响其他地图、海浪波高、C185 浮力或低画质水面原有着色。
+- A/B 临时页面将天空设为 12:00、季节 1、天气 Clear、街道质量 2，锁定相同机位以及渲染海浪时间 20 秒，减少独立场景加载和自动天气对结果的混淆。
+- 现有 A/B 浏览器脚本可通过 `PATROL_BROWSER_CHANNEL=chrome` 使用 Windows 已安装 Chrome 的本地浏览器；显示 16 次 RAF 样本，但不声称是 GPU 帧耗。

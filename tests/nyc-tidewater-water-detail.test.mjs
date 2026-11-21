@@ -9,8 +9,8 @@ const shader=html.slice(at,html.indexOf('  const WORLD_',at+20)>at?
   html.indexOf('  const WORLD_',at+20):at+64000);
 test('NYC water detail is compile-time reversible and guarded by city and pixel size',()=>{
   assert.match(shader,/const bool NYC_TIDEWATER_DETAIL = true;/);
-  assert.match(shader,/if\(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 14\.0\)/);
-  assert.match(shader,/if\(uManhattan && NYC_TIDEWATER_DETAIL && pixel < 2\.0\)/);
+  assert.match(shader,/if\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 14\.0\)/);
+  assert.match(shader,/if\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 2\.0\)/);
   assert.equal(html.split('const bool NYC_TIDEWATER_DETAIL = true;').length-1,1);
 });
 test('dark water gusts stay world-space and do not touch wave displacement or C185',()=>{
@@ -30,7 +30,7 @@ test('fragmented foam fades into stable distant average without new textures',()
   assert.doesNotMatch(shader,/uniform sampler2D uTidewater/);
 });
 test('subpixel caustics are filtered only in NYC',()=>{
-  assert.match(shader,/causticFootprint=\(uManhattan && NYC_TIDEWATER_DETAIL\)/);
+  assert.match(shader,/causticFootprint=\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL\)/);
   assert.match(shader,/focus=oceanCaustic\(floorXZ,depth\)\*localDetail\*/);
 });
 test('existing same-camera A/B harness covers crest and sea-detail independently',()=>{
@@ -39,4 +39,11 @@ test('existing same-camera A/B harness covers crest and sea-detail independently
   assert.match(testTool,/const bool NYC_TIDEWATER_DETAIL = false;/);
   assert.match(testTool,/nyc-water-'\+report\.mode/);
   assert.match(testTool,/gpuFrameMs:null/);
+});
+test('graphics compat and NYC Basic bypass extra visual noise without touching water physics',()=>{
+  assert.match(shader,/uniform bool uNYCSeaDetail;/);
+  assert.match(html,/nycSeaDetail:gl\.getUniformLocation\(worldProg,'uNYCSeaDetail'\)/);
+  assert.match(html,/gl\.uniform1i\(uWorld\.nycSeaDetail,/);
+  assert.match(html,/selectedMap\.city && !graphicsCompat &&/);
+  assert.match(html,/nyStreetQuality\.value !== '1'/);
 });
