@@ -69,6 +69,7 @@ export function buildChongqingMarketFronts({
     mesh.setMatrixAt(mesh.count++,marker.matrix);
   };
   const sites=[];
+  let stairTreads=0;
   for(const site of CHONGQING_MARKET_SITES){
     const {x,z,roofRise,doorSide}=site,
       earth=ground(x,z),frontGround=ground(x,z+5.35);
@@ -136,6 +137,33 @@ export function buildChongqingMarketFronts({
     position(roof,x,earth+17.20+roofRise*.10,z-6,1,roofRise/2.2,1);
     position(beams,x,earth+17.32,z+4.65,23.5,.30,.42);
     position(beams,x,earth+17.35,z-16.50,23.5,.24,.28);
+    // Non-repeating small architecture: three individual shop characters.
+    // Ground-following limestone steps remain at pedestrian height; unlike
+    // fake giant stair cubes, each tread is no more than 1.4 m above soil.
+    if(site.id==='stone-stair'){
+      for(let t=0;t<6;t++){
+        const sx=x+5.8,sz=z+9.2-t*.63,
+          foot=ground(sx,sz),h=.24+t*.22,top=foot+h;
+        position(stone,sx,foot+h*.5,sz,2.25,h,.60);
+        obstacles.push({x:sx,z:sz,w:2.25,d:.60,
+          base:foot-.02,top,marketStep:true});
+        stairTreads++;
+      }
+      position(beams,x+7.25,earth+3.10,z+5.95,.16,3.9,.20);
+    }else if(site.id==='tea-lane'){
+      // Lower corner shade and real cantilever braces, not repeated neon.
+      position(beams,x-5.25,earth+7.75,z+4.75,8.3,.28,2.8);
+      for(const dx of [-8.2,-2.3]){
+        position(braces,x+dx,earth+6.55,z+4.20,.24,3.25,.25,
+          Math.atan2(-2.20,2.35));
+      }
+    }else if(site.id==='river-market'){
+      // A closed timber-grid corner bay distinguishes the riverside shop.
+      position(beams,x+8.3,earth+13.5,z+4.65,.33,3.65,.28);
+      for(let t=0;t<4;t++){
+        position(lattice,x+5.4+t*.93,earth+13.7,z+4.70,.11,2.65,.17);
+      }
+    }
   }
   for(const mesh of [beams,braces,stone,glass,lattice,roof]){
     mesh.instanceMatrix.needsUpdate=true;
@@ -144,7 +172,7 @@ export function buildChongqingMarketFronts({
   }
   const stats={
     sites:sites.length,posts:sites.length*2,
-    galleryDecks:sites.length,curvedRoofs:roof.count,
+    galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
     meshes:6,instances:[beams,braces,stone,glass,lattice,roof]
       .reduce((sum,m)=>sum+m.count,0)
