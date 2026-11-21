@@ -9,7 +9,8 @@ const candidates=[
   {id:'3dassets-highwing',url:'/artifacts/c185-asset-review/viewer/3dassets-highwing.glb',label:'3DAssets generic 4-seat twin floats'},
   {id:'3dassets-lite',url:'/artifacts/c185-asset-review/viewer/3dassets-lite.glb',label:'3DAssets generic small twin floats'},
   {id:'innerscene-twin',url:'/artifacts/c185-asset-review/viewer/innerscene-twin.glb',label:'Innerscene generic 4-seat dual floats'},
-  {id:'innerscene-amphibious',url:'/artifacts/c185-asset-review/viewer/innerscene-amphibious.glb',label:'Innerscene generic amphibious floats'}
+  {id:'innerscene-amphibious',url:'/artifacts/c185-asset-review/viewer/innerscene-amphibious.glb',label:'Innerscene generic amphibious floats'},
+  {id:'innerscene-sixseat',url:'/artifacts/c185-asset-review/viewer/innerscene-sixseat.glb',label:'Innerscene six-seat generic dual floats, 11.2m span'}
 ];
 const html=`<!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box} body{margin:0;background:#bfd5e1;color:#102533}
@@ -129,7 +130,7 @@ const out={environment:'Chromium SwiftShader software WebGL2, NOT real GPU FPS o
  reportedAt:new Date().toISOString(),reports,
   pass:reports.every(x=>!x.error),
   releaseApproved:false,
-  identityNote:'All third-party CC0 models are generic four-seat planes, NOT exact Cessna 185s.'
+  identityNote:'Most CC0 candidates are generic four-seat planes; Innerscene six-seat is C185-like in size but NOT a proven exact Cessna 185.'
 };
 await writeFile('artifacts/c185-asset-review/browser-report.json',JSON.stringify(out,null,2)+'\n');
 console.log(JSON.stringify(out,null,2));
