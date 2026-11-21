@@ -73,5 +73,11 @@ test('high quality adds diagonal iron webbing but not new mesh groups',()=>{
   assert.equal(high.stats.bowBridgeTrussMembers-low.stats.bowBridgeTrussMembers,40);
   assert.equal(high.stats.waterBodies,6);
   assert.ok(high.beams.length>low.beams.length);
-  assert.ok(high.quads.length<low.quads.length+10,'same stone deck in both LODs');
+  // High LOD intentionally has more lake ripples than low LOD. Restrict this
+  // parity check to Bow Bridge's own fixed soffit surfaces, not whole park.
+  const bridgeSoffits=scene=>scene.quads.filter(q=>
+    isColor(q.color,castIron)&&q.corners.every(p=>
+      p[2]>=149.6&&p[2]<=152.4&&p[1]>waterTop+.5)).length;
+  assert.equal(bridgeSoffits(low),20,'low LOD retains all bridge underside slabs');
+  assert.equal(bridgeSoffits(high),20,'high LOD retains the same solid bridge');
 });
