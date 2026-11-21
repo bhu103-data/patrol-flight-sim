@@ -95,6 +95,7 @@ test('lodge timber and metal shaders tag the real, independently validated faces
   assert.match(html,/PATROL_ALASKA_LODGE_WOOD_V1/);
   assert.match(html,/alaskaLodgeCladding\(material,n,surfaceRoughness\)/);
   assert.match(html,/vHarborSurface<14\.5/);
+  assert.match(html,/uAlaskaMesh && vHarborSurface>14\.5 && vHarborSurface<16\.5/);
 });
 
 test('stilt and porch support bottoms are not suspended above local terrain',()=>{
