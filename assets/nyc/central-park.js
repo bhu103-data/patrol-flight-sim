@@ -49,7 +49,7 @@ export function buildCentralPark({
 }){
   const high=quality==='high';
   const stats={trees:0,waterBodies:0,shoreTriangles:0,paths:0,
-    majorLandmarks:0,verticesEstimate:0};
+    skippedWetPaths:0,reroutedPathPoints:0,majorLandmarks:0,verticesEstimate:0};
   const granite=[.52,.52,.47],pale=[.70,.69,.60],limestone=[.75,.70,.59],
     gravel=[.56,.51,.43],asphalt=[.27,.30,.28],pathShade=[.64,.61,.54],
     bronze=[.43,.34,.22],dark=[.21,.25,.24],water=[.12,.28,.34],
@@ -63,21 +63,65 @@ export function buildCentralPark({
     seed=(Math.imul(seed,1664525)+1013904223)>>>0;
     return seed/4294967296;
   };
-  const noise=(a,b)=>Math.sin(a*15.73+b*23.19)*.5+.5;
+  // The previous looping paths crossed the Reservoir, The Lake and Turtle Pond.
+  // Route the path consistently on one shore instead of projecting each point
+  // to its nearest bank (which would flip sides and draw across the water).
+  const dryPoint=(u,z,vertical,sides,width)=>{
+    let outU=u,outZ=z;
+    for(let pass=0;pass<2;pass++)for(let i=0;i<PARK_WATERS.length;i++){
+      const feature=PARK_WATERS[i];
+      const dx=(outU-feature.cx)/feature.rx,dz=(outZ-feature.cz)/feature.rz;
+      const angle=Math.atan2(dz,dx);
+      const shore=shoreRadius(angle,feature);
+      const buffer=1.19+Math.min(width*.5,2.3)/
+        Math.min(feature.rx,feature.rz);
+      const distance=Math.hypot(dx,dz)/shore;
+      if(distance>=buffer)continue;
+      const threshold=buffer*shore;
+      if(vertical){
+        const needed=Math.sqrt(Math.max(0,threshold*threshold-dz*dz));
+        outU=feature.cx+sides[i]*feature.rx*needed;
+      }else{
+        const needed=Math.sqrt(Math.max(0,threshold*threshold-dx*dx));
+        outZ=feature.cz+sides[i]*feature.rz*needed;
+      }
+      stats.reroutedPathPoints++;
+    }
+    return [outU,outZ];
+  };
+  const waterClear=(a,b,clearance=1.055)=>{
+    const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
+    return [a,b,mid].every(([u,z])=>
+      PARK_WATERS.every(f=>normalizedWaterDistance(u,z,f)>=clearance));
+  };
   const band=(a,b,width,color,offset=.17)=>{
     if(!isParkInterior(a[0],a[1],grid,-4) ||
        !isParkInterior(b[0],b[1],grid,-4))return;
+    if(!waterClear(a,b)){
+      stats.skippedWetPaths++;
+      return;
+    }
     ribbon(p(a[0],a[1],offset),p(b[0],b[1],offset),width,color);
     stats.paths++;
   };
   function trail(points,width=1.2,color=gravel){
+    if(points.length<2)return;
+    const start=points[0],end=points[points.length-1];
+    const vertical=Math.abs(end[1]-start[1])>=Math.abs(end[0]-start[0]);
+    const center=[points.reduce((s,p)=>s+p[0],0)/points.length,
+      points.reduce((s,p)=>s+p[1],0)/points.length];
+    // Stable per-lake shore choice prevents discontinuous underwater chords.
+    const sides=PARK_WATERS.map(f=>
+      (vertical?center[0]-f.cx:center[1]-f.cz)>=0?1:-1);
+    let prev=dryPoint(start[0],start[1],vertical,sides,width);
     for(let i=1;i<points.length;i++){
       const a=points[i-1],b=points[i];
       const d=Math.hypot(a[0]-b[0],a[1]-b[1]);
-      const n=Math.max(1,Math.ceil(d/4));
-      let prev=a;
+      const n=Math.max(1,Math.ceil(d/2.25));
       for(let j=1;j<=n;j++){
-        const t=j/n,next=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+        const t=j/n,raw=[a[0]+(b[0]-a[0])*t,
+          a[1]+(b[1]-a[1])*t];
+        const next=dryPoint(raw[0],raw[1],vertical,sides,width);
         band(prev,next,width,color);
         prev=next;
       }
@@ -125,10 +169,14 @@ export function buildCentralPark({
   PARK_WATERS.forEach(lake);
   // The drives are not a continued street grid. Four arterial transverses
   // cross the park where they occur in the real park (approximate scale).
-  for(const [street,z] of [[65,91],[79,174],[86,215],[97,280]]){
+  // Shift the compressed 79th and 86th crossings away from small Turtle
+  // Pond and the Reservoir shore. The real streets use depressed transverses;
+  // in PATROL their uninterrupted road ribbon stays above dry terrain.
+  for(const [street,z] of [[65,91],[79,170],[86,209],[97,280]]){
     const points=[];
     for(let j=0;j<=20;j++){
-      const u=-41+j*4.1,zz=z+Math.sin(j*.22+street)*1.9;
+      const u=-41+j*4.1;
+      const zz=z+((street===79||street===86)?0:Math.sin(j*.22+street)*1.2);
       points.push([u,zz]);
     }
     trail(points,4.35,asphalt);
