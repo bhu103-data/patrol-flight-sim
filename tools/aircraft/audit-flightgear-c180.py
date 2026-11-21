@@ -62,7 +62,11 @@ try:
                 txt=raw.decode("latin-1",errors="replace")
                 surfaces=[int(m) for m in re.findall(r"(?m)^numsurf\s+(\d+)\s*$",txt)]
                 refs=[int(m) for m in re.findall(r"(?m)^refs\s+(\d+)\s*$",txt)]
+                objects=re.findall(r'(?m)^name\\s+"([^"]+)"',txt)
+                named_float_objects=[n for n in objects if re.search(r"float|pontoon|hydro|water|gear|rudder",n,re.I)]
                 record.update({
+                    "modelObjectNames":objects[:70],
+                    "namedFloatGearRudderParts":named_float_objects[:45],
                     "objects":len(surfaces),
                     "faceCount":sum(surfaces),
                     "triangulatedFanUpperBound":sum(max(0,n-2) for n in refs),
@@ -71,6 +75,12 @@ try:
                 })
             model_records.append(record)
         variant_names=matches(r"(?i)(^|/)[^/]*(Cessna|c180|skywagon|hydro|float)[^/]*-set\.xml$")
+        variant_configuration=[]
+        for path in variant_names:
+            blob=archive.read(path).decode("utf-8",errors="replace")
+            hits=[line.strip() for line in blob.splitlines()
+                if re.search(r"float|hydro|gear|models|[.]ac<",line,re.I)]
+            variant_configuration.append({"path":path,"floatOrModelLines":hits[:65]})
         references=[]
         for p in xmlpaths:
             low=p.lower()
@@ -92,9 +102,11 @@ try:
             "inflatedBytes":sum(x.file_size for x in entries),
             "fileTypeCounts":dict(Counter(Path(p).suffix.lower() for p in paths)),
             "aircraftVariants":variant_names[:80],
+            "variantConfigurationEvidence":variant_configuration,
             "floatNames":fpaths[:120],
             "licenseFiles":credit,
-            "floatModels":[r for r in model_records if re.search(r"float|hydro|water|pontoon",r["path"],re.I)][:45],
+            "floatModels":[r for r in model_records if
+                re.search(r"float|hydro|water|pontoon",r["path"],re.I) or r.get("namedFloatGearRudderParts")][:45],
             "allModelRecords":model_records[:320],
             "materialImages":len(texture_paths),
             "textureUncompressedBytes":sum(x.file_size for x in entries if x.filename in texture_paths),
