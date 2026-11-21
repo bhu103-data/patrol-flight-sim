@@ -233,9 +233,11 @@ try{
  await sampleFramePacing('09-manhattan-window-facades');
  await capture('09-manhattan-window-facades.png');
  // Same official OTI camera target, closer zoom for street/roof relief QA.
+ // Higher zoom makes the scenic camera both physically closer and narrower
+ // (see getScenicCamera); 27 would have been farther than the default 42.
  // Do not call this a free-flight low pass: it is a hotel-camera close view.
  await page.locator('#hotelZoom').evaluate(el=>{
-  el.value='27';el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
  });
  await page.waitForTimeout(1300);
  await sampleFramePacing('11-oti-downtown-close');
