@@ -88,17 +88,18 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   hubGeo.rotateX(Math.PI/2);
   const tires=pool(tireGeo,dark,48),hubs=pool(hubGeo,frame,48);
   const fronts=pool(unit,pale,24),backs=pool(unit,red,24);
-  const checker=pool(unit,dark,72),taxiSigns=pool(unit,amber,12);
+  const checker=pool(unit,dark,72),checkerLight=pool(unit,white,72),taxiSigns=pool(unit,amber,12);
   const sideMirror=pool(unit,frame,24);
   const bumper=pool(unit,dark,24);
   const carTypes=[0,1,0,2,0,2,0,1,0,2]; // 0=taxi, 1=dark civilian, 2=white civilian
   const carColors=[0xebd233,0x42556a,0xe7d433,0xdce2db,0xeccf2d,0x8892a0,0xe4c926,0x35516a,0xe9d02b,0xe1e5e6];
   const vehicles=[];
+  let taxisPlaced=0;
   for(let i=0;i<carTypes.length;i++){
     const lane=i%2?-.28:.28;
     const route=i%4;
     vehicles.push({
-      id:i,taxi:carTypes[i]===0,
+      id:i,taxi:carTypes[i]===0,taxiIndex:carTypes[i]===0?taxisPlaced++:-1,
       side:route<2?1:-1,tier:route%2,
       dir:lane>0?1:-1,
       lane:lane>0?2.45:-2.45,
@@ -175,12 +176,10 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     light.position.set(x,ground(x,z)+12,z);
     scene.add(light);streetLights.push(light);
   }
-  const buffer={body:bodies,glass:windows,tires,hubs,fronts,backs,checker,taxiSigns,sideMirror,bumper};
+  const buffer={body:bodies,glass:windows,tires,hubs,fronts,backs,checker,checkerLight,taxiSigns,sideMirror,bumper};
   function update(dt,player){
     for(const v of vehicles){
       const loop=1770,half=885;
-      const nextX=v.start+dt*0; // placeholder for deterministic state-driven advancement
-      void nextX;
       if(player&&Math.abs(v.x-player.x)<10&&Math.abs(v.z-player.z)<6&&Math.abs(v.y-player.y)<5){
         v.stall=Math.min(1,(v.stall??0)+dt*2.5);
       }else v.stall=Math.max(0,(v.stall??0)-dt*.65);
@@ -195,8 +194,9 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
       pose(windows,i,o,heading,[0,0,0],[1,1,1],0);
       for(let wheel=0;wheel<4;wheel++){
         const xw=wheel<2?-1.97:1.94,zw=wheel%2===0?-1.04:1.04;
-        pose(tires,i*4+wheel,o,heading,[xw,.61,zw],[1,1,1],Math.PI/2);
-        pose(hubs,i*4+wheel,o,heading,[xw,.61,zw+Math.sign(zw)*.01],[1,1,1],Math.PI/2);
+        // Wheel geometry has already been rotated so its axle aligns with local Z.
+        pose(tires,i*4+wheel,o,heading,[xw,.61,zw],[1,1,1],0);
+        pose(hubs,i*4+wheel,o,heading,[xw,.61,zw+Math.sign(zw)*.01],[1,1,1],0);
       }
       for(let side=0;side<2;side++){
         const zz=side===0?-0.8:0.8;
@@ -206,19 +206,20 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
         pose(bumper,i*2+side,o,heading,[side===0?2.98:-2.98,.67,0],[.24,.22,1.95],0);
       }
       if(v.taxi){
-        const taxiIndex=vehicles.slice(0,i+1).filter(o=>o.taxi).length-1;
+        const taxiIndex=v.taxiIndex;
         pose(taxiSigns,taxiIndex,o,heading,[-.1,2.24,0],[.75,.27,.47],0);
         for(let check=0;check<6;check++){
           const cy=check%2===0?1.01:1.17;
           const cx=-2.25+Math.floor(check/2)*2.14;
-          pose(checker,taxiIndex*6+check,o,heading,[cx,cy,check%2?1.09:-1.09],[.48,.15,.045],0);
+          pose(checker,taxiIndex*6+check,o,heading,[cx,cy,check%2?1.09:-1.09],[.46,.18,.045],0);
+          pose(checkerLight,taxiIndex*6+check,o,heading,[cx+.48,cy,check%2?1.09:-1.09],[.46,.18,.045],0);
         }
       }
     }
     fronts.count=backs.count=sideMirror.count=bumper.count=vehicles.length*2;
     tires.count=hubs.count=vehicles.length*4;
     taxiSigns.count=vehicles.filter(v=>v.taxi).length;
-    checker.count=taxiSigns.count*6;
+    checker.count=checkerLight.count=taxiSigns.count*6;
     windows.count=vehicles.length;
     for(const mesh of Object.values(buffer)){
       mesh.instanceMatrix.needsUpdate=true;
@@ -229,7 +230,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   function setQuality(mode){
     const low=mode==='low';
     curbs.visible=!low;brightGlints.visible=!low;
-    checker.visible=!low;hubs.visible=!low;
+    checker.visible=!low;checkerLight.visible=!low;hubs.visible=!low;
     // The vehicle silhouettes, roads, headlamps and pole lamps always remain.
     for(const light of streetLights)light.visible=!low;
   }
