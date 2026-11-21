@@ -5566,7 +5566,7 @@
   }
 
   let mapScenery=null;
-  let nycHeroScenery=null,nycStreetMesh=null,nycHeroEpoch=0;
+  let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -5640,7 +5640,8 @@
   function createMapScenery() {
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
-    nycHeroScenery=nycStreetMesh=null;
+    disposeSceneMesh(nycGisMesh);
+    nycHeroScenery=nycStreetMesh=nycGisMesh=null;
     const heroEpoch=++nycHeroEpoch;
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
@@ -6125,7 +6126,38 @@
         oldScreens.addQuad(a,b,c,d,uniqueFallback);
         adPanels.push({label,color,panelId:'times-square-'+index,a,b,c,d});
       };
-      buildTimesSquareDistrict({box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
+      const protectedTimesSites=buildTimesSquareDistrict(
+        {box,lamp,addQuad:solid.addQuad,lightQuad:lights.addQuad,solidAt,place},ledQuad);
+      // PATROL_NYC_GIS_INFILL_V11_HOOK — official FID/HEIGHTROOF
+      // polygons from NYC public data, clipped to open lots; no extra engine.
+      // Disable for troubleshooting: ?nycGIS=off
+      if(!graphicsCompat && smoothScenery() &&
+         new URLSearchParams(location.search).get('nycGIS')!=='off'){
+        const sceneEpoch=heroEpoch;
+        Promise.all([
+          import('./assets/nyc/nyc-gis-infill.js'),
+          fetch('./assets/nyc/times-square-footprints.json').then(r=>{
+            if(!r.ok)throw Error('NYC GIS HTTP '+r.status);
+            return r.json();
+          })
+        ]).then(([module,asset])=>{
+          if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
+          const dataMesh=createTriangleMesh();
+          const stats=module.buildTimesSquareGisInfill(asset,{
+            addQuad:dataMesh.addQuad,addTri:dataMesh.addTri,
+            box:(...args)=>addModelBox(dataMesh.addQuad,...args),
+            ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
+            protectedSites:protectedTimesSites
+          });
+          const uploaded=dataMesh.upload();
+          if(sceneEpoch!==nycHeroEpoch||gl.isContextLost())
+            disposeSceneMesh(uploaded);
+          else{
+            nycGisMesh=uploaded;
+            console.info('[PATROL] NYC official footprint infill',stats);
+          }
+        }).catch(error=>console.warn('[PATROL] GIS fallback',error));
+      }
       const ledColumns=Math.max(8,Math.ceil(Math.sqrt(adPanels.length)));
       for(let i=0;i<adPanels.length;i++){
         const {a,b,c,d}=adPanels[i],row=Math.floor(i/ledColumns),
@@ -6736,6 +6768,7 @@
       // Tiny amber lane reflectors (not oversized signs).
       box(avenue-1.92,street+0.09,z+2.0,0.13,0.035,0.09,trafficYellow);
     }
+    return blocks.map(b=>({name:b.name,x:b.x,z:b.z,w:b.w,d:b.d}));
   }
 
   function buildPoliceStop({box,addQuad,place},{x,y,z,yaw,sidewalkX,footY}){
@@ -8288,6 +8321,7 @@
   function drawMapScenery(drawMesh) {
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
+    if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(dcSurfaceMeshes.length){
