@@ -463,7 +463,16 @@ export function buildNycStreetNetwork({
       stats.streetFixtures+=2;
     }
   }
-  for(let j=-16;j<=9;j++)for(let i=-10;i<=8;i++){
+  // Apply the same full-footprint intersection clearance in both Manhattan
+  // and Brooklyn/DUMBO. Previously Brooklyn roads were drawn without any
+  // crossings or signals because the intersection loop stopped at avenue 8.
+  const intersectionDistricts=[
+    {minI:-10,maxI:8,minJ:-16,maxJ:9},
+    {minI:9,maxI:20,minJ:-12,maxJ:-7}
+  ];
+  for(const district of intersectionDistricts)
+  for(let j=district.minJ;j<=district.maxJ;j++)
+  for(let i=district.minI;i<=district.maxI;i++){
     const z=j*grid.blockLength,x=avenueX(i,z);
     // Extra conservative building/bridge and Times Square safety margin.
     if(!permitted(x,z)||nearOld(x,z,11.2)||
