@@ -35,15 +35,27 @@ function screenshotPixels(bytes){
  return {width:img.width,height:img.height,colorBins:colors.size,
   nearBlackFraction:black/Math.max(count,1)};
 }
-const screenshots=[],pixels={};
+const screenshots=[],pixels={},captureTimings={};
+let pendingShot=null;
 async function capture(name){
- const stats=screenshotPixels(await page.screenshot({
-  path:out+'/'+name,fullPage:true,animations:'disabled'
- }));
+ // The previous full-page screenshots included the HUD, which could make a
+ // blank WebGL canvas appear nonblank. Capture the canvas itself instead.
+ // SwiftShader software rendering can exceed Playwright's 30s screenshot
+ // default at later camera positions; give the render an explicit budget.
+ const started=Date.now();
+ pendingShot=name;
+ console.log('[PATROL QA] capturing canvas '+name);
+ const image=await page.locator('#glCanvas').screenshot({
+  path:out+'/'+name,animations:'allow',timeout:75000
+ });
+ const stats=screenshotPixels(image);
+ captureTimings[name]=Date.now()-started;
  check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
   stats.nearBlackFraction<.97,
-  'Blank or nearly uniform rendered NYC image: '+name+' '+JSON.stringify(stats));
+  'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
  screenshots.push(name);pixels[name]=stats;
+ pendingShot=null;
+ console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
 }
 
 let result;
@@ -148,10 +160,15 @@ try{
  }
 
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,warnings};
+ result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings};
 }catch(e){
- result={passed:false,error:e.stack||String(e),errors,warnings};
- try{await page.screenshot({path:out+'/FAILED.png',fullPage:true});}catch{}
+ result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,
+   captureTimings,errors,warnings};
+ // Avoid another potentially stalled screenshot when the failure itself was
+ // a SwiftShader capture timeout. Partial completed images stay in artifacts.
+ if(!pendingShot)try{
+   await page.screenshot({path:out+'/FAILED.png',timeout:10000});
+ }catch{}
 }finally{
  await writeFile(out+'/smoke-report.json',JSON.stringify(result,null,2));
  await browser.close();
