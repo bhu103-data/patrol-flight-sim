@@ -5878,7 +5878,7 @@ const CENTRAL_PARK_SITES=[
         face(wallPoint(0,entryTop),wallPoint(1,entryTop),
           wallPoint(1,roofY),wallPoint(0,roofY),wallTint,9);
       }else{
-        const loA=[a[0],y,a[1]],loB=[b[0],y,a[1]+dz];
+        const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
         const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
         face(loA,loB,hiB,hiA,wallTint,9);
       }
