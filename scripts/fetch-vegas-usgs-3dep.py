@@ -36,12 +36,12 @@ PARAMS = {
 OUTPUT = Path("artifacts/vegas-dem")
 
 
-def lon_to_col(lon: float) -> int:
-    return max(0, min(WIDTH - 1, int(round((lon - BBOX[0]) / (BBOX[2] - BBOX[0]) * (WIDTH - 1)))))
+def lon_to_col(lon: float, bounds: tuple[float, float, float, float]) -> int:
+    return max(0, min(WIDTH - 1, int(round((lon - bounds[0]) / (bounds[2] - bounds[0]) * (WIDTH - 1)))))
 
 
-def lat_to_row(lat: float) -> int:
-    return max(0, min(HEIGHT - 1, int(round((BBOX[3] - lat) / (BBOX[3] - BBOX[1]) * (HEIGHT - 1)))))
+def lat_to_row(lat: float, bounds: tuple[float, float, float, float]) -> int:
+    return max(0, min(HEIGHT - 1, int(round((bounds[3] - lat) / (bounds[3] - bounds[1]) * (HEIGHT - 1)))))
 
 
 def query() -> bytes:
@@ -66,8 +66,11 @@ def convert(raw: bytes) -> dict:
             raise RuntimeError(f"Expected raw elevation float32, received {dataset.dtypes[0]} (possibly hillshade)")
         arr = dataset.read(1, masked=True).filled(np.nan).astype("float64")
         bounds = dataset.bounds
-        if max(abs(bounds.left - BBOX[0]), abs(bounds.right - BBOX[2]),
-               abs(bounds.bottom - BBOX[1]), abs(bounds.top - BBOX[3])) > 0.002:
+        raster_bounds = (bounds.left, bounds.bottom, bounds.right, bounds.top)
+        # ArcGIS may expand one axis slightly to maintain the exact requested
+        # 256x128 image aspect ratio. Preserve and use the *actual* GeoTIFF
+        # geotransform, rather than silently pretending no expansion occurred.
+        if max(abs(a - b) for a, b in zip(raster_bounds, BBOX)) > 0.008:
             raise RuntimeError(f"Unexpected raster extent {bounds}")
         valid = arr[np.isfinite(arr)]
         if valid.size < arr.size * 0.98 or not np.all((valid > 100) & (valid < 4500)):
@@ -75,14 +78,14 @@ def convert(raw: bytes) -> dict:
         if np.ptp(valid) < 70:
             raise RuntimeError("Raster is too flat to represent surrounding measured hills")
         def col_range(lo: float, hi: float) -> slice:
-            return slice(lon_to_col(lo), lon_to_col(hi) + 1)
+            return slice(lon_to_col(lo, raster_bounds), lon_to_col(hi, raster_bounds) + 1)
         west = col_range(-115.385, -115.305)
         center = col_range(-115.182, -115.162)
         east = col_range(-115.045, -114.976)
         latitudes = [round(BBOX[1] + (BBOX[3] - BBOX[1]) * i / 48, 7) for i in range(49)]
         samples = {"west": [], "center": [], "east": []}
         for lat in latitudes:
-            row = lat_to_row(lat)
+            row = lat_to_row(lat, raster_bounds)
             band = arr[max(0, row - 1):min(HEIGHT, row + 2)]
             samples["west"].append(round(float(np.nanmax(band[:, west])), 2))
             samples["center"].append(round(float(np.nanmedian(band[:, center])), 2))
@@ -100,6 +103,7 @@ def convert(raw: bytes) -> dict:
                        "license": "United States Government public domain",
                        "crs": "EPSG:4326", "verticalUnits": "meters"},
             "boundsWgs84": list(BBOX),
+            "rasterExtentWgs84": list(raster_bounds),
             "sampleLatitudesNorthing": latitudes,
             "elevationMeters": samples,
             "gameInterpretation": {
