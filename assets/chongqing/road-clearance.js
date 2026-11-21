@@ -168,12 +168,17 @@ export function clipChongqingDryRoadSegments(points,width,ground,riverDist,
     if(!Number.isFinite(length)||length<1e-7){flush();continue;}
     const nx=-dz/length,nz=dx/length,offset=width*.5+Math.max(0,shoreMargin);
     let dry=true;
-    for(const t of [0,.5,1]){
+    // Dense longitudinal probes catch narrow tributary channels halfway
+    // between the old endpoint/midpoint checks. This is scene-build work,
+    // not a per-frame runtime cost. Avoid sampling ground twice per probe.
+    for(const t of [0,.25,.5,.75,1]){
       const x=a.x+dx*t,z=a.z+dz*t;
       for(const across of [-1,-.5,0,.5,1]){
         const sx=x+nx*offset*across,sz=z+nz*offset*across;
-        if(!Number.isFinite(ground(sx,sz))||ground(sx,sz)<=0||
-           riverDist(sx,sz)<shoreMargin){dry=false;break;}
+        const elevation=ground(sx,sz),waterDistance=riverDist(sx,sz);
+        // Unknown water distance must never be interpreted as dry land.
+        if(!Number.isFinite(elevation)||elevation<=0||
+           !(waterDistance>=shoreMargin)){dry=false;break;}
       }
       if(!dry)break;
     }

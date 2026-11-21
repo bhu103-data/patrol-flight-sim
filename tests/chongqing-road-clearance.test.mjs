@@ -145,3 +145,35 @@ test('procedural Chongqing towers leave roads, bridges and each other clear',()=
  assert.ok(result.stats.skippedRoadOverlap+result.stats.skippedBridgeOverlap+
    result.stats.skippedAdjacentBuilding>0);
 });
+
+
+test('quarter-span tributary water removes only the crossed asphalt slab',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0},{x:11,y:20,z:0}];
+ const ground=()=>20;
+ for(const forbiddenX of [1.375,4.125]){
+   const riverDistance=(x)=>Math.abs(x-forbiddenX)<.19?0:20;
+   const segments=clipChongqingDryRoadSegments(points,6,ground,riverDistance);
+   assert.equal(segments.length,1,'preserve the fully dry second slab');
+   assert.deepEqual(segments[0].map(p=>p.x),[5.5,11],
+     'do not paint a road over a narrow unbridged tributary inlet');
+ }
+});
+
+test('missing river distance does not become a dry road surface',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0},{x:11,y:20,z:0}];
+ const unknown=(x)=>Math.abs(x-1.375)<.19?NaN:20;
+ const sections=clipChongqingDryRoadSegments(points,6,()=>20,unknown);
+ assert.deepEqual(sections.map(path=>path.map(p=>p.x)),[[5.5,11]],
+   'unknown tributary samples must reject only the affected strip');
+});
+
+test('quarter-span clearance has a bounded scene-build sampling budget',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0}];
+ let heights=0,riverSamples=0;
+ const paths=clipChongqingDryRoadSegments(points,6,
+   ()=>{heights++;return 20;},
+   ()=>{riverSamples++;return 20;});
+ assert.equal(paths.length,1);
+ assert.equal(heights,25,'evaluate each road cross-section at most once');
+ assert.equal(riverSamples,25,'five longitudinal by five lateral probes');
+});
