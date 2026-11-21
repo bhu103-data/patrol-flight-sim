@@ -907,6 +907,19 @@ function scenicView(key){
     Digit5:{name:'支流护栏与山城道路',pos:[-472,ground(-472,-271)+8,-271],
       target:[-420,ground(-420,-271)+12,-271]}
   };
+  // Inspect a crossing that REALLY survived river/building checks.
+  // No fixed guessed site: the source is the instantiated street network.
+  if(key==='Digit6'){
+    const x=streetBuild.snapshot().crossingXs[0];
+    if(Number.isFinite(x)){
+      const z=riverCenter(x)+250+14*Math.sin(x/115+1);
+      destinations.Digit6={
+        name:'双向红绿灯与山城街面',
+        pos:[x,ground(x,z)+5.5,z],
+        target:[x+18,ground(x,z)+6.3,z]
+      };
+    }
+  }
   const next=destinations[key];
   if(!next)return false;
   state.pos.set(...next.pos);
@@ -1349,7 +1362,12 @@ function frame(){
 window.PatrolSpaceBridge={getState:()=>({
   map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
-  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
+  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying,
+  // Exposed only when asked for the actual browser inspector state.
+  signalCrossings:streetBuild.stats.signalizedCrossings,
+  signalMasts:streetBuild.stats.trafficSignals,
+  signalStopLines:streetBuild.stats.stopLines,
+  signalAspect:streetBuild.snapshot().signalAspect
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
