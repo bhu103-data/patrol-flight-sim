@@ -91,3 +91,10 @@ Additional regression tests: `node --test tests/chongqing-detail.test.mjs` and `
 ### Chongqing wet-street update
 
 Wet asphalt now features 192 custom-shaped local puddles and 102 subtle light-reflection strips in two GPU-friendly batches. A pedestrian zebra crossing near the hotpot district has 2 operating traffic signals; westbound cars stop on red and continue on green. Low graphics mode hides extra wet-road layers. Both the effects and street furniture are locally authored, with no provider branding. Regressions: `node --test tests/chongqing-wetstreets.test.mjs`, `node --test tests/chongqing-streetlife.test.mjs`. These effects are approximations rather than actual screen-space / ray-traced urban reflections or a 1:1 georeferenced road.
+
+
+### Chongqing ferry boarding and WebGL regression
+
+The Chongqing scenic map now features three moving Jialing River ferries with detailed passenger decks, hulls and wakes. The player may land on a cruise deck and travel with it; ferry markers and a new exploration objective appear in the game. The old 300-unit climb restriction was corrected, leaving the intended 650-unit orbit entry and 725-unit safety limit. Day/Dusk/Night now also controls traffic headlights and artificial road reflection strips.
+
+Testing: `node --test tests/chongqing-*.test.mjs`; optional real Chromium screenshots: [Chongqing workflow](.github/workflows/chongqing-visual.yml) and [browser smoke script](scripts/chongqing-browser-smoke.mjs). WebGL screenshots and frame rate remain **unverified until a real Actions/browser run completes**. Models are original artistic recreations, not scanned 1:1 architecture.
