@@ -1066,8 +1066,13 @@ const CENTRAL_PARK_SITES=[
       const gridX = Math.ceil(span / city.blockWidth * 0.65);
       const gridZ = Math.ceil(span / city.blockLength * 0.5);
       for (let iz=-gridZ;iz<gridZ;iz++) for (let ix=-gridX;ix<gridX;ix++) {
-        const z=(iz+0.5+(hash(ix,iz,811)-0.5)*0.18)*city.blockLength;
-        const x=(ix+0.5+(hash(ix,iz,813)-0.5)*0.18)*city.blockWidth+city.tilt*z+city.offset;
+        // Align anonymous buildings to the same compact street grid as the
+        // rendered roads. Keep official municipal polygons untouched.
+        const streetGrid=(ix>=-10&&ix<=8&&iz>=-17&&iz<=12)||
+          (ix>=9&&ix<=20&&iz>=-13&&iz<=-7);
+        const jitter=streetGrid?0.03:0.18;
+        const z=(iz+0.5+(hash(ix,iz,811)-0.5)*jitter)*city.blockLength;
+        const x=(ix+0.5+(hash(ix,iz,813)-0.5)*jitter)*city.blockWidth+city.tilt*z+city.offset;
         if (Math.abs(x)>span/2 || Math.abs(z)>span/2) continue;
         // Keep geometry/collision and terrain heightfields coherent:
         // a parcel not admitted here is not baked into the height map.
@@ -1079,8 +1084,12 @@ const CENTRAL_PARK_SITES=[
         const top = cityHeight(x,z,true)*scale;
         if (top-base<2.9) continue;
         const tone = hash(ix,iz,312);
-        const width=city.blockWidth*(0.36+tone*0.28);
-        const length=city.blockLength*(0.41+hash(ix,iz,531)*0.26);
+        // Leave clearance for avenue asphalt, curbs and sidewalks.
+        // Narrow, varied facades preserve buildings without deleting roads.
+        const rawWidth=city.blockWidth*(0.36+tone*0.28);
+        const rawLength=city.blockLength*(0.41+hash(ix,iz,531)*0.26);
+        const width=streetGrid?Math.min(rawWidth,9.0):rawWidth;
+        const length=streetGrid?Math.min(rawLength,19.0):rawLength;
         // Suppress only anonymous parcels physically overlapping the
         // OTI polygons. Keep other procedural streets and skyline unchanged.
         if(officialLots.some(lot=>
