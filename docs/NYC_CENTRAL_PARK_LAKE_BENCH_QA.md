@@ -20,3 +20,19 @@
 
 ## Merge gate
 Hold as a draft until same-camera WebGL evidence and parent integration compatibility are reviewed. Do not alter `main` or the shared integration branch directly.
+
+## 2026-11-21 Boathouse architecture follow-up
+
+Verified original reference features (not licensed asset downloads):
+- [Central Park Conservancy: Central Park Boathouse](https://www.centralparknyc.org/locations/central-park-boathouse) — current building, eastern Lake edge, lakeside rowing/dining.
+- [Architectural Digest architectural overview](https://www.architecturaldigest.com/story/a-mysterious-billionaire-might-save-new-yorks-iconic-central-park-boathouse) — green hipped/gabled roof and lake-facing classical columns.
+- Public exterior photographs confirm the signature horizontal burgundy/ivory awning and white colonnade. **No photography or third-party model has been embedded in code**.
+
+Changes to the existing batched park geometry:
+- Two original sloped green metal roof faces and two gable ends replace the dark-gray flat-looking roof. Fourteen slender raised seam beams (seven on each slope) add scale.
+- High-only waterside details: fourteen alternating pale/burgundy canopy panels, six pale columns individually foot-sampled against terrain, a thin veranda deck, five glazed bays with framing, and three muted planter groups. All are part of the existing batch and do not add texture requests or any separate draw call.
+- A four-corner conservative east-Lake normalized-distance gate prevents the canopy or terrace from appearing over the Lake. Nominal safe corner threshold is `>1.05` (the minimum nominal modeled corner is only slightly above this boundary, so same-camera shoreline QA is still required).
+- Direct sample count using the same geometry callbacks and test ground (high): **91 boxes, 246 beams, 198 quads**; low: **48 boxes, 166 beams, 184 quads**. These counts are not GPU triangle or FPS measurements.
+- `tests/nyc-boathouse-lakefront-architecture.test.mjs` verifies panels, green roof, columns, shoreline and bounds. Browser test adds two **QA-only** lakeside inspection cameras with `hotelAngle` temporarily allowing up to 120 degrees **in Playwright only**; no user control range is modified in the game.
+
+Accept only after the latest GitHub Actions Node regression and WebGL screenshots pass. Review actual screenshot quality: the model is still an approximated, compressed-scale facade; do not claim exact roof dimensions, real photo texture accuracy, physical scan, or proof of native GPU FPS. Keep the PR in draft pending central QA.
