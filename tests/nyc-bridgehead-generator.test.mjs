@@ -105,3 +105,37 @@ test('gapfill buildings keep away from runway and railway guard bands',()=>{
     'runway clear');
   }
 });
+
+test('Brooklyn road ribbons are rendered as actual clear segments',async()=>{
+  const streetSource=await readFile(
+    new URL('../assets/nyc/nyc-street-network.js',import.meta.url),'utf8');
+  const {buildNycStreetNetwork}=await import('data:text/javascript;base64,'+
+    Buffer.from(streetSource).toString('base64'));
+  const hash=(ix,iy,seed)=>{
+    let n=(ix*374761393+iy*668265263+seed*1442695041)|0;
+    n=(n^(n>>>13))*1274126177;
+    return ((n^(n>>>16))>>>0)/4294967295;
+  };
+  const ground=new Function('city','hash','water','scale','clamp','return ('+
+    functionSource('cityHeight')+')')(city,hash,12.2,54,
+    (v,a,b)=>Math.max(a,Math.min(b,v)));
+  const detailBand=(x,z)=>city.focusZones.some(zone=>
+    (x-zone[0])**2+(z-zone[1])**2<zone[2]**2)?2:0;
+  const isClear=(x,z,r=.1)=>!terrain.parcels.some(lot=>
+    Math.abs(x-lot[0])<=lot[2]/2+r&&Math.abs(z-lot[1])<=lot[3]/2+r);
+  let bridgeRibbons=0;
+  const stats=buildNycStreetNetwork({
+    addQuad(){},addTri(){},box(){},beam(){},
+    ribbon(a,b){
+      if(a[0]>210&&a[0]<435&&a[2]>-415&&a[2]<-195)
+        bridgeRibbons++;
+    },
+    terrainAt:(x,z)=>ground(x,z)*54,
+    detailBand,grid:city,streetY:14.86,waterY:12.2,
+    timesBounds:city.timesSquareBounds,
+    existingStreets:city.streets,isClear
+  });
+  assert.ok(stats.avenues>=35,'several Brooklyn avenues accepted');
+  assert.ok(stats.streets>=90,'cross streets grow across the bridgehead');
+  assert.ok(bridgeRibbons>300,'nonempty visible Brooklyn street batch');
+});
