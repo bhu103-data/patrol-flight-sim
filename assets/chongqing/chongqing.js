@@ -907,7 +907,11 @@ function scenicView(key){
     Digit1:{name:'洪崖洞临江夜景',pos:[155,132,-72],target:[155,112,168]},
     Digit2:{name:'朝天门来福士与水晶连廊',pos:[-355,302,-50],target:[-355,294,176]},
     Digit3:{name:'李子坝轻轨穿楼',pos:[-121,112,-345],target:[-121,100,-254]},
-    Digit4:{name:'重庆老火锅',pos:[285,ground(285,265)+2.7,265],target:[285,ground(285,225)+8,225]}
+    Digit4:{name:'重庆老火锅',pos:[285,ground(285,265)+2.7,265],target:[285,ground(285,225)+8,225]},
+    // One inspectable bank approach: look east across the unbridged tributary.
+    // The camera is still in the actual compressed city, never in water.
+    Digit5:{name:'支流护栏与山城道路',pos:[-472,ground(-472,-271)+8,-271],
+      target:[-420,ground(-420,-271)+12,-271]}
   };
   const next=destinations[key];
   if(!next)return false;
