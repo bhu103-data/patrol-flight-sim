@@ -26,6 +26,8 @@ try {
     await page.goto(home,{waitUntil:'domcontentloaded',timeout:35000});
     await page.locator('input[name="flightMap"][value="'+map+'"]').check({force:true});
     await page.locator('input[name="aircraft"][value="seaplane"]').check({force:true});
+    // Launch directly afloat; verify the new universal docking/float option.
+    await page.locator('input[name="waterStart"]').check({force:true});
     await page.locator('#startFlight').click({timeout:15000});
     await page.waitForFunction(()=>{
       const menu=document.getElementById('titleOverlay'),
@@ -47,6 +49,12 @@ try {
         menuClosed:document.getElementById('titleOverlay')?.hidden
       };
     });
+    const waterStatus=await page.locator('#gearStatus').textContent();
+    if(!waterStatus?.includes('WATER TAXI') && !waterStatus?.includes('DOCKING BRAKE'))
+      throw new Error('Floatplane did not initialize afloat on '+map+': '+waterStatus);
+    if(state.flight.altitude>16||state.flight.altitude<12)
+      throw new Error('Floatplane pontoon waterline is invalid on '+map+': '+state.flight.altitude);
+    report.maps.push({map,waterStatus,waterStart:true});
     if(!state.webgl||state.contextLost||state.width<500||
       state.flight?.aircraft!=='seaplane'||state.flight?.map!==map)
       throw new Error('Invalid floatplane scene '+map+': '+JSON.stringify(state));
