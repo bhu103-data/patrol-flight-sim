@@ -167,7 +167,13 @@ test('real Chongqing building parcels still leave safe usable signal crossings',
 test('landmark and background geometry still fit instance buffers',()=>{
   const {sceneObjects,urban,details}=generate();
   assert.ok(urban.stats.towers>100);
-  assert.equal(details.stats.curvedRoofs,33);
+  // The first Hongyadong-neighbor storefront now contributes one authentic
+  // curved roof to the previous 33. The existing GPU batch holds 96 roofs.
+  assert.equal(details.stats.curvedRoofs,34,
+    '33 existing curved roofs plus one stepped-neighbor roof');
+  const roofs=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===96);
+  assert.equal(roofs.length,1,'share the single existing curved-roof instance batch');
+  assert.equal(roofs[0].count,34);
   for(const mesh of sceneObjects.filter(m=>m instanceof Instanced)){
     assert.ok(mesh.count<=mesh.capacity);
     assert.ok(mesh.writes<=mesh.capacity);
