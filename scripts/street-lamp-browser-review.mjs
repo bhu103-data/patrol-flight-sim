@@ -45,17 +45,27 @@ async function capture(label,pose,preview,quality='high'){
         expected,{timeout:90000,polling:250});
     }
     await page.waitForTimeout(900);
+    // Bound the comparison on software WebGL: no browser-only test may
+    // hold a free CI runner indefinitely waiting for perfect frame counts.
     const samples=await page.evaluate(async()=>new Promise(resolve=>{
       const timestamps=[];
-      let last=null;
+      let last=null,done=false;
+      function finish(){
+        if(done)return;
+        done=true;clearTimeout(watchdog);
+        resolve(timestamps.slice(Math.min(3,Math.floor(timestamps.length/5))));
+      }
+      const watchdog=setTimeout(finish,35000);
       function tick(now){
+        if(done)return;
         if(last!==null)timestamps.push(now-last);
         last=now;
-        if(timestamps.length>=42)resolve(timestamps.slice(6));
+        if(timestamps.length>=22)finish();
         else requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
     }));
+    if(samples.length<8)throw Error('Insufficient software WebGL frames: '+samples.length);
     const game=await page.evaluate(()=>{
       const c=document.querySelector('canvas#world');
       const gl=c?.getContext('webgl2');
