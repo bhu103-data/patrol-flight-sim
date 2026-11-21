@@ -71,3 +71,20 @@ test('survey-backed ridge mesh truly replaces synthetic heights',async()=>{
  assert.ok(survey.triangles.every(face=>[face.a,face.b,face.c].every(p=>
    p.every(Number.isFinite))),'no invalid game vertices');
 });
+test('real 2D foothills connect to desert grade and have upward-facing winding',async()=>{
+ const payload=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const {triangles}=scene(decodeVegasRidgeDEM(payload));
+ const terrain=(x,z)=>13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7;
+ let seam=0;
+ for(const {a,b,c} of triangles){
+   const p=[a,b,c];
+   for(const [x,y,z] of p)if(Math.abs(x)===686){
+     assert.ok(Math.abs(y-terrain(x,z))<1e-7,'terrain ridge edge must touch desert');
+     seam++;
+   }
+   const crossY=(b[2]-a[2])*(c[0]-a[0])-
+     (b[0]-a[0])*(c[2]-a[2]);
+   assert.ok(crossY>0,'all rendered USGS mountain surface normals must face up');
+ }
+ assert.ok(seam>=90);
+});
