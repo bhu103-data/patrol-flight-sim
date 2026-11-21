@@ -6190,7 +6190,15 @@ const CENTRAL_PARK_SITES=[
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
-      if(!local && !destroyed && h>7.5 && detailBand>=2){
+      // PATROL_NYC_TIMES_SHORT_FACADE_V1: a low 5-7m streetfront in
+      // the mapped Times Square block must not render as a giant blank slab.
+      // Reuse the existing, batched shopfront/glazing framing ONLY for
+      // anonymous low-rise parcels within the 42nd-47th Street focus box.
+      // The official FID-protected buildings already took their own path.
+      const timesShortStorefront=!local && h>4.2 && h<=7.5 &&
+        east>-45 && east<65 && north>-100 && north<75;
+      if(!local && !destroyed && detailBand>=2 &&
+         (h>7.5 || timesShortStorefront)){
         const steel=heroDowntown?[.26,.32,.37]:[.235,.27,.30];
         const stone=heroDowntown?
           material.map(v=>Math.min(.88,v*.96)):[.51,.51,.48];
