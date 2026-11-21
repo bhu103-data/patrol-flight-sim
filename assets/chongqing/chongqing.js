@@ -3,6 +3,7 @@
 // https://github.com/jjcm/petalwake — credits in docs/CHONGQING_HOTPOT_PILOT.md.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
+import { buildChongqingMarketFronts } from './market-fronts.js';
 import { buildChongqingLandmarks } from './landmarks.js';
 import { buildChongqingStreetlife } from './streetlife.js';
 import { buildChongqingWetStreets } from './wetstreets.js';
@@ -532,6 +533,10 @@ scene.add(trees,stems,branches);
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
+// Separate bounded street-market sample, clear of PR #93's corner shop.
+// Include the suspended gallery slab/posts in the SAME spatial index used
+// by pilot, roads and vehicle traffic before that index is constructed.
+const marketFronts=buildChongqingMarketFronts({THREE,scene,ground,riverDist,obstacles});
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Static building/landmark collision registration is now complete. Build one
@@ -664,6 +669,7 @@ function applyQuality(){
   moon.castShadow=!low;
   trees.castShadow=qualityMode==='high';
   detailBuild.setQuality(low?'low':'normal');
+  marketFronts.setQuality(low?'low':'normal');
   skyline.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
@@ -917,6 +923,17 @@ function scenicView(key){
         name:'双向红绿灯与山城街面',
         pos:[x,ground(x,z)+5.5,z],
         target:[x+18,ground(x,z)+6.3,z]
+      };
+    }
+  }
+  if(key==='Digit7'){
+    const site=marketFronts.snapshot()[1]??marketFronts.snapshot()[0];
+    if(site){
+      const cameraZ=site.z+24;
+      destinations.Digit7={
+        name:'山城商铺 · 木构廊道与坡屋顶',
+        pos:[site.x,ground(site.x,cameraZ)+4.8,cameraZ],
+        target:[site.x,site.base+13.5,site.z+1.4]
       };
     }
   }
@@ -1355,7 +1372,8 @@ function frame(){
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
         '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips+
         '\nJialing River ferries '+riverBuild.stats.boats+
-        '\nStreet cuts '+roadClearanceStats.clipped+' / clear strips '+roadClearanceStats.paths;
+        '\nStreet cuts '+roadClearanceStats.clipped+' / clear strips '+roadClearanceStats.paths+
+        '\nMarket porch roofs '+marketFronts.stats.curvedRoofs+' / '+marketFronts.stats.roofTriangles+' triangles';
     }
   }
 }
@@ -1367,7 +1385,9 @@ window.PatrolSpaceBridge={getState:()=>({
   signalCrossings:streetBuild.stats.signalizedCrossings,
   signalMasts:streetBuild.stats.trafficSignals,
   signalStopLines:streetBuild.stats.stopLines,
-  signalAspect:streetBuild.snapshot().signalAspect
+  signalAspect:streetBuild.snapshot().signalAspect,
+  marketGalleryRoofs:marketFronts.stats.curvedRoofs,
+  marketGalleryInstances:marketFronts.stats.instances
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
