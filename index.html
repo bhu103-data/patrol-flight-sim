@@ -11723,8 +11723,12 @@ const CENTRAL_PARK_SITES=[
       // Normal free flight and existing mission spawns remain unchanged.
       const alaskaGlacierView=selectedMap.alaska && !runway &&
         new URLSearchParams(location.search).get('alaskaView')==='glacier';
+      const alaskaHarborView=selectedMap.alaska && !runway &&
+        new URLSearchParams(location.search).get('alaskaView')==='harbor';
       Object.assign(plane, {
         pos: runway ? [runway.x,sampleTerrainHeight(runway.x,runway.z)+GEAR_CLEARANCE,runway.z]
+          : alaskaHarborView
+            ? [88,Math.max(46,sampleGroundHeight(88,-559)+21),-559]
           : alaskaGlacierView
             ? [105,Math.min(CEILING-8,Math.max(44,sampleGroundHeight(105,245)+18)),245]
           : (selectedMap.alaska && terrainOptions.alaskaDEM
@@ -11733,7 +11737,8 @@ const CENTRAL_PARK_SITES=[
                    sampleGroundHeight(selectedMap.spawn[0],selectedMap.spawn[2])+12),
                  selectedMap.spawn[2]]
               : [...(selectedMap.spawn || [30,40,-185])]),
-        yaw: runway ? runway.yaw : 0, pitch: 0, bank: 0, rollAnim: 0,
+        yaw: runway ? runway.yaw : alaskaHarborView ? 1.18 : 0,
+        pitch: alaskaHarborView ? -0.08 : 0, bank: 0, rollAnim: 0,
         speed: grounded ? 0 : AIRCRAFT[selectedAircraft].cruise, afterburner: false
       });
       // A returning astronaut takes precedence over a new water-start preference.
@@ -11768,7 +11773,8 @@ const CENTRAL_PARK_SITES=[
       } catch(error) {
         console.warn('Cosmos flight restoration skipped:',error);
       }
-      if(waterStartRequested && !resumedFromCosmos && !alaskaGlacierView){
+      if(waterStartRequested && !resumedFromCosmos &&
+          !alaskaGlacierView && !alaskaHarborView){
         const waterSite=findFloatWaterStart();
         if(waterSite){
           plane.pos=[waterSite[0],WATER_H+FLOAT_CLEARANCE,waterSite[1]];
