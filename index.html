@@ -253,6 +253,7 @@
     <button id="rideViewButton" type="button" aria-pressed="false" hidden>Onboard View</button>
     <button id="dcTourButton" type="button" aria-pressed="false" hidden>Start Auto Tour</button>
     <button id="rescueViewButton" type="button" hidden>Skyline Rescue [J]</button>
+    <button id="bridgeFocusButton" type="button" hidden>Brooklyn Bridge · Close View</button>
     <label id="scenicAngleLabel" for="hotelAngle">View angle</label>
     <input id="hotelAngle" type="range" min="-48" max="48" step="1" value="0">
     <label for="hotelZoom">Zoom</label>
@@ -337,6 +338,7 @@
   const dcTourButton = document.getElementById('dcTourButton');
   const scenicAngleLabel = document.getElementById('scenicAngleLabel');
   const rescueViewButton = document.getElementById('rescueViewButton');
+  const bridgeFocusButton = document.getElementById('bridgeFocusButton');
   rescueViewButton.addEventListener('click',triggerSkylineRescue);
   const resumeFlight = document.getElementById('resumeFlight');
   const runwayChoice = document.getElementById('runwayChoice');
@@ -5375,7 +5377,7 @@
     const solid=createTriangleMesh(), lights=createTriangleMesh();
     // Separate single-batch harbor geometry; no extra renderer/scene graph.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
-      import('./assets/nyc/nyc-hero.js').then(({buildNycHeroScenery})=>{
+      import('./assets/nyc/nyc-hero.js').then(({buildNycHeroScenery,buildManhattanWaterfront})=>{
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
         buildNycHeroScenery({
@@ -5384,6 +5386,13 @@
           beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
           waterY:WATER_H,groundY:sampleTerrainHeight(-140,-611),
           spawn:NYC_HERO_ROUTE.spawn,liberty:NYC_HERO_ROUTE.liberty
+        });
+        buildManhattanWaterfront({
+          addQuad:detail.addQuad,
+          box:(...args)=>addModelBox(detail.addQuad,...args),
+          beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
+          waterY:WATER_H,
+          terrain:(x,z)=>sampleTerrainHeight(x,z)
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
@@ -8698,6 +8707,10 @@
       detail:'Inspect 1515 and 1540 Broadway screens, storefronts and rooftops'},
     {name:'Brooklyn Bridge',x:82,z:-342,height:18,bearing:158,radius:103,rise:19,
       detail:'Stone towers, suspension cables and lit approaches'},
+    {name:'Brooklyn Bridge · Deck View',x:82,z:-342,height:15.0,bearing:115,radius:41,rise:8,
+      detail:'Close to the suspension cables, raised timber walkway and limestone towers'},
+    {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,
+      detail:'Different working piers, ferry dock, handrails and shoreline masonry'},
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
       detail:'Wedge-shaped masonry landmark'},
     {name:'Skyline Rescue',x:40,z:-70,height:31,bearing:156,radius:67,rise:18,
@@ -8747,6 +8760,7 @@
     dcTourButton.hidden=!selectedMap.dc;
     setDcAutoTour(false);
     rescueViewButton.hidden=!selectedMap.city;
+    bridgeFocusButton.hidden=!selectedMap.city;
     rescueStart=null;
     rescueForm=RESCUE_FORMS.length-1;
     if(hasScenicViews())for(const {site} of scenicViews())hotelTarget.add(new Option(site.name));
@@ -8823,6 +8837,17 @@
     return {eye:[x,height,z],look:[view.x,ground+view.height,view.z],up:worldUp,fov:lerp(66,43,zoom)};
   }
   hotelViewButton.addEventListener('click',()=>setScenicView(!scenicViewActive));
+  bridgeFocusButton.addEventListener('click',()=>{
+    if(!selectedMap.city||!flying||crash)return;
+    if(!scenicViewActive)setScenicView(true);
+    const bridgeIndex=scenicViews().findIndex(v=>v.name==='Brooklyn Bridge · Deck View');
+    if(bridgeIndex<0)return;
+    hotelTarget.selectedIndex=bridgeIndex;
+    hotelAngle.value='0';
+    hotelZoom.value='68';
+    onboardView=false;
+    updateScenicView();
+  });
   resumeFlight.addEventListener('click',()=>setScenicView(false));
   hotelTarget.addEventListener('change',()=>{
     setDcAutoTour(false);
