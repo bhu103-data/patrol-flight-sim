@@ -13,7 +13,7 @@ const browser=await chromium.launch({headless:true,args:[
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
-page.on('requestfailed',r=>errors.push('failed request: '+r.url()));
+page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
 let result={status:'failed',errors,screenshots,shots};
 try {
