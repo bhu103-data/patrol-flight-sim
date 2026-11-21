@@ -59,9 +59,10 @@ test('full ten-view tour inspects OTI facades in daylight before bridge zoom',as
   const harbor=script.indexOf("await capture('09-manhattan-window-facades.png')");
   const city=script.indexOf("await capture('01-city-loaded.png')");
   const bridge=script.indexOf("const bridgeShortcut=");
+  const resume=script.indexOf("await page.locator('#resumeFlight').click");
   const lastTimes=script.indexOf("const timesViews=");
-  assert.ok(city>=0&&harbor>city&&bridge>harbor&&lastTimes>harbor,
-    'harbor view must happen before bridge zoom=68 and late-night Times Square');
+  assert.ok(city>=0&&harbor>city&&resume>harbor&&bridge>resume&&lastTimes>harbor,
+    'harbor view must be early; restore original flight before bridge shortcut');
   assert.match(script,/el\.value='42'/,
     'harbor camera zoom must match the independently verified one-view camera');
   assert.match(script,/facadeView\.zoom==='42'/,
