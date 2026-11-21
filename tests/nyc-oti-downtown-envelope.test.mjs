@@ -114,3 +114,15 @@ test('entrance center is truly cut from original wall and glazing faces outside 
   }
  }
 });
+
+test('pedestrian scenic camera is anchored to an actual OTI doorway source edge',()=>{
+ const lot=source.footprints.find(lot=>lot[0]===119028);
+ assert.ok(lot,'OTI source doorway parcel exists');
+ const ring=lot[6],a=ring[12],b=ring[(12+1)%ring.length];
+ assert.ok(a&&b,'inspected source edge exists');
+ const midpoint=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
+ assert.ok(Math.abs(midpoint[0]+102.88)<.02);
+ assert.ok(Math.abs(midpoint[1]+487.14)<.02);
+ assert.match(html,/name:'Lower Manhattan · Street Entrance',x:-102\.88,z:-487\.14,height:1\.50/);
+ assert.match(html,/bearing:201\.7,radius:11\.8,rise:1\.30/);
+});

@@ -254,6 +254,21 @@ try{
  await page.waitForTimeout(1300);
  await sampleFramePacing('11-oti-downtown-close');
  await capture('11-oti-downtown-close.png');
+ // Unlike a rooftop scenic view, inspect the physical entrance at
+ // OTI DOITT_ID 119028 edge 12 from a near-pedestrian viewpoint.
+ await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Street Entrance'});
+ await page.waitForTimeout(1700);
+ const doorway=await page.evaluate(()=>{
+  const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+  return {camera:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
+   zoom:document.getElementById('hotelZoom')?.value,
+   webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(doorway.camera==='Lower Manhattan · Street Entrance'&&doorway.zoom==='68'&&
+   doorway.webgl&&doorway.graphicsError===0,
+   'Lower Manhattan doorway street camera failed: '+JSON.stringify(doorway));
+ await sampleFramePacing('12-oti-doorway-street');
+ await capture('12-oti-doorway-street.png');
  // Restore the same free-flight state as the original tour before invoking
  // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
  await page.locator('#resumeFlight').click({force:true});
