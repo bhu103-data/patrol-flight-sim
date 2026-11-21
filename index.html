@@ -4935,6 +4935,8 @@ const CENTRAL_PARK_SITES=[
   }
 
   // Bridgehead connector uses authored street anchors; never a shortcut.
+  // Road topology stays the authored CITY_STREETS geometry. The only
+  // modifications are safe, inset terminal turning points for these cars.
   function makeBrooklynBridgeheadCarRoute(streets,bridge,terrainAt,lotAt,waterY){
     const bridgeLine=streets[0],head=bridgeLine?.at(-1);
     const reach=bridge.halfLength+bridge.ramp;
@@ -4945,8 +4947,7 @@ const CENTRAL_PARK_SITES=[
       path[1][0]>head[0]);
     if(!branch)return null;
     const points=bridgeLine.map(p=>[p[0],p[1]]);
-    // Reuse authored roads' full sidewalk envelope and sampled shoreline
-    // clearance; do not route even part of the vehicle through a building.
+    // Keep the same authored-road full-width shore and lot clipping rule.
     for(let i=1;i<branch.length&&i<=3;i++){
       const a=branch[i-1],b=branch[i];
       const segments=clipAuthoredNycStreet(a,b,terrainAt,lotAt,waterY);
@@ -4956,11 +4957,88 @@ const CENTRAL_PARK_SITES=[
          Math.hypot(end[0]-b[0],end[1]-b[1])>.1)break;
       points.push([b[0],b[1]]);
     }
-    return points.length>bridgeLine.length?makeTrafficRoute(points):null;
+    if(points.length<=bridgeLine.length)return null;
+    const inset=8,first=points[0],second=points[1];
+    const firstLength=Math.hypot(second[0]-first[0],second[1]-first[1]);
+    const end=points.at(-1),before=points.at(-2);
+    const lastLength=Math.hypot(end[0]-before[0],end[1]-before[1]);
+    if(firstLength<inset*2||lastLength<inset*2)return null;
+    points[0]=first.map((v,i)=>v+(second[i]-v)*inset/firstLength);
+    const turnCenter=end.map((v,i)=>v+(before[i]-v)*inset/lastLength);
+    points[points.length-1]=turnCenter;
+    // A continuous U-turn has radius 1.07 and stays inside the tested
+    // 12.1-unit street corridor. Test its entire swept vehicle footprint,
+    // not merely the center point, before enabling the connector.
+    const radius=1.07,vehicleEnvelope=2.45;
+    for(let k=0;k<24;k++){
+      const angle=k*Math.PI/12;
+      const x=turnCenter[0]+(radius+vehicleEnvelope)*Math.cos(angle);
+      const z=turnCenter[1]+(radius+vehicleEnvelope)*Math.sin(angle);
+      if(terrainAt(x,z)<=waterY+.68||lotAt(x,z))return null;
+    }
+    if(terrainAt(...turnCenter)<=waterY+.68||lotAt(...turnCenter))
+      return null;
+    return makeTrafficRoute(points);
+  }
+
+  function bridgeheadTrafficPose(actor,time){
+    const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
+    const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
+    const phase=((time*pace+offset)%period+period)%period;
+    const first=route.points[0],last=route.points.at(-1);
+    const tangent=(a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],m=Math.hypot(dx,dz)||1;
+      return [dx/m,dz/m];
+    };
+    const onArc=(center,u,theta,atStart)=>{
+      const normal=[u[1],-u[0]],c=Math.cos(theta),si=Math.sin(theta);
+      const sign=atStart?-1:1;
+      const x=center[0]+sign*rad*(normal[0]*c+u[0]*si);
+      const z=center[1]+sign*rad*(normal[1]*c+u[1]*si);
+      const vx=sign*(u[0]*c-normal[0]*si);
+      const vz=sign*(u[1]*c-normal[1]*si);
+      const onBridge=atStart;
+      return {x,z,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+        yaw:Math.atan2(vx,vz),onBridge,turning:true};
+    };
+    if(phase>=route.total&&phase<route.total+turnLength)
+      return onArc(last,tangent(route.points.at(-2),last),
+        (phase-route.total)/rad,false);
+    if(phase>=2*route.total+turnLength)
+      return onArc(first,tangent(first,route.points[1]),
+        (phase-2*route.total-turnLength)/rad,true);
+    const forward=phase<route.total;
+    const distance=forward?phase:2*route.total+turnLength-phase;
+    const direction=forward?1:-1;
+    const i=Math.max(1,route.lengths.findIndex((at,index)=>
+      index>0&&at>=distance));
+    const a=route.points[i-1],b=route.points[i];
+    const fraction=(distance-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
+    let [ux,uz]=tangent(a,b);
+    // Smooth bridgehead bends' heading and lane offset across a 4-unit
+    // approach on either side; preserve the original centerline geometry.
+    for(let j=Math.max(1,i-1);j<=Math.min(route.points.length-2,i);j++){
+      const delta=distance-route.lengths[j],blend=4;
+      if(Math.abs(delta)>blend)continue;
+      const before=tangent(route.points[j-1],route.points[j]);
+      const after=tangent(route.points[j],route.points[j+1]);
+      const t=(delta+blend)/(2*blend),weight=t*t*(3-2*t);
+      const bx=before[0]*(1-weight)+after[0]*weight;
+      const bz=before[1]*(1-weight)+after[1]*weight;
+      const len=Math.hypot(bx,bz)||1;
+      ux=bx/len;uz=bz/len;break;
+    }
+    const yaw=Math.atan2(ux*direction,uz*direction);
+    const x=a[0]+(b[0]-a[0])*fraction+Math.cos(yaw)*rad;
+    const z=a[1]+(b[1]-a[1])*fraction-Math.sin(yaw)*rad;
+    const onBridge=i<=actor.bridgeSegmentCount;
+    return {x,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+      z,yaw,onBridge};
   }
 
   function trafficPose(actor,time) {
     if(actor.parked)return actor.parked;
+    if(actor.bridgehead)return bridgeheadTrafficPose(actor,time);
     const {route,pace,offset,kind}=actor;
     const cycle=(time*pace+offset)%(actor.vegas||actor.oneWay?route.total:2*route.total);
     const direction=cycle<route.total?1:-1;
