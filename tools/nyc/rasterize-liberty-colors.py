@@ -113,7 +113,8 @@ quadrant_rgb = {}
 for slot in range(len(blender_names)):
     if slot >= 4:
         raise RuntimeError("Unexpected extra Innerscene material")
-    x0, y0 = (slot % 2) * (W // 2), (slot // 2) * (H // 2)
+    # glTF UV V is bottom-up but Pillow scanlines are top-down.
+    x0, y0 = (slot % 2) * (W // 2), (1 - slot // 2) * (H // 2)
     patch = canvas[y0:y0 + H // 2, x0:x0 + W // 2]
     occupied = painted[y0:y0 + H // 2, x0:x0 + W // 2]
     if not np.any(occupied):
