@@ -11205,13 +11205,18 @@ const CENTRAL_PARK_SITES=[
     {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
       detail:'Inspect industrial brick facades, rooflines, road grid and street fixtures'},
     // Opt-in QA only: compare identical 290/-363 street target at three
-    // camera distances without ever altering aircraft controls or collision.
+    // camera distances without altering aircraft controls or collision.
+    // The original 170° camera retreated into harbor water at Mid/Far,
+    // making the LOD screenshots poor street-surface evidence. 45° looks
+    // from the confirmed dry northeast DUMBO blocks: at zoom 42 the
+    // camera XZ sites are ~[302,-351], [353,-300], [438,-215], with no
+    // official footprint collision and all terrain heights ~14.6.
     ...(new URLSearchParams(location.search).has('nycRoadQa')?[
-      {name:'DUMBO Road QA · Near',x:290,z:-363,height:1.4,bearing:170,
+      {name:'DUMBO Road QA · Near',x:290,z:-363,height:1.4,bearing:45,
         radius:18,rise:3.1,detail:'Near road surface, utility grate and curb'},
-      {name:'DUMBO Road QA · Mid',x:290,z:-363,height:1.4,bearing:170,
+      {name:'DUMBO Road QA · Mid',x:290,z:-363,height:1.4,bearing:45,
         radius:93,rise:10,detail:'Middle LOD at same target'},
-      {name:'DUMBO Road QA · Far',x:290,z:-363,height:1.4,bearing:170,
+      {name:'DUMBO Road QA · Far',x:290,z:-363,height:1.4,bearing:45,
         radius:220,rise:26,detail:'Far LOD at same target'}
     ]:[]),
     {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,
