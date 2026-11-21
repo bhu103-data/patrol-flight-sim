@@ -600,7 +600,7 @@ for(const plan of plannedRoads){
   }
 }
 const shorelineSafety=buildChongqingShorelineBarriers({
-  THREE,scene,ends:shorelineRoadEnds
+  THREE,scene,ground,ends:shorelineRoadEnds
 });
 // The shared obstacle index was built after all static structures above.
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
