@@ -5,6 +5,10 @@ on:
   pull_request:
     paths:
       - "assets/chongqing/street-lamp-review.js"
+      - "assets/chongqing/street-lamp-preview.js"
+      - "assets/chongqing/streetlife.js"
+      - "assets/chongqing/chongqing.js"
+      - "scripts/street-lamp-browser-review.mjs"
       - "tests/chongqing-street-lamp-review.test.mjs"
       - "scripts/audit-external-glb.mjs"
       - ".github/workflows/asset-glb-audit.yml"
@@ -17,7 +21,7 @@ concurrency:
 jobs:
   verify-source-glb:
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +50,23 @@ jobs:
             /tmp/patrol-review-street-light.glb \
             artifacts/streetlamp-review/source-manifest.json \
             artifacts/streetlamp-review/glb-audit.json
+      - name: Install original GLB into temporary test server only
+        run: |
+          mkdir -p assets/chongqing/review
+          cp /tmp/patrol-review-street-light.glb assets/chongqing/review/street-light.glb
+      - name: Install free headless Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start isolated local map server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-streetlamp-server.log 2>&1 &
+          sleep 3
+          curl --fail --silent http://127.0.0.1:8765/chongqing.html >/dev/null
+      - name: Capture same-camera street, low-altitude and battery WebGL evidence
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/street-lamp-browser-review.mjs
       - name: Retain evidence only, NOT automatic installation
         if: always()
         uses: actions/upload-artifact@v4
