@@ -239,6 +239,74 @@ export function createChongqingPBR(THREE){
     color:0x89a9b2,metalness:.39,roughness:.26,emissive:0x314a4f,
     emissiveIntensity:.36,side:THREE.DoubleSide
   });
+  // PATROL_CQ_CINEMATIC_V2: original textured facade atlas, not flat gray
+  // geometry. Architectural rhythm derives from modern Chongqing balcony
+  // slabs, concrete residential stock and blue-grey commercial towers.
+  function makeBuildingFacadeAtlas(kind,size=768){
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+    const c=canvas.getContext('2d');
+    const rows=16,cols=10,ww=size/cols,hh=size/rows;
+    let seed=kind==='residential'?170523:910277;
+    const rnd=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+    c.fillStyle=kind==='residential'?'#979b98':'#384b57';c.fillRect(0,0,size,size);
+    for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+      const x=col*ww,y=row*hh,lit=rnd()>.77;
+      const residential=kind==='residential';
+      // Subtle individual concrete/stone/mullion/soot tint.
+      const value=Math.floor(rnd()*22),tone=residential?
+        'rgb('+(145+value)+','+(147+value)+','+(144+value)+')':
+        'rgb('+(63+value)+','+(76+value)+','+(82+value)+')';
+      c.fillStyle=tone;c.fillRect(x,y,ww,hh);
+      c.fillStyle=residential?'#343d43':'#1f323e';
+      c.fillRect(x+ww*.16,y+hh*.18,ww*.70,hh*.61);
+      const g=c.createLinearGradient(x,y,x+ww,y+hh);
+      g.addColorStop(0,residential?'#324952':'#416472');
+      g.addColorStop(.45,lit?'#c5ac87':'#304e60');
+      g.addColorStop(1,residential?'#182b38':'#152e3a');
+      c.fillStyle=g;c.fillRect(x+ww*.21,y+hh*.22,ww*.60,hh*.54);
+      c.fillStyle='rgba(221,226,222,.26)';
+      c.fillRect(x+ww*.48,y+hh*.22,ww*.026,hh*.54);
+      c.fillStyle=residential?'#b1b5b1':'#788e99';
+      c.fillRect(x,y+hh*.81,ww,hh*.092);
+      c.fillStyle='rgba(25,31,35,.42)';
+      c.fillRect(x,y+hh*.90,ww,hh*.045);
+      if(residential){
+        // Deep ledge and partial AC cage/piping mimic real apartment service
+        // balconies while avoiding identical glowing office grids.
+        c.fillStyle='#6e7473';c.fillRect(x+ww*.69,y+hh*.44,ww*.19,hh*.28);
+        c.fillStyle='#989f9d';c.fillRect(x+ww*.71,y+hh*.48,ww*.14,hh*.16);
+        c.fillStyle='rgba(34,43,44,.65)';
+        for(let k=0;k<5;k++)c.fillRect(x+ww*.73,y+hh*(.49+k*.023),ww*.10,1);
+        if((col+row)%3===0){
+          c.fillStyle='#626a68';c.fillRect(x,y+hh*.72,ww*.95,hh*.044);
+          for(let j=0;j<4;j++)c.fillRect(x+ww*j*.25,y+hh*.64,ww*.022,hh*.12);
+        }
+      }else{
+        c.fillStyle='#94a2aa';c.fillRect(x+ww*.045,y,ww*.024,hh);
+        c.fillStyle='rgba(185,210,219,.15)';
+        c.fillRect(x+ww*.25,y+hh*.25,ww*.14,hh*.40);
+      }
+    }
+    // Fine weather and grime: no per-building network textures.
+    for(let i=0;i<2400;i++){
+      const x=rnd()*size,y=rnd()*size;
+      c.fillStyle=rnd()>.5?'rgba(212,215,200,.055)':'rgba(17,28,32,.055)';
+      c.fillRect(x,y,1+rnd()*3,1+rnd()*4);
+    }
+    const tex=new THREE.CanvasTexture(canvas);
+    tex.colorSpace=THREE.SRGBColorSpace;
+    tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+    tex.anisotropy=anisotropy;tex.generateMipmaps=true;
+    return tex;
+  }
+  const residentialFacade=new THREE.MeshStandardMaterial({
+    map:makeBuildingFacadeAtlas('residential'),color:0xf0f0ec,
+    roughness:.82,metalness:.025,side:THREE.DoubleSide
+  });
+  const commercialFacade=new THREE.MeshStandardMaterial({
+    map:makeBuildingFacadeAtlas('commercial'),color:0xe8eff2,
+    roughness:.39,metalness:.23,side:THREE.DoubleSide
+  });
   const roofMat=new THREE.MeshStandardMaterial({
     color:0xddd6cc,map:tileTexture,bumpMap:tileTexture,bumpScale:.09,roughness:.83,metalness:0
   });
@@ -297,6 +365,7 @@ export function createChongqingPBR(THREE){
     concrete:concreteMat,stone:stoneMat,asphalt:asphaltMat,roof:roofMat,
     cutStone:carvedStoneMat,glass:glassMat,window:nightWindowMat,
     curtainWall:curtainWallMat,glassPane:glassPaneMat,hillside:hillsideMat,
+    residentialFacade,commercialFacade,
     wood:woodMat,carvedWood:carvedWoodMat,cc0Status
   };
 }
