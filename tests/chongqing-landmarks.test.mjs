@@ -28,6 +28,22 @@ class Geometry {
   setIndex(a){this.index=a}
   computeVertexNormals(){}
 }
+class BoxGeometry extends Geometry {
+  constructor(){
+    super();
+    const coords=Array.from({length:24},(_,i)=>[
+      (i%4===0||i%4===3)?0:1,
+      i%4<2?1:0
+    ]);
+    this.attributes.uv={
+      coords,count:coords.length,needsUpdate:false,
+      getX(i){return this.coords[i][0]},
+      getY(i){return this.coords[i][1]},
+      setXY(i,u,v){this.coords[i]=[u,v]}
+    };
+  }
+  getAttribute(name){return this.attributes[name]}
+}
 class Material {
   constructor(options={}){Object.assign(this,options)}
   clone(){return new Material(this)}
@@ -50,7 +66,7 @@ class InstancedMesh extends Mesh {
   computeBoundingSphere(){}
 }
 const FakeThree={
-  BoxGeometry:Geometry,CylinderGeometry:Geometry,TorusGeometry:Geometry,
+  BoxGeometry,CylinderGeometry:Geometry,TorusGeometry:Geometry,
   BufferGeometry:Geometry,Float32BufferAttribute:Geometry,
   MeshStandardMaterial:Material,MeshPhysicalMaterial:Material,MeshBasicMaterial:Material,
   Object3D:Obj,Mesh,Group:Obj,InstancedMesh,PointLight:Obj,
@@ -60,7 +76,9 @@ const FakeThree={
 function setup(){
   const meshes=[],obstacles=[],signs=[];
   const scene={add(o){meshes.push(o)}};
-  const pbr={concrete:new Material({color:0xb2b2b2}),glass:new Material({roughness:.2}),window:new Material({color:0xdddddd})};
+  const pbr={concrete:new Material({color:0xb2b2b2}),glass:new Material({roughness:.2}),
+    window:new Material({color:0xdddddd}),
+    residentialFacade:new Material({map:'original-PBR-residential-atlas'})};
   const ground=(x,z)=>Math.max(8,22+z*.12);
   const box=(x,y,z,w,h,d,mat,parent=scene)=>{
     const mesh=new Mesh(new Geometry(),mat);
@@ -69,7 +87,7 @@ function setup(){
   const monument=buildChongqingLandmarks({
     THREE:FakeThree,scene,ground,pbr,box,sign:(...items)=>signs.push(items),obstacles
   });
-  return {monument,meshes,obstacles,signs,ground};
+  return {monument,meshes,obstacles,signs,ground,pbr};
 }
 
 test('eight towers and the 300-metre Crystal are present',()=>{
@@ -121,4 +139,30 @@ test('landmark mesh batching fits the indexed capacities',()=>{
   assert.ok(instances.length>=4);
   assert.ok(instances.every(i=>i.written<=i.capacity));
   assert.ok(monument.stats.lizibaWindows>350);
+});
+
+test('Liziba station uses original textured PBR facade even in low graphics mode',()=>{
+  const {monument,meshes,pbr,obstacles}=setup();
+  const shells=meshes.filter(mesh=>mesh instanceof Mesh&&
+    mesh.material===pbr.residentialFacade);
+  assert.equal(shells.length,2,'Lower and upper apartment shells use one shared PBR atlas');
+  const [lower,upper]=shells;
+  assert.ok(lower.scale.y<upper.scale.y);
+  for(const shell of shells){
+    const uv=shell.geometry.getAttribute('uv');
+    assert.ok(uv);
+    assert.ok(uv.needsUpdate);
+    for(let i=8;i<16;i++)
+      assert.deepEqual(uv.coords[i],[.02,.002],
+        'Roof/underside must sample plain concrete, not painted windows');
+  }
+  // The upper storeys have more actual floors and hence more atlas rows.
+  assert.ok(upper.geometry.getAttribute('uv').coords[0][1]>
+    lower.geometry.getAttribute('uv').coords[0][1]);
+  monument.setQuality('low');
+  assert.ok(shells.every(shell=>shell.visible!==false),
+    'Low graphics mode keeps textured buildings instead of blank gray boxes');
+  assert.equal(obstacles.filter(o=>Math.abs(o.x-monument.liziba.x)<1&&
+    Math.abs(o.z-monument.liziba.z)<=20).length,4,
+    'Monorail opening and all collision volumes stay unchanged');
 });
