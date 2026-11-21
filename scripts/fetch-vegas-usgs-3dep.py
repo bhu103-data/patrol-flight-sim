@@ -7,6 +7,8 @@ remain in Actions artifact; only a small georeferenced profile is committed.
 """
 from __future__ import annotations
 import datetime as dt
+import base64
+import struct
 import hashlib
 import io
 import json
@@ -94,6 +96,31 @@ def convert(raw: bytes) -> dict:
             diff = np.array(samples[side]) - np.array(samples["center"])
             if not np.isfinite(diff).all() or np.ptp(samples[side]) < 6:
                 raise RuntimeError(f"Invalid or too-flat {side} ridge profile")
+        # Two small *genuine* 2D WGS84 elevation surfaces, not interpolated
+        # from the three 1D ridge lines. Each cell samples one actual TIFF
+        # pixel from the USGS raster. Keep away from the outer nodata edge.
+        longitudes = {
+            "west": [round(-115.305 - .086 * j / 8, 7) for j in range(9)],
+            "east": [round(-115.045 + .077 * j / 8, 7) for j in range(9)]
+        }
+        surface = {"gridRows": 49, "gridColumns": 9,
+                   "rowOrdering": "south_to_north",
+                   "columnOrdering": "near_valley_to_outer_ridge",
+                   "encoding": "uint16_le_base64_decimeters"}
+        for side, lons in longitudes.items():
+            values = []
+            for lat in latitudes:
+                for lon in lons:
+                    row, col = dataset.index(lon, lat)
+                    if row < 0 or row >= HEIGHT or col < 0 or col >= WIDTH:
+                        raise RuntimeError("USGS 2D grid coordinate outside TIFF")
+                    dm = int(round(float(arr[row, col]) * 10))
+                    if not 1000 < dm < 45000:
+                        raise RuntimeError("Invalid USGS 2D DEM pixel")
+                    values.append(dm)
+            surface[side + "LongitudeWgs84"] = lons
+            surface[side + "ElevationDecimetersBase64"] = base64.b64encode(
+                struct.pack("<" + "H" * len(values), *values)).decode("ascii")
         return {
             "schema": "patrol-vegas-usgs-3dep-ridges-v1",
             "source": {"agency": "USGS", "dataset": "3DEP Bare Earth Dynamic ImageServer",
@@ -106,6 +133,7 @@ def convert(raw: bytes) -> dict:
             "rasterExtentWgs84": list(raster_bounds),
             "sampleLatitudesNorthing": latitudes,
             "elevationMeters": samples,
+            "ridgeSurface": surface,
             "gameInterpretation": {
                 "x": "west/east background ridge only, not ground plane",
                 "z": "south to north in 49 samples across the bounded extent",
