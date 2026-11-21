@@ -5,6 +5,9 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "assets/nyc/nyc-gis-infill.js"
+      - "tests/nyc-times-fid384606-storefront.test.mjs"
+      - "scripts/nyc-road-browser-smoke.mjs"
       - "tests/nyc-roof-setback-grounding.test.mjs"
       - ".github/workflows/nyc-bridgehead-browser.yml"
   push:
@@ -14,6 +17,7 @@ on:
       - "assets/nyc/**"
       - "tests/nyc-brooklyn-*.test.mjs"
       - "tests/nyc-times-ground-storefronts.test.mjs"
+      - "tests/nyc-times-fid384606-storefront.test.mjs"
       - "tests/nyc-liberty-crown-volume.test.mjs"
       - "scripts/nyc-road-browser-smoke.mjs"
       - "tests/nyc-road-clearance.test.mjs"
@@ -46,7 +50,7 @@ jobs:
           node-version: "22"
       - name: Validate NYC road and waterfront clearance
         run: |
-          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-times-ground-storefronts.test.mjs tests/nyc-oti-harbor-window-depth.test.mjs tests/nyc-unified-webgl-qa.test.mjs tests/nyc-harbor-sky-qa.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
+          node --test tests/nyc-road-clearance.test.mjs tests/nyc-authored-road-shoreline.test.mjs tests/nyc-road-coastline.test.mjs tests/nyc-intersection-connectivity.test.mjs tests/nyc-intersection-waterline.test.mjs tests/nyc-brooklyn-lod.test.mjs tests/nyc-brooklyn-facades.test.mjs tests/nyc-times-ground-storefronts.test.mjs tests/nyc-times-fid384606-storefront.test.mjs tests/nyc-oti-harbor-window-depth.test.mjs tests/nyc-unified-webgl-qa.test.mjs tests/nyc-harbor-sky-qa.test.mjs tests/nyc-liberty-crown-volume.test.mjs tests/nyc-roof-setback-grounding.test.mjs
       - name: Install Chromium with software WebGL
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
