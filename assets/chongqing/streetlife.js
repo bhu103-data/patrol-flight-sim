@@ -279,7 +279,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
         v.disabled=!found;
       }
       const currentDist=v.distance??0;
-      const currentX=((v.start+currentDist+half)%loop+loop-half);
+      const currentX=((v.start+currentDist+half)%loop+loop)%loop-half;
       let nextDistance=currentDist+v.speed*Math.max(.04,1-(v.stall??0)*.95)*dt*v.dir;
       let x=((v.start+nextDistance+half)%loop+loop)%loop-half;
       // Stop cars going west on the upper riverside road at the red crossing.
