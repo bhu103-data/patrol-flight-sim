@@ -78,7 +78,11 @@ export function buildNycBridgeheadDetailChunks({
     if(!isClear(x,centerZ,.45)||terrainAt(x,centerZ)<waterY+1.58)
       continue;
     const baseY=streetY+.154,mid=makeMesh(),near=makeMesh();
-    const blackIron=[.215,.241,.247],frame=[.425,.452,.455],
+    // The original iron tint sat inside PATROL's asphalt color-key mask
+    // (~0.73 road classification), so rain could incorrectly turn a drain
+    // cover into a wet-road reflection surface. Keep metal outside both
+    // asphaltA/B shader thresholds without altering pavement materials.
+    const blackIron=[.14,.16,.18],frame=[.425,.452,.455],
       rib=[.53,.55,.55];
     // Mid LOD: recognizable 0.64 x 0.48m utility grate surround.
     // Actual mesh is slightly above, not coplanar with, the sidewalk.
