@@ -170,7 +170,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
 
   // The Qiansimen crossing uses an arched crimson truss silhouette with diagonal web members.
   // Unlike the second stylized cable-stayed crossing it is no longer dominated by pylons.
-  const by=59, bx=-230;
+  const by=59, bx=40;
   for(const side of [-1,1]){
     const xx=bx+side*9.7;
     for(let i=0;i<28;i++){
@@ -299,7 +299,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   for(let i=0;i<560;i++){
     const near=rand()<.72, x=near?-150+rand()*570:-900+rand()*1850;
     const z=riverCenter(x)+(rand()-.5)*138;
-    const dist=Math.min(Math.abs(x-155),Math.abs(x+230),Math.abs(x-470));
+    const dist=Math.min(Math.abs(x-155),Math.abs(x-40),Math.abs(x-470));
     const strength=Math.max(.45,1-dist/500);
     dummy.position.set(x,-1.88+rand()*.06,z);
     dummy.rotation.set(-Math.PI/2,0,0);
@@ -323,7 +323,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.9,vertexColors:true,transparent:true,opacity:.38,depthWrite:false})));
 
   // Three high-value lamps only; warm emissive geometry supplies most of the night scene.
-  for(const [x,z,intensity] of [[155,180,95],[280,285,80],[-230,20,85]]){
+  for(const [x,z,intensity] of [[155,180,95],[280,285,80],[40,20,85]]){
     const p=new THREE.PointLight(0xff9c53,intensity,145,2);
     p.position.set(x,ground(x,z)+34,z);scene.add(p);
   }
