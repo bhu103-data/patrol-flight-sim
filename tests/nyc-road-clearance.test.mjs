@@ -46,6 +46,27 @@ test('no road ribbon or intersection is painted through an occupied building',()
       assert.fail('Road ribbon inside building footprint');
   }
 });
+test('an obstructed Manhattan avenue keeps clear approaches without painting through a building',()=>{
+  // Building is centered on i=0 Avenue between j=0 and j=1.
+  const obstruction={x:33.84,z:16,w:10,d:10};
+  const isClear=(x,z,r=0)=>Math.abs(x-obstruction.x)>=obstruction.w*.5+r||
+    Math.abs(z-obstruction.z)>=obstruction.d*.5+r;
+  const {stats,slabs}=city(isClear);
+  const mainAsphalt=slabs.filter(r=>r.width===6.35&&
+    Math.abs(r.a[0]-(30+.24*r.a[2]))<.02&&
+    Math.abs(r.b[0]-(30+.24*r.b[2]))<.02&&
+    r.a[2]>=-1e-8&&r.b[2]<=33+1e-8);
+  assert.ok(stats.preservedRoadSections>=2,'clear road approaches should be retained');
+  assert.ok(mainAsphalt.some(r=>r.a[2]>=0&&r.b[2]<7),
+    'keep the avenue approaching the building from the south');
+  assert.ok(mainAsphalt.some(r=>r.a[2]>25&&r.b[2]<=33),
+    'keep the avenue leaving the building to the north');
+  for(const r of mainAsphalt){
+    const middleZ=(r.a[2]+r.b[2])/2;
+    assert.equal(isClear(30+.24*middleZ,middleZ,r.width*.5),true,
+      'asphalt ribbon must not penetrate the occupied parcel');
+  }
+});
 test('thin walls between grid samples cannot cut through avenue asphalt',()=>{
   const wall={x:33.5,z:12.3,w:.16,d:.16};
   const isClear=(x,z,r=0)=>Math.abs(x-wall.x)>=wall.w*.5+r||
