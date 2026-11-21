@@ -60,6 +60,30 @@ test('Brooklyn Bridge district contains bounded additional building footprints',
   assert.ok(fills.length>=10,'small vacant blocks should be filled');
   assert.equal(terrain.height.length,64*64);
 });
+test('synthetic NYC buildings preserve the local grid road and sidewalk corridors',()=>{
+  const normalizer=Math.hypot(1,city.tilt);
+  let checked=0;
+  for(const lot of terrain.parcels){
+    if(lot[7]||lot[8]==='bridgehead-gapfill')continue;
+    const [x,z,w,d]=lot;
+    const u=(x-city.tilt*z-city.offset)/city.blockWidth;
+    const v=z/city.blockLength;
+    const ix=Math.floor(u),iz=Math.floor(v);
+    const onStreetGrid=(ix>=-10&&ix<=8&&iz>=-17&&iz<=12)||
+      (ix>=9&&ix<=20&&iz>=-13&&iz<=-7);
+    if(!onStreetGrid)continue;
+    checked++;
+    const fracU=u-ix,fracV=v-iz;
+    const avenueDist=Math.min(fracU,1-fracU)*city.blockWidth/normalizer;
+    const buildingExtent=(w+Math.abs(city.tilt)*d)*.5/normalizer;
+    const crossDist=Math.min(fracV,1-fracV)*city.blockLength;
+    assert.ok(avenueDist>=buildingExtent+4.65-1e-6,
+      'Avenue corridor blocked by parcel '+x.toFixed(1)+','+z.toFixed(1));
+    assert.ok(crossDist>=d*.5+4.35-1e-6,
+      'Cross street blocked by parcel '+x.toFixed(1)+','+z.toFixed(1));
+  }
+  assert.ok(checked>=100,'enough generated buildings were inspected');
+});
 test('generated bridgehead buildings do not intrude into authored road corridors',()=>{
   const crosses=new Function('city','return ('+
     functionSource('generatedCityRoadOverlap')+')')(city);
