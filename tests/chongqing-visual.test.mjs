@@ -112,4 +112,27 @@ test('map material bindings and riverfront building placement remain wired',asyn
   assert.ok(source.includes('landmarkBuild.update(dt)'));
 });
 
+test('cinematic Chongqing uses PBR curved hotpot roof and grounded river-facing bays',async()=>{
+  const source=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  const blender=await readFile(new URL('../tools/blender/chongqing_scenario_author.py',import.meta.url),'utf8');
+  const bridge=await readFile(new URL('../assets/chongqing/scenario-assets.js',import.meta.url),'utf8');
+  const manifest=JSON.parse(await readFile(new URL('../assets/chongqing/scenario-manifest.json',import.meta.url),'utf8'));
+  assert.match(source,/const roofMat=pbr\.roof\.clone\(\)/,
+    'physical PBR ceramic roof instead of broad flat box');
+  assert.match(source,/const potWarmGlass=new THREE\.MeshStandardMaterial/,
+    'real riverfront glazing with nighttime occupancy');
+  assert.match(source,/earth=ground\(x,z\)/,
+    'cliffside restaurant supports follow terrain');
+  assert.doesNotMatch(source,/flyingScarf\./,
+    'realistic pilot no longer animates removed cartoon scarf');
+  assert.match(blender,/wing_depth_offsets = \(-2\.25, 1\.15, -\.65\)/,
+    'Hongyadong comprises staggered structural wings');
+  assert.match(blender,/covered_wings = \{/,
+    'a varied roofline rather than identical continuous slabs');
+  assert.match(bridge,/node\.castShadow=true/,
+    'recessed eaves receive real shadow passes');
+  assert.equal(manifest.hongyadong.enabled,false,
+    'the unapproved landmark must remain opt-in');
+});
+
 process.on('exit',()=>{globalThis.document=oldDocument});
