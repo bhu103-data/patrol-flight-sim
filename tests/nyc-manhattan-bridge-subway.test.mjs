@@ -20,6 +20,7 @@ test('prototype loads before native WebGL renderer and only builds in NYC scene'
   assert.match(traffic,/if\(selectedMap\.city&&typeof window!==['\"]undefined['\"]&&window\.PatrolNycManhattanSubway\)\{/);
   assert.match(traffic,/subway\.trainPose\(sceneryTime,run,car\)/);
   assert.match(traffic,/streetMeshes\.train/);
+  assert.ok(html.includes('Manhattan Bridge · Subway Tracks'),'Metro bridge camera is selectable');
   assert.match(html,/const BROOKLYN_RAIL = \{[^\n]*enabled:false/);
 });
 

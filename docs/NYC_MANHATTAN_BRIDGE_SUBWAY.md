@@ -26,3 +26,7 @@ Sources:
 
 ## Rights
 Code is original in this PR; no third-party image, mesh, Tripo asset, audio, or model files copied. Public reference photographs remain reference only. License details for future imported third-party GLBs must be audited separately.
+
+## Dedicated spectator QA
+- In the NYC game press **H → Scenic Views → Manhattan Bridge · Subway Tracks**. Fly controls stay unchanged; leave the view to resume.
+- The NYC bridgehead WebGL smoke captures `10-manhattan-bridge-subway.png` after checking that the real browser loaded the module, its four tracks and two train runs, and that WebGL2 did not report an error. This does not itself certify correct geographic placement or photorealism.
