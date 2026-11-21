@@ -249,7 +249,7 @@ function bridge(x,style=0){
     lane.material=M.gold;
   }
 }
-bridge(-230,0);bridge(470,1);
+bridge(40,0);bridge(470,1);
 
 // Warm, stacked Hongyadong-style architecture. An intentionally compressed artistic reconstruction.
 const hong=new THREE.Group();scene.add(hong);
@@ -287,8 +287,8 @@ function sign(text,x,y,z,w=44,h=11,ink='#ffe3a4',bg='#58202a'){
   plane.position.set(x,y,z);scene.add(plane);return plane;
 }
 sign('洪崖洞',155,133,215,48,13);
-sign('千厮门大桥',-230,82,40,40,10);
-sign('解放碑',-153,130,275,38,11);
+sign('千厮门大桥',40,82,40,40,10);
+sign('解放碑',-135,ground(-135,335)+64,347,28,8);
 
 const hotpot={x:285,z:225};
 const shopY=ground(hotpot.x,hotpot.z);
@@ -578,7 +578,7 @@ function updateQuest(){
     visited.hong=true;const el=document.getElementById('questHong');
     el.textContent='✓ 飞过洪崖洞';el.classList.add('done');message('发现地标：洪崖洞！');
   }
-  if(!visited.bridge&&([-230,470].some(x=>Math.abs(state.pos.x-x)<45))&&Math.abs(state.pos.z)<130&&state.pos.y>35){
+  if(!visited.bridge&&([40,470].some(x=>Math.abs(state.pos.x-x)<45))&&Math.abs(state.pos.z)<130&&state.pos.y>35){
     visited.bridge=true;const el=document.getElementById('questBridge');
     el.textContent='✓ 飞过跨江大桥';el.classList.add('done');message('飞越两江大桥！');
   }
@@ -597,7 +597,7 @@ function drawMinimap(){
   mapCtx.strokeStyle='#3b90b4';mapCtx.lineWidth=22;mapCtx.beginPath();
   for(let i=0;i<=40;i++){const x=-990+1980*i/40,px=128+(x-state.pos.x)*.17,py=128+(riverCenter(x)-state.pos.z)*.17;if(i===0)mapCtx.moveTo(px,py);else mapCtx.lineTo(px,py);}
   mapCtx.stroke();
-  for(const [x,z,label] of [[155,145,'洪'],[-230,0,'桥'],[470,0,'桥'],[hotpot.x,hotpot.z,'锅']]){
+  for(const [x,z,label] of [[155,145,'洪'],[40,0,'桥'],[470,0,'桥'],[hotpot.x,hotpot.z,'锅']]){
     const px=128+(x-state.pos.x)*.17,py=128+(z-state.pos.z)*.17;
     mapCtx.fillStyle='#ffd28b';mapCtx.beginPath();mapCtx.arc(px,py,10,0,TAU);mapCtx.fill();
     mapCtx.fillStyle='#30251d';mapCtx.font='bold 13px sans-serif';mapCtx.textAlign='center';mapCtx.textBaseline='middle';mapCtx.fillText(label,px,py);
