@@ -39,8 +39,13 @@ async function capture(label,file){
   }));
   if(state.menuError||state.gpuLost||!state.flight?.playing||state.flight.map!=='alaska')
     throw Error(label+' failed to load: '+JSON.stringify(state));
-  await page.locator('#skyTime').selectOption('12');
-  await page.locator('#skyWeather').selectOption('Clear');
+  await page.evaluate(()=>{
+    for(const [id,value] of [['skyTime','12'],['skyWeather','Clear']]){
+      const control=document.getElementById(id);
+      control.value=value;
+      control.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+  });
   await page.waitForTimeout(1300);
   await page.addStyleTag({content:
     '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
