@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "purpose": "One-off planning intake only; no runtime GIS transform or code changes",
+  "baseline_ref": "codex/nyc-road-realism",
+  "source_files": [
+    "index.html",
+    "assets/nyc/nyc-street-network.js",
+    "docs/nyc-road-realism.md"
+  ],
+  "authoritative_datasets": [
+    {
+      "name": "NYC DCP LION",
+      "id": "2v4z-66xt",
+      "url": "https://data.cityofnewyork.us/City-Government/LION/2v4z-66xt"
+    },
+    {
+      "name": "NYC Street Centerline / CSCL",
+      "id": "inkn-q76z",
+      "url": "https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/inkn-q76z"
+    }
+  ],
+  "gis_record_status": {
+    "downloaded_per_segment_records": false,
+    "segment_ids": null,
+    "node_ids": null,
+    "geometry": null,
+    "crs_transform": null,
+    "reason": "Official metadata read, but record-level Socrata API endpoints unavailable in this chat session. Never infer surveyed coordinates from game positions."
+  },
+  "lion_codes": {
+    "TrafDir": {
+      "W": "FromNode to ToNode one-way",
+      "A": "ToNode to FromNode one-way",
+      "T": "two-way",
+      "P": "pedestrian / non-vehicular"
+    },
+    "SegmentTyp": {
+      "E": "entrance or exit ramp",
+      "C": "roadbed connector",
+      "R": "physical roadbed",
+      "G": "imaginary generic centerline",
+      "F": "auxiliary faux connector"
+    }
+  },
+  "game_space_only": {
+    "crs": "PATROL custom normalized coordinates; NOT geographic or projected GIS",
+    "east_bridge_end": {
+      "x": 253,
+      "z": -342,
+      "source": "EAST_RIVER_BRIDGE.x + halfLength + ramp"
+    },
+    "route_edges": [
+      {
+        "source_id": "CITY_STREETS[0]",
+        "first": [
+          -89,
+          -342
+        ],
+        "last": [
+          253,
+          -342
+        ],
+        "traffic_routing": "independent back-and-forth"
+      },
+      {
+        "source_id": "CITY_STREETS[2]",
+        "first": [
+          253,
+          -342
+        ],
+        "next": [
+          273,
+          -333
+        ],
+        "traffic_routing": "independent back-and-forth"
+      },
+      {
+        "source_id": "CITY_STREETS[6]",
+        "first": [
+          253,
+          -342
+        ],
+        "next": [
+          245,
+          -319
+        ],
+        "traffic_routing": "not in first three CITY_STREETS car routes"
+      }
+    ],
+    "missing_graph_connector": "bridge route to Brooklyn feeders has no shared directed turn-edge despite coincident geometry"
+  },
+  "priority_intersections": [
+    {
+      "id": "adams_tillary",
+      "real_streets": [
+        "Adams Street",
+        "Tillary Street"
+      ],
+      "mode": "vehicle_and_crossing",
+      "official_plan_url": "https://www.nyc.gov/html/dot/downloads/pdf/tillary-adams-reconstruction.pdf",
+      "motor_directional_scheme": "Adams northbound bridge-bound vs southbound outbound; Tillary east-west divided roadway per DOT design",
+      "verified_current_lion_trafdir": null,
+      "verified_current_lane_count": null,
+      "crossing": "two-stage pedestrian crossings across separated roadbeds with refuge island; precise placement unverified",
+      "historic_turn_restrictions": [
+        "Adams northbound to Tillary westbound left prohibited (2008 DOT source)",
+        "Tillary eastbound to Adams northbound left prohibited (2008 DOT source)"
+      ],
+      "current_turn_restrictions_verified": false
+    },
+    {
+      "id": "adams_johnson",
+      "real_streets": [
+        "Adams Street",
+        "Johnson Street"
+      ],
+      "mode": "bicycle_pedestrian",
+      "crossing": "median shared path to Johnson Street; 2026 planned barrier-protected two-way bike-link toward Fulton",
+      "current_completion_status": null,
+      "evidence_date": "2026-06-09",
+      "verified_current_lion_bike_trafdir": null
+    },
+    {
+      "id": "washington_prospect",
+      "real_streets": [
+        "Washington Street / Cadman Plaza East",
+        "Prospect Street"
+      ],
+      "mode": "pedestrian_stairs",
+      "crossing": "Brooklyn Bridge promenade staircase into DUMBO; not a car-road turn",
+      "official_reference": "https://brooklynbridgepark.org/places-to-see/brooklyn-bridge/",
+      "verified_current_lion_trafdir": null
+    }
+  ],
+  "acceptance_gates": [
+    "No guessed geographic coordinates or node/segment IDs",
+    "No game-space segment silently renamed as an actual NYC street",
+    "No bridge-to-feeder turns until LION roadbed and ramp node topology is verified",
+    "No at-grade vehicle connection through nonpedestrian or grade-separated segments",
+    "Crosswalks depend on the confirmed reachable curb endpoints and real refuge islands",
+    "Current lane counts, turn restrictions and bike-link construction status remain unresolved until checked"
+  ],
+  "forbidden_changes": [
+    "main",
+    "codex/nyc-road-realism",
+    "index.html",
+    "bridge deck",
+    "flight physics",
+    "live assets"
+  ]
+}
