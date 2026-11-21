@@ -8,7 +8,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       typeof terrainAt !== 'function' || !Number.isFinite(waterY)) {
     throw new TypeError('Alaska detail requires mesh writers and terrain sampling');
   }
-  const stats={crevasses:0,iceFloes:0,rockBands:0};
+  const stats={crevasses:0,iceFloes:0,iceFloesRejectedShore:0,rockBands:0};
   // All geometry is cosmetic, measured heights still come from terrainAt.
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
@@ -111,14 +111,18 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     // Check the whole floe footprint against the surveyed coast, including
     // diagonal banks. Four cardinal samples alone let ice intersect narrow
     // diagonal spits even while its center was on navigable water.
-    let whollyAfloat=terrainAt(east,north)<=waterY+.12;
+    const isWater=(x,z)=>{
+      const sample=terrainAt(x,z);
+      return Number.isFinite(sample)&&sample<=waterY+.12;
+    };
+    let whollyAfloat=isWater(east,north);
     for(let edge=0;edge<8 && whollyAfloat;edge++){
       const angle=edge*Math.PI/4;
-      if(terrainAt(east+Math.cos(angle)*radius,
-                   north+Math.sin(angle)*radius)>waterY+.12)
+      if(!isWater(east+Math.cos(angle)*radius,
+                  north+Math.sin(angle)*radius))
         whollyAfloat=false;
     }
-    if(!whollyAfloat)continue;
+    if(!whollyAfloat){stats.iceFloesRejectedShore++;continue;}
     const corners=7+i%3;
     const y=waterY+.035,thick=.15+.27*hash(i*29+5);
     const top=[.69+.10*j,.85+.08*j,.90+.06*j];
@@ -130,6 +134,15 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       ring.push([east+Math.cos(a)*radius*scale,y+thick,
         north+Math.sin(a)*radius*(.53+.23*h)*scale]);
     }
+    // The eight outward radial probes alone still miss shallow patches within
+    // the polygon. Check the exact triangle-fan boundary and interior too.
+    const touchesShore=ring.some((point,k)=>{
+      const next=ring[(k+1)%corners];
+      return !isWater(point[0],point[2]) ||
+        !isWater((point[0]+next[0])*.5,(point[2]+next[2])*.5) ||
+        !isWater((point[0]+east)*.5,(point[2]+north)*.5);
+    });
+    if(touchesShore){stats.iceFloesRejectedShore++;continue;}
     for(let k=0;k<corners;k++){
       const next=(k+1)%corners,a=ring[k],b=ring[next];
       addTri(center,a,b,top);
