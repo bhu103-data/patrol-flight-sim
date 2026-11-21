@@ -376,7 +376,18 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     }
   }
   // Hotpot shop facade: metal roll-up frames, neon window strips, red lanterns, tiled entrance.
-  const sx=hotpot.x,sz=hotpot.z,sy=ground(sx,sz);
+  const sx=hotpot.x,sz=hotpot.z,sy=ground(sx,sz+28);
+// Stilted hillside foundation: the rear sits above lower terrain, while the
+// storefront threshold meets the uphill pavement rather than being buried.
+for(const x of [sx-29,sx-7,sx+17,sx+29]){
+  for(const z of [sz-18,sz+7]){
+    const earth=ground(x,z);
+    const rise=Math.max(1,sy-earth);
+    put('stone',x,earth+rise*.5,z,2.6,rise,2.7);
+    put('carved',x,sy+.34,z,5,.68,5);
+  }
+}
+put('paving',sx,sy+.36,sz+31.3,72,.7,14);
   obstacles.push({x:sx,z:sz,w:72,d:50,base:sy,top:sy+23.3});
   for(let x=sx-30;x<=sx+30;x+=10){
     put('timber',x,sy+9,sz+26.4,.8,18,.9);
