@@ -52,6 +52,12 @@ try{
     await page.waitForTimeout(1100);
     await capture(name);
   }
+  // Inspect the actual riverbank dead-end guardrails in real WebGL:
+  // the left side of the tributary must show rails on dry asphalt, no
+  // floating posts or uninterrupted underwater road through the channel.
+  await page.keyboard.press('5');
+  await page.waitForTimeout(1100);
+  await capture('03b-tributary-safety-guards');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
