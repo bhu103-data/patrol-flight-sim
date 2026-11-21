@@ -110,6 +110,26 @@ test('crossing changes its active lamp after 24 seconds and again after 36',()=>
   assert.equal(greens[0].visible,true);
   assert.equal(reds[0].visible,false);
 });
+test('westbound taxi traffic can stop at red and resume when signal turns green',()=>{
+  const {traffic}=setup();
+  let sawStop=false,sawRelease=false,stoppedId=-1;
+  for(let frame=0;frame<3500;frame++){
+    traffic.update(.04,null);
+    const snap=traffic.snapshot();
+    for(let i=0;i<snap.vehicles.length;i++){
+      const v=snap.vehicles[i];
+      if(v.side!==1||v.tier!==1||v.dir!==-1)continue;
+      if(!snap.vehicleGreen&&Math.abs(v.x-297)<.08){
+        sawStop=true;stoppedId=i;
+      }
+      if(sawStop&&snap.vehicleGreen&&i===stoppedId&&v.x<294){
+        sawRelease=true;
+      }
+    }
+  }
+  assert.equal(sawStop,true,'at least one car halts before the pedestrian crossing');
+  assert.equal(sawRelease,true,'held car resumes at the next green phase');
+});
 test('painted car body, cabin glass, wheels and white-black checker are separate batches',()=>{
   const {objects}=setup();
   const instanced=objects.filter(x=>x instanceof InstancedMesh);
