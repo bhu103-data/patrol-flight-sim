@@ -2381,7 +2381,7 @@
       }
       vec3 n = normalize(vNorm);
       vec3 material = vColor;
-      if(vHarborSurface>0.0) material=harborSurfaceColor(material,n);
+      if(vHarborSurface>0.0 && vHarborSurface<3.5) material=harborSurfaceColor(material,n);
       float surfaceRoughness=1.0;
       float nyRoad=0.0,nyPuddle=0.0;
       if(uManhattanView && uSmooth && uNyStreetQuality>0.5){
@@ -2410,6 +2410,15 @@
         }
         vec3 toEye = uEye - vWorld;
         float fresnel=pow(clamp(1.0-abs(dot(normalize(toEye),n)),0.0,1.0),3.4);
+        // Material classes 4 (paint/metal) and 5 (glass) are explicitly
+        // authored on the moving vehicles and boats, independent of map.
+        if(vHarborSurface>=3.5 && vHarborSurface<5.5){
+          bool clearGlass=vHarborSurface>4.5;
+          surfaceRoughness=clearGlass?.16:.34;
+          vec3 skyTint=mix(vec3(.12,.20,.28),vec3(.46,.59,.69),uAtmosphere.x);
+          material=mix(material,skyTint,
+            fresnel*(clearGlass?.62:.20));
+        }
         if(uDcSurface==5 && n.y>0.8){
           vec3 reflected=mix(vec3(0.13,0.21,0.31),vec3(0.55,0.69,0.79),uAtmosphere.x);
           material=mix(material,reflected,fresnel*0.72);
@@ -2494,10 +2503,10 @@
         horizon=mix(horizon,vec3(0.48,0.33,0.35),uAtmosphere.y*0.58);
         vec3 nightFill=uTwilight?vec3(0.57,0.54,0.61):uManhattanView?vec3(0.40,0.43,0.52):vec3(0.25,0.32,0.45);
         vec3 shaded=material*light*mix(nightFill,vec3(1.0),uAtmosphere.x)+windowLight;
-        if(uDcSurface>=0){
+        if(uDcSurface>=0 || (vHarborSurface>=3.5 && vHarborSurface<5.5)){
           vec3 halfRay=normalize(uSun+normalize(toEye));
-          float gloss=pow(max(dot(n,halfRay),0.0),mix(64.0,11.0,surfaceRoughness));
-          shaded+=vec3(0.88,0.90,0.94)*gloss*(0.025+0.19*(1.0-surfaceRoughness))*direct*uAtmosphere.x;
+          float gloss=pow(max(dot(n,halfRay),0.0),mix(86.0,11.0,surfaceRoughness));
+          shaded+=vec3(.88,.90,.94)*gloss*(.025+.19*(1.0-surfaceRoughness))*direct*uAtmosphere.x;
         }
         if(uTwilight)shaded+=vegasSpill(vWorld,n)*(0.14+material*0.80)*(1.0-uAtmosphere.x*0.88);
         if(uManhattanView)shaded+=manhattanSpill(vWorld,n)*(0.13+material*0.74)*(1.0-uAtmosphere.x*0.89);
@@ -2753,10 +2762,10 @@
     addQuad(nBot, nLeft, fLF, fBotF, grey);
     addQuad(nRight, nBot, fBotF, fRF, slate);
 
-    addQuad(fTopF, fRF, fRR, fTopR, slate);
-    addQuad(fLF, fTopF, fTopR, fLR, grey);
+    addQuad(fTopF, fRF, fRR, fTopR, slate,4);
+    addQuad(fLF, fTopF, fTopR, fLR, grey,4);
     addQuad(fBotF, fLF, fLR, fBotR, slate);
-    addQuad(fRF, fBotF, fBotR, fRR, grey);
+    addQuad(fRF, fBotF, fBotR, fRR, grey,4);
 
     // Clear bubble canopy: only the structural frame is opaque, leaving the
     // pilot visible from chase and top-down views.
@@ -3296,13 +3305,13 @@
       .finally(()=>{nycRealismLoading=false;});
   }
 
-  function addModelBox(addQuad, x, y, z, width, height, length, color) {
+  function addModelBox(addQuad, x, y, z, width, height, length, color, materialClass=0) {
     const l = x-width/2, r = x+width/2, b = y-height/2, t = y+height/2;
     const f = z+length/2, k = z-length/2;
     const a=[l,b,f],c=[r,b,f],e=[r,t,f],g=[l,t,f];
     const i=[l,b,k],j=[r,b,k],m=[r,t,k],n=[l,t,k];
     for (const face of [[a,c,e,g],[j,i,n,m],[i,a,g,n],[c,j,m,e],[g,e,m,n],[i,j,c,a]]) {
-      addQuad(...face,color);
+      addQuad(...face,color,materialClass);
     }
   }
 
@@ -3318,13 +3327,21 @@
     const { halfLength: length, halfWidth: width } = SHIP_TYPES[kind];
     const hull = kind === 'cargo' ? [0.27,0.23,0.27] : kind === 'ferry' ? [0.86,0.37,0.10] : [0.13,0.29,0.43];
     const ivory = [0.88,0.91,0.92], windows = [0.14,0.28,0.38], red = [0.80,0.28,0.20];
-    const outline = [[0,length],[width,length*0.55],[width,-length*0.73],[width*0.67,-length],
+    // NYC harbor commuter ferries have a double-ended bow/stern silhouette.
+    const outline = kind==='ferry' ? [
+      [0,length],[width*.62,length*.95],[width*.92,length*.77],
+      [width,length*.52],[width,-length*.52],
+      [width*.92,-length*.77],[width*.62,-length*.95],[0,-length],
+      [-width*.62,-length*.95],[-width*.92,-length*.77],
+      [-width,-length*.52],[-width,length*.52],
+      [-width*.92,length*.77],[-width*.62,length*.95]
+    ] : [[0,length],[width,length*0.55],[width,-length*0.73],[width*0.67,-length],
       [-width*0.67,-length],[-width,-length*0.73],[-width,length*0.55]];
     const deck = outline.map(([x,z]) => [x,2.3,z]);
     const keel = outline.map(([x,z]) => [x*0.73,-0.60,z*0.94]);
     for (let i=0;i<outline.length;i++) {
       const j = (i+1)%outline.length;
-      addQuad(deck[i],deck[j],keel[j],keel[i],hull);
+      addQuad(deck[i],deck[j],keel[j],keel[i],hull,4);
       addTri([0,2.3,0],deck[i],deck[j],ivory);
     }
     if (kind === 'cruise') {
@@ -3356,9 +3373,9 @@
       box(0,10.5,-7,2.4,4.5,3.3,red);
       box(0,12.6,-7,2.5,0.65,3.4,hull);
     } else if (kind === 'ferry') {
-      box(0,3.5,-1,width*1.8,2.5,length*1.48,ivory);
-      box(0,5.4,2,width*1.43,1.5,length*0.96,[0.82,0.60,0.23]);
-      for (const side of [-1,1]) box(side*width*0.90,4,-1,0.16,0.8,length*1.34,windows);
+      box(0,3.5,-1,width*1.8,2.5,length*1.48,ivory,4);
+      box(0,5.4,2,width*1.43,1.5,length*0.96,[0.82,0.60,0.23],4);
+      for (const side of [-1,1]) box(side*width*0.90,4,-1,0.16,0.8,length*1.34,windows,5);
       box(0,6.85,-3,1.72,1.3,1.9,hull);
     } else {
       box(0,4.4,-length*0.70,width*1.54,4.0,5,ivory);
@@ -3457,6 +3474,45 @@
           box(side*(width*.78),2.82,zz,.55,.11,.45,stainless);
         }
       box(0,9.10,-length*.70,.10,2.15,.10,stainless);
+    }
+
+    // Double-ended terminal approach: matching pilot houses at both ends,
+    // framed windscreens, railings and navigation hardware, no brand decals.
+    if(kind==='ferry'){
+      const orange=[.87,.39,.13],white=[.88,.91,.88],
+            windowTint=[.13,.29,.37],steel=[.65,.69,.70];
+      for(const end of [-1,1]){
+        const pilotZ=end>0?7.0:-8.1;
+        const outward=pilotZ+end*1.12;
+        box(0,7.32,pilotZ,2.30,.92,2.12,white,4);
+        box(0,7.89,pilotZ,2.54,.16,2.33,[.34,.39,.42]);
+        box(0,7.34,outward,1.96,.48,.052,windowTint,5);
+        for(const side of [-1,1]){
+          box(side*.63,7.34,outward+end*.034,.045,.50,.064,steel);
+          box(side*1.16,7.31,pilotZ,.047,.43,1.60,windowTint,5);
+          box(side*1.21,8.14,pilotZ,.050,.55,.05,steel);
+          box(side*1.21,8.39,pilotZ,.05,.055,1.52,steel);
+          // Double-end docking bumpers and movable loading apron.
+          box(side*1.24,2.62,end*(length-.85),.47,.32,.80,[.24,.27,.29]);
+        }
+        box(0,8.60,pilotZ,.09,1.28,.09,steel);
+        box(0,9.22,pilotZ,.96,.045,.08,[.31,.34,.34]);
+        box(0,2.70,end*(length-.92),width*1.02,.17,1.07,orange);
+      }
+      // Passenger rail openings with dark glass rather than solid white walls.
+      for(const side of [-1,1])for(let zz=-9;zz<=9;zz+=1.38){
+        box(side*(width*.89+.05),4.33,zz,.045,.56,.90,windowTint,5);
+        box(side*(width*.90+.08),4.07,zz,.051,.035,1.05,steel);
+      }
+      // Lifebuoys, stacks and fender fittings above the orange hull.
+      for(const side of [-1,1])for(const zz of [-5.7,5.7]){
+        const ringX=side*(width*.90+.08),ringY=5.09;
+        for(let k=0;k<12;k++){
+          const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+          const p=(theta,r)=>[ringX,ringY+Math.sin(theta)*r,zz+Math.cos(theta)*r];
+          addQuad(p(a,.32),p(b,.32),p(b,.20),p(a,.20),k%3===0?white:orange);
+        }
+      }
     }
     return upload();
   }
@@ -3582,6 +3638,19 @@
         addRideBeam(addQuad,[bx-3.2,y-.34,z+side*3.75],
           [bx+3.2,y-1.22,z+side*.82],.055,steelFrame);
       }
+    }
+
+    // Protected cycling strip and original walkway lane markings.
+    // Kept on the same bridge collision deck and follows approach elevations.
+    for(let xx=x-halfLength+1;xx<x+halfLength-1;xx+=5.5){
+      const yy=bridgeRoadHeight(xx)+.045, next=Math.min(xx+5.5,x+halfLength-1);
+      pushRoadStrip(addQuad,[xx,yy,z+halfWidth*.58],
+        [next,bridgeRoadHeight(next)+.045,z+halfWidth*.58],
+        .065,[.83,.85,.80],.004);
+      if(Math.round(xx)%2===0)
+        pushRoadStrip(addQuad,[xx,yy,z+halfWidth*.20],
+          [Math.min(xx+1.85,next),bridgeRoadHeight(Math.min(xx+1.85,next))+.045,z+halfWidth*.20],
+          .055,[.88,.84,.65],.005);
     }
     // Stone cable-anchor housings flank each shore approach.
     for(const side of [-1,1])for(const ax of [x-halfLength-9,x+halfLength+9]){
@@ -3816,15 +3885,41 @@
     const glass=[0.25,0.39,0.44], rubber=[0.12,0.14,0.15];
     if(kind==='taxi'||kind==='police') {
       const police=kind==='police',body=police?[0.80,0.83,0.86]:[0.96,0.66,0.11];
-      box(0,0.69,0,1.67,0.76,3.8,body);
+
+      // Six longitudinal sections create a sculpted hood, tapered bumpers,
+      // chamfered shoulder line and curved boot instead of a single cuboid.
+      const shell=[
+        [-1.95,.64,.78,.63],[-1.74,.79,.93,.76],
+        [-1.12,.835,1.035,.88],[.82,.835,1.035,.89],
+        [1.57,.79,.96,.80],[1.95,.64,.79,.64]
+      ];
+      function contour([z,halfW,top,shoulder]){
+        return [
+          [-halfW*.88,.35,z],[-halfW,.53,z],[-halfW,shoulder-.04,z],
+          [-halfW*.88,top-.015,z],[-halfW*.65,top,z],
+          [halfW*.65,top,z],[halfW*.88,top-.015,z],
+          [halfW,shoulder-.04,z],[halfW,.53,z],[halfW*.88,.35,z]
+        ];
+      }
+      const cross=shell.map(contour);
+      for(let k=0;k<cross.length-1;k++){
+        for(let j=0;j<cross[k].length;j++)
+          addQuad(cross[k][j],cross[k][(j+1)%10],
+            cross[k+1][(j+1)%10],cross[k+1][j],
+            (j===3||j===4)?body.map(c=>Math.min(1,c*1.035)):body,4);
+      }
+      for(const at of [cross[0],cross[cross.length-1]])
+        for(let j=0;j<at.length;j++)
+          addTri([0,.59,at[0][2]],at[j],at[(j+1)%10],body,4);
+
       // Sloped sedan glazing replaces the rectangular greenhouse.
       const low=[[-.72,1.01,.70],[.72,1.01,.70],
         [.72,1.01,-1.04],[-.72,1.01,-1.04]];
       const high=[[-.59,1.59,.47],[.59,1.59,.47],
         [.59,1.59,-.77],[-.59,1.59,-.77]];
       for(let k=0;k<4;k++)addQuad(low[k],low[(k+1)%4],
-        high[(k+1)%4],high[k],glass);
-      addQuad(high[0],high[1],high[2],high[3],body);
+        high[(k+1)%4],high[k],glass,5);
+      addQuad(high[0],high[1],high[2],high[3],body,4);
       for(const side of [-1,1]){
         box(side*.665,1.30,-.24,.052,.53,.055,body);
         box(side*.665,1.04,-.18,.045,.044,1.61,body);
@@ -3870,6 +3965,23 @@
               point(outer,b,.335),point(outer,a,.335),rubber);
             addTri([outer+side*.005,.345,z],point(outer,b,.235),
               point(outer,a,.235),[.53,.56,.58]);
+          }
+
+          // Three-dimensional wheel arches follow the upper tire radius.
+          const arch=(theta,r)=>[side*.870,.345+Math.sin(theta)*r,z+Math.cos(theta)*r];
+          for(let k=0;k<8;k++){
+            const a=k*Math.PI/8,b=(k+1)*Math.PI/8;
+            addQuad(arch(a,.375),arch(b,.375),
+              arch(b,.412),arch(a,.412),body,4);
+          }
+          // Brake hub and five spokes are visible from the sidewalk.
+          for(let spoke=0;spoke<5;spoke++){
+            const a=spoke*Math.PI*2/5;
+            const px=outer+side*.025;
+            addQuad([px,.345+Math.sin(a)*.07,z+Math.cos(a)*.07],
+              [px,.345+Math.sin(a+.18)*.07,z+Math.cos(a+.18)*.07],
+              [px,.345+Math.sin(a+.18)*.205,z+Math.cos(a+.18)*.205],
+              [px,.345+Math.sin(a)*.205,z+Math.cos(a)*.205],[.65,.67,.67]);
           }
           box(outer+side*.01,.345,z,.022,.13,.13,[.34,.37,.39]);
         }
@@ -3933,7 +4045,7 @@
   // Procedural, logo-free civilian airliners based on the proportions of the
   // open CC-BY airliner reference set. This fits PATROL's raw WebGL2 pipeline.
   function buildCivilAirlinerMesh(livery=0) {
-    const body=createTriangleMesh(), trim=createTriangleMesh(), lights=createTriangleMesh();
+    const body=createTriangleMesh(), trim=createTriangleMesh(), lights=createTriangleMesh(), gear=createTriangleMesh();
     const fuselage=livery===1?[0.82,0.84,0.86]:livery===2?[0.92,0.92,0.88]:[0.90,0.91,0.89];
     const stripe=livery===1?[0.12,0.31,0.62]:livery===2?[0.06,0.45,0.54]:[0.18,0.25,0.36];
     const window=[0.035,0.095,0.13], dark=[0.025,0.045,0.068], glow=[1.0,0.83,0.46];
@@ -3998,7 +4110,35 @@
     // Grey radome ring and antenna fairing.
     addModelBox(trim.addQuad,0,.10,2.90,.20,.018,.08,[.66,.68,.69]);
     addModelBox(trim.addQuad,0,.68,-1.86,.12,.20,.31,fuselage);
-    return {body:body.upload(),trim:trim.upload(),lights:lights.upload()};
+
+    // Solid wing undersides, visible flaps and ground-approach landing gear.
+    // The gear uses a separate shared mesh and is drawn for approach traffic.
+    const underWing=[.49,.53,.57],tire=[.095,.115,.13],wheel=[.49,.52,.53];
+    for(const side of [-1,1]){
+      body.addQuad([side*.38,-.047,.89],[side*3.89,-.087,-.07],
+        [side*3.35,-.075,-.45],[side*.41,-.042,-.27],underWing,4);
+      body.addQuad([side*.41,-.048,-.27],[side*3.35,-.075,-.45],
+        [side*2.75,-.071,-.86],[side*.36,-.047,-.55],underWing,4);
+      for(let i=0;i<3;i++){
+        const wx=side*(1.12+i*.77);
+        body.addQuad([wx,.041,-.45],[wx+side*.45,.033,-.50],
+          [wx+side*.41,.031,-.59],[wx,.043,-.55],[.48,.53,.56],4);
+      }
+      const gx=side*.52;
+      addModelBox(gear.addQuad,gx,-.78,-.68,.12,.70,.13,[.58,.60,.60]);
+      addModelBox(gear.addQuad,gx,-1.09,-.68,.29,.16,.20,[.19,.22,.24]);
+      for(let k=0;k<12;k++){
+        const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+        const p=(theta,r)=>[gx+side*.18,-1.13+Math.sin(theta)*r,-.68+Math.cos(theta)*r];
+        gear.addQuad(p(a,.19),p(b,.19),p(b,.11),p(a,.11),tire);
+        gear.addTri([gx+side*.182,-1.13,-.68],p(a,.096),p(b,.096),wheel);
+      }
+    }
+    addModelBox(gear.addQuad,0,-.70,1.55,.10,.66,.11,[.58,.60,.61]);
+    for(const side of [-1,1]){
+      addModelBox(gear.addQuad,side*.12,-1.04,1.55,.10,.25,.23,tire);
+    }
+    return {body:body.upload(),trim:trim.upload(),lights:lights.upload(),gear:gear.upload()};
   }
 
   const civilAirlinerMeshes=[0,1,2].map(buildCivilAirlinerMesh);
@@ -4020,6 +4160,7 @@
       const meshes=civilAirlinerMeshes[actor.livery];
       drawMesh(meshes.body,model);
       drawMesh(meshes.trim,model);
+      if(actor.approach)drawMesh(meshes.gear,model);
       if(Math.sin(sceneryTime*3.0+actor.phase)>-0.15)drawMesh(meshes.lights,model,true);
     }
   }
