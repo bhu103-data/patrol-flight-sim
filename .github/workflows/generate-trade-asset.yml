@@ -42,7 +42,9 @@ jobs:
           assert struct.unpack_from('<I',raw,8)[0]==len(raw)
           length=struct.unpack_from('<I',raw,12)[0]
           assert raw[16:20]==b'JSON'
-          doc=json.loads(raw[20:20+length])
+          def reject(value):
+              raise ValueError('Invalid JSON numerical constant '+value)
+          doc=json.loads(raw[20:20+length],parse_constant=reject)
           count=0
           textured=0
           for m in doc['meshes']:
@@ -62,6 +64,12 @@ jobs:
           audit=json.loads(Path('assets/nyc/scenario/trade-provenance.json').read_text())
           assert audit['triangles']==count
           assert audit['generation'].startswith('Original procedural')
+          # Check the published mesh itself, not only its JSON metadata.
+          import numpy as np, trimesh
+          scene=trimesh.load(str(p),force='scene')
+          for name,mesh in scene.geometry.items():
+              assert np.isfinite(mesh.vertices).all(),name+' bad positions'
+              assert np.isfinite(mesh.vertex_normals).all(),name+' bad normals'
           print('VERIFIED original GLB:',count,'triangles,',len(raw),'bytes, 1 embedded atlas')
           PY
       - name: Commit only new GLB and provenance to main
