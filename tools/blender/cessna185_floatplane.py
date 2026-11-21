@@ -162,6 +162,12 @@ def run(output):
     bpy.context.scene.unit_settings.scale_length=1
     out=Path(output).resolve()
     out.parent.mkdir(parents=True,exist_ok=True)
+    # Keep a native editable Blender project as a short-lived Actions artifact.
+    # GLB remains the sole published runtime asset, so the game stays small.
+    editable=out.with_suffix(".blend")
+    bpy.ops.wm.save_as_mainfile(filepath=str(editable),compress=True)
+    if not editable.is_file() or editable.stat().st_size>8_000_000:
+        raise RuntimeError("Editable Blender source is empty or exceeds 8 MB")
     bpy.ops.export_scene.gltf(filepath=str(out),export_format="GLB",
                               export_yup=True,export_apply=True)
     if out.stat().st_size>2_000_000:
