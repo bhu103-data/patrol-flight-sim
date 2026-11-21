@@ -1,6 +1,6 @@
 # PATROL Flight Simulator
 
-PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washington, DC, Las Vegas, the Alaska Fjords, Alder River Valley, or Copper Coast in a Viper jet, a UFO, or a jetpack. Select **? Random Map** for a surprise destination.
+PATROL is a WebGL 2 flight simulator for the browser. Fly over Manhattan, Washington, DC, Las Vegas, the Alaska Fjords, Alder River Valley, or Copper Coast in a Viper jet, a UFO, a Cessna 185 twin-float seaplane, or a jetpack. Select **? Random Map** for a surprise destination.
 
 The Manhattan map includes a compressed Times Square district shaped by the diagonal of Broadway and the through lanes of Seventh Avenue. Walk signals, traffic lights, trees, street lamps, and numbered crossings line pedestrian plazas with illuminated storefronts, the TKTS red steps, and the ball atop One Times Square.
 
@@ -13,6 +13,15 @@ The expanded Washington, DC map now spans the federal core from the Pentagon and
 The Viper now has a clear framed canopy with a visible helmeted pilot, harness, visor, and oxygen mask. The former jetpack option is a gold-and-red Mark 42-inspired armored flyer rebuilt with tapered anatomical proportions, a faceted helmet and faceplate, layered chest and abdominal armor, shoulder bells, articulated gauntlets, knee and shin plates, armored boots, compact back thrusters, four repulsor exhausts, emissive eyes and arc reactor, twin palm lasers, assisted landing, collision recovery instead of destruction, and a dedicated JARVIS-style first-person HUD.
 
 [Play PATROL on GitHub Pages](https://bhu103-data.github.io/patrol-flight-sim/)
+
+## Universal Cessna 185 twin-float seaplane
+
+Select **Cessna 185 Floatplane** from the left-hand Aircraft selector before starting **any** map (New York, Alaska, DC, or other maps). The independent Chongqing river map receives the same selection and shared Blender GLB. Both floats must clear open water for a safe landing; shorelines, piers and buildings block the pontoons.
+
+**Controls:** Hold **Shift** (or mouse boost) to power up; pull up with **W/Up** once water taxi speed reaches **17.5 game units/s**; use **S/Down** to descend, **A/D** to steer, **B** to brake and **G** to toggle docking brake. **Space** changes the camera in the main renderer. Chongqing uses **Space** as an additional pull-up control.
+
+The Blender model is built at **one game unit per metre**, with a **10.922-m wingspan** and **approximately 7.8105-m overall length**. It is a stylized but metrically dimensioned approximation, **not** proprietary engineering CAD and not a certified flight trainer. The generated game mesh is [Cessna 185 GLB](assets/aircraft/cessna185-floats.glb). For editable Blender geometry, use [the original Blender authoring script](tools/blender/cessna185_floatplane.py) or download the native `.blend` + `.glb` bundle from [successful Blender Actions artifacts](https://github.com/bhu103-data/patrol-flight-sim/actions/workflows/cessna185-floatplane-blender.yml).
+
 
 ## Chongqing Hotpot Pilot (new)
 
