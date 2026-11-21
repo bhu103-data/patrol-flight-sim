@@ -144,6 +144,50 @@ export function sampleChongqingTerraceSurface(plan,ground,riverCenter,
   return result;
 }
 
+// Do not stretch unbridged road ribbons across Chongqing's perpendicular
+// tributary. Road centerlines and their FULL shoulder widths must both stay
+// on dry terrain; longitudinal midpoint checks close gaps between samples.
+// This operates before the independent building-volume clipping pass.
+export function clipChongqingDryRoadSegments(points,width,ground,riverDist,
+  shoreMargin=2.4,minLength=2.5){
+  if(!Array.isArray(points)||points.length<2||
+     !Number.isFinite(width)||width<=0||typeof ground!=='function'||
+     typeof riverDist!=='function')return [];
+  const result=[];let open=null;
+  const flush=()=>{
+    if(open?.length>1){
+      const len=open.reduce((sum,p,i)=>i?
+        sum+Math.hypot(p.x-open[i-1].x,p.z-open[i-1].z):0,0);
+      if(len>=minLength)result.push(open);
+    }
+    open=null;
+  };
+  for(let i=1;i<points.length;i++){
+    const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z;
+    const length=Math.hypot(dx,dz);
+    if(!Number.isFinite(length)||length<1e-7){flush();continue;}
+    const nx=-dz/length,nz=dx/length,offset=width*.5+Math.max(0,shoreMargin);
+    let dry=true;
+    for(const t of [0,.5,1]){
+      const x=a.x+dx*t,z=a.z+dz*t;
+      for(const across of [-1,-.5,0,.5,1]){
+        const sx=x+nx*offset*across,sz=z+nz*offset*across;
+        if(!Number.isFinite(ground(sx,sz))||ground(sx,sz)<=0||
+           riverDist(sx,sz)<shoreMargin){dry=false;break;}
+      }
+      if(!dry)break;
+    }
+    if(!dry){flush();continue;}
+    if(!open)open=[a,b];else{
+      const prev=open.at(-1);
+      if(Math.hypot(prev.x-a.x,prev.z-a.z)<.001)open.push(b);
+      else{flush();open=[a,b];}
+    }
+  }
+  flush();
+  return result;
+}
+
 export function chongqingTerraceRoads(riverCenter){
   const paths=[];
   for(const side of [-1,1])for(let tier=0;tier<3;tier++){
