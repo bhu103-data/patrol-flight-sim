@@ -59,7 +59,7 @@ test('real WebGL atlas artwork contains original advert copy, not debug labels',
   }
   assert.equal(texts.length,16*4,'title, strapline, headline and microcopy per panel');
   assert.equal(new Set(texts.filter((_,i)=>i%4===2)).size,16);
-  assert.ok(!texts.some(x=>/^(?:CREATIVE|CAMPAIGN)\\s/i.test(x)),
+  assert.ok(!texts.some(x=>/^(?:CREATIVE|CAMPAIGN)\s/i.test(x)),
     'large diagnostic identifiers must not appear on ads');
   assert.equal(texts.filter(x=>/EDITION [0-9A-Z]{6,}/.test(x)).length,16,
     'each screen keeps a unique edition identifier in microtype');
