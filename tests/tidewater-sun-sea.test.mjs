@@ -1,0 +1,65 @@
+// PATROL shared sunlight/ocean smoke without a GPU or terrain-map fixture.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
+const source=html.slice(html.indexOf('<script>'),html.lastIndexOf('</script>'));
+function between(a,b){
+ const start=source.indexOf(a),end=source.indexOf(b,start+a.length);
+ assert.ok(start>=0&&end>start,'Missing marker: '+a);
+ return source.slice(start,end);
+}
+const helper=between('  function orientSunAzimuth(sun, value){','  function sampleFlightEnvironment(dt){');
+const orientSunAzimuth=new Function(helper+'return orientSunAzimuth;')();
+
+test('default solar path is retained and invalid compass values are ignored',()=>{
+ const sample=[0.28,0.82,-0.49];
+ for(const value of ['-1','bad','360','-5']){
+  assert.strictEqual(orientSunAzimuth(sample,value),sample);
+ }
+});
+
+test('solar azimuth keeps seasonal elevation and horizontal sun radius',()=>{
+ const sample=[0.28,0.82,-0.49],radius=Math.hypot(sample[0],sample[2]);
+ for(const deg of [0,45,90,135,180,225,270,315,359]){
+  const actual=orientSunAzimuth(sample,String(deg)),a=deg*Math.PI/180;
+  assert.ok(Math.abs(actual[1]-sample[1])<1e-12);
+  assert.ok(Math.abs(Math.hypot(actual[0],actual[2])-radius)<1e-12);
+  assert.ok(Math.abs(actual[0]-Math.sin(a)*radius)<1e-12);
+  assert.ok(Math.abs(actual[2]-Math.cos(a)*radius)<1e-12);
+ }
+});
+
+test('sun angle UI updates live in shared environment, independent of map',()=>{
+ assert.match(html,/id="skyAzimuth" type="range" min="-1" max="359" step="1" value="-1"/);
+ assert.match(html,/id="skyAzimuthValue"/);
+ assert.match(source,/skyAzimuth\.addEventListener\('input'/);
+ assert.match(source,/const sun=orientSunAzimuth\(horizontal\(hourAngle\),skyAzimuth\.value\)/);
+ assert.match(source,/return \{sun,moon,atmosphere:/);
+});
+
+test('atmosphere retains moon, Alaska aurora and physically motivated sun glow',()=>{
+ const sky=between('    vec3 getSky(vec3 rd) {','    vec3 applyFog(vec3 col, vec3 rd, float dist) {');
+ for(const token of ['rayleighPhase','miePhase','airMass','forwardScatter',
+   'solarRadius','solarEdge','alaskaAurora(rd)','moonAmt','star=']){
+  assert.ok(sky.includes(token),'Missing sky term: '+token);
+ }
+ assert.match(sky,/float solarRadius=0\.0058/);
+});
+
+test('ocean glints use angular LOD and beach foam follows falling crests',()=>{
+ const water=between('          float alpha2=max(roughness*roughness','          // Bow pressure, hull wash');
+ assert.match(water,/max\(0\.0012,pixelAngle\*pixelAngle\*0\.48\)/);
+ assert.match(water,/if\(sparkleMip>0\.015\)/);
+ assert.match(water,/float postCrest=smoothstep\(0\.04,0\.68,-cos\(shoalPhase\)\)/);
+ assert.match(water,/float coastalPatch=vnoise/);
+ assert.match(water,/shore = smoothstep\(0\.36, 0\.88, pulse\) \* postCrest/);
+});
+
+test('existing wave-height and floatplane sampling model stays intact',()=>{
+ assert.match(source,/const oceanBands = \[\[35,0\.00284,0\.73\]/);
+ assert.match(source,/function floatOceanHeight\(x,z,t,depth,map\)/);
+ assert.match(source,/function floatOceanPose\(x,z,yaw,t,map,water,terrain\)/);
+ assert.match(source,/const vec4 OCEAN_PHASE\[18\]/);
+ assert.match(source,/hasOceanCascades\(\)/);
+});

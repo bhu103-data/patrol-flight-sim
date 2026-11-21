@@ -1,0 +1,43 @@
+name: NYC Tidewater-inspired sun, sky and sea WebGL QA
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "tests/tidewater-sun-sea.test.mjs"
+      - "scripts/nyc-tidewater-sun-sea-browser-qa.mjs"
+      - ".github/workflows/nyc-tidewater-sun-sea.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sun-sea-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate sun azimuth, ocean shading and shared float sampler
+        run: node --test tests/tidewater-sun-sea.test.mjs
+      - name: Install headless Chromium for actual WebGL2 screenshots
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs
+          npx playwright install --with-deps chromium
+      - name: Start local PATROL static scene
+        run: |
+          python3 -m http.server 8899 --bind 127.0.0.1 >/tmp/patrol-sun-sea.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8899/index.html >/dev/null
+      - name: Capture fixed NYC Harbor dusk and noon scenes
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8899
+        run: node scripts/nyc-tidewater-sun-sea-browser-qa.mjs
+      - name: Archive screenshot evidence even on failed smoke
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nyc-tidewater-sun-sea-webgl
+          path: artifacts/nyc-tidewater-sun-sea/
+          retention-days: 7
+          if-no-files-found: warn
