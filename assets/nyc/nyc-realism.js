@@ -83,7 +83,11 @@ export async function decodeGLB(gl,buffer,targetHeight){
         if(color0 && color0.components!==3 && color0.components!==4)
           throw Error('Unsupported GLB COLOR_0');
         const idx=primitive.indices!==undefined?readAccessor(primitive.indices):null;
-        const pbr=document.materials?.[primitive.material??0]?.pbrMetallicRoughness;
+        // glTF 2.0: a primitive with no material index uses the GLTF
+        // default untextured material; it does NOT inherit material[0].
+        // Blender often exports colored metal parts without a material slot.
+        const pbr=primitive.material===undefined?null:
+          document.materials?.[primitive.material]?.pbrMetallicRoughness;
         const faceColor=pbr?.baseColorFactor||[1,1,1,1];
         const diffuse=pbr?.baseColorTexture;
         let uv=null;
