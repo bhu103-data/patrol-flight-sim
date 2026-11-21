@@ -1,0 +1,12 @@
+{
+  "asset": "trade",
+  "file": "trade.glb",
+  "generation": "Original procedural mesh and Base Color atlas (not Scenario AI)",
+  "triangles": 22064,
+  "bytes": 1798336,
+  "height_meters": 541,
+  "roof_meters": 417,
+  "source_geometry": "https://www.som.com/projects/one-world-trade-center/",
+  "license": "Original artwork authored for PATROL; redistribution permitted",
+  "limits": "Visual interpretation only; not georeferenced/photogrammetric 1:1"
+}
