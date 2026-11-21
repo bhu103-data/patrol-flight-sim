@@ -104,7 +104,10 @@ function parseGLB(bytes){
   let tris=0,primitives=0,meshBounds=[],drawMaterialIds=new Set();
   function getPosBounds(i){
     const a=accessors[i],b=bv[a?.bufferView],sz=componentSize[a?.componentType];
-    assert(a?.type==='VEC3'&&sz&&b?.buffer===0&&!a.sparse&&a.count>0,'Unsupported POSITION buffer');
+    assert(a?.type==='VEC3'&&sz&&b?.buffer===0&&!a.sparse&&a.count>0,
+      'Unsupported POSITION buffer '+JSON.stringify({accessorIndex:i,type:a?.type,
+        componentType:a?.componentType,bufferView:a?.bufferView,buffer:b?.buffer,
+        count:a?.count,sparse:!!a?.sparse,extensions:b?.extensions}));
     const stride=b.byteStride||sz*3,base=(b.byteOffset||0)+(a.byteOffset||0);
     assert(base+stride*(a.count-1)+sz*3<=(b.byteOffset||0)+b.byteLength,'POSITION out of bufferView');
     assert(base+stride*(a.count-1)+sz*3<=binLength,'POSITION out of BIN');
