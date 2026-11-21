@@ -376,7 +376,7 @@ const scarf=box(0,.17,.60,1.1,.25,.65,M.scarf,avatar);
 avatar.rotation.order='YXZ';
 
 const state={
-  pos:new THREE.Vector3(285,ground(285,240)+2.7,240),
+  pos:new THREE.Vector3(285,ground(285,265)+2.7,265),
   vel:new THREE.Vector3(),heading:0,flying:false,onGround:true,
   spicy:0,boosting:false,jumpCount:0,seenHong:false,seenBridge:false,seenHotpot:false
 };
