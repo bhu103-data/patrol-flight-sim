@@ -140,36 +140,38 @@ class Architecture:
 
 
 def construct(floors):
-    # Local Blender coordinates (X front width, Y river-facing depth, Z vertical).
-    # Intended for offline lighting, topology and material study ONLY; no game
-    # georeference or collision-mesh replacement until placement is calibrated.
+    # GLB local X/Y/Z aligns with game X/Y/Z after Blender Y-up export:
+    # blender X=game X, blender Z=game Y, blender Y=-game Z.
+    # The manifest anchors this local mesh at game-space (155,13,112).
+    # All dimensions are from the existing compressed PATROL corridor,
+    # not surveyed metres or authoritative Chongqing coordinates.
     a = Architecture()
     labels = list(PALETTE)
     mid = {name: labels.index(name) for name in labels}
-    level_height = 6.1
+    level_height = 10.25
     for floor in range(floors):
         height = floor * level_height
-        setback = max(0, floor-5) * .85
-        width = 108 - max(0, floor-7) * 3.0
-        depth = 30 - setback
-        a.block(0, setback/2, height+level_height/2, width, depth, level_height-.2, mid["brick"])
+        center_depth = -floor * 8.3  # inland: positive game Z
+        width = 128 - floor * 4.1
+        depth = 22.5
+        a.block(0, center_depth, height+level_height/2, width, depth, level_height-.2, mid["brick"])
         # Continuous white masonry plinth/floor slab and cantilevered gallery.
-        a.block(0, -depth/2-2.15, height+.30, width+3, 5.2, .48, mid["concrete"])
-        a.block(0, -depth/2-2.6, height+level_height-.48, width+4, 4.7, .38, mid["timber"])
+        a.block(0, center_depth+depth/2+2.15, height+.30, width+3, 5.2, .48, mid["concrete"])
+        a.block(0, center_depth+depth/2+2.6, height+level_height-.48, width+4, 4.7, .38, mid["timber"])
         # Regular timber posts, window bays, recesses and varied warm occupancy.
         number_bays = 18
         bay = (width-5)/number_bays
         for n in range(number_bays):
             bx = -width/2+2.5+(n+.5)*bay
-            front = -depth/2-.11
+            front = center_depth+depth/2+.11
             color = "window_warm" if (n*7+floor*11)%9 < 4 else "window_dark"
-            a.block(bx,front-.04,height+3.3,bay-.7,.17,3.55,mid[color],3)
-            a.block(bx,front-.15,height+5.32,bay-.36,.24,.22,mid["timber"])
+            a.block(bx,front+.04,height+3.3,bay-.7,.17,3.55,mid[color],3)
+            a.block(bx,front+.15,height+8.12,bay-.36,.24,.22,mid["timber"])
             if n % 3 == 0:
-                a.block(bx-bay/2,front-2.4,height+3.2,.31,4.3,5.9,mid["timber"])
-                a.block(bx,front-4.48,height+1.19,bay*2.5,.14,.23,mid["metal"])
+                a.block(bx-bay/2,front+2.4,height+5.1,.31,4.3,9.2,mid["timber"])
+                a.block(bx,front+4.48,height+1.19,bay*2.5,.14,.23,mid["metal"])
         # Articulated railings: thin separate horizontals and short metal balusters.
-        front = -depth/2-4.6
+        front = center_depth+depth/2+4.6
         a.block(0,front,height+1.35,width+2,.17,.16,mid["metal"])
         for n in range(52):
             x = -width/2+n*(width/51)
@@ -178,11 +180,12 @@ def construct(floors):
         if floor in (2,5,8,floors-1):
             for lane in range(4):
                 xx = -width/2+(lane+.5)*width/4
-                a.roof(xx,0,height+level_height,width/4+.85,depth+4,2.3,mid["terracotta"])
+                a.roof(xx,center_depth,height+level_height,width/4+.85,depth+4,2.3,mid["terracotta"])
     # Rooftop stepped silhouette rather than an isolated low-poly block.
     top = floors*level_height
-    a.block(0,5,top+1.15,35,17,2.3,mid["timber"])
-    a.roof(0,5,top+2.3,38,20,4.0,mid["terracotta"])
+    upper_center = -(floors-1)*8.3
+    a.block(0,upper_center-5,top+1.15,35,17,2.3,mid["timber"])
+    a.roof(0,upper_center-5,top+2.3,38,20,4.0,mid["terracotta"])
     return a
 
 
