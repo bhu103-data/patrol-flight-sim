@@ -26,11 +26,11 @@
       "license": "Original Art Deco architecture mesh and embedded glass atlas authored for PATROL; redistribution permitted. Generated offline with Python/trimesh, not Scenario AI or photogrammetry."
     },
     "chrysler": {
-      "enabled": false,
+      "enabled": true,
       "file": "scenario/chrysler.glb",
       "target_height": 68,
       "min_triangles": 600,
-      "license": ""
+      "license": "Original authored Chrysler Building geometry with embedded window atlas generated offline for PATROL; redistribution permitted. Not Scenario cloud AI or photogrammetry."
     },
     "flatiron": {
       "enabled": false,
