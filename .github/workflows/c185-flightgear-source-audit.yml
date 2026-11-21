@@ -1,0 +1,39 @@
+name: FlightGear C180 hydroplane original archive rights inventory
+on:
+  push:
+    branches: [review/c185-thirdparty-float-source-audit-20261121]
+    paths:
+      - 'tools/aircraft/audit-flightgear-c180.py'
+      - '.github/workflows/c185-flightgear-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: patrol-c180-flightgear-inventory-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  inspect-official-zip-without-importing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original FlightGear aircraft archive from official public mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/c185-asset-review
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 240 \
+            --proto '=https' --output /tmp/flightgear-Cessna-180.zip \
+            'https://mirrors.ibiblio.org/flightgear/ftp/Aircraft-trunk/Cessna-180.zip'
+          test "$(stat -c%s /tmp/flightgear-Cessna-180.zip)" -gt 1000000
+          test "$(stat -c%s /tmp/flightgear-Cessna-180.zip)" -lt 120000000
+      - name: Read licensing, float geometry files, XML variants and texture budget
+        run: python3 tools/aircraft/audit-flightgear-c180.py
+      - name: Retain only source rights and geometry inventory, NOT 40MB source archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flightgear-c180-float-rights-and-geometry-inventory
+          path: artifacts/c185-asset-review/
+          if-no-files-found: ignore
+          retention-days: 14
