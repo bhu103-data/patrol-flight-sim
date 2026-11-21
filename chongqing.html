@@ -50,6 +50,8 @@ body.cinematic #top,body.cinematic #map,body.cinematic #bottom,body.cinematic #h
 #cqEnvPanel label{font:12px system-ui,sans-serif;color:#e0eaee}
 #cqTime{background:#0a1b2b;color:#e6ebed;border:1px solid #7996a2;border-radius:5px;padding:5px;font:12px system-ui}
 #cqEnvPanel button{border:1px solid #a1b6ba;background:#213c50;border-radius:5px;padding:5px 8px;color:#fff;cursor:pointer}
+#cqBlenderToggle[aria-pressed="true"]{border-color:#ddd9c5;background:#39514d;color:#f7f2e6}
+#cqBlenderToggle{white-space:nowrap;font-weight:600}
 #perfHud{top:266px}
 @media(max-width:800px),(pointer:coarse){#cqEnvPanel{top:172px;right:10px;padding:3px}#perfHud{top:215px}#top{max-width:61vw}}
 </style>
@@ -61,7 +63,7 @@ body.cinematic #top,body.cinematic #map,body.cinematic #bottom,body.cinematic #h
 <canvas id="map" width="256" height="256" aria-label="小地图"></canvas>
 <button id="qualityBtn" type="button" aria-label="切换画质">画质：自动</button>
 <div id="cqEnvPanel"><label for="cqTime">Environment [T]</label>
-<select id="cqTime"><option value="day">Day · 白天</option><option value="dusk" selected>Dusk · 黄昏</option><option value="night">Night · 夜景</option></select></div>
+<select id="cqTime"><option value="day">Day · 白天</option><option value="dusk" selected>Dusk · 黄昏</option><option value="night">Night · 夜景</option></select><button id="cqBlenderToggle" type="button" aria-label="切换 Blender 建筑预览" aria-pressed="false" title="仅替换洪崖洞建筑外观；保留现有地形、道路与碰撞">3D 写实预览</button></div>
 <output id="perfHud" hidden aria-live="off"></output>
 <div id="hint">靠近火锅店按 E，解锁麻辣喷火推进 🌶️</div>
 <div id="toast" role="status"></div>
