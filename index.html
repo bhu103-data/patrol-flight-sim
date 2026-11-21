@@ -6630,9 +6630,13 @@ const CENTRAL_PARK_SITES=[
     const alaska = selectedMap.alaska;
     // Avoid obvious duplicate old conical trees when photographic Alaska
     // forest geometry is available. Keep them in compatibility fallback.
+    // Central Park now owns a shoreline-cleared forest mesh. The legacy
+    // city conifers at (79,160) pierced the Loeb Boathouse roof in actual
+    // lake-view WebGL screenshots. Disable only that duplicate NYC batch;
+    // retain the original fallback for Alaska and other non-city maps.
     const patches = alaska && !graphicsCompat ? [] : alaska
       ? [[-176,-430],[160,-330],[-185,-160],[166,12],[-142,205],[169,255]]
-      : [[79,160],[90,255]];
+      : selectedMap.city ? [] : [[79,160],[90,255]];
     for (const [cx,cz] of patches) for (let i=0;i<28;i++) {
       const x = cx+Math.sin(i*4.32+cz)*30;
       const z = cz+Math.cos(i*3.82+cx)*(alaska?53:48);
