@@ -105,6 +105,30 @@ try{
   check(['green','amber','red'].includes(signalState.signalAspect),
     'No running three-aspect traffic cycle');
   await capture('03c-signalized-street');
+  // Independent second-row shopfront example, not PR #93's corner shop.
+  // Sample real illuminated gallery, grounded columns and pitched stone-tile
+  // roof in both presets, using EXACTLY one street-level pilot pose.
+  await page.keyboard.press('7');
+  await page.waitForTimeout(1000);
+  const marketState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(marketState.marketGalleryRoofs===3 &&
+    marketState.marketGalleryInstances>=70,
+    'New secondary timber shopfronts not integrated in the live city');
+  check(marketState.avatarFlying,'Market inspector must remain above the hillside');
+  await capture('03d-marketfront-night-low');
+  const savedPose=marketState.position;
+  await page.locator('#cqTime').selectOption('day');
+  await page.locator('#qualityBtn').click(); // low -> auto
+  await page.locator('#qualityBtn').click(); // auto -> high
+  check((await page.locator('#qualityBtn').textContent()).includes('高'),
+    'High-detail quality setting was not activated for market facades');
+  await page.waitForTimeout(1400);
+  const highPose=await page.evaluate(()=>window.PatrolSpaceBridge.getState().position);
+  check(Math.hypot(...savedPose.map((v,i)=>v-highPose[i]))<4,
+    'Market day/high shot must be the same physical location as night/low');
+  await capture('03e-marketfront-day-high');
+  await page.locator('#qualityBtn').click(); // high -> low
+  await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
