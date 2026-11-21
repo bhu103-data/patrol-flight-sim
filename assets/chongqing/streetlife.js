@@ -198,42 +198,75 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   // White zebra strips are physically laid across the road rather than billboard text.
   // The earlier fixed crossing at x=285 could be INSIDE the hotpot building.
   // Pick the nearest collision-free patch of the actual upper riverside road.
+  // Bounded midblock pedestrian crossings on the actual upper terrace road.
+  // Every post is surveyed separately; a clear road center does not imply that
+  // the sidewalk or the signal cabinet is clear of a building or river edge.
   const candidates=[285,360,390,420,470,520,600,-450,-600];
-  const crossingX=candidates.find(cx=>[-18,0,18].every(dx=>{
-    const x=cx+dx,z=routeZ(x,1,1);
-    return isRoadClear(x,z,ground(x,z)+1.78,11.2);
-  }))??null;
-  const crossingZ=crossingX===null?null:routeZ(crossingX,1,1);
-  const zebra=pool(unit,white,14);
-  for(let n=0;crossingX!==null&&n<10;n++){
-    const x=crossingX-6.75+n*1.5;
-    const z=routeZ(x,1,1);
+  const crossingSites=[];
+  for(const cx of candidates){
+    if(crossingSites.length>=4)break;
+    if(crossingSites.some(previous=>Math.abs(previous-cx)<110))continue;
+    const clearRoad=[-18,0,18].every(dx=>{
+      const x=cx+dx,z=routeZ(x,1,1);
+      return isRoadClear(x,z,ground(x,z)+1.78,11.2);
+    });
+    const px=cx+11,pz=routeZ(px,1,1);
+    const clearPosts=[-1,1].every(side=>{
+      const z=pz+side*9.1;
+      return isRoadClear(px,z,ground(px,z)+2.5,1.5);
+    });
+    if(clearRoad&&clearPosts)crossingSites.push(cx);
+  }
+  const crossingX=crossingSites[0]??null;
+  const zebra=pool(unit,white,40);
+  let zebraCount=0;
+  for(const cx of crossingSites)for(let n=0;n<10;n++){
+    const x=cx-6.75+n*1.5,z=routeZ(x,1,1);
     const y=ground(x,z)+1.80;
     const dz=(routeZ(x+1,1,1)-routeZ(x-1,1,1))*.5;
-    pose(zebra,n,{x,y,z},Math.atan2(dz,1),[0,0,0],[.85,.032,10.2],0);
+    pose(zebra,zebraCount++,{x,y,z},Math.atan2(dz,1),
+      [0,0,0],[.85,.032,10.2],0);
   }
-  zebra.count=crossingX===null?0:10;zebra.instanceMatrix.needsUpdate=true;
-  zebra.computeBoundingSphere();zebra.frustumCulled=true;
-  // Two six-metre traffic signal poles, black heads and alternating bulbs.
-  // All visible structures use instancing; no new draw call per light.
-  const signalPosts=pool(unit,frame,2);
-  const signalHeads=pool(unit,dark,2);
-  const signalRed=pool(unit,new THREE.MeshBasicMaterial({color:0xff4539}),2);
-  const signalGreen=pool(unit,new THREE.MeshBasicMaterial({color:0x4ee28b}),2);
-  for(let side=0;crossingX!==null&&side<2;side++){
-    const lateral=side===0?-9.1:9.1;
-    const x=crossingX+11,z=crossingZ+lateral;
-    const pavement=ground(x,z)+1.7;
-    pose(signalPosts,side,{x,y:pavement,z},0,[0,3,0],[.32,6,.32],0);
-    pose(signalHeads,side,{x,y:pavement,z},0,[0,6.8,0],[.95,1.85,.75],0);
-    pose(signalRed,side,{x,y:pavement,z},0,[0,7.22,-.4],[.43,.45,.08],0);
-    pose(signalGreen,side,{x,y:pavement,z},0,[0,6.33,-.4],[.43,.45,.08],0);
+  zebra.count=zebraCount;zebra.instanceMatrix.needsUpdate=true;
+  if(zebra.count)zebra.computeBoundingSphere();zebra.frustumCulled=true;
+  // Chinese three-aspect signal assembly: full-height steel mast, horizontal
+  // cantilever, shielded vertical head and pedestrian WALK/WAIT indicator.
+  // Meshes are shared instanced batches, so four crossings never mean 8 new
+  // separate draw calls per pole.
+  const signalMax=8;
+  const signalPosts=pool(unit,frame,signalMax);
+  const signalArms=pool(unit,frame,signalMax);
+  const signalHeads=pool(unit,dark,signalMax);
+  const signalPedHeads=pool(unit,dark,signalMax);
+  const signalRed=pool(unit,new THREE.MeshBasicMaterial({color:0xff4539}),signalMax);
+  const signalAmber=pool(unit,new THREE.MeshBasicMaterial({color:0xffb92f}),signalMax);
+  const signalGreen=pool(unit,new THREE.MeshBasicMaterial({color:0x4ee28b}),signalMax);
+  const pedestrianWait=pool(unit,new THREE.MeshBasicMaterial({color:0xf45b4e}),signalMax);
+  const pedestrianWalk=pool(unit,new THREE.MeshBasicMaterial({color:0x48dc94}),signalMax);
+  let signalCount=0;
+  for(const cx of crossingSites)for(const side of [-1,1]){
+    const x=cx+11,baseZ=routeZ(x,1,1),
+      z=baseZ+side*9.1,pavement=ground(x,z)+1.7,
+      at={x,y:pavement,z},idx=signalCount++;
+    pose(signalPosts,idx,at,0,[0,3.2,0],[.32,6.4,.32],0);
+    pose(signalArms,idx,at,0,[0,6.38,-side*2.06],[.18,.17,4.25],0);
+    pose(signalHeads,idx,at,0,[0,6.52,-side*4.08],[.85,2.23,.74],0);
+    // Bulbs sit proud of the east-facing head, visible to westbound cars.
+    pose(signalRed,idx,at,0,[.445,7.13,-side*4.08],[.085,.43,.43],0);
+    pose(signalAmber,idx,at,0,[.445,6.52,-side*4.08],[.085,.43,.43],0);
+    pose(signalGreen,idx,at,0,[.445,5.91,-side*4.08],[.085,.43,.43],0);
+    pose(signalPedHeads,idx,at,0,[0,3.73,-side*.10],[.43,1.02,.62],0);
+    pose(pedestrianWait,idx,at,0,[.23,3.96,-side*.10],
+      [.05,.30,.37],0);
+    pose(pedestrianWalk,idx,at,0,[.23,3.52,-side*.10],
+      [.05,.30,.37],0);
   }
-  for(const item of [signalPosts,signalHeads,signalRed,signalGreen]){
-    item.count=crossingX===null?0:2;item.instanceMatrix.needsUpdate=true;
-    item.computeBoundingSphere();item.frustumCulled=true;
+  for(const item of [signalPosts,signalArms,signalHeads,signalPedHeads,
+    signalRed,signalAmber,signalGreen,pedestrianWait,pedestrianWalk]){
+    item.count=signalCount;item.instanceMatrix.needsUpdate=true;
+    if(item.count)item.computeBoundingSphere();item.frustumCulled=true;
   }
-  let signalTime=0,vehicleGreen=true;
+  let signalTime=0,vehicleGreen=true,signalAspect='green';
   // Five localized light sources brighten road asphalt and nearby car roofs.
   const streetLights=[];
   for(const x of [-350,115,335]){
@@ -255,9 +288,14 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   const buffer={body:bodies,glass:windows,tires,hubs,fronts,backs,checker,checkerLight,taxiSigns,sideMirror,bumper,grilles,plates,rearTrims};
   function update(dt,player){
     signalTime+=Math.max(0,Math.min(dt,.05));
-    vehicleGreen=signalTime%36<24;
+    const phase=signalTime%36;
+    signalAspect=phase<22?'green':phase<25?'amber':'red';
+    vehicleGreen=signalAspect==='green';
     signalGreen.visible=vehicleGreen;
-    signalRed.visible=!vehicleGreen;
+    signalAmber.visible=signalAspect==='amber';
+    signalRed.visible=signalAspect==='red';
+    pedestrianWalk.visible=signalAspect==='red';
+    pedestrianWait.visible=signalAspect!=='red';
     for(const v of vehicles){
       const loop=1770,half=885;
       if(player&&Math.abs(v.x-player.x)<10&&Math.abs(v.z-player.z)<6&&Math.abs(v.y-player.y)<5){
@@ -282,14 +320,19 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
       const currentX=((v.start+currentDist+half)%loop+loop)%loop-half;
       let nextDistance=currentDist+v.speed*Math.max(.04,1-(v.stall??0)*.95)*dt*v.dir;
       let x=((v.start+nextDistance+half)%loop+loop)%loop-half;
-      // Stop cars going west on the upper riverside road at the red crossing.
-      // A clamped center point holds the bumper short of the zebra stripes.
-      const stopX=crossingX+12;
-      if(crossingX!==null&&!vehicleGreen&&v.side===1&&v.tier===1&&v.dir<0 &&
-         currentX>=stopX-.005 && currentX<stopX+36 && x<stopX &&
-         currentX-x<6){
-        nextDistance=currentDist-(currentX-stopX);
-        x=stopX;
+      // Each surveyed crossing has its own physical stop line. Yellow is a
+      // stop phase, too; a car already inside the junction continues through.
+      // Keep the bumper short of the zebra stripes, not inside the people.
+      if(!vehicleGreen&&v.side===1&&v.tier===1&&v.dir<0){
+        for(const cx of crossingSites){
+          const stopX=cx+12;
+          if(currentX>=stopX-.005&&currentX<stopX+36&&
+             x<stopX&&currentX-x<6){
+            nextDistance=currentDist-(currentX-stopX);
+            x=stopX;
+            break;
+          }
+        }
       }
       if(!v.disabled&&!laneIsClear(v,x)){
         v.dir*=-1;
@@ -385,12 +428,15 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     update,setQuality,setTimeOfDay,
     // Explicit snapshots are created only when inspected/tested, never each frame.
     snapshot(){return {
-      vehicleGreen,signalPhase:signalTime%36,crossingX,
+      vehicleGreen,signalAspect,signalPhase:signalTime%36,crossingX,
+      crossingXs:crossingSites.slice(),
       vehicles:vehicles.map(v=>({x:v.x,y:v.y,z:v.z,side:v.side,tier:v.tier,dir:v.dir,disabled:!!v.disabled}))
     }},
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
       streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,movingHeadlights:headlightCones.length,
-      zebraStripes:zebra.count,trafficSignals:signalHeads.count,drawGroups:Object.keys(buffer).length+10},
+      zebraStripes:zebra.count,trafficSignals:signalHeads.count,
+      pedestrianSignals:signalPedHeads.count,signalizedCrossings:crossingSites.length,
+      drawGroups:Object.keys(buffer).length+15},
     // For collision avoidance, external consumers can check an individual 3m footprint.
     nearby(x,z,y,radius=3.8){
       return vehicles.some(v=>!v.disabled&&Math.abs(v.x-x)<radius+3.2&&Math.abs(v.z-z)<radius+1.35&&Math.abs(v.y-y)<3.4);
