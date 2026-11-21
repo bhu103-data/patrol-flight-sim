@@ -109,7 +109,7 @@ jobs:
         if: always()
         run: |
           node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
-      - name: Upload actual staged GLB, trace and screenshots — NO automatic GitHub import
+      - name: Upload verified candidate, trace, and screenshots for QA review
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -119,3 +119,52 @@ jobs:
             assets/nyc/scenario/liberty.glb
           retention-days: 10
           if-no-files-found: ignore
+
+  # This second job publishes only the proven candidate binary to the SAME
+  # isolated QA branch, never to main, and never flips manifest.enabled.
+  # It runs only on a trusted push (not on PRs or workflow_dispatch).
+  # A stale run cannot overwrite a branch that advanced during its GPU QA.
+  stage-verified-candidate-in-draft-branch:
+    needs: isolated-liberty-candidate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/qa/nyc-liberty-cc0-glb-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download actual previously-tested GLB and checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: nyc-liberty-cc0-staged-model-and-webgl
+          path: .
+      - name: Validate exact asset, fallback, and no activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s assets/nyc/scenario/liberty.glb
+          sha256sum -c artifacts/nyc-liberty/optimized-sha256.txt
+          test "$(stat -c%s assets/nyc/scenario/liberty.glb)" -le 8388608
+          node tools/nyc/check-liberty-harbor-placement.mjs assets/nyc/scenario/liberty.glb
+          node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
+          node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
+      - name: Commit GLB only on original branch and only if HEAD has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/heads/qa/nyc-liberty-cc0-glb-20261121:refs/remotes/origin/qa/nyc-liberty-cc0-glb-20261121
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse refs/remotes/origin/qa/nyc-liberty-cc0-glb-20261121)" ]; then
+            echo "::notice::Branch moved after model QA; refusing to stage a stale candidate"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/nyc/scenario/liberty.glb
+          if git diff --cached --quiet; then
+            echo "Verified binary already matches QA branch"
+            exit 0
+          fi
+          git commit -m 'assets(nyc): stage verified Liberty CC0 GLB, no production activation'
+          git push origin HEAD:refs/heads/qa/nyc-liberty-cc0-glb-20261121
