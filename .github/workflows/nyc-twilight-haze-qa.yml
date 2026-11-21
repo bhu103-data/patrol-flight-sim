@@ -91,7 +91,7 @@ jobs:
                 'before':a['metrics'],'after':b['metrics']} for a,b in
                 zip(old['shots'],new['shots'])]},indent=2))
           PY
-      - name: Upload six screenshots, camera state and measurable contrast
+      - name: Upload eight screenshots, camera state and measurable contrast
         if: always()
         uses: actions/upload-artifact@v4
         with:
