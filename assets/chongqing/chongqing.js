@@ -119,7 +119,7 @@ for(let iz=0;iz<=gz;iz++){
   for(let ix=0;ix<=gx;ix++){
     const x=-990+1980*ix/gx, y=ground(x,z);
     positions.push(x,y,z);
-    uvs.push(x/16,z/16);
+    uvs.push(x/48,z/48);
     const n=clamp((y-9)/145,0,1);
     color.setHSL(0.25-0.12*n,0.13+0.06*n,0.28+0.1*(1-n));
     if(y<0)color.setRGB(0.09,0.22,0.26);
@@ -135,7 +135,7 @@ worldGeometry.setAttribute('position',new THREE.Float32BufferAttribute(positions
 worldGeometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
 worldGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
 worldGeometry.computeVertexNormals();
-const groundMaterial=pbr.stone.clone();groundMaterial.vertexColors=true;groundMaterial.side=THREE.DoubleSide;
+const groundMaterial=pbr.hillside.clone();groundMaterial.vertexColors=true;groundMaterial.side=THREE.DoubleSide;
 scene.add(new THREE.Mesh(worldGeometry,groundMaterial));
 
 const waterUniforms={uTime:{value:0}};
