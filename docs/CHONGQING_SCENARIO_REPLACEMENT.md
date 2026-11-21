@@ -1,6 +1,6 @@
 # Scenario for Blender → Chongqing Hongyadong
 
-**Status:** An actual review-only GLB was generated using **Blender 5.2.1** in [GitHub Actions run 44853187676](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853187676) and committed to `assets/chongqing/generated/hongyadong-study.glb`. The 972,500-byte model contains **13,808 triangles**, 7 glTF materials and **no photo texture images**; SHA-256: `2998ef1a88ce3065ad94528152911af286b507f796e69756f4da3b6f6fed41c9`. [Publishing run](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853333799) passed. No paid Scenario cloud generation, photoreal texture review, or measured GPU FPS has been performed. **The production Chongqing map still uses its original geometry; the model is opt-in preview only.**
+**Status (CC0 photographic PBR version):** A real Blender 5.2.1 export from [run 44853989606](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853989606) replaced the earlier flat-color proof of concept. The verified model at `assets/chongqing/generated/hongyadong-study.glb` is **3,720,076 bytes, 14,272 triangles, four embedded image textures**, SHA-256 `b66cb4e8680fb52324d833447ddacb1ac805d071f711ffe7ef088dd64076a5d3`. [PBR publishing run 44854110974](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44854110974) passed. Brick/concrete imagery reuses existing CC0 photographs; wood and roof photo inputs come from Poly Haven CC0. This is **not paid Scenario cloud generation** or a photogrammetric/AAA 1:1 reconstruction. The production `enabled` setting remains `false`; only the explicit `?scenario=hongyadong` URL requests this PBR preview.
 
 ## Files
 
@@ -61,3 +61,12 @@ node --test tests/chongqing-scenario.test.mjs tests/chongqing-detail.test.mjs te
 ```
 
 GitHub Actions executes script syntax and Node tests. These **are not** proof of an actual Blender viewport render, full WebGL screenshot, frame-rate benchmark or 1:1 photographic accuracy.
+
+
+## Verified photographic inputs (Blender PBR review)
+
+- Wood photo: `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks/wood_planks_diff_1k.jpg` (SHA-256 `3b0669f683e4bf10f5a55a381cfa9669a7b8dfd921901829daa3b35acc2bbdec`).
+- Clay roof photo: `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clay_roof_tiles_03/clay_roof_tiles_03_diff_1k.jpg` (SHA-256 `6719293429932a27c8ed3526b22cd65d1cd1d43194ce30fa5f4590bb3c513844`).
+- Existing CC0 walls: `assets/nyc/concrete_wall_008_diff_1k.jpg` and `concrete_wall_008_nor_gl_1k.jpg` (credited in `assets/nyc/PBR_TEXTURE_SOURCES.md`).
+
+The downloaded source photos are temporary and not checked in; Blender embeds the required images in the review GLB. The renderer still uses only approved base PBR materials, not a real city scan. The manuscript keeps initial collision volumes for safe preview. The PBR GLB is suitable for inspection, not proof of survey accuracy, realistic street-level architecture or final game art acceptance.
