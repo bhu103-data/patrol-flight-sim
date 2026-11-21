@@ -5,9 +5,20 @@ on:
   pull_request:
     paths:
       - "index.html"
-      - "assets/nyc/nyc-gis-infill.js"
-      - "tests/nyc-times-fid384606-storefront.test.mjs"
+      - "assets/nyc/**"
       - "scripts/nyc-road-browser-smoke.mjs"
+      - "scripts/nyc-harbor-sky-qa.mjs"
+      - "tests/nyc-brooklyn-*.test.mjs"
+      - "tests/nyc-times-ground-storefronts.test.mjs"
+      - "tests/nyc-times-fid384606-storefront.test.mjs"
+      - "tests/nyc-liberty-crown-volume.test.mjs"
+      - "tests/nyc-road-clearance.test.mjs"
+      - "tests/nyc-authored-road-shoreline.test.mjs"
+      - "tests/nyc-oti-harbor-window-depth.test.mjs"
+      - "tests/nyc-unified-webgl-qa.test.mjs"
+      - "tests/nyc-harbor-sky-qa.test.mjs"
+      - "tests/nyc-road-coastline.test.mjs"
+      - "tests/nyc-intersection-*.test.mjs"
       - "tests/nyc-roof-setback-grounding.test.mjs"
       - ".github/workflows/nyc-bridgehead-browser.yml"
   push:

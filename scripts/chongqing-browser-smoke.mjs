@@ -1,6 +1,7 @@
 // Real Chromium WebGL check for the standalone Chongqing PATROL level.
 // With a local HTTP server running: node scripts/chongqing-browser-smoke.mjs
 import { chromium } from 'playwright';
+import { PNG } from 'pngjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const base=(process.env.CHONGQING_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
@@ -35,8 +36,39 @@ async function capture(name){
   check(state.width>300&&state.height>200,'Empty canvas at '+name);
   check(state.game?.map==='chongqing'&&state.game?.playing,'Game did not start at '+name);
   check(state.game.position.every(Number.isFinite),'Nonfinite pilot position at '+name);
-  await page.screenshot({path:dir+'/'+name+'.png',fullPage:true});
-  screenshots.push({name,width:state.width,height:state.height,altitude:state.game.altitude});
+  // Capture the actual WebGL canvas, not HUD panels that can hide black frames.
+  // Element screenshots can still include HTML HUD painted above the canvas
+  // by the browser compositor. Explicitly hide the overlay just for capture.
+  await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
+  let raw;
+  try{
+    check(await page.locator('#questHotpot').evaluate(
+      el=>getComputedStyle(el).visibility==='hidden'),
+      'HUD overlays not hidden during Chongqing WebGL screenshot');
+    raw=await page.locator('#world').screenshot({
+      path:dir+'/'+name+'.png',timeout:75000,animations:'allow'
+    });
+  }finally{
+    await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
+  }
+  const png=PNG.sync.read(raw),colorBins=new Set();
+  let nearBlack=0,sampled=0;
+  for(let y=0;y<png.height;y+=10)for(let x=0;x<png.width;x+=10){
+    const i=(y*png.width+x)*4;
+    const red=png.data[i],green=png.data[i+1],blue=png.data[i+2];
+    colorBins.add(((red>>4)<<8)|((green>>4)<<4)|(blue>>4));
+    if(red+green+blue<22)nearBlack++;
+    sampled++;
+  }
+  const pixels={width:png.width,height:png.height,colorBins:colorBins.size,
+    nearBlackFraction:nearBlack/Math.max(1,sampled)};
+  // Conservative limits: reject empty/noise frames without treating this as
+  // a geometry realism score. Keep night scenes and dark river areas valid.
+  check(pixels.width>=640&&pixels.height>=360&&pixels.colorBins>20&&
+    pixels.nearBlackFraction<0.985,
+    'Blank Chongqing WebGL frame at '+name+': '+JSON.stringify(pixels));
+  screenshots.push({name,width:state.width,height:state.height,
+    altitude:state.game.altitude,pixels});
 }
 let report;
 try{
@@ -44,6 +76,9 @@ try{
     waitUntil:'domcontentloaded',timeout:60000
   });
   check(response?.ok(),'Chongqing HTTP page unavailable');
+  await page.addStyleTag({content:
+    'body.patrol-qa-scene-only * {visibility:hidden !important;} '+
+    'body.patrol-qa-scene-only #world {visibility:visible !important;}'});
   await page.locator('#loading').waitFor({state:'detached',timeout:105000});
   await page.waitForTimeout(900);
   await capture('00-spawn');
@@ -94,7 +129,7 @@ try{
   check(!errors.length,'Uncaught runtime error: '+errors.join('; '));
   report={passed:true,climb:{before,after,above300:after>300},environments:['day','night'],screenshots,warnings};
 }catch(e){
-  report={passed:false,error:e.stack||String(e),errors,warnings};
+  report={passed:false,error:e.stack||String(e),errors,warnings,screenshots};
   try{await page.screenshot({path:dir+'/FAILED.png',fullPage:true});}catch{}
 }finally{
   await writeFile(dir+'/smoke-report.json',JSON.stringify(report,null,2));
