@@ -127,6 +127,25 @@ test('actual NYC terrain and building footprints keep live bridgehead chunks',as
   });
   assert.equal(chunks.length,4,'bridgehead layout must survive real land checks');
   assert.ok(chunks.every(c=>c.mid.quads.length===5&&c.near.quads.length===7));
+  // Draft #88 uses these authored CITY_STREETS for its proposed bridge
+  // connector. This 2D clearance assertion is not a live vehicle test.
+  const connector=routes[2];
+  const distanceSegment=(x,z,a,b)=>{
+    const dx=b[0]-a[0],dz=b[1]-a[1];
+    const t=Math.max(0,Math.min(1,
+      ((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1)));
+    return Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);
+  };
+  const guardrailZ=-11*city.blockLength-(5.65/2+1.16);
+  for(const chunk of chunks){
+    const [x,,z]=chunk.utility;
+    const distanceToRoute=Math.min(...connector.slice(1).map((p,i)=>
+      distanceSegment(x,z,connector[i],p)));
+    assert.ok(distanceToRoute>5.0,
+      'grate intrudes into planned bridgehead vehicle corridor');
+    assert.ok(z-guardrailZ>5.0,
+      'north sidewalk grate overlaps #100 south-side guardrail');
+  }
 });
 
 test('road LOD uses PATROL render lifecycle and rain is gated to NYC/wetness',async()=>{

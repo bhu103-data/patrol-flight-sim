@@ -37,6 +37,56 @@ function screenshotPixels(bytes){
   nearBlackFraction:black/Math.max(count,1),
   upperSkyFraction:visibleHarborSkyFraction(img)};
 }
+// Two identical clear-weather captures provide a broad sampled road-surface
+// pixel-stability sentinel. Cars and the harbor move; this is NOT a proof
+// of zero z-fighting and is not a substitute for frame-by-frame inspection.
+function roadTemporalProbe(beforeBytes,afterBytes){
+ const a=PNG.sync.read(beforeBytes),b=PNG.sync.read(afterBytes);
+ check(a.width===b.width&&a.height===b.height,'Road frames changed viewport');
+ const bounds=[Math.floor(a.width*.34),Math.floor(a.width*.82),
+  Math.floor(a.height*.52),Math.floor(a.height*.93)];
+ const diffs=[];
+ for(let y=bounds[2];y<bounds[3];y+=6)
+  for(let x=bounds[0];x<bounds[1];x+=6){
+   const p=(y*a.width+x)*4;
+   diffs.push((Math.abs(a.data[p]-b.data[p])+
+     Math.abs(a.data[p+1]-b.data[p+1])+
+     Math.abs(a.data[p+2]-b.data[p+2]))/3);
+  }
+ diffs.sort((x,y)=>x-y);
+ const at=q=>Number(diffs[Math.min(diffs.length-1,
+  Math.floor((diffs.length-1)*q))].toFixed(2));
+ return {bounds,samples:diffs.length,medianRgbDelta:at(.5),
+  p90RgbDelta:at(.9),changedOver32Fraction:Number(
+   (diffs.filter(x=>x>32).length/diffs.length).toFixed(4))};
+}
+// Browser requestAnimationFrame cadence with a bounded sample window.
+// It is not physical-GPU FPS or a measurement of individual LOD draw cost.
+async function roadFrameCadence(page){
+ return page.evaluate(()=>new Promise(resolve=>{
+  const deltas=[];let previous=null,done=false;
+  const finish=()=>{
+   if(done)return;done=true;clearTimeout(timer);
+   const sorted=deltas.slice().sort((a,b)=>a-b);
+   const value=q=>sorted.length?Number(sorted[
+    Math.floor((sorted.length-1)*q)].toFixed(2)):null;
+   const med=value(.5);
+   resolve({samples:sorted.length,medianFrameMs:med,p95FrameMs:value(.95),
+    estimatedRafHz:med?Number((1000/med).toFixed(1)):null,
+    renderer:'Chromium SwiftShader rAF cadence, not GPU FPS'});
+  };
+  const timer=setTimeout(finish,5500);
+  const sample=time=>{
+   if(done)return;
+   if(previous!==null&&time>previous&&time-previous<5000)
+    deltas.push(time-previous);
+   previous=time;
+   if(deltas.length>=12)finish();
+   else requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+ }));
+}
 // Narrow screenshot ROI corresponding to the previously verified blank
 // FID 384606 right foreground (at the fixed 1280x720, zoom-42 camera).
 // This is a pixel-backed *local wall detail* test, not a realism score.
@@ -141,6 +191,7 @@ async function capture(name,{control=false}={}){
   }
   pendingShot=null;
   console.log('[PATROL QA] captured '+name+' '+captureTimings[name]+'ms');
+  return image;
  }finally{
   await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
  }
@@ -287,7 +338,14 @@ try{
    'Near camera never selected high road LOD: '+JSON.stringify(near));
   check(near.wetness<.10,
    'Initial dry road unexpectedly wet: '+near.wetness);
-  await capture('11-dumbo-road-near-dry.png');
+  const dryImage=await capture('11-dumbo-road-near-dry.png');
+  const dryCadence=await roadFrameCadence(page);
+  await page.waitForTimeout(450);
+  const stableImage=await capture('11b-dumbo-road-near-dry-stability.png');
+  const temporal=roadTemporalProbe(dryImage,stableImage);
+  check(temporal.samples>=500&&temporal.medianRgbDelta<40,
+   'Fixed clear-weather road changed too much between captures: '+
+    JSON.stringify(temporal));
   await page.evaluate(()=>{
    const el=document.getElementById('skyWeather');
    el.value='Rain';el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -298,15 +356,40 @@ try{
   check(wet.chunks.some(c=>c.lod===2),
    'Wet road camera drifted to a different LOD');
   await capture('12-dumbo-road-near-rain.png');
+  const wetCadence=await roadFrameCadence(page);
   const mid=await setSite('DUMBO Road QA · Mid');
   check(mid.chunks.some(c=>c.lod===1),
    'Mid camera never selected medium road LOD: '+JSON.stringify(mid));
   await capture('13-dumbo-road-mid-rain.png');
+  const midCadence=await roadFrameCadence(page);
+  // Move a single camera down the same street: as zoom decreases, each
+  // chunk's LOD can only stay unchanged or decrease. Test all 4 chunks,
+  // never treating an entire scene as one global LOD switch.
+  const lodSweep=[];
+  for(const zoom of [100,80,60,42,20,0]){
+   await page.locator('#hotelZoom').evaluate((el,z)=>{
+    el.value=String(z);el.dispatchEvent(new Event('input',{bubbles:true}));
+   },zoom);
+   await page.waitForTimeout(700);
+   const frame=await page.evaluate(()=>window.__patrolNycRoadLodQa?.());
+   check(frame?.chunks?.length===4,'Zoom sweep lost NYC chunks');
+   lodSweep.push({zoom,levels:frame.chunks.map(c=>c.lod),
+    camera:frame.camera});
+  }
+  let changed=0;
+  for(let i=1;i<lodSweep.length;i++)
+   for(let k=0;k<4;k++){
+    check(lodSweep[i].levels[k]<=lodSweep[i-1].levels[k],
+     'Road LOD increases while camera retreats: '+JSON.stringify(lodSweep));
+    if(lodSweep[i].levels[k]<lodSweep[i-1].levels[k])changed++;
+   }
+  check(changed>0,'Camera zoom sweep did not exercise any LOD boundary');
   const far=await setSite('DUMBO Road QA · Far');
   check(far.chunks.every(c=>c.lod===0),
    'Far camera retains too many detailed road chunks: '+JSON.stringify(far));
   await capture('14-dumbo-road-far-rain.png');
-  petalwakeQa={near,wet,mid,far};
+  petalwakeQa={near,wet,mid,far,temporal,lodSweep,
+   cadence:{dry:dryCadence,wet:wetCadence,mid:midCadence}};
   await page.evaluate(()=>{
    const el=document.getElementById('skyWeather');
    el.value='Clear';el.dispatchEvent(new Event('change',{bubbles:true}));
