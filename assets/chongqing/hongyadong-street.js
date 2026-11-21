@@ -30,14 +30,14 @@ function makeSurfaceTexture(THREE){
   return texture;
 }
 
-function makeRibbon(THREE,points,width,yOffset=0){
+function makeRibbon(THREE,points,width,yOffset=0,lateralOffset=0){
   const positions=[],uvs=[],indices=[];
   for(let i=0;i<points.length;i++){
     const p=points[i],a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)];
     const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz)||1;
     const nx=-dz/len,nz=dx/len;
-    positions.push(p.x+nx*width/2,p.y+yOffset,p.z+nz*width/2,
-      p.x-nx*width/2,p.y+yOffset,p.z-nz*width/2);
+    positions.push(p.x+nx*(lateralOffset+width/2),p.y+yOffset,p.z+nz*(lateralOffset+width/2),
+      p.x+nx*(lateralOffset-width/2),p.y+yOffset,p.z+nz*(lateralOffset-width/2));
     uvs.push(i/(points.length-1),0,i/(points.length-1),1);
     if(i){const k=(i-1)*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
   }
@@ -48,8 +48,8 @@ function makeRibbon(THREE,points,width,yOffset=0){
   return g;
 }
 
-function addBoxStrip(THREE,group,material,points,width,height=0,yOffset=0){
-  const geo=makeRibbon(THREE,points,width,yOffset+height);
+function addBoxStrip(THREE,group,material,points,width,height=0,yOffset=0,lateralOffset=0){
+  const geo=makeRibbon(THREE,points,width,yOffset+height,lateralOffset);
   const mesh=new THREE.Mesh(geo,material);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
   // The thin vertical face is intentionally omitted: this is a surface prototype,
   // not a replacement for the existing collision/retaining-wall geometry.
@@ -73,8 +73,10 @@ export function buildHongyadongStreetPrototype({THREE,scene,ground,riverCenter,p
   const seamMat=new THREE.MeshStandardMaterial({color:0x2b3030,roughness:.54,metalness:.1});
   const dry=path.slice(0,11),wet=path.slice(11,19),dry2=path.slice(19);
   const meshes=[addBoxStrip(THREE,group,walkwayMat,path,12),
-    addBoxStrip(THREE,group,curb,path,1.1,.18,.15),
-    addBoxStrip(THREE,group,wall,path,1.35,.16,-.4),
+    // Edge bands follow opposite sides of the 12 m boardwalk, not its center.
+    // Keep them inside the surface footprint and above the existing collision geometry.
+    addBoxStrip(THREE,group,curb,path,1.1,.18,.15,5.35),
+    addBoxStrip(THREE,group,wall,path,1.35,.16,-.05,-5.25),
     addBoxStrip(THREE,group,dryAsphalt,dry,4,.025,.03),
     addBoxStrip(THREE,group,wetAsphalt,wet,4,.025,.035),
     addBoxStrip(THREE,group,dryAsphalt,dry2,4,.025,.03)];
