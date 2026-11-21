@@ -57,3 +57,24 @@ For surface continuity the large terrain mesh increased to **208×148 cells** an
 **Validation and limitation:** module syntax checks passed for `chongqing.js`, `details.js`, `pbr.js` and `spatial.js`. A non-graphics mock exercised both the photographic PBR path loader and the instanced detail builder: six local texture paths, 14 storefront signs, 31 new scene colliders and 9,449 instanced detail primitives in about 20 render groups, without buffer overflow. This is not an actual WebGL screenshot test or measured frame-rate result. The public GitHub Pages endpoint could not be verified from this environment.
 
 **Accuracy:** the rebuild is designed to look substantially less cartoon-like, but remains a custom compressed scenic model, **not yet an exact photographic reconstruction or georeferenced digital twin**. Achieving street-level 1:1 would require actual surveyed geometry and legitimately licensed high-resolution facades, which this commit does not include.
+
+
+## Recognizable modern landmark pass — 20 November 2026
+
+This pass adds **Raffles City Chongqing / Chaotianmen** and the **Liziba Line 2 through-building monorail** as modeled 3D landmarks with real architectural proportions rather than random rectangular towers.
+
+### Raffles City and The Crystal
+
+The project's architect [Safdie Architects](https://www.safdiearchitects.com/projects/raffles-city-chongqing) describes eight sail-inspired towers: six southern towers of about 250 m and two northern towers of about 350 m. The project's operator [CapitaLand](https://www.capitaland.com/en/about-capitaland/newsroom/news-releases/international/2020/jun/CapitaLand-opens-250-metre-high-glass-bottom-Exploration-Deck-at-RCCQ.html) describes The Crystal as a 300 m-long, 32.5 m-wide, 26.5 m-high horizontal skybridge over four 250 m towers.
+
+`assets/chongqing/landmarks.js` creates eight original curved/chamfered facade volumes, story mullions, a commercial podium, a 300×32.5×26.5 world-unit elliptical glass tube, structural ribs, mechanical roof detailing and link arms. Tower heights are approximately 250 and 350 game units. A physical collision volume protects the podium and Crystal's landable rooftop. Adjacent decorative/background towers are excluded to avoid occupying the landmark footprint.
+
+### Liziba Station
+
+The [Chongqing municipal government](https://english.cq.gov.cn/specials/explore/PhotoPerfectSpots/202608/t20260810_15912642.html) describes Liziba Station on Line 2 as a straddle-type monorail station integrated into a residential/commercial building. An [architecture/history description](https://www.ichongqing.info/2022/01/06/which-came-first-liziba-station-or-its-residential-building/) describes its distinctive train-through-building design.
+
+In the game it is a 19-storey station block with a real through-opening around the monorail height, separated lower/upper/side colliders, windows and a station sign. A three-car animated rail vehicle follows the curved elevated guideway. The prior wide metal slab rail and stationary block cars were removed in favor of a concrete straddle-monorail guidebeam with piers. Both landmarks are in the mini-map and discoverable through their exploration tasks.
+
+### Validation and scope
+
+Run `node --test tests/chongqing-landmarks.test.mjs` and `node --test tests/chongqing-spatial.test.mjs`. The landmark test covers the eight towers, Crystal length and collider, the physically open Liziba tunnel, train motion and GPU instance capacity; five landmark tests passed in the isolated JavaScript mock runner. No GPU rendering test, measured FPS or public Pages deployment verification was available. The city layout remains a compressed artistic arrangement — **not** surveyed 1:1 coordinates, photogrammetry or an exact topology of Chongqing.
