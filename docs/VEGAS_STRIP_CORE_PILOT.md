@@ -17,8 +17,8 @@
 | Third-party Las Vegas casino models / photo facades | None verified | Not approved | **None downloaded/used** |
 
 ## Geometric/performance budget (incremental)
-- Static mountain triangles: **216** (2 sides × 18 segments × 6 triangles); flat/faceted colors, no new textures.
-- Core pavement repair geometry: **9 quads = 18 triangles**, flush with existing asphalt; overall **234 triangles** incremental.
+- Static mountain triangles: **768** (2 sides × 48 segments × 8 triangles); flat/faceted colors, no new textures.
+- Core pavement repair geometry: **9 quads = 18 triangles**, flush with existing asphalt; overall **786 triangles** incremental.
 - New GPU textures, shader programs, instanced draw calls, network fetches, off-site models: **0 introduced directly**. Actual renderer draw-call behavior and GPU driver timings require a WebGL screenshot run.
 - Target for native WebGL2 / SwiftShader baseline: incremental first-load JS (not including preexisting HTML): **< 5 KiB** source-code budget; incremental dynamic GPU time **≤0.3 ms/frame** at 1280×720 on the project QA machine; FPS target **≥30** in the same fixed camera and graphics-quality setting. These are *acceptance limits*, **not measured results**.
 - The mountain profile is a placeholder silhouette, not a claimed Spring Mountains or Sunrise Mountain surveyed elevation field. Its world positions deliberately remain `|x|>=686` to avoid existing casino/road collision footprints. The distant scenery should be checked for clipping and flat-shaded facets.
@@ -47,3 +47,7 @@ Central QA must compare the same four settings against baseline `6d50bfd` and in
 - Measured start-to-verified-frame: **10,167 ms**; WebGL2 context present and `getError()==0`; browser errors: zero.
 - **Observed software frame cadence: 90 frames, 321.1 ms/frame, ~3.11 FPS.** This does not pass the aspirational 30 FPS target; compare against the untouched integrated baseline before judging incremental cost, and do not interpret JS requestAnimationFrame as GPU-only time.
 - Screenshot review: near Strip facades remain flat/blocky, the previous far camera stayed effectively at street level and did not establish clear mountain visibility. The script now uses Bellagio for the flight-distance camera and CI runs the exact same screenshot script against clean `6d50bfd` as a regression control. Authentic GIS/DEM precision remains **not achieved**.
+
+## Same-camera before/after evidence — refined scene baseline
+- Run [44958150919](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44958150919) successfully captured eight screenshots: four current-branch and four untouched `6d50bfd` using **the same** real-browser Scenic Views settings and SwiftShader. First-load baseline **9.572 seconds** vs. candidate **8.718 seconds**; mean requestAnimationFrame interval **284.99 ms** vs. **288.69 ms** (+1.30%), approximated software FPS **3.51** vs. **3.46** (-1.28%). This is software rendering, **not GPU frame time** and does not meet 30 FPS.
+- The sample hills are visibly present in the distant daytime and night Bellagio views but were faceted and unnaturally slab-like. Revised to 48 segments per side (768 mountain triangles, 786 total) and warmer strata. Review the new captured screenshots before acceptance; actual DEM import and authentic casino models remain separate work.
