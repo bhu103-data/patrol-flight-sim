@@ -227,8 +227,10 @@ export function buildNycStreetNetwork({
   }
   // Two tourist-vendor stands within the dedicated, wide Times Square
   // pedestrian plaza; no guesswork on actual permit/vendor coordinates.
-  hotDogCart(-4.4,9.1,0);
-  hotDogCart(-4.2,24.0,1);
+  // Times Square vendors only stand on exposed, dry pedestrian paving.
+  for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]]){
+    if(terrainAt(x,z)>waterY+1.55)hotDogCart(x,z,v);
+  }
   // Downtown commercial corridor: two hand-placed pedestrian corners,
   // skipping any place that is flooded or inside the building heightfield.
   for(const [x,z,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
