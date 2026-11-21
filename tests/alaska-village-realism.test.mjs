@@ -25,13 +25,13 @@ function buildRealHarbor(){
   assert.ok(start>0&&end>start,'the original harbor authoring function is present');
   const boxes=[],surfaces=[],obstacles=[],logs=[],bridges=[];
   const finite=v=>assert.ok(Array.isArray(v)&&v.length===3&&v.every(Number.isFinite));
-  const addQuad=(a,b,c,d,color)=>{for(const p of [a,b,c,d])finite(p);finite(color);surfaces.push('quad');};
-  const addTri=(a,b,c,color)=>{for(const p of [a,b,c])finite(p);finite(color);surfaces.push('tri');};
+  const addQuad=(a,b,c,d,color,surfaceId=0)=>{for(const p of [a,b,c,d])finite(p);finite(color);surfaces.push({kind:'quad',surfaceId});};
+  const addTri=(a,b,c,color,surfaceId=0)=>{for(const p of [a,b,c])finite(p);finite(color);surfaces.push({kind:'tri',surfaceId});};
   const createTriangleMesh=()=>({addQuad,addTri,upload:()=>({primitives:surfaces.length})});
-  const addModelBox=(_,x,y,z,w,h,d,color)=>{
+  const addModelBox=(_,x,y,z,w,h,d,color,surfaceId=0)=>{
     for(const n of [x,y,z,w,h,d])assert.ok(Number.isFinite(n),'finite house geometry');
     assert.ok(w>0&&h>0&&d>0,'positive actual mesh dimensions');
-    finite(color);boxes.push({x,y,z,w,h,d,color});
+    finite(color);boxes.push({x,y,z,w,h,d,color,surfaceId});
   };
   const addRideBeam=(_,start,end,width,color)=>{
     finite(start);finite(end);finite(color);assert.ok(width>0);
@@ -83,6 +83,18 @@ test('actual geometry includes distinct siding, metal gables, windows and anchor
   assert.ok(scene.surfaces.length>25,'roof gable and lighthouse are true mesh faces');
   assert.match(html,/const porchTerrain=\[-1\.1,0,1\.1\]\.map/);
   assert.match(html,/if\(Math\.min\(\.\.\.porchTerrain\)>WATER_H\+\.95/);
+});
+
+test('lodge timber and metal shaders tag the real, independently validated faces',()=>{
+  const timber=scene.boxes.filter(b=>b.surfaceId===15);
+  const paintedMetal=scene.surfaces.filter(v=>v.kind==='quad'&&v.surfaceId===16);
+  const woodGables=scene.surfaces.filter(v=>v.kind==='tri'&&v.surfaceId===15);
+  assert.equal(timber.length,6,'one physically shaded timber shell per lodge');
+  assert.equal(paintedMetal.length,12,'both actual metal roof slopes on six cabins');
+  assert.equal(woodGables.length,12,'gable infills use the same grain material');
+  assert.match(html,/PATROL_ALASKA_LODGE_WOOD_V1/);
+  assert.match(html,/alaskaLodgeCladding\(material,n,surfaceRoughness\)/);
+  assert.match(html,/vHarborSurface<14\.5/);
 });
 
 test('stilt and porch support bottoms are not suspended above local terrain',()=>{
