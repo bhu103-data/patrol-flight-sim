@@ -1,0 +1,49 @@
+name: Audit 3DAssets CC0 modern streetlight source
+on:
+  push:
+    branches: [review/chongqing-lightweight-lamp-3dassets-20261121]
+    paths:
+      - "scripts/audit-3dassets-lamp.mjs"
+      - ".github/workflows/3dassets-streetlamp-audit.yml"
+      - "docs/3DASSETS_STREETLAMP_AUDIT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: streetlamp-3dassets-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  producer-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download only the pinned publisher original and API rights record
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/3dassets-lamp
+          curl --fail --location --retry 2 --max-time 45 --proto '=https' \
+            'https://cdn.3dassets.dev/assets/28261/v1/model.glb' \
+            -o /tmp/patrol-3dassets-lamp.glb
+          curl --fail --location --retry 2 --max-time 45 --proto '=https' \
+            'https://3dassets.dev/api/v1/assets/battle-royale-town-and-airfield-street-lamp-d6bcc658' \
+            -o artifacts/3dassets-lamp/publisher-source.json
+      - name: Independently check actual GLB, embedded images, CC0 claim, and SHA-256
+        run: |
+          node scripts/audit-3dassets-lamp.mjs \
+            /tmp/patrol-3dassets-lamp.glb \
+            artifacts/3dassets-lamp/publisher-source.json \
+            artifacts/3dassets-lamp/binary-audit.json
+      - name: Preserve audit evidence, do not install the asset into PATROL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-3dassets-lamp-source-audit
+          path: artifacts/3dassets-lamp/
+          retention-days: 7
+          if-no-files-found: ignore
