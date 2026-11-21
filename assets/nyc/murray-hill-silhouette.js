@@ -17,13 +17,13 @@ function triangulate(r,addTri,y,color){ // Ear clipping for non-convex footprint
    if(cross(a,b,c)<=1e-7)continue;
    if(ix.some(j=>j!==ia&&j!==ib&&j!==ic&&
     cross(a,b,p[j])>=-1e-7&&cross(b,c,p[j])>=-1e-7&&cross(c,a,p[j])>=-1e-7))continue;
-   addTri([a[0],y,a[1]],[b[0],y,b[1]],[c[0],y,c[1]],color,SURFACE.roof);
+   addTri([a[0],y,a[1]],[c[0],y,c[1]],[b[0],y,b[1]],color,SURFACE.roof);
    ix.splice(i,1);found=true;count++;break;
   }
   if(!found)return {count,complete:false};
  }
  if(ix.length===3){const [a,b,c]=ix.map(i=>p[i]);
-  addTri([a[0],y,a[1]],[b[0],y,b[1]],[c[0],y,c[1]],color,SURFACE.roof);count++;
+  addTri([a[0],y,a[1]],[c[0],y,c[1]],[b[0],y,b[1]],color,SURFACE.roof);count++;
  }
  return {count,complete:ix.length===3};
 }
@@ -53,10 +53,11 @@ export function buildMurrayHillVisualMesh(snapshot,{addQuad,addTri},{origin=[-73
  const quad=(a,b,c,d,col,surface)=>{addQuad(a,b,c,d,col,surface);mesh.facadeQuads++};
  const wall=(ring,y0,y1,id,decorate)=>{
   const color=mat[id%mat.length];
+  ring=area(ring)>0?ring:ring.slice().reverse();
   for(let k=0;k<ring.length;k++){
    const p=ring[k],q=ring[(k+1)%ring.length],len=Math.hypot(p[0]-q[0],p[1]-q[1]);
    if(len<.10)continue;
-   quad([p[0],y0,p[1]],[q[0],y0,q[1]],[q[0],y1,q[1]],[p[0],y1,p[1]],color,SURFACE.masonry);
+   quad([q[0],y0,q[1]],[p[0],y0,p[1]],[p[0],y1,p[1]],[q[0],y1,q[1]],color,SURFACE.masonry);
    if(!decorate||mesh.facadeQuads>maxFacadeQuads-20||len<2.5||y1-y0<4)continue;
    const bays=Math.min(5,Math.floor(len/2.4)),floors=Math.min(8,Math.floor((y1-y0-1.1)/2.5));
    for(let f=0;f<floors;f++)for(let j=0;j<bays;j++){
