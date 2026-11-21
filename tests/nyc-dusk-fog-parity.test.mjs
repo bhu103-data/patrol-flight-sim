@@ -89,6 +89,12 @@ test('fixed Manhattan camera captures the true summer horizon in addition to UI 
   assert.match(script,/regionMeanLuma/);
   assert.match(script,/distantSkyline/);
   assert.match(script,/foregroundBuildings/);
+  assert.match(script,/const expectedStatus=clock\+/,
+    'capture must wait for actual game time and weather, not only select values');
+  assert.match(script,/page\.waitForFunction\(expected=>/,
+    'slow SwiftShader frames need game-state acknowledgement before screenshots');
+  assert.match(script,/state\.status\?\.trim\(\)!==expectedStatus/,
+    'reject screenshots whose environment status is still from the previous scene');
   assert.match(script,/name:'midnight',value:'0'/);
   assert.match(script,/o\.value='19\.5'/,'test-only time option does not touch game UI');
   const lat=41*Math.PI/180,declination=22*Math.PI/180;
