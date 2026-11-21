@@ -98,3 +98,10 @@ Wet asphalt now features 192 custom-shaped local puddles and 102 subtle light-re
 The Chongqing scenic map now features three moving Jialing River ferries with detailed passenger decks, hulls and wakes. The player may land on a cruise deck and travel with it; ferry markers and a new exploration objective appear in the game. The old 300-unit climb restriction was corrected, leaving the intended 650-unit orbit entry and 725-unit safety limit. Day/Dusk/Night now also controls traffic headlights and artificial road reflection strips.
 
 Testing: `node --test tests/chongqing-*.test.mjs`; optional real Chromium screenshots: [Chongqing workflow](.github/workflows/chongqing-visual.yml) and [browser smoke script](scripts/chongqing-browser-smoke.mjs). WebGL screenshots and frame rate remain **unverified until a real Actions/browser run completes**. Models are original artistic recreations, not scanned 1:1 architecture.
+
+
+### New York / Chongqing road-and-building clearance
+
+NYC generated building lots now reserve Manhattan's main street corridors; new street surfaces and crossings check the complete road/sidewalk envelope. Chongqing background towers reserve all six curved roads and two bridge approaches, with final road segments clipped after all landmark colliders are registered. Chongqing taxis, streetlights, road paint, zebra crossings and wet asphalt use the same no-building occupancy query.
+
+Tests and limitations: [NYC & Chongqing road clearance](docs/NYC_CHONGQING_ROAD_CLEARANCE.md). Run `node --test tests/nyc-road-clearance.test.mjs tests/chongqing-road-clearance.test.mjs tests/chongqing-street-occupancy.test.mjs`. A GitHub Actions Chromium visual check is configured; real screenshots and FPS remain unverified until that check successfully runs.
