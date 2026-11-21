@@ -1163,7 +1163,8 @@ const CENTRAL_PARK_SITES=[
             if(occupied)continue;
             const height=9.6+hash(ix,iz,772)*5.9;
             const tone=hash(ix,iz,312);
-            cityParcels.set(key,[x,z,width,length,height,tone]);
+            // Stable metadata identifies these authored gapfills in regressions.
+            cityParcels.set(key,[x,z,width,length,height,tone,false,null,'bridgehead-gapfill']);
             brooklynGapFills++;
             break;
           }
