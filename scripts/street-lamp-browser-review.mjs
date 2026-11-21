@@ -2,7 +2,8 @@
 // GitHub Actions downloads the officially hosted GLB to the local test server.
 // Never interprets this experiment as a release approval.
 import {chromium} from 'playwright';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {PNG} from 'pngjs';
 
 const base=(process.env.CHONGQING_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const dir='artifacts/streetlamp-review';
@@ -29,7 +30,7 @@ async function capture(label,pose,preview,quality='high'){
     if(msg.type()==='warning')warnings.push({label,message:msg.text().slice(0,200)});
   });
   const params=new URLSearchParams({
-    quality,time:'night',assetQA:pose
+    quality,time:'day',assetQA:pose
   });
   if(preview)params.set('lampReview','grab3d');
   try{
@@ -44,6 +45,8 @@ async function capture(label,pose,preview,quality='high'){
         document.documentElement.dataset.streetlampReview===expected,
         expected,{timeout:90000,polling:250});
     }
+    // Remove HUD overlays from the *canvas screenshot*; UI is tested elsewhere.
+    await page.addStyleTag({content:'body > :not(canvas#world):not(script) { visibility:hidden!important; }'});
     await page.waitForTimeout(900);
     // Bound the comparison on software WebGL: no browser-only test may
     // hold a free CI runner indefinitely waiting for perfect frame counts.
@@ -78,6 +81,11 @@ async function capture(label,pose,preview,quality='high'){
     });
     if(!game.webgl2||!game.playing||!game.stats?.anchor)
       throw Error('No live WebGL scene or safe lamp anchor');
+    const projected=game.stats.lampScreenProjection;
+    if(!projected||Math.abs(projected[0])>0.38||Math.abs(projected[1])>0.38||
+       Math.abs(projected[2])>1){
+      throw Error('Target lamp is out of usable camera frame: '+JSON.stringify(projected));
+    }
     if(preview&&quality!=='low'&&
       (game.stats.status!=='ready'||game.stats.candidateBytes!==702900))
       throw Error('Audited GLB not swapped into the scene');
@@ -88,6 +96,8 @@ async function capture(label,pose,preview,quality='high'){
     const result={
       label,pose,preview,quality,webgl2:game.webgl2,
       status:game.stats.status,anchor:game.stats.anchor,
+      cameraPosition:game.stats.cameraPosition,
+      lampScreenProjection:game.stats.lampScreenProjection,
       calls:game.stats.drawCalls,triangles:game.stats.triangles,
       pixelRatio:game.stats.pixelRatio,candidateBytes:game.stats.candidateBytes,
       decodeMs:game.stats.decodeMs,
@@ -114,13 +124,43 @@ try{
   for(const pose of ['street','air']){
     const baseShot=experiments.find(x=>x.pose===pose&&!x.preview);
     const candidate=experiments.find(x=>x.pose===pose&&x.preview&&x.quality==='high');
+    const imageA=PNG.sync.read(await readFile(baseShot.screenshot));
+    const imageB=PNG.sync.read(await readFile(candidate.screenshot));
+    if(imageA.width!==imageB.width||imageA.height!==imageB.height)
+      throw Error('A/B screenshot dimensions differ');
+    // Actual lamp must visibly change in the central ROI, not behind a hill.
+    // Ignore dynamic particles outside this ROI. Compare RGB channels only.
+    const w=imageA.width,h=imageA.height;
+    let changedPixels=0,observedPixels=0,brightness=0;
+    for(let y=Math.floor(h*.22);y<Math.ceil(h*.83);y++){
+      for(let x=Math.floor(w*.3);x<Math.ceil(w*.7);x++){
+        const i=(y*w+x)*4;
+        const a=imageA.data,b=imageB.data;
+        brightness+=(a[i]+a[i+1]+a[i+2])/3;
+        observedPixels++;
+        if(Math.max(
+          Math.abs(a[i]-b[i]),
+          Math.abs(a[i+1]-b[i+1]),
+          Math.abs(a[i+2]-b[i+2]))>20)changedPixels++;
+      }
+    }
+    const changedRatio=changedPixels/observedPixels;
+    const meanBaselineBrightness=brightness/observedPixels;
     comparisons.push({
       pose,
+      meanBaselineBrightness:Math.round(meanBaselineBrightness*100)/100,
+      visuallyChangedPixels:changedPixels,
+      visuallyChangedPercent:Math.round(changedRatio*10000)/100,
       medianDeltaMs:Math.round((candidate.frameMsMedian-baseShot.frameMsMedian)*100)/100,
       p95DeltaMs:Math.round((candidate.frameMsP95-baseShot.frameMsP95)*100)/100,
       drawCallDelta:candidate.calls-baseShot.calls,
       triangleDelta:candidate.triangles-baseShot.triangles
     });
+    if(meanBaselineBrightness<30)
+      throw Error('Camera still obscured/black: '+pose+', brightness '+meanBaselineBrightness);
+    if(changedPixels<150)
+      throw Error('Replacement not visibly confirmed at '+pose+': only '+changedPixels+' pixels changed');
+
   }
   report={passed:true,environment:'Chromium SwiftShader (software WebGL2, not GPU benchmark)',
     experiments,comparisons,warnings,
