@@ -21,7 +21,7 @@ export const PARK_WATERS=[
   {name:'The Lake',cx:-14,cz:150,rx:24.0,rz:16.2,phase:1.15},
   {name:'The Pond',cx:21,cz:73,rx:12.4,rz:8.6,phase:2.75},
   {name:'Harlem Meer',cx:17,cz:339,rx:16.5,rz:10.2,phase:1.7},
-  {name:'Turtle Pond',cx:-12,cz:178,rx:7.7,rz:5.3,phase:3.85},
+  {name:'Turtle Pond',cx:6,cz:177,rx:7.7,rz:5.3,phase:3.85},
   {name:'Conservatory Water',cx:26,cz:146,rx:9.2,rz:6.7,phase:0.85}
 ];
 export const PARK_LAWNS=[
@@ -215,7 +215,6 @@ export function buildCentralPark({
         [cx+Math.cos(a)*1.12,base+height*.88,z+Math.sin(a)*1.0],
         .092,branch);
     }
-    const top=height+base-.25;
     crown(u,z,variant,height-.65,1.75+rand()*.64,palette);
     const b1=variant*1.11;
     crown(u+Math.cos(b1)*.76,z+Math.sin(b1)*.67,variant+2,
