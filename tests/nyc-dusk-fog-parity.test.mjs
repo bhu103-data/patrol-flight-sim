@@ -60,10 +60,10 @@ test('noon, midnight and non-Manhattan shaders keep their original result',()=>{
 test('fixed Manhattan camera captures the true summer horizon in addition to UI dusk',async()=>{
   const script=await readFile(new URL('../scripts/nyc-time-visibility-browser.mjs',import.meta.url),'utf8');
   assert.match(script,/name:'noon',value:'12'/);
-  assert.match(script,/name:'dusk',value:'18\\.5'/);
-  assert.match(script,/name:'solar-dusk',value:'19\\.5'/);
+  assert.match(script,/name:'dusk',value:'18\.5'/);
+  assert.match(script,/name:'solar-dusk',value:'19\.5'/);
   assert.match(script,/name:'midnight',value:'0'/);
-  assert.match(script,/o\\.value='19\\.5'/,'test-only time option does not touch game UI');
+  assert.match(script,/o\.value='19\.5'/,'test-only time option does not touch game UI');
   const lat=41*Math.PI/180,declination=22*Math.PI/180;
   const elevation=hour=>Math.asin(Math.sin(lat)*Math.sin(declination)+
     Math.cos(lat)*Math.cos(declination)*Math.cos((hour-12)*Math.PI/12));
