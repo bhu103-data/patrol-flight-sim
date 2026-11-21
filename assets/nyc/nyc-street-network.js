@@ -1,10 +1,10 @@
-// PATROL_NYC_STREETS_V10 — native WebGL2 static scene geometry.
+// PATROL_NYC_STREET_FURNITURE_V11 — native WebGL2 street realism; retains V10.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -13,7 +13,9 @@ export function buildNycStreetNetwork({
   const roadY=streetY+.086,markY=streetY+.117,paveY=streetY+.154;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
-    skippedWater:0,skippedLOD:0};
+    skippedWater:0,skippedLOD:0,streetFurniture:0,
+    busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
+    accessibleCorners:0,skippedBuildings:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -46,6 +48,130 @@ export function buildNycStreetNetwork({
     }
     return false;
   }
+  function siteClear(x,z,radius=.5){
+    if(!Number.isFinite(x)||!Number.isFinite(z))return false;
+    if(terrainAt(x,z)<waterY+1.58)return false;
+    if(!isClear(x,z,radius)){stats.skippedBuildings++;return false;}
+    return true;
+  }
+  function streetFurniture(a,b,kind,i,j,width){
+    // NYC DOT furniture strip: grouped by block, not repeated at every lamp.
+    // Keep a clear inner walking zone and never populate a building footprint.
+    if(stats.streetFurniture>=82 || detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<3)
+      return;
+    const chance=hash(i,j,49);
+    if(chance<.76)return;
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    if(length<13)return;
+    const side=hash(i,j,58)<.5?-1:1;
+    const mid=[a[0]*.54+b[0]*.46,a[1]*.54+b[1]*.46];
+    const normal=[dz/length,-dx/length],along=[dx/length,dz/length];
+    const d=width*.5+1.18;
+    const x=mid[0]+normal[0]*side*d,z=mid[1]+normal[1]*side*d;
+    if(!siteClear(x,z,.54))return;
+    const base=streetY+.18,frame=[.27,.31,.34],
+      aluminum=[.62,.67,.69],glass=[.19,.33,.40],
+      green=[.18,.38,.30],navy=[.12,.23,.42];
+    // Vary furniture types by parcel: glass shelter, WalkNYC, bike rack,
+    // paved tree pit, or black lamp post. Max one item per selected block.
+    const variant=Math.floor(hash(i,j,50)*5);
+    const at=(sideways,forward,y)=>[
+      x+normal[0]*sideways+along[0]*forward,y,
+      z+normal[1]*sideways+along[1]*forward];
+    const bar=(u,v,r,color)=>beam(u,v,r,color);
+    if(variant===0 && stats.busShelters<12){
+      // Narrow JCDecaux-style transparent shelter on a local sidewalk bulb-out,
+      // not an actual mapped MTA stop or franchised ad placement.
+      if(!siteClear(x+along[0]*.78,z+along[1]*.78,1.04))return;
+      const bottom=base+.06,roof=base+2.80;
+      const col=[.35,.40,.44];
+      box(x,bottom-.035,z,1.65,.08,3.30,[.49,.51,.49]);
+      for(const side2 of [-1,1]){
+        bar(at(-.57,side2*1.18,bottom),
+          at(-.57,side2*1.18,roof),.055,col);
+        bar(at(.57,side2*1.18,bottom),
+          at(.57,side2*1.18,roof),.055,col);
+        bar(at(-.57,side2*1.18,roof),
+          at(.57,side2*1.18,roof),.065,aluminum);
+      }
+      // Transparent tempered glazing plus dark protective kickplate.
+      for(const side2 of [-1,1]){
+        const q=side2*1.18;
+        addQuad(at(-.56,q,bottom+.34),at(.56,q,bottom+.34),
+          at(.56,q,roof-.16),at(-.56,q,roof-.16),glass,5);
+      }
+      box(x,roof+.06,z,1.59,.17,2.93,col);
+      box(x,roof+.19,z,.58,.09,2.25,aluminum);
+      const stop=at(-.67,.76,base+1.57);
+      box(stop[0],stop[1],stop[2],.04,1.92,.76,navy);
+      box(stop[0],stop[1]+.60,stop[2],.052,.45,.72,[.85,.86,.81]);
+      if(lettering)lettering('BUS',at(-.70,.74,base+2.08),
+        .64,.19,[.93,.94,.91]);
+      stats.busShelters++;
+    }else if(variant===1 && stats.bikeRacks<26){
+      // Three steel NYC CityRack-like hoops, spaced along the sidewalk.
+      for(let k=-1;k<=1;k++){
+        const forward=k*.63;
+        const bottomA=at(-.28,forward,base),bottomB=at(.28,forward,base);
+        const highA=at(-.28,forward,base+.91),
+          highB=at(.28,forward,base+.91);
+        bar(bottomA,highA,.042,aluminum);
+        bar(highA,highB,.045,aluminum);
+        bar(highB,bottomB,.042,aluminum);
+        const anchor=at(0,forward,base-.01);
+        box(anchor[0],anchor[1],anchor[2],.44,.065,.085,frame);
+      }
+      stats.bikeRacks++;
+    }else if(variant===2 && stats.wayfinding<17){
+      // Slim WalkNYC-style walking map kiosk. Original simulated diagram.
+      box(x,base+1.26,z,.19,2.49,.78,frame);
+      for(const way of [-1,1]){
+        const p=at(way*.11,0,base+1.50);
+        box(p[0],p[1],p[2],.07,1.39,.68,[.73,.76,.75]);
+        const panel=at(way*.15,0,base+1.41);
+        box(panel[0],panel[1],panel[2],.03,.93,.50,
+          [way<0?.28:.19,.50,.54]);
+      }
+      const cap=at(0,0,base+2.55);
+      box(cap[0],cap[1],cap[2],.33,.13,.91,navy);
+      stats.wayfinding++;
+    }else if(variant===3 && stats.treePits<26){
+      // Granite tree bed with non-cartoon separated branches and leaf clusters.
+      box(x,base-.05,z,1.42,.08,1.28,[.55,.55,.51]);
+      for(const turn of [-1,1]){
+        box(x+turn*.48,base-.008,z,.055,.023,1.20,frame);
+        box(x,base-.008,z+turn*.41,1.28,.023,.044,frame);
+      }
+      bar(at(0,0,base),at(.06,.03,base+3.45),.11,[.31,.29,.25]);
+      for(let k=0;k<7;k++){
+        const angle=k*2.399963,dist=.60+(k%3)*.18;
+        const leafPoint=at(Math.cos(angle)*dist,Math.sin(angle)*dist,
+          base+3.36+(k%3)*.19);
+        bar(at(0,0,base+2.56),leafPoint,.038,[.34,.32,.25]);
+        // Multiple smaller angled leaf clusters avoid a single green cube.
+        for(let j=0;j<3;j++){
+          const a=angle+j*2.10;
+          const t=at(Math.cos(angle)*dist+Math.cos(a)*.18,
+            Math.sin(angle)*dist+Math.sin(a)*.16,leafPoint[1]-.13+j*.09);
+          const c=j===0?[.24,.42,.29]:j===1?[.32,.46,.31]:[.19,.37,.27];
+          addQuad([t[0]-.20,t[1]-.09,t[2]-.10],
+            [t[0]+.19,t[1]-.11,t[2]+.05],
+            [t[0]+.12,t[1]+.23,t[2]+.17],
+            [t[0]-.16,t[1]+.17,t[2]-.14],c);
+        }
+      }
+      stats.treePits++;
+    }else if(variant===4 && stats.streetlamps<25){
+      // Tapered NYC-style streetlight with cantilever and compact luminaire.
+      bar(at(0,0,base),at(0,0,base+5.5),.088,frame);
+      bar(at(0,0,base+5.32),at(-.62,.64,base+5.49),.074,frame);
+      const p=at(-.62,.64,base+5.49);
+      box(p[0],p[1],p[2],.37,.11,.48,[.63,.66,.62]);
+      box(p[0],p[1]-.07,p[2],.25,.03,.36,[.89,.85,.70]);
+      stats.streetlamps++;
+    }else return;
+    stats.streetFurniture++;
+  }
   function rect(x,z,w,d,color,y=roadY){
     addQuad([x-w/2,y,z-d/2],[x+w/2,y,z-d/2],
       [x+w/2,y,z+d/2],[x-w/2,y,z+d/2],color);
@@ -62,7 +188,8 @@ export function buildNycStreetNetwork({
     // They sit OUTSIDE the asphalt: no two large overlapping quads.
     for(const side of [-1,1]){
       const p=shift(a,b,side*(half+.53));
-      slab(p[0],p[1],.88,sidewalk,paveY);
+      // Wider concrete frontage leaves space for a furnishings strip.
+      slab(p[0],p[1],1.42,sidewalk,paveY);
       const c=shift(a,b,side*(half+.035));
       slab(c[0],c[1],.22,granite,roadY+.127);
       const g=shift(a,b,side*(half-.18));
@@ -98,6 +225,7 @@ export function buildNycStreetNetwork({
       stats.streetFixtures++;
     }
     if(kind==='avenue')stats.avenues++;else stats.streets++;
+    streetFurniture(a,b,kind,i,j,width);
     return true;
   }
   // Unified surface-road generation. Positions align with the EXISTING
@@ -157,16 +285,28 @@ export function buildNycStreetNetwork({
         rect(xx+k*.115,zz,.034,.41,steel,markY+.010);
     }
     const cornerX=x+4.48,cornerZ=z+4.55;
-    if(hash(i,j,3)>.40){
+    if(hash(i,j,3)>.40 && siteClear(cornerX,cornerZ,.30)){
       signal(cornerX,cornerZ,(Math.abs(i)+j+30)%3);
       stats.intersections++;
     }
+    // Pedestrian tactile curb ramp pads; restricted to featured intersections.
+    if(stats.accessibleCorners<65 && detailBand(x,z)>=3 &&
+      hash(i,j,62)>.71 && siteClear(x-4.2,z+3.9,.35)){
+      const px=x-4.20,pz=z+3.92;
+      rect(px,pz,1.15,.84,[.67,.65,.54],paveY+.012);
+      for(let row=-2;row<=2;row++)for(let col=-3;col<=3;col++)
+        rect(px+col*.145,pz+row*.13,.037,.036,
+          [.46,.44,.34],paveY+.027);
+      stats.accessibleCorners++;
+    }
     // A curb-side NYC red hydrant and street waste bin, with restrained count.
-    if(hash(i,j,4)>.71){
+    if(hash(i,j,4)>.71 && siteClear(x-4.20,z-4.56,.36)){
       box(x-4.20,streetY+.48,z-4.56,.23,.75,.24,hydrant);
       box(x-4.2,streetY+.83,z-4.56,.35,.14,.36,hydrant);
-      box(x+4.35,streetY+.41,z-4.65,.53,.61,.47,iron);
-      box(x+4.35,streetY+.75,z-4.65,.61,.08,.55,steel);
+      if(siteClear(x+4.35,z-4.65,.46)){
+        box(x+4.35,streetY+.41,z-4.65,.53,.61,.47,iron);
+        box(x+4.35,streetY+.75,z-4.65,.61,.08,.55,steel);
+      }
       stats.streetFixtures+=2;
     }
   }
@@ -194,12 +334,12 @@ export function buildNycStreetNetwork({
       for(let k=0;k<10;k++){
         const a=k*Math.PI/5,b=(k+1)*Math.PI/5;
         // Polygonal rubber wheels with lighter circular wheel hubs.
-        const A=[cx,.36+y+Math.sin(a)*.26,cz+Math.cos(a)*.26],
-          B=[cx,.36+y+Math.sin(b)*.26,cz+Math.cos(b)*.26];
+        const A=[cx,.25+y+Math.sin(a)*.26,cz+Math.cos(a)*.26],
+          B=[cx,.25+y+Math.sin(b)*.26,cz+Math.cos(b)*.26];
         addQuad(A,B,[cx+side*.11,B[1],B[2]],
           [cx+side*.11,A[1],A[2]],dark);
       }
-      box(cx+side*.11,y+.36,cz,.055,.20,.20,steel);
+      box(cx+side*.11,y+.25,cz,.055,.20,.20,steel);
     }
     box(x,y+2.42,z,.085,1.82,.082,steel);
     const canopyTop=[x,y+3.57,z],N=10,rad=2.05;
@@ -229,12 +369,12 @@ export function buildNycStreetNetwork({
   // pedestrian plaza; no guesswork on actual permit/vendor coordinates.
   // Times Square vendors only stand on exposed, dry pedestrian paving.
   for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]]){
-    if(terrainAt(x,z)>waterY+1.55)hotDogCart(x,z,v);
+    if(siteClear(x,z,1.05))hotDogCart(x,z,v);
   }
   // Downtown commercial corridor: two hand-placed pedestrian corners,
   // skipping any place that is flooded or inside the building heightfield.
   for(const [x,z,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
-    if(terrainAt(x,z)>waterY+1.7 && detailBand(x,z)>=2&&!nearOld(x,z,3.1))
+    if(detailBand(x,z)>=2 && siteClear(x,z,1.05) && !nearOld(x,z,3.1))
       hotDogCart(x,z,k);
   }
   return stats;
