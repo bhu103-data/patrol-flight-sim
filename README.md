@@ -71,3 +71,8 @@ The Chongqing map now has a separate [Raffles City / Liziba modeling module](ass
 The latest update adds two optional **CC0 1K photographic material streams** for timber beams and ceramic roofs, plus **33 curved pitched roof meshes** with raised eave corners and timber lattice window frames. Their provider names are not shown in the game; asset URLs and license information remain in [CHONGQING_LICENSES.md](CHONGQING_LICENSES.md). A local procedural material fallback is preserved for offline or failed requests. These are real material photographs, **not** a copyrighted 3D city scan or a 1:1 imported Hongyadong building model.
 
 Additional regression tests: `node --test tests/chongqing-detail.test.mjs` and `node --test tests/chongqing-visual.test.mjs`.
+
+
+### More realistic Chongqing night streets
+
+`assets/chongqing/streetlife.js` adds 10 moving cars (5 yellow Chongqing-style taxis), realistic road markings, curbs, 108 streetlights and nearby aimed vehicle headlights. Distant conical trees were replaced with varied broadleaf clusters and branches; the active area has a localized soft shadow system, which can be disabled with Low graphics. Texture license records remain in [CHONGQING_LICENSES.md](CHONGQING_LICENSES.md). No source-provider names are placed in the game UI. Further regression checks: `node --test tests/chongqing-streetlife.test.mjs` and `node --test tests/chongqing-vegetation.test.mjs`.
