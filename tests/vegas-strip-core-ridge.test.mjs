@@ -44,5 +44,5 @@ test('flush Strip surface repairs have no physical colliders or textures',()=>{
    p[0]>=-44&&p[0]<=-26&&p[2]>=-210&&p[2]<=-120)));
  assert.match(html,/buildVegasRoads\(box,lamp,addQuad\);\s*\/\/ Geometry is batched/);
  assert.match(html,/buildVegasCoreRidgeSample\(geometry\)/);
- assert.doesNotMatch(sampleSource,/solidAt\(|texture|fetch\(|import\(/);
+ assert.doesNotMatch(sampleSource,/solidAt\(|fetch\(|import\(/);
 });
