@@ -108,10 +108,18 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
   reflections.renderOrder=2;
   scene.add(reflections);
 
+  let lowQuality=false,daylight=false;
+  function syncVisibility(){
+    puddles.visible=!lowQuality;
+    reflections.visible=!lowQuality&&!daylight;
+  }
   function setQuality(mode){
-    const low=mode==='low';
-    puddles.visible=!low;
-    reflections.visible=!low;
+    lowQuality=mode==='low';
+    syncVisibility();
+  }
+  function setTimeOfDay(preset){
+    daylight=preset==='day';
+    syncVisibility();
   }
   let time=0;
   function update(dt){
@@ -120,7 +128,7 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter}) {
     reflectionMaterial.opacity=.49+.05*Math.sin(time*.7);
   }
   return {
-    update,setQuality,
+    update,setQuality,setTimeOfDay,
     stats:{puddles:puddleIndices.length/54,reflectionStrips:glowIndices.length/6,drawGroups:2}
   };
 }
