@@ -6133,9 +6133,15 @@ const CENTRAL_PARK_SITES=[
         }
       }
       for(const [cx,cz] of candidates){
+        // Sample the full cabin parcel. Thin tidal inlets can pass between
+        // the corners and center of a 3x3 grid even when all nine are dry.
         const heights=[];
-        for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
-          heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
+        for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++){
+          const px=cx+(ix/6-.5)*(w+.65);
+          const pz=cz+(iz/6-.5)*(d+.65);
+          heights.push(sampleTerrainHeight(px,pz));
+        }
+        if(!heights.every(Number.isFinite))continue;
         const low=Math.min(...heights),high=Math.max(...heights);
         if(low<=WATER_H+1.0||high-low>maxSlope)continue;
         if(alaskaObstacles.some(o=>Math.abs(cx-o.x)<w*.5+o.halfX+2.2 &&
