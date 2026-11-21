@@ -17,6 +17,8 @@ on:
       - 'tools/scenario_blender_export.py'
       - 'tools/scenario_glb_selftest.html'
       - 'tests/scenario-glb.test.mjs'
+      - 'tools/scenario_model_preview.html'
+      - 'tests/scenario-model-preview.test.mjs'
   pull_request:
     paths:
       - 'tools/blender/**'
@@ -29,6 +31,8 @@ on:
       - 'tools/scenario_blender_export.py'
       - 'tools/scenario_glb_selftest.html'
       - 'tests/scenario-glb.test.mjs'
+      - 'tools/scenario_model_preview.html'
+      - 'tests/scenario-model-preview.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -51,6 +55,9 @@ jobs:
       - name: Test Scenario glTF importer with embedded atlas and hostile URLs
         run: |
           node --test tests/scenario-glb.test.mjs
+      - name: Audit local Blender GLB preview UI
+        run: |
+          node --test tests/scenario-model-preview.test.mjs
       - name: No Blender render or Scenario API call
         run: |
           echo "Static checks only; visual Blender render, paid Scenario generation and live GPU FPS are NOT verified."
