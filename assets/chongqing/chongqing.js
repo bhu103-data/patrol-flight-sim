@@ -520,7 +520,7 @@ function move(dt){
   avatar.rotation.y=state.heading;
   const bank=clamp(-state.vel.x*Math.cos(viewYaw)*.005+state.vel.z*Math.sin(viewYaw)*.005,-.24,.24);
   avatar.rotation.z+= (bank-avatar.rotation.z)*(1-Math.exp(-dt*5));
-  avatar.rotation.x+=(state.flying?-.11:0-avatar.rotation.x)*Math.min(1,dt*5);
+  avatar.rotation.x+=((state.flying?-.11:0)-avatar.rotation.x)*Math.min(1,dt*5);
 }
 const visited={hong:false,bridge:false};
 function updateQuest(){
