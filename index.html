@@ -2853,6 +2853,29 @@
     }
     box(0,.37,.92,.40,.038,.055,trim);
     box(0,.34,.33,.42,.027,.12,seal);
+
+    // Fighter close-up pass: intakes, panel seams, service markings, exhaust petals.
+    const titanium=[.35,.37,.39], panel=[.22,.28,.34];
+    for(const side of [-1,1]){
+      // Open-looking dark intake with an aluminum lip.
+      box(side*.495,-.075,.26,.20,.22,.39,titanium);
+      box(side*.505,-.086,.39,.150,.150,.05,[.08,.11,.15]);
+      // Wing flap hinge and access-panel lines.
+      for(const zz of [-.48,-.91,-1.16])
+        box(side*1.24,.079,zz,.67,.016,.020,panel);
+      for(const zz of [.92,.53,-.26,-1.27])
+        box(side*.325,.308,zz,.055,.014,.065,panel);
+      box(side*.36,.17,1.08,.09,.028,.11,[.80,.82,.82]);
+      // Twelve-sided visible engine exhaust turbine petals.
+      const nx=side*.22;
+      for(let k=0;k<12;k++){
+        const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+        const pt=(t,r,z)=>[nx+Math.cos(t)*r,Math.sin(t)*r,z];
+        addQuad(pt(a,.18,-1.85),pt(b,.18,-1.85),
+          pt(b,.145,-1.96),pt(a,.145,-1.96),titanium);
+      }
+    }
+    box(0,.69,.30,.055,.07,.07,[.20,.26,.31]);
     return upload();
   }
 
@@ -3293,7 +3316,7 @@
     const { addTri, addQuad, upload } = createTriangleMesh();
     const box = (...args) => addModelBox(addQuad, ...args);
     const { halfLength: length, halfWidth: width } = SHIP_TYPES[kind];
-    const hull = kind === 'cargo' ? [0.27,0.23,0.27] : [0.13,0.29,0.43];
+    const hull = kind === 'cargo' ? [0.27,0.23,0.27] : kind === 'ferry' ? [0.86,0.37,0.10] : [0.13,0.29,0.43];
     const ivory = [0.88,0.91,0.92], windows = [0.14,0.28,0.38], red = [0.80,0.28,0.20];
     const outline = [[0,length],[width,length*0.55],[width,-length*0.73],[width*0.67,-length],
       [-width*0.67,-length],[-width,-length*0.73],[-width,length*0.55]];
@@ -3379,6 +3402,61 @@
       for(let k=0;k<3;k++)
         box(0,5.0,-length*.7+1.1+k*.64,1.20,.06,.09,hardware);
       box(0,8.67,-length*.72,.48,.43,.48,rail);
+    }
+
+    // Harbor vessel visual upgrade: exposed upper decks, equipment and
+    // navigation fittings with a bounded shared mesh (no external download).
+    const marine=[.25,.30,.32], stainless=[.75,.78,.77], white=[.90,.91,.87],
+          safety=[.94,.53,.15], cabinGlass=[.12,.25,.32];
+    // Painted boot-top and rub rails follow the hull, rather than extra hulls.
+    for(const side of [-1,1]){
+      box(side*(width-.032),1.33,-length*.12,.048,.115,length*1.27,marine);
+      for(const zz of [-length*.78,length*.76]){
+        box(side*(width-.12),2.62,zz,.18,.21,.18,marine);
+        box(side*(width-.12),2.81,zz,.26,.07,.24,stainless);
+      }
+    }
+    if(kind==='ferry'){
+      const orange=[.86,.39,.12];
+      // Two-level walkaround passenger decks and orange steel bulkheads.
+      box(0,4.90,-1.15,width*1.76,.19,length*1.29,orange);
+      box(0,6.39,1.02,width*1.37,.17,length*.87,white);
+      box(0,7.22,-3.1,2.05,.83,2.35,white);
+      for(const side of [-1,1]){
+        for(const level of [4.95,6.47]){
+          const edge=side*(level>6?width*.70:width*.91);
+          for(let zz=-length*.49;zz<length*.51;zz+=1.65)
+            box(edge,level+.37,zz,.050,.72,.055,stainless);
+          box(edge,level+.75,0,.060,.065,length*1.10,stainless);
+          box(edge,level+.38,0,.048,.050,length*1.10,stainless);
+        }
+        for(let zz=-length*.42;zz<length*.43;zz+=1.21)
+          box(side*(width*.91+.055),3.80,zz,.04,.55,.86,cabinGlass);
+        for(let dz=-.62;dz<=.62;dz+=.62)
+          box(side*.92,7.30,-2.05+dz,.37,.40,.048,cabinGlass);
+        box(side*(width*.61),6.82,-8.0,.76,.33,1.20,safety);
+      }
+      box(0,8.03,-3.1,2.24,.10,2.55,marine);
+      box(0,8.85,-3.1,.095,1.59,.09,white);
+      box(0,9.58,-3.1,1.14,.065,.075,marine);
+      for(const side of [-1,1]){
+        box(side*.43,9.57,-3.1,.075,.16,.075,stainless);
+        box(side*(width*.77),5.38,6.80,.84,.36,.88,white);
+      }
+    }else if(kind==='cruise'){
+      for(let zz=-length*.54;zz<length*.47;zz+=2.55)
+        for(const side of [-1,1]){
+          box(side*(width*.79),7.15,zz,.06,.77,.055,stainless);
+          box(side*(width*.79),7.54,zz,.060,.047,2.36,stainless);
+          box(side*(width*.72),6.1,zz,1.05,.56,1.42,safety);
+        }
+    }else{
+      for(let zz=-length*.55;zz<length*.50;zz+=4.5)
+        for(const side of [-1,1]){
+          box(side*(width*.83),2.54,zz,.35,.40,.45,marine);
+          box(side*(width*.78),2.82,zz,.55,.11,.45,stainless);
+        }
+      box(0,9.10,-length*.70,.10,2.15,.10,stainless);
     }
     return upload();
   }
@@ -3480,6 +3558,29 @@
         const zRail=z+side*.72;
         box(bx,y+.95,zRail,.075,1.45,.075,steelFrame);
         box(bx,y+1.66,zRail,3.1,.068,.070,steelFrame);
+      }
+    }
+
+    // Detail pass: separate wooden transverse plank joints, curb stringers,
+    // walkway safety mesh and under-deck steel cross bracing.
+    const paleWood=[.48,.38,.27], darkJoint=[.22,.21,.20], railWire=[.39,.42,.42];
+    for(let bx=x-halfLength+1.0; bx<x+halfLength-1.0; bx+=1.35){
+      const y=bridgeRoadHeight(bx);
+      box(bx,y+.270,z,1.30,.014,1.34,paleWood);
+      box(bx+.66,y+.278,z,.034,.020,1.34,darkJoint);
+      if(Math.round((bx-x)*10)%3===0){
+        for(const side of [-1,1]){
+          const rz=z+side*.72;
+          box(bx,y+1.18,rz,.027,.024,.050,railWire);
+          box(bx,y+1.38,rz,.029,.024,.050,railWire);
+        }
+      }
+    }
+    for(let bx=x-halfLength+4;bx<x+halfLength-4;bx+=7){
+      const y=bridgeRoadHeight(bx);
+      for(const side of [-1,1]){
+        addRideBeam(addQuad,[bx-3.2,y-.34,z+side*3.75],
+          [bx+3.2,y-1.22,z+side*.82],.055,steelFrame);
       }
     }
     // Stone cable-anchor housings flank each shore approach.
@@ -3775,6 +3876,37 @@
         box(x*0.8,0.83,1.92,0.35,0.17,0.08,[0.94,0.94,0.83]);
         box(x*0.8,0.78,-1.93,0.31,0.19,0.07,[0.71,0.18,0.13]);
       }
+
+      // Detail pass: door seams, tire fenders, badges and modeled trim.
+      const satin=[.65,.68,.69], blackPlastic=[.11,.14,.16];
+      for(const side of [-1,1]){
+        const sx=side*.849;
+        for(const zz of [-.72,.58]){
+          box(sx,.89,zz,.029,.55,.014,police?[.24,.39,.64]:[.60,.43,.14]);
+          box(sx,.51,zz+.12,.040,.050,.58,blackPlastic);
+        }
+        box(side*.77,.52,1.95,.28,.19,.050,blackPlastic);
+        box(side*.77,.52,-1.95,.28,.18,.050,blackPlastic);
+        if(police){
+          box(side*.855,.74,.03,.031,.20,2.55,[.12,.31,.63]);
+          box(side*.857,.88,.34,.033,.05,1.50,satin);
+          box(side*.851,.95,-1.38,.034,.12,.39,[.13,.30,.60]);
+        }else{
+          box(side*.853,.76,.04,.028,.10,2.16,[.99,.80,.18]);
+          box(side*.853,.87,-1.35,.033,.24,.18,blackPlastic);
+        }
+      }
+      if(police){
+        // Push bumper and lamp rack on the patrol-car nose.
+        box(0,.62,2.045,1.25,.11,.065,blackPlastic);
+        for(const side of [-1,1])
+          box(side*.55,.64,2.040,.085,.41,.105,blackPlastic);
+      }else{
+        // Roof medallion support and taxi identification lamp.
+        box(0,1.658,-.22,.48,.055,.20,blackPlastic);
+        box(0,1.82,-.22,.44,.13,.19,[1.0,.90,.43]);
+        box(0,1.895,-.105,.30,.045,.022,[.16,.17,.18]);
+      }
     } else if(kind==='train') {
       const z=0;
       box(0,1.55,z,2.55,2.80,12.7,[0.67,0.72,0.74]);
@@ -3806,8 +3938,8 @@
     const stripe=livery===1?[0.12,0.31,0.62]:livery===2?[0.06,0.45,0.54]:[0.18,0.25,0.36];
     const window=[0.035,0.095,0.13], dark=[0.025,0.045,0.068], glow=[1.0,0.83,0.46];
     const rings=[[3.45,0.02,0.02],[2.85,0.58,0.56],[1.55,0.70,0.68],[-1.80,0.62,0.60],[-3.05,0.31,0.30],[-3.38,0.08,0.08]];
-    const ringPoint=([z,rx,ry],i)=>{const a=i*Math.PI*2/8;return [Math.cos(a)*rx,0.14+Math.sin(a)*ry,z];};
-    for(let r=0;r<rings.length-1;r++)for(let i=0;i<8;i++)body.addQuad(
+    const ringPoint=([z,rx,ry],i)=>{const a=i*Math.PI*2/16;return [Math.cos(a)*rx,0.14+Math.sin(a)*ry,z];};
+    for(let r=0;r<rings.length-1;r++)for(let i=0;i<16;i++)body.addQuad(
       ringPoint(rings[r],i),ringPoint(rings[r],i+1),ringPoint(rings[r+1],i+1),ringPoint(rings[r+1],i),fuselage);
     for(const side of [-1,1]){
       body.addQuad([side*0.38,0.08,0.92],[side*4.10,0.03,-0.05],[side*3.45,0.01,-0.46],[side*0.40,0.10,-0.25],fuselage);
@@ -3845,6 +3977,27 @@
     addModelBox(lights.addQuad,-0.06,0.20,3.39,0.12,0.08,0.10,glow);
     addModelBox(lights.addQuad,0.06,0.20,3.39,0.12,0.08,0.10,glow);
     for(const side of [-1,1])addModelBox(lights.addQuad,side*3.42,0.05,-0.20,0.07,0.06,0.18,glow);
+
+    // Airliner close-range geometry: rounded nacelles, flap seams and gear.
+    for(const side of [-1,1]){
+      const ex=side*1.62, ey=-.23, engineColor=[.66,.70,.72];
+      for(let j=0;j<16;j++){
+        const a=j*Math.PI/8,b=(j+1)*Math.PI/8;
+        const p=(theta,r,z)=>[ex+Math.cos(theta)*r,ey+Math.sin(theta)*r,z];
+        body.addQuad(p(a,.32,.43),p(b,.32,.43),p(b,.29,-.48),p(a,.29,-.48),fuselage);
+        trim.addQuad(p(a,.33,.51),p(b,.33,.51),p(b,.255,.52),p(a,.255,.52),engineColor);
+      }
+      for(let i=0;i<3;i++){
+        const wx=side*(.95+i*.93);
+        addModelBox(trim.addQuad,wx,.064,-.38,.23,.018,.022,[.38,.43,.46]);
+      }
+      // Small retracted gear door markings remain visible while flying.
+      addModelBox(trim.addQuad,side*.45,-.50,-.75,.24,.035,.48,[.37,.39,.41]);
+      addModelBox(trim.addQuad,side*.46,.40,2.25,.17,.065,.13,window);
+    }
+    // Grey radome ring and antenna fairing.
+    addModelBox(trim.addQuad,0,.10,2.90,.20,.018,.08,[.66,.68,.69]);
+    addModelBox(trim.addQuad,0,.68,-1.86,.12,.20,.31,fuselage);
     return {body:body.upload(),trim:trim.upload(),lights:lights.upload()};
   }
 
@@ -4325,11 +4478,44 @@
             [center+2.48,by,z+bz],[center-2.48,by,z+bz],[0.53,0.50,0.45]);
         }
       }
+
+      // Limestone masonry courses and voussoir accents close to both towers.
+      // Geometry is attached to the existing Gothic tower meshes, no duplicates.
+      const mortarColor=[.40,.40,.37], stoneHighlight=[.69,.65,.57];
+      for(const center of [x+west,x+east]){
+        for(const side of [-1,1]){
+          const zz=z+side*4.82;
+          for(let y=13.5;y<44.0;y+=1.48){
+            const phase=(Math.round(y*10)%2)*.93;
+            box(center,y,zz,4.72,.060,.030,mortarColor);
+            for(let b=-1;b<=1;b++){
+              box(center+b*1.48+phase*.18,y+.62,zz+side*.012,.028,1.09,.035,mortarColor);
+            }
+          }
+          box(center,44.75,z+side*3.58,6.04,.24,3.28,stoneHighlight);
+        }
+      }
       function cableHeight(dx) {
         if(dx<west)return lerp(27.6,45,(dx+halfLength)/(west+halfLength));
         if(dx>east)return lerp(45,27.6,(dx-east)/(halfLength-east));
         const t=(dx-west)/(east-west);
         return 29+16*(2*t-1)**2;
+      }
+
+      // Extra visual cable rhythm, positioned against the authored road surface.
+      for(const side of [-1,1]){
+        const zz=z+side*3.58;
+        for(let dx=-halfLength+2;dx<halfLength-2;dx+=2){
+          const xx=x+dx, low=deck+.59, upper=cableHeight(dx);
+          addRideBeam(addQuad,[xx,low,zz],[xx,upper,zz],.034,suspender);
+        }
+        for(const tower of [west,east]){
+          for(let dx=-halfLength+9;dx<halfLength-9;dx+=12){
+            if(Math.abs(dx-tower)>72||Math.abs(dx-tower)<8)continue;
+            addRideBeam(addQuad,[x+tower,43.4,zz],
+              [x+dx,deck+.65,zz],.049,metal);
+          }
+        }
       }
       for (const side of [-1,1]) {
         const rail = z + side*3.58;
