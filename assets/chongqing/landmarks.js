@@ -220,11 +220,35 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
   stationFacadeShell(stationBase+stationLower/2,stationLower);
   const upperStart=railY+11.2,upperHeight=stationBase+height-upperStart;
   stationFacadeShell(upperStart+upperHeight/2,upperHeight);
+  // PATROL_CQ_LIZIBA_TRANSIT_GLASS_V10: continuous opaque concrete
+  // behind the previous glass made the station a solid blue rectangle.
+  // Use weatherproof transparent glazing and narrow steel columns instead.
+  const stationGlass=new THREE.MeshStandardMaterial({
+    color:0x8aa6b3,metalness:.18,roughness:.27,
+    transparent:true,opacity:.34,depthWrite:false,side:THREE.DoubleSide
+  });
+  const stationMullions=new THREE.InstancedMesh(unit,steel,120);
+  let stationMullionCount=0;
   for(const side of [-1,1]){
-    solid(station.x,railY+2.9,station.z+side*18,frameLength,16.3,4,concrete);
-    solid(station.x,railY+2.9,station.z+side*20.2,frameLength,13.2,.42,glass);
-    solid(station.x,railY+11.2,station.z+side*19.5,frameLength,.7,2.4,steel);
+    solid(station.x,railY+2.9,station.z+side*20.2,
+      frameLength,13.2,.30,stationGlass);
+    for(let col=0;col<=10;col++){
+      const x=station.x-frameLength*.5+frameLength*col/10;
+      alignBox(stationMullions,stationMullionCount++,x,
+        railY+2.9,station.z+side*20.42,
+        col===0||col===10?.66:.28,16.15,.54);
+    }
+    for(const y of [railY-3.1,railY+1.5,railY+6.4,railY+10.9]){
+      alignBox(stationMullions,stationMullionCount++,station.x,
+        y,station.z+side*20.45,frameLength,.25,.42);
+    }
+    solid(station.x,railY+11.2,station.z+side*19.5,
+      frameLength,.7,2.4,steel);
   }
+  stationMullions.count=stationMullionCount;
+  stationMullions.instanceMatrix.needsUpdate=true;
+  stationMullions.computeBoundingSphere();
+  scene.add(stationMullions);
   // The gap is intentionally clear for the moving train and a skilled player.
   obstacles.push(
     {x:station.x,z:station.z,w:frameLength,d:frameDepth,base:stationBase,top:railY-5.1},
