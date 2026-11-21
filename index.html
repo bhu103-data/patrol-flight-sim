@@ -6115,7 +6115,7 @@ const CENTRAL_PARK_SITES=[
     // Reuse only two already road-cleared, accepted procedural parcels.
     // Stable chosen lot identity survives rebuild/demolition.
     const warehouseStyles=new Map();
-    if(!local && parcels.length>=32){
+    if(!local && parcels.length>=32 && !graphicsCompat && smoothScenery()){
       const eligible=parcels.filter(p=>!p[7] &&
         p[0]>205&&p[0]<435&&p[1]>-415&&p[1]<-195 &&
         p[2]>=7.2&&p[3]>=10&&p[4]>=14&&p[4]<=23 &&
