@@ -267,6 +267,14 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
     raffles:{x:raffles.x,z:raffles.z,y:podiumY+255},
     liziba:{x:station.x,z:station.z,y:railY+5},
     update,
+    setQuality(mode){
+      const low=mode==='low';
+      bright.visible=!low;
+      mullions.visible=!low;
+      glazing.visible=!low;
+      crystalGlow.visible=!low;
+      // Keep the eight tower cores, glass bridge, rail and moving train visible.
+    },
     stats:{towers:layout.length,crystalLength:300,trainCars:cars.length,
       facadeBands:nb,mullions:nm,lizibaWindows:glazedCount}
   };
