@@ -46,9 +46,12 @@ function decodeGLB(gl,buffer,targetHeight){
     const result=new Float32Array(a.count*components);
     for(let row=0;row<a.count;row++)for(let k=0;k<components;k++){
       const offset=start+row*stride+k*width;
-      result[row*components+k]=a.componentType===5126?dv.getFloat32(offset,true):
+      const raw=a.componentType===5126?dv.getFloat32(offset,true):
         a.componentType===5125?dv.getUint32(offset,true):
         a.componentType===5123?dv.getUint16(offset,true):dv.getUint8(offset);
+      result[row*components+k]=a.normalized && a.componentType!==5126
+        ?raw/(a.componentType===5121?255:a.componentType===5123?65535:4294967295)
+        :raw;
     }
     const ret={result,components,count:a.count};
     cache.set(id,ret);return ret;
@@ -66,6 +69,10 @@ function decodeGLB(gl,buffer,targetHeight){
         if(p.components!==3)throw Error('Expected VEC3 positions');
         const n=primitive.attributes.NORMAL!==undefined?
           readAccessor(primitive.attributes.NORMAL):null;
+        const color0=primitive.attributes.COLOR_0!==undefined?
+          readAccessor(primitive.attributes.COLOR_0):null;
+        if(color0 && color0.components!==3 && color0.components!==4)
+          throw Error('Unsupported GLB COLOR_0');
         const idx=primitive.indices!==undefined?readAccessor(primitive.indices):null;
         const faceColor=document.materials?.[primitive.material??0]?.pbrMetallicRoughness
           ?.baseColorFactor||[0.6,0.62,0.63,1];
@@ -90,7 +97,13 @@ function decodeGLB(gl,buffer,targetHeight){
               const len=Math.hypot(ax,ay,az)||1;
               nor.push(ax/len,ay/len,az/len);
             }else nor.push(0,1,0);
-            col.push(faceColor[0],faceColor[1],faceColor[2]);
+            const tint=color0
+              ?[color0.result[index*color0.components],
+                color0.result[index*color0.components+1],
+                color0.result[index*color0.components+2]]
+              :[1,1,1];
+            col.push(faceColor[0]*tint[0],faceColor[1]*tint[1],
+              faceColor[2]*tint[2]);
           }
         }
       }
@@ -188,10 +201,55 @@ export async function loadNycRealism(gl){
       models[kind]=decodeGLB(gl,bytes,height);
     }catch(error){failures.push(kind+': '+error.message);}
   }));
+  // Scenario for Blender assets are optional; the public game never calls
+  // Scenario or includes API tokens. Only exact, manifest-approved same-origin
+  // GLBs are requested, preserving original procedural asset fallback.
+  const scenarioReady=(async()=>{
+    try{
+      const response=await fetch('./assets/nyc/scenario-manifest.json');
+      if(!response.ok)return;
+      const manifest=await response.json();
+      if(manifest.schema_version!==1||!manifest.landmarks)return;
+      const allowed=new Set(['liberty','trade','empire','chrysler','flatiron','times']);
+      await modelsReady;
+      await Promise.all(Object.entries(manifest.landmarks).map(async ([kind,spec])=>{
+        if(!allowed.has(kind)||!spec||spec.enabled!==true)return;
+        if(typeof spec.file!=='string' ||
+           !/^scenario\/[a-z0-9_-]+\.glb$/.test(spec.file) ||
+           !Number.isFinite(spec.target_height)||spec.target_height<10||
+           spec.target_height>100||!Number.isInteger(spec.min_triangles)||
+           spec.min_triangles<200||typeof spec.license!=='string'||
+           !spec.license.trim()){
+          failures.push('scenario '+kind+': invalid manifest');return;
+        }
+        try{
+          const file=await fetch('./assets/nyc/'+spec.file);
+          if(!file.ok)throw Error('HTTP '+file.status);
+          const bytes=await file.arrayBuffer();
+          if(bytes.byteLength>8388608||
+             bytes.byteLength>(Number(manifest.max_glb_bytes)||8388608))
+            throw Error('GLB exceeds import limit');
+          if(gl.isContextLost())return;
+          const mesh=decodeGLB(gl,bytes,spec.target_height);
+          if(mesh.count<spec.min_triangles*3){
+            for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
+            gl.deleteVertexArray(mesh.vao);
+            throw Error('Not enough triangles for premium mesh');
+          }
+          mesh.source='scenario';
+          if(models[kind]){
+            for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
+            gl.deleteVertexArray(models[kind].vao);
+          }
+          models[kind]=mesh;
+        }catch(error){failures.push('scenario '+kind+': '+error.message);}
+      }));
+    }catch(error){failures.push('scenario manifest: '+error.message);}
+  })();
   const photoPromise=photos(gl).catch(error=>{
     failures.push('street textures: '+error.message);return null;
   });
-  const [,photoResult]=await Promise.all([modelsReady,photoPromise]);
+  const [,,photoResult]=await Promise.all([modelsReady,scenarioReady,photoPromise]);
   if(failures.length)console.warn('[PATROL] NYC asset fallbacks:',failures);
   return {models,photos:photoResult,failures};
 }
