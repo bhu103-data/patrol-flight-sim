@@ -1,5 +1,41 @@
 # Alaska Fjords — open-source research and implementation record
 
+## 2026-11-20/21 — CC0 photographic PBR and animated calving
+
+Photo material asset build: `tools/alaska/build_photo_atlas.py`; GitHub Actions
+build `.github/workflows/alaska-photo-atlas.yml`. Original **CC0 photographic
+maps** are sourced only from [Poly Haven Rock 01](https://polyhaven.com/a/rock_01)
+and [Poly Haven Snow 02](https://polyhaven.com/a/snow_02), under
+[Poly Haven's CC0 license](https://polyhaven.com/license). Artist: Rob Tuytel.
+The separate *local* 512×256 WebP atlases contain color, OpenGL normal RGB and
+roughness A channels; the files are committed under `assets/alaska/`.
+`alaska-photo-manifest.json` records provenance and layout. No network
+requests to Poly Haven occur during gameplay. The build job alone downloads
+1K source materials using allowlisted hostnames and a strict size cap.
+
+The Alaska-only world raymarcher blends these photographs with the existing
+USGS-based elevation terrain at camera distances under 255 flight units,
+including simple normal-mapped micro-shading and roughness-based reflectance.
+It uses at most two atlas samples on qualifying nearby pixels. **These are real
+photographs, not measured on-site Alaska imagery.** Geometry is not displaced
+by the normal map, and this lightweight lighting is not a complete energy-
+conserving metal/rough PBR renderer.
+
+The photos are loaded on demand when the Alaska map starts, use mipmaps,
+and are freed when switching maps. Compatibility / low-detail / resource
+failure keeps procedural materials, without blocking flight loading. A
+separate, capped optional module `assets/alaska/alaska-ice-motion.js`
+adds moving near-water floes and periodically calving shards, using the
+same terrain sampler to refuse drift onto land. Motion is visual only:
+no new aircraft or iceberg collisions or real observed ice velocities.
+It does not physically simulate calving events.
+
+Tests: `node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs tests/alaska-photo-ice.test.mjs`.
+The tests include bounded draw counts and asset/license metadata; browser
+shader compilation and GPU performance must still be checked on representative
+devices. Direct WebGL screenshot validation has not been claimed.
+
+
 ## 2026-11-20/21 — Actual USGS Tracy Arm elevation integrated
 
 The Alaska flight menu now loads `assets/alaska/tracy-arm-3dep.json` (a baked,
@@ -41,9 +77,9 @@ that fallback, open `?alaskaTerrain=legacy` in the game URL.
   validates the baked dataset and placement contracts.
 
 This introduces **real mountains and coastline topology**, but the authored
-harbor, glacier mesh, decorative trees and ice floes remain artistic. Actual
-PBR imagery, detailed ice fields, high-resolution LOD terrain and surveyed
-buildings/ports require separate source and performance work.
+harbor, glacier mesh, decorative trees and ice floes remain artistic. Photographic
+rock/snow material is now bundled, but detailed 3D ice fields, high-resolution
+terrain LOD and surveyed buildings/ports still need separate performance work.
 
 
 Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene, existing `FLIGHT_MAPS.alaska`. Do not add a duplicate map or silently change New York, DC, Chongqing or the universe portal.
@@ -79,12 +115,12 @@ Checked 2026-11-20. Target: `patrol-flight-sim` native WebGL2 main flight scene,
 1. Choose **one** real bounded area (for example Juneau/Mendenhall or a Glacier Bay flight corridor) rather than claiming Denali, Fairbanks, and Juneau appear at true relative distances inside a 1,920-unit arena.
 2. Fetch USGS public-domain IfSAR/3DEP DEM and its CRS/vertical-datum metadata; derive low/medium/high LOD tiles offline with GDAL. Preserve the original source attribution and acquisition date.
 3. Improve the already documented WGS84 -> game-space rotation with a formal ENU transform and geospatial metadata for every authored landmark; preserve consistent terrain, collision, nav-map, waterline and spawn sampling.
-4. Create real-world water masks/shoreline from licensed sources (USGS/OSM with attribution) and photographic landscape textures with their own credits. Avoid Google Maps 3D/photogrammetry scraping or ambiguous model licensing.
+4. Create real-world water masks/shoreline from licensed sources (USGS/OSM with attribution) and add further varied photographic materials with credits. Avoid Google Maps 3D/photogrammetry scraping or ambiguous model licensing.
 5. Stream/cull only visible bounded tiles and pre-compress assets so GitHub Pages loads promptly; keep coarse procedural fallback for offline/slow connections.
 6. Validate low-altitude flight, waterline, crash detection, spawn and map switching on mobile and desktop GPU. Compare a fixed set of surveyed reference points; never market the result as a 1:1 map until those checks pass.
 
 ## Quick checks
 
-`node --test tests/alaska-fjords.test.mjs`
+`node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs tests/alaska-photo-ice.test.mjs`
 
 Review on the Alaska map in clear day, dusk, clear night, overcast night and mobile low-quality graphics. The static test does not replace actual shader compilation, frame timing or screenshot comparison.
