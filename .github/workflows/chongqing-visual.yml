@@ -12,6 +12,7 @@ on:
       - "assets/chongqing/**"
       - "tests/chongqing-*.test.mjs"
       - "scripts/chongqing-browser-smoke.mjs"
+      - "scripts/nyc-road-browser-smoke.mjs"
       - ".github/workflows/chongqing-visual.yml"
 
 concurrency:
@@ -41,15 +42,21 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-chongqing-http.log 2>&1 &
           sleep 3
           curl --fail --silent --show-error http://127.0.0.1:8765/chongqing.html >/dev/null
-      - name: Browser screenshot and high-rise climb checks
+      - name: Chongqing screenshot and high-rise climb checks
         env:
           CHONGQING_BASE_URL: http://127.0.0.1:8765
         run: node scripts/chongqing-browser-smoke.mjs
+      - name: New York real-browser skyline and road check
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-road-browser-smoke.mjs
       - name: Upload screenshots, WebGL report and failure evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: chongqing-webgl-screenshots
-          path: artifacts/chongqing/
+          path: |
+            artifacts/chongqing/
+            artifacts/nyc/
           retention-days: 7
           if-no-files-found: ignore
