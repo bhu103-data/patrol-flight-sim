@@ -8,8 +8,10 @@ on:
       - "chongqing.html"
       - "index.html"
       - "assets/nyc/nyc-street-network.js"
+      - "assets/nyc/nyc-hero.js"
       - "assets/nyc/nyc-led.js"
       - "tests/nyc-road-clearance.test.mjs"
+      - "tests/nyc-waterfront-pier-grounding.test.mjs"
       - "tests/nyc-led-creative.test.mjs"
       - "assets/chongqing/**"
       - "tests/chongqing-*.test.mjs"
@@ -60,6 +62,8 @@ jobs:
         run: node --test tests/nyc-led-creative.test.mjs
       - name: Validate NYC road/building occupancy
         run: node --test tests/nyc-road-clearance.test.mjs
+      - name: Validate Lower Manhattan docks against shoreline and flight collision bounds
+        run: node --test tests/nyc-waterfront-pier-grounding.test.mjs
       - name: New York real-browser skyline and road check
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
