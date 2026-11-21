@@ -52,6 +52,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     paving:new THREE.MeshStandardMaterial({color:0x55545a,roughness:.96}),
     steps:pbr?.cutStone??new THREE.MeshStandardMaterial({color:0xbdb2a9,roughness:.89}),
     window:pbr?.window??new THREE.MeshBasicMaterial({color:0xffcf86}),
+    lattice:pbr?.carvedWood??new THREE.MeshStandardMaterial({color:0x694c34,roughness:.8}),
     neon:new THREE.MeshBasicMaterial({color:0xffbd70}),
     red:new THREE.MeshBasicMaterial({color:0xff4142}),
     bridge:new THREE.MeshStandardMaterial({color:0xa7232c,metalness:.46,roughness:.38,emissive:0x7c0917,emissiveIntensity:.4}),
@@ -60,7 +61,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   };
   const definitions=[
     ['timber',3600],['carved',1600],['terra',950],['rail',3300],['stone',2700],
-    ['paving',1250],['steps',1250],['window',3500],['neon',1700],['red',700],
+    ['paving',1250],['steps',1250],['window',3500],['lattice',3400],['neon',1700],['red',700],
     ['bridge',850],['amber',950],['blue',800]
   ];
   const pools=new Map();
@@ -160,6 +161,12 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
       put('timber',x,y+4.3,front,1.15,9.2,1.5);
       put('window',x,y+5.6,front+.16,4.0,5.5,.12);
+      // Six true-depth timber lattice strips give each pane articulated window frames.
+      // All members render in one InstancedMesh; no per-window draw calls.
+      for(let n=-1;n<=1;n++){
+        put('lattice',x+n*1.06,y+5.6,front+.37,.115,5.35,.16);
+        put('lattice',x,y+5.6+n*1.38,front+.37,3.88,.105,.15);
+      }
       put('terra',x,y+5.5,front+.27,.28,5.8,.19);
       if(j%2===0){
         lantern(x,y+8.45,front+5.5,1.05);
@@ -179,6 +186,11 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
       put('timber',x,y+5.2,waterfront-1.3,1.3,9.2,1.0);
       put('window',x,y+5.6,waterfront-2.1,4.0,5.6,.18);
+      // River-facing screens are distinct from land-facing doors and balconies.
+      for(let n=-1;n<=1;n++){
+        put('lattice',x+n*1.06,y+5.6,waterfront-2.43,.115,5.4,.17);
+        put('lattice',x,y+5.6+n*1.38,waterfront-2.43,3.9,.105,.17);
+      }
       put('carved',x,y+2.8,waterfront-2.5,4.8,.39,.7);
       put('carved',x,y+8.9,waterfront-3.1,5.6,.5,.8);
       put('timber',x,y+3.65,waterfront-7.2,.38,3.7,.45);
@@ -612,6 +624,6 @@ put('paving',sx,sy+.36,sz+31.3,72,.7,14);
   return {
     stats:{...Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),curvedRoofs:curvedRoofs.count},
     detailMeshes:pools.size+3,
-    setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;}
+    setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;pools.get('lattice').mesh.visible=!low;}
   };
 }
