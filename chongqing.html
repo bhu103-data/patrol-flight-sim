@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>PATROL · 重庆火锅飞行员</title>
+<title>PATROL · Chongqing | Cinematic Flight</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111426;color:#fff}
@@ -36,15 +36,37 @@ kbd{font-family:inherit;border:1px solid #fff8;border-radius:4px;padding:1px 4px
 #perfHud[hidden]{display:none}
 #joystick,#mobile button{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 @media(max-width:800px),(pointer:coarse){#qualityBtn{top:135px}#perfHud{top:170px}}
-body.cinematic #top,body.cinematic #map,body.cinematic #bottom,body.cinematic #hint,body.cinematic #controls,body.cinematic #back,body.cinematic #qualityBtn,body.cinematic #perfHud,body.cinematic #mobile,body.cinematic #joystick{display:none!important}
+body.cinematic #top,body.cinematic #map,body.cinematic #bottom,body.cinematic #hint,body.cinematic #controls,body.cinematic #back,body.cinematic #qualityBtn,body.cinematic #cqEnvPanel,body.cinematic #perfHud,body.cinematic #mobile,body.cinematic #joystick{display:none!important}
+
+/* PATROL_CQ_CINEMATIC_V2: consistent transparent flight HUD and graphics
+   controls shared in spirit with the Manhattan flight interface. */
+#top{border-left:3px solid #d9a06f;padding:9px 12px;background:linear-gradient(90deg,#081524bd,#0b1d2d4d 85%,transparent);border-radius:0 8px 8px 0}
+#top h1{font-size:clamp(17px,2vw,24px);letter-spacing:.16em;color:#e7eced}
+#top p{color:#d7dee5;font-size:12px}
+#quest{background:#0e2235c7;border:1px solid #879daf66;border-radius:8px;box-shadow:0 6px 24px #0007}
+#map{border-color:#c3d9dc8c;background:#081c29c8}
+#meter{background:#0b2132cd;border-color:#a8c6cb77;border-radius:9px}
+#qualityBtn{top:185px;background:#0c2536dd;color:#e7f1f1;border-color:#9eb9c088}
+#cqEnvPanel{position:absolute;right:18px;top:224px;z-index:6;display:flex;gap:6px;align-items:center;background:#0c2536dd;border:1px solid #9eb9c088;border-radius:8px;padding:5px 8px}
+#cqEnvPanel label{font:12px system-ui,sans-serif;color:#e0eaee}
+#cqTime{background:#0a1b2b;color:#e6ebed;border:1px solid #7996a2;border-radius:5px;padding:5px;font:12px system-ui}
+#cqEnvPanel button{border:1px solid #a1b6ba;background:#213c50;border-radius:5px;padding:5px 8px;color:#fff;cursor:pointer}
+#perfHud{top:266px}
+@media(max-width:800px),(pointer:coarse){#cqEnvPanel{top:172px;right:10px;padding:3px}#perfHud{top:215px}#top{max-width:61vw}}
 </style>
 </head>
 <body>
 <canvas id="world" aria-label="重庆三维探索地图"></canvas>
-<div id="loading"><div><h2>🌶️ 重庆火锅飞行员</h2><p>正在生成山城、两江和洪崖洞…</p></div></div>
-<section id="top"><h1>CHONGQING · PILOT</h1><p>重庆山城自由探索 / Hotpot Jet Flight</p><div id="quest"><strong>探索重庆</strong><div id="questHong">□ 飞过洪崖洞</div><div id="questHotpot">□ 吃一次重庆火锅</div><div id="questBridge">□ 飞过跨江大桥</div><div id="questRaffles">□ 朝天门来福士与水晶连廊</div><div id="questLiziba">□ 李子坝轻轨穿楼</div></div></section>
+<div id="loading"><div><h2>PATROL · CHONGQING</h2><p>加载山城高精度建筑、两江材质与真实光照…</p></div></div>
+<section id="top"><h1>PATROL / CHONGQING</h1><p>山城写实探索 · WebGL Cinematic / Flight & Hotpot</p><div id="quest"><strong>探索重庆</strong><div id="questHong">□ 飞过洪崖洞</div><div id="questHotpot">□ 吃一次重庆火锅</div><div id="questBridge">□ 飞过跨江大桥</div><div id="questRaffles">□ 朝天门来福士与水晶连廊</div><div id="questLiziba">□ 李子坝轻轨穿楼</div></div></section>
 <canvas id="map" width="256" height="256" aria-label="小地图"></canvas>
 <button id="qualityBtn" type="button" aria-label="切换画质">画质：自动</button>
+<div id="cqEnvPanel"><label for="cqTime">Environment [T]</label>
+  <select id="cqTime" aria-label="重庆场景光照与时间">
+    <option value="day">Day · 白天</option>
+    <option value="dusk" selected>Dusk · 黄昏</option>
+    <option value="night">Night · 夜景</option>
+  </select></div>
 <output id="perfHud" hidden aria-live="off"></output>
 <div id="hint">靠近火锅店按 E，解锁麻辣喷火推进 🌶️</div>
 <div id="toast" role="status"></div>
