@@ -6903,7 +6903,7 @@ const CENTRAL_PARK_SITES=[
           waterY:WATER_H,groundY:sampleTerrainHeight(-140,-611),
           spawn:NYC_HERO_ROUTE.spawn,liberty:NYC_HERO_ROUTE.liberty
         });
-        buildManhattanWaterfront({
+        const waterfront=buildManhattanWaterfront({
           addQuad:detail.addQuad,
           box:(...args)=>addModelBox(detail.addQuad,...args),
           beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
@@ -6912,7 +6912,13 @@ const CENTRAL_PARK_SITES=[
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
-        else nycHeroScenery=uploaded;
+        else {
+          nycHeroScenery=uploaded;
+          // Activate colliders only for the same NYC scene generation that
+          // owns these pier meshes. Map changes reset sceneryObjects, while
+          // stale asynchronous loads must never leak obstacles into Alaska.
+          sceneryObjects.push(...waterfront.pierObstacles);
+        }
       }).catch(error=>console.warn('[PATROL] Harbor detail fallback:',error));
     }
     // Park geometry uses a separate, bounded triangle batch, but the same
