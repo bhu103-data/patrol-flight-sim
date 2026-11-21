@@ -148,7 +148,7 @@ test('pedestrian scenic camera is anchored to an actual OTI doorway source edge'
 
 
 test('street entrance camera bearing faces source polygon outward',()=>{
- const lot=source.footprints.find(l=>lot[0]===65190),polygon=lot[6];
+ const lot=source.footprints.find(l=>l[0]===65190),polygon=lot[6];
  const area=polygon.reduce((v,a,i)=>{
   const b=polygon[(i+1)%polygon.length];
   return v+a[0]*b[1]-a[1]*b[0];
