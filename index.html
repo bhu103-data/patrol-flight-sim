@@ -5858,12 +5858,32 @@ const CENTRAL_PARK_SITES=[
       const a=outline[i],b=outline[(i+1)%outline.length];
       const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
       if(length<.10)continue;
-      const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
-      const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
-      face(loA,loB,hiB,hiA,wallTint,9);
+      const normal=[sign*dz/length,-sign*dx/length];
+      // PATROL_OTI_DOWNTOWN_REAL_ENTRY_V4: cut original wall into four
+      // perimeter panels around a recessed door. No collider/lot changes.
+      const downtownRelief=(lot[8]%3===0) && detailBand===3 && y<20 &&
+        x>-155&&x<-40&&z>-515&&z<-400 && h>=8 && !destroyed;
+      const entryBase=y+.24,entryTop=Math.min(roofY-.48,y+2.42);
+      const cutEntrance=downtownRelief && streetEntrances<2 &&
+        length>=3.5 && (normal[1]<-.20 || normal[0]<-.30) &&
+        entryTop>entryBase+.88;
+      if(cutEntrance){
+        const wallPoint=(t,yy)=>[a[0]+dx*t,yy,a[1]+dz*t],u=.31,v=.69;
+        face(wallPoint(0,y),wallPoint(1,y),
+          wallPoint(1,entryBase),wallPoint(0,entryBase),wallTint,9);
+        face(wallPoint(0,entryBase),wallPoint(u,entryBase),
+          wallPoint(u,entryTop),wallPoint(0,entryTop),wallTint,9);
+        face(wallPoint(v,entryBase),wallPoint(1,entryBase),
+          wallPoint(1,entryTop),wallPoint(v,entryTop),wallTint,9);
+        face(wallPoint(0,entryTop),wallPoint(1,entryTop),
+          wallPoint(1,roofY),wallPoint(0,roofY),wallTint,9);
+      }else{
+        const loA=[a[0],y,a[1]],loB=[b[0],y,a[1]+dz];
+        const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
+        face(loA,loB,hiB,hiA,wallTint,9);
+      }
       walls++;
       if(destroyed||length<1.4||detailBand<2)continue;
-      const normal=[sign*dz/length,-sign*dx/length];
       // OTI public polygons: focus physical window depth on the
       // harbor-facing side of near-camera downtown buildings only.
       // The source supplies footprint topology, not exact window surveys.
@@ -5876,8 +5896,6 @@ const CENTRAL_PARK_SITES=[
       // preserving game road/collision indices and all existing landmarks.
       // Select a stable fraction of documented OTI DOITT_ID footprints.
       // The full 100-building pilot must remain below its 9000-face budget.
-      const downtownRelief=(lot[8]%3===0) && detailBand===3 && y<20 &&
-        x>-155&&x<-40&&z>-515&&z<-400 && h>=8 && !destroyed;
       const at=(t,yy,offset)=>[
         a[0]+dx*t+normal[0]*offset,yy,
         a[1]+dz*t+normal[1]*offset
@@ -5925,26 +5943,27 @@ const CENTRAL_PARK_SITES=[
       // Ground-level entrance/glazing is *authored* and not an OTI surveyed
       // tenant, opening, or historic architectural detail. Four-sided recess
       // uses the same 9/10 material tags already in the native WebGL city mesh.
-      if(downtownRelief && streetEntrances<2 && length>=3.5 &&
-          (normal[1]<-.20 || normal[0]<-.30)){
-        const u=.31,v=.69,base=y+.24,top=Math.min(roofY-.48,y+2.42);
-        if(top>base+.88){
-          const trim=isGlass?[.35,.40,.41]:[.45,.43,.39];
-          const dark=[.11,.16,.20],lintel=[.58,.56,.52];
-          face(at(u,base,.070),at(v,base,.070),
-            at(v,top,.070),at(u,top,.070),dark,9);
-          face(at(u+.015,base+.12,.079),at(v-.015,base+.12,.079),
-            at(v-.015,top-.15,.079),at(u+.015,top-.15,.079),glass,10);
-          for(const [a0,b0] of [[u-.018,u],[v,v+.018]])
-            face(at(a0,base-.08,.13),at(b0,base-.08,.13),
-              at(b0,top+.08,.13),at(a0,top+.08,.13),trim,9);
-          face(at(u-.020,top-.04,.133),at(v+.020,top-.04,.133),
-            at(v+.020,top+.09,.133),at(u-.020,top+.09,.133),lintel,9);
-          const mid=(u+v)*.5;
-          face(at(mid-.008,base+.12,.138),at(mid+.008,base+.12,.138),
-            at(mid+.008,top-.14,.138),at(mid-.008,top-.14,.138),trim,9);
-          streetEntrances++;
-        }
+      if(cutEntrance){
+        const u=.31,v=.69,base=entryBase,top=entryTop,back=-.135;
+        const trim=isGlass?[.35,.40,.41]:[.45,.43,.39];
+        const dark=[.11,.16,.20];
+        // Source wall is genuinely open; inset glass stays behind its plane.
+        face(at(u,base,back),at(v,base,back),
+          at(v,top,back),at(u,top,back),glass,10);
+        face(at(u,base,0),at(u,base,back),
+          at(u,top,back),at(u,top,0),dark,9);
+        face(at(v,base,back),at(v,base,0),
+          at(v,top,0),at(v,top,back),dark,9);
+        face(at(u,top,back),at(v,top,back),
+          at(v,top,0),at(u,top,0),trim,9);
+        face(at(u,base,0),at(v,base,0),
+          at(v,base,back),at(u,base,back),trim,9);
+        const mid=(u+v)*.5;
+        face(at(mid-.009,base+.09,back+.008),
+          at(mid+.009,base+.09,back+.008),
+          at(mid+.009,top-.09,back+.008),
+          at(mid-.009,top-.09,back+.008),trim,9);
+        streetEntrances++;
       }
       // Cornice lies *below* source HEIGHT_ROOF and follows polygon edges:
       // no floating rooftop cuboid, no change to roof clipping/collisions.
