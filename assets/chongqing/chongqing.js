@@ -607,6 +607,7 @@ function press(key,once=false){
 window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if(!e.repeat&&scenicView(e.code))return;
+  if(!e.repeat&&e.code==='KeyH'){document.body.classList.toggle('cinematic');return;}
   if(!e.repeat&&e.code==='KeyP')perfHud.hidden=!perfHud.hidden;
   if(!e.repeat)press(e.code,true);
 });
