@@ -434,6 +434,12 @@
       ((x-start[0])*dx+(z-start[1])*dz)/(dx*dx+dz*dz)));
     const lateral=Math.hypot(x-(start[0]+t*dx),z-(start[1]+t*dz));
     if(z>-558 && z<-215 && lateral<69+91*t)return 3;
+    // Brooklyn Bridge close view needs the same near-field streets and
+    // road markings as the Manhattan hero corridor. Limit the extra GPU
+    // load to two bounded bridgehead pockets, not all of Brooklyn.
+    if(x>205 && x<438 && z>-410 && z<-194 &&
+       Math.min(Math.hypot(x-285,z+330),
+         Math.hypot(x-372,z+285))<72)return 3;
     let band=distance<NYC_HERO_ROUTE.skylineRadius?1:0;
     // Connect skyline strips between landmark zones at low geometric cost.
     if(x>-158 && x<163 && z>-525 && z<275)band=Math.max(1,band);
