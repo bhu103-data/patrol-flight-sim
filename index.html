@@ -1115,13 +1115,21 @@ const CENTRAL_PARK_SITES=[
         if(x+width/2>west&&x-width/2<east&&z+length/2>south&&z-length/2<north)continue;
         cityParcels.set(iz*256+ix,[x,z,width,length,top-base,tone]);
       }
-      // PATROL_NYC_BROOKLYN_GAPFILL_V1
-      // Fill a bounded set of vacant DUMBO/bridgehead blocks with smaller,
-      // non-overlapping buildings. Never create a new map or extend the world.
-      // Existing road, railway, runway, shoreline and source polygons win.
+      // PATROL_NYC_BROOKLYN_GAPFILL_V2
+      // Prioritize visible bridgehead gaps instead of spending the budget
+      // row-by-row on the southern fringe. All existing safety guards remain.
+      const bridgeheadCandidates=[];
+      for(let iz=-13;iz<=-6;iz++)for(let ix=6;ix<=25;ix++){
+        const z=(iz+.5)*city.blockLength;
+        const x=(ix+.5)*city.blockWidth+city.tilt*z+city.offset;
+        const score=Math.min(Math.hypot(x-285,z+330),
+          Math.hypot(x-372,z+285));
+        bridgeheadCandidates.push({ix,iz,score});
+      }
+      bridgeheadCandidates.sort((a,b)=>a.score-b.score||a.iz-b.iz||a.ix-b.ix);
       let brooklynGapFills=0;
-      for(let iz=-13;iz<=-6 && brooklynGapFills<18;iz++)
-        for(let ix=6;ix<=25 && brooklynGapFills<18;ix++){
+      for(const {ix,iz} of bridgeheadCandidates){
+        if(brooklynGapFills>=32)break;
           const key=iz*256+ix;
           if(cityParcels.has(key))continue;
           const z0=(iz+.5)*city.blockLength;
