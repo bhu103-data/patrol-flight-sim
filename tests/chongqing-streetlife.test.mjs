@@ -122,17 +122,18 @@ test('crossing changes its active lamp after 24 seconds and again after 36',()=>
 });
 test('westbound taxi traffic can stop at red and resume when signal turns green',()=>{
   const {traffic}=setup();
-  let sawStop=false,sawRelease=false,stoppedId=-1;
+  let sawStop=false,sawRelease=false,stoppedId=-1,stoppedAt=null;
   for(let frame=0;frame<3500;frame++){
     traffic.update(.04,null);
     const snap=traffic.snapshot();
     for(let i=0;i<snap.vehicles.length;i++){
       const v=snap.vehicles[i];
       if(v.side!==1||v.tier!==1||v.dir!==-1)continue;
-      if(!snap.vehicleGreen&&Math.abs(v.x-297)<.08){
-        sawStop=true;stoppedId=i;
+      const stop=snap.crossingXs.find(cx=>Math.abs(v.x-(cx+12))<.08);
+      if(!sawStop&&!snap.vehicleGreen&&stop!==undefined){
+        sawStop=true;stoppedId=i;stoppedAt=stop+12;
       }
-      if(sawStop&&snap.vehicleGreen&&i===stoppedId&&v.x<294){
+      if(sawStop&&snap.vehicleGreen&&i===stoppedId&&v.x<stoppedAt-3){
         sawRelease=true;
       }
     }
