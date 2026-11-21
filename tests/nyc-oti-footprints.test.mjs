@@ -34,12 +34,12 @@ const triArea3D=(a,b,c)=>{
 test('NYC government provenance, schema, unique building identifiers and bounded input',()=>{
   assert.equal(snapshot.schema,'patrol-nyc-oti-footprints-v1');
   assert.match(snapshot.provider,/NYC Office of Technology and Innovation/);
-  assert.equal(snapshot.footprints.length,60);
-  assert.equal(new Set(snapshot.footprints.map(x=>x[0])).size,60);
+  assert.equal(snapshot.footprints.length,100);
+  assert.equal(new Set(snapshot.footprints.map(x=>x[0])).size,100);
   for(const [id,x,z,w,d,h,poly] of snapshot.footprints){
     assert.ok(id>0&&w>.7&&d>.7&&h>=4&&h<=48);
-    assert.ok(x>=-155&&x<=-50&&z>=-510&&z<=-408);
-    assert.ok(poly.length>=3&&poly.length<=36);
+    assert.ok(x>=-155&&x<=-40&&z>=-515&&z<=-400);
+    assert.ok(poly.length>=3&&poly.length<=46);
     assert.ok(poly.every(p=>p.length===2&&p.every(Number.isFinite)));
     assert.ok(area(poly)>1);
     assert.ok(contains(x,z,poly),'projected footprint center should be inside itself');
@@ -73,7 +73,7 @@ test('worker terrain snapshot and city collision index remain connected',()=>{
   assert.match(source,/official-financial-footprints\.json/);
 });
 
-test('terrain worker generates at least 50 official buildings with finite heights',()=>{
+test('terrain worker preserves all 100 official buildings with finite heights',()=>{
   const generator=new Function(pick('  function* generateTerrain(options) {',
     '  const workerSrc =')+'return generateTerrain;')();
   const city={
@@ -93,7 +93,7 @@ test('terrain worker generates at least 50 official buildings with finite height
   }
   assert.ok(result);
   const real=result.parcels.filter(lot=>lot[8]);
-  assert.ok(real.length>=50&&real.length<=60);
+  assert.ok(real.length>=95&&real.length<=100);
   assert.ok(result.parcels.length>=real.length);
   assert.ok(Array.from(result.height).every(Number.isFinite));
 });
