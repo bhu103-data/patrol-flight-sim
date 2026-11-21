@@ -2,10 +2,8 @@
 // No textures or meshes copied from other games. Deliberately localized for small download size.
 export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles}) {
   const unit=new THREE.BoxGeometry(1,1,1);
-  const sphere=new THREE.IcosahedronGeometry(1,1);
   const up=new THREE.Vector3(0,1,0);
   const dummy=new THREE.Object3D();
-  const color={};
   // Tiny procedural material atlases instead of large downloaded photographs.
   function tiledTexture(type) {
     const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
@@ -69,7 +67,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   for(const [name,capacity] of definitions){
     const mesh=new THREE.InstancedMesh(unit,materials[name],capacity);
     mesh.count=0;mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-    mesh.frustumCulled=false;
+    mesh.frustumCulled=true;
     scene.add(mesh);pools.set(name,{mesh,capacity,count:0});
   }
   function put(name,x,y,z,w,h,d,rx=0,ry=0,rz=0){
@@ -103,6 +101,9 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   for(let level=0;level<11;level++){
     const z=112+level*8.3, y=13+level*10.25, w=128-level*4.1;
     const front=z+12.15;
+    // One instanced core replaces hundreds of individually drawn facade blocks.
+    put('timber',hongX,y+4.85,z,w,9.7,22.5);
+    obstacles.push({x:hongX,z,w,d:22.5,base:y,top:y+10.2});
     const sections=Math.floor((w-8)/7);
     put('terra',hongX,y+10.45,z,w+15,1.1,33);
     put('carved',hongX,y+9.15,front+1,w+5,.72,1.25);
@@ -246,6 +247,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const x=212+(i%7)*24,z=303+Math.floor(i/7)*42;
     const y=ground(x,z);
     const facade=(i%4===0?'terra':'timber');
+    obstacles.push({x,z:z-6,w:20,d:16,base:y,top:y+16.1});
     put('stone',x,y+.65,z,21,1.3,25);
     put(facade,x,y+7.9,z-6,20,15.7,16);
     put('terra',x,y+16.4,z-6,23,1.5,22);
@@ -261,6 +263,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   }
   // Hotpot shop facade: metal roll-up frames, neon window strips, red lanterns, tiled entrance.
   const sx=hotpot.x,sz=hotpot.z,sy=ground(sx,sz);
+  obstacles.push({x:sx,z:sz,w:72,d:50,base:sy,top:sy+23.3});
   for(let x=sx-30;x<=sx+30;x+=10){
     put('timber',x,sy+9,sz+26.4,.8,18,.9);
     put('window',x+4.5,sy+12,sz+26.5,7.2,6,.2);
@@ -305,7 +308,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const y=ground(t.x,t.z), top=y+t.h;
     box(t.x,y+t.h/2,t.z,t.w,t.h,t.d,
       new THREE.MeshStandardMaterial({color:index%2?0x344a62:0x465362,metalness:.36,roughness:.31}));
-    obstacles.push({x:t.x,z:t.z,w:t.w,d:t.d,top});
+    obstacles.push({x:t.x,z:t.z,w:t.w,d:t.d,base:y,top});
     for(let floor=1;floor<Math.floor(t.h/7);floor++){
       const fy=y+floor*7;
       put(t.accent,t.x,fy,t.z+t.d/2+.12,t.w+.2,.34,.14);
@@ -368,7 +371,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   // Water glints are instanced transparent strips. No real-time reflection render target.
   const glints=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),
     new THREE.MeshBasicMaterial({color:0xffb96f,transparent:true,opacity:.23,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}),560);
-  glints.count=0;glints.frustumCulled=false;
+  glints.count=0;glints.frustumCulled=true;
   for(let i=0;i<560;i++){
     const near=rand()<.72, x=near?-150+rand()*570:-900+rand()*1850;
     const z=riverCenter(x)+(rand()-.5)*138;
@@ -379,7 +382,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     dummy.scale.set((1+rand()*7)*strength,.15+rand()*.52,1);
     dummy.updateMatrix();glints.setMatrixAt(glints.count++,dummy.matrix);
   }
-  glints.instanceMatrix.needsUpdate=true;scene.add(glints);
+  glints.instanceMatrix.needsUpdate=true;glints.computeBoundingSphere();scene.add(glints);
 
   // Gentle airborne dust motes around the foreground riverside, cheap point cloud.
   const points=[],pal=[];
@@ -393,7 +396,8 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
   g.setAttribute('color',new THREE.Float32BufferAttribute(pal,3));
-  scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.9,vertexColors:true,transparent:true,opacity:.38,depthWrite:false})));
+  const dust=new THREE.Points(g,new THREE.PointsMaterial({size:.9,vertexColors:true,transparent:true,opacity:.38,depthWrite:false}));
+  scene.add(dust);
 
   // Three high-value lamps only; warm emissive geometry supplies most of the night scene.
   for(const [x,z,intensity] of [[155,180,95],[280,285,80],[40,20,85]]){
@@ -404,6 +408,12 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   for(const pool of pools.values()){
     pool.mesh.count=pool.count;
     pool.mesh.instanceMatrix.needsUpdate=true;
+    if(pool.count>0)pool.mesh.computeBoundingSphere();
   }
-  return { stats:Object.fromEntries([...pools].map(([key,p])=>[key,p.count])), detailMeshes:pools.size+2 };
+  // Toggle purely ornamental layers for battery life; core landmarks stay intact.
+  return {
+    stats:Object.fromEntries([...pools].map(([key,p])=>[key,p.count])),
+    detailMeshes:pools.size+2,
+    setQuality(mode){const low=mode==='low';glints.visible=!low;dust.visible=!low;leafMesh.visible=!low;barkMesh.visible=!low;}
+  };
 }
