@@ -48,3 +48,24 @@ test('no safe water never places a floatplane on dry land',()=>{
   const search=choose({spawn:[0,50,0]},800,800,130,()=>false,[],()=>[0,0,0]);
   assert.equal(search(),null);
 });
+
+test('Alaska southern open water is rejected when it leads into boundary assist',()=>{
+  // A fjord opening points south from the actual Alaska spawn. Its water
+  // surface stays open beyond the game-world edge, so a 94m water-only test
+  // incorrectly launched straight into the automatic boundary turn.
+  const spawn=[-19,33,-667];
+  const isWater=(x,z)=>x>-38&&x<0&&z<-644;
+  const select=choose({spawn,alaska:true},735,860,130,
+    isWater,[],()=>[0,0,0]);
+  const berth=select();
+  assert.ok(!berth ||
+    !(Math.abs(berth[0]+19)<1e-8 && Math.abs(berth[1]+667)<1e-8
+      && Math.abs(Math.cos(berth[2])+1)<1e-8),
+    'do not launch south from the old boundary-facing spawn');
+  if(berth){
+    const end=[berth[0]+Math.sin(berth[2])*132,
+      berth[1]+Math.cos(berth[2])*132];
+    assert.ok(Math.hypot(...end)<=860-130-8,
+      'water takeoff corridor must end before boundary auto-turn');
+  }
+});
