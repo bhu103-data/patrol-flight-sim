@@ -54,7 +54,7 @@ const M = {
   glass:pbr.glass, beam:mat('#654941',.75),
   roof:pbr.roof, red:mat('#ae2932',0.43,0x651318,0.28),
   road:pbr.asphalt, rail:new THREE.MeshStandardMaterial({color:0xa5adb4,roughness:.37,metalness:.42,side:THREE.DoubleSide}),
-  window:pbr.window,
+  window:pbr.glassPane,
   white:new THREE.MeshBasicMaterial({color:0xffd998}),
   dark:mat('#22263b'), skin:mat('#e1a97e'), coat:mat('#e4c18b'),
   scarf:mat('#c13c32'), pants:mat('#433a47'), boot:mat('#2e292c'),
