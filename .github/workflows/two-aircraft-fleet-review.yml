@@ -1,0 +1,143 @@
+name: PATROL two-active-aircraft fleet and real GLB browser review
+on:
+  push:
+    branches:
+      - review/two-aircraft-fleet-and-cc0-jet-20261121
+    paths:
+      - 'index.html'
+      - 'assets/aircraft/active-fleet.json'
+      - 'assets/chongqing/chongqing.js'
+      - 'tests/two-aircraft-active-fleet.test.mjs'
+      - 'tools/aircraft/audit-cc0-stealth-fighter.mjs'
+      - 'tools/aircraft/preview-cc0-fighter-webgl.mjs'
+      - 'tools/aircraft/two-aircraft-browser-smoke.mjs'
+      - '.github/workflows/two-aircraft-fleet-review.yml'
+      - 'docs/TWO_AIRCRAFT_FLEET_QA.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: patrol-two-aircraft-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  targeted-node:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile local scripts and check two-entry runtime registry
+        run: |
+          node --check tools/aircraft/audit-cc0-stealth-fighter.mjs
+          node --check tools/aircraft/preview-cc0-fighter-webgl.mjs
+          node --check tools/aircraft/two-aircraft-browser-smoke.mjs
+          node --test tests/two-aircraft-active-fleet.test.mjs tests/floatplane-global.test.mjs tests/cessna185-seaplane.test.mjs
+
+  licensed-fighter-source-and-isolated-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install free pinned source GLB viewer modules and Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
+            three@0.180.0 playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Download original CC0 publisher source and cryptographic catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/aircraft-two-choice-review/source
+          curl -fLsS --retry 2 --connect-timeout 15 --max-time 80 \
+            'https://tevy.dev/models.json' -o /tmp/tevy-models.json
+          curl -fLsS --retry 2 --connect-timeout 15 --max-time 50 \
+            'https://tevy.dev/models/stealth-fighter' -o /tmp/tevy-stealth-fighter.html
+          for level in 0 1 2; do
+            curl -fLsS --retry 2 --connect-timeout 15 --max-time 90 \
+              "https://tevy.dev/models/stealth-fighter/v1/lod${level}.glb" \
+              -o "/tmp/stealth-fighter-lod${level}.glb"
+            test "$(stat -c%s "/tmp/stealth-fighter-lod${level}.glb")" -gt 20000
+            test "$(stat -c%s "/tmp/stealth-fighter-lod${level}.glb")" -lt 2500000
+          done
+      - name: Verify CC0 license and SHA256, triangle/texture/LOD of all original models
+        run: node tools/aircraft/audit-cc0-stealth-fighter.mjs
+      - name: Stage verified sources for isolated viewer only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for level in 0 1 2; do
+            cp "/tmp/stealth-fighter-lod${level}.glb" \
+              "artifacts/aircraft-two-choice-review/source/stealth-fighter-lod${level}.glb"
+          done
+          cat > artifacts/aircraft-two-choice-review/source/ORIGINAL_SOURCE_LICENSE.txt <<'EOF'
+          Creator/publisher: tevy; individual model artist not identified by the public source.
+          Original URL: https://tevy.dev/models/stealth-fighter
+          Model version: v1, LOD0/LOD1/LOD2
+          License: Creative Commons CC0 1.0, as advertised by publisher source page and catalog.
+          Modifications/redistribution, including on public GitHub, are permitted by CC0 declaration.
+          These binaries are CI review artifacts and are NOT included in PATROL runtime.
+          Existing main fighter model is a fictional Viper; this source is NOT a real F-15 or exact Viper.
+          EOF
+      - name: Start read-only repository HTTP source viewer
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-aircraft-viewer.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Render verified publisher GLBs in real Chromium WebGL2 with Meshopt and KTX2
+        env:
+          PATROL_TEST_URL: http://127.0.0.1:8765
+        run: node tools/aircraft/preview-cc0-fighter-webgl.mjs
+      - name: Preserve source originals, PBR screenshots and exact metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fighter-cc0-source-real-webgl2-preview
+          path: artifacts/aircraft-two-choice-review/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  playable-two-craft-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned free Chromium and PNG pixel QA
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
+            playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve actual checked out PATROL app, no production pages modified
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-actual-fleet-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Enter NYC flight with both choices, capture PNG and check black/console/fetch
+        env:
+          PATROL_TEST_URL: http://127.0.0.1:8765
+        run: node tools/aircraft/two-aircraft-browser-smoke.mjs
+      - name: Preserve actual game screenshots and error report for central QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: two-active-aircraft-live-game-webgl2
+          path: artifacts/aircraft-two-choice-review/
+          if-no-files-found: ignore
+          retention-days: 14
