@@ -8966,37 +8966,40 @@ const CENTRAL_PARK_SITES=[
   // GIS-derived coordinates, collider additions or flight-physics changes.
   function buildVegasCoreRidgeSample(geometry) {
     const {addTri,addQuad}=geometry;
-    const stone=[[.43,.38,.34],[.37,.33,.30],[.32,.30,.29],
-      [.48,.43,.38],[.39,.36,.33]];
+    // Original, editable earth-toned silhouette geometry. The shape is
+    // intentionally not presented as a real USGS digital elevation model.
+    const stone=[[.47,.37,.29],[.43,.34,.27],[.38,.31,.26],
+      [.52,.41,.32],[.46,.36,.28]];
     let triangles=0;
-    const face=(a,b,c,color)=>{
-      addTri(a,b,c,color);triangles++;
-    };
+    const face=(a,b,c,color)=>{addTri(a,b,c,color);triangles++;};
+    // Combine non-repeating long ridges, secondary crests and smaller
+    // weathered outcrops; avoid the former five-sample sawtooth skyline.
     const ridgeHeight=(i,side)=>{
-      const uneven=Math.sin(i*1.73+side*.6)*.27+
-        Math.sin(i*.67+side*1.4)*.19;
-      return 47+(i%5)*7+uneven*28;
+      const phase=side===1?.35:1.47;
+      return Math.max(28,61+17*Math.sin(i*.17+phase)+
+        10*Math.sin(i*.39+phase*.7)+
+        5.5*Math.sin(i*1.21+phase*2.3));
     };
-    // Distant western/eastern Mojave-style silhouette; scenic-only geometry.
-    // Deliberately NOT advertised as a surveyed Spring Mountains / Sunrise
-    // Mountain DEM until an actual USGS 3DEP raster is projected and checked.
-    const rows=18,dz=74,z0=-666;
+    const rows=48,dz=1332/rows,z0=-666;
     for(const side of [-1,1])for(let i=0;i<rows;i++){
       const z=z0+i*dz,zn=z+dz;
-      const height0=ridgeHeight(i,side),height1=ridgeHeight(i+1,side);
-      const section=(zz,height,depth)=> {
-        const x=side*depth,ground=sampleTerrainHeight(x,zz);
-        return [x,ground+height,zz];
+      const h0=ridgeHeight(i,side),h1=ridgeHeight(i+1,side);
+      const profile=(zz,h)=>{
+        const point=(depth,fraction)=> {
+          const x=side*depth;
+          return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
+        };
+        return [point(686,.018),point(720,.25),point(754,.59),
+          point(811,1),point(847,.12)];
       };
-      const a=section(z,1,686),b=section(zn,1,686);
-      const c=section(z,height0*.49,744),d=section(zn,height1*.49,744);
-      const e=section(z,height0,811),g=section(zn,height1,811);
-      const h=section(z,height0*.14,847),j=section(zn,height1*.14,847);
-      const tint=stone[(i+(side===1?2:0))%stone.length];
-      const lit=stone[(i+3)%stone.length];
-      face(a,b,c,tint);face(b,d,c,tint);
-      face(c,d,e,lit);face(d,g,e,lit);
-      face(e,g,h,tint);face(g,j,h,tint);
+      const a=profile(z,h0),b=profile(zn,h1);
+      for(let band=0;band<4;band++){
+        // Adjacent slopes use different earth tones, like weathered gravel
+        // and exposed ridge stone; no repeated billboard/photo texture.
+        const color=stone[(band+i%3+(side===1?1:0))%stone.length];
+        face(a[band],b[band],a[band+1],color);
+        face(b[band],b[band+1],a[band+1],color);
+      }
     }
     // Small-scale parallel pavement joints and tonal repair strips along
     // the *existing* straight Strip between Harmon and Flamingo; flush
@@ -9010,7 +9013,7 @@ const CENTRAL_PARK_SITES=[
         [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
       triangles+=2;
     }
-    return {mountainTriangles:rows*2*6,roadTriangles:18,triangles};
+    return {mountainTriangles:rows*2*8,roadTriangles:18,triangles};
   }
 
   function buildVegasStrip(geometry) {
