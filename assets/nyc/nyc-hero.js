@@ -274,6 +274,9 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
     darkSteel=[.23,.28,.31], handrail=[.53,.57,.57], timber=[.44,.34,.24],
     deckPaint=[.65,.63,.56], blackRubber=[.12,.15,.17], glass=[.16,.28,.33];
   let pierCount=0;
+  // Use the EXACT rendered pier sites as flight collision bounds, rather than
+  // a second guessed list of waterfront obstacle coordinates.
+  const pierObstacles=[];
   // Recover the existing coastline rather than guessing a fixed X position.
   function bank(z,side){
     const center=.24*z+30.0;
@@ -405,7 +408,17 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
       }
       box(tip-side*1.6,top+.36,z,.68,.56,1.12,[.79,.34,.15]);
     }
+    // The deck is above water, so terrain sampling alone cannot stop a
+    // floatplane from landing through it. Include the entire structure,
+    // including landside terminal and tall workboat boom, with a small
+    // pontoon/wing clearance margin in the same compressed game coordinates.
+    pierObstacles.push({
+      name:'Lower Manhattan pier',
+      x:(root+tip)*.5,z,y:waterY-1.0,top:waterY+6.15,
+      halfX:Math.abs(tip-root)*.5+2.0,halfZ:width*.5+.95,
+      roofSlope:0,roofSlopeZ:0
+    });
     pierCount++;
   }
-  return {pierCount,coastRange:[-491,-348]};
+  return {pierCount,coastRange:[-491,-348],pierObstacles};
 }
