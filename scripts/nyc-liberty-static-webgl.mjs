@@ -116,6 +116,24 @@ async function flight(candidate){
       sample.push([Number(surface.toFixed(3)),Number(terrain.toFixed(3))]);
     }
     const ground=sampleGroundHeight(mark.x,mark.z),left=mark.x-16,right=mark.x+16;
+    const asset=nycRealismAssets?.models?.liberty;
+    const scenarioShapeActive=asset?.source==='scenario' &&
+      asset.triangleCount===15900 && !graphicsCompat && smoothScenery();
+    // Flight physics, NOT a polygon-only mock: test 12 genuine corridor
+    // sweeps in the plaza outside the actual 15.9k GLB mesh. Historical
+    // fallback retains its deliberately broader bounding-box collision.
+    let scenarioClearSweeps=0;
+    if(scenarioShapeActive){
+      for(const relativeHeight of [5,11,20,29]){
+        for(const radius of [8.2,9.1,10.3]){
+          checkFlightCollision([mark.x+radius,ground+relativeHeight,mark.z-0.6],
+            [mark.x+radius,ground+relativeHeight,mark.z+0.6]);
+          if(crash)throw Error('Invisible Liberty plaza collision: '+
+            JSON.stringify({radius,relativeHeight,reason:crash.reason}));
+          scenarioClearSweeps++;
+        }
+      }
+    }
     // Normal engine substeps: aircraft overflies *above* monument top
     // without crashing. No synthetic physics branch or disabled collision.
     checkFlightCollision([left,ground+38,mark.z],[right,ground+38,mark.z]);
@@ -130,6 +148,7 @@ async function flight(candidate){
       pathLength:32,nominalCollisionSteps:Math.ceil(32/0.65),
       overflightHeight:ground+38,hitHeight:ground+20,
       overflightCrash,hitReason:crash?.reason||null,
+      scenarioClearSweeps,scenarioShapeActive,
       ranRealCollisionResolver:true};
   };
 `;
@@ -237,7 +256,9 @@ async function flight(candidate){
   if(physics.overflightCrash!==null ||
      physics.hitReason!=='Collision with Statue of Liberty' ||
      physics.nominalCollisionSteps<40 ||
-     physics.aircraft==='jetpack')
+     physics.aircraft==='jetpack'||
+     physics.scenarioClearSweeps!==(candidate?12:0)||
+     physics.scenarioShapeActive!==candidate)
     die('NYC swept collision changed '+JSON.stringify({
       overflightCrash:physics.overflightCrash,hitReason:physics.hitReason,
       steps:physics.nominalCollisionSteps,aircraft:physics.aircraft}));

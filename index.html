@@ -13728,6 +13728,22 @@ const CENTRAL_PARK_SITES=[
     return { basis, boundaryAssist };
   }
 
+  // PATROL_NYC_LIBERTY_SCENARIO_RADIAL_COLLISION_V1
+  // Derived from licensed 15,900-triangle candidate GLB, scaled to 31.3.
+  // Every radius bounds ALL mesh triangles crossing its 2-unit height band,
+  // including those whose vertices fall outside the band. Not a surveyed mesh.
+  // Preserve the game's original 0.55-unit aircraft collision cushion.
+  const libertyScenarioBandRadii = Object.freeze([
+    6.593, 6.307, 5.712, 5.117, 4.211, 4.371, 4.038, 4.228,
+    2.248, 2.121, 2.397, 2.397, 2.226, 2.226, 2.510, 2.646
+  ]);
+  function libertyScenarioRadialCollision(dx,dz,level){
+    if(!Number.isFinite(dx)||!Number.isFinite(dz)||!Number.isFinite(level)||
+       level<0||level>31.3+0.58)return false;
+    const band=Math.min(libertyScenarioBandRadii.length-1,Math.floor(level/2));
+    const radius=libertyScenarioBandRadii[band]+0.55;
+    return dx*dx+dz*dz<=radius*radius;
+  }
   function checkFlightCollision(previous, next) {
     // Substeps keep a fast-moving aircraft from crossing a narrow collision volume in one frame.
     const steps = Math.max(1, Math.ceil(Math.hypot(...next.map((value, i) => value - previous[i])) / 0.65));
@@ -13768,6 +13784,23 @@ const CENTRAL_PARK_SITES=[
       for (const mark of NEW_YORK_LANDMARKS) {
         const level = y - sampleGroundHeight(mark.x, mark.z);
         if (level < 0 || level > mark.top + 0.58) continue;
+        // Apply the GLB-specific profile ONLY when that exact-sized model is
+        // currently the rendered high-detail asset. Original procedural,
+        // bundled, texture-failure, low-quality and other map collisions
+        // continue unchanged, even while optional GLB loading is pending.
+        if(mark.kind==='liberty' && !graphicsCompat && smoothScenery()){
+          const mesh=nycRealismAssets?.models?.liberty;
+          if(mesh?.source==='scenario' && mesh.triangleCount===15900 &&
+             Math.abs(mesh.dimensions?.height-31.3)<0.01 &&
+             Math.abs(mesh.dimensions?.width-9.323)<0.04 &&
+             Math.abs(mesh.dimensions?.depth-9.323)<0.04){
+            if(libertyScenarioRadialCollision(x-mark.x,z-mark.z,level)){
+              finishFlight(pos,'Collision with '+mark.name,false);
+              return;
+            }
+            continue;
+          }
+        }
         const dx=Math.abs(x-mark.x),dz=z-mark.z;
         let width=mark.w,depth=mark.d;
         if(mark.kind==='flatiron'){
