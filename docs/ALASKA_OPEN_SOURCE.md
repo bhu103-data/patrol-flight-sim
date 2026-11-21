@@ -18,13 +18,13 @@ requests to Poly Haven occur during gameplay. The build job alone downloads
 The Alaska-only world raymarcher blends these four photographic surfaces with the existing
 USGS-based elevation terrain at camera distances under 255 flight units,
 including simple normal-mapped micro-shading and roughness-based reflectance.
-It uses at most two atlas samples on qualifying nearby pixels. **These are real
+It uses up to three atlas samples on qualifying nearby pixels (two albedo materials blended smoothly plus one normal/roughness fetch), to avoid visible material transition rings. Sheltered-fjord wave slopes are damped only in Alaska. **These are real
 photographs, not measured on-site Alaska imagery.** Geometry is not displaced
 by the normal map, and this lightweight lighting is not a complete energy-
 conserving metal/rough PBR renderer.
 
 The updated forest-floor photographs cover nearby low-elevation shores, while
-snow and rock photographs cover the alpine slopes. Dense but bounded conifer
+snow and rock photographs cover the alpine slopes. Dense but bounded, jittered shoreline conifer
 forest instances replace the legacy conical tree patches on capable GPUs;
 low-graphics mode retains its original fallback.
 
