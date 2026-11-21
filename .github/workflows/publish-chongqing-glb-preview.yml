@@ -25,10 +25,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/patrol-pbr-review assets/chongqing/generated
-          gh run download 44853989606 -R bhu103-data/patrol-flight-sim \
+          gh run download 44854459813 -R bhu103-data/patrol-flight-sim \
             --name hongyadong-blender-pbr-review \
             --dir /tmp/patrol-pbr-review
-          echo "b66cb4e8680fb52324d833447ddacb1ac805d071f711ffe7ef088dd64076a5d3  /tmp/patrol-pbr-review/hongyadong-study.glb" | sha256sum -c -
+          echo "4020b6a735b6e600d8f9249f43889b6b67c74a300e9f6b843afad3177458bd9e  /tmp/patrol-pbr-review/hongyadong-study.glb" | sha256sum -c -
           cp /tmp/patrol-pbr-review/hongyadong-study.glb assets/chongqing/generated/hongyadong-study.glb
       - name: Recheck using the production WebGL gate
         run: |
@@ -53,7 +53,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Verified artifact already present."
           else
-            git commit -m "Upgrade Chongqing optional GLB to CC0 photographic PBR version"
+            git commit -m "Upgrade Chongqing optional GLB with curved roofs and timber lattice"
             git push origin HEAD:main
           fi
           echo "Production manifest remains disabled by default."
