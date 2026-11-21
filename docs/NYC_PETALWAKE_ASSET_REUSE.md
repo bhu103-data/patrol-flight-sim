@@ -3,7 +3,7 @@
 ## Provenance and scope
 
 - Upstream: [jjcm/petalwake](https://github.com/jjcm/petalwake), source file [src/world/town.js](https://github.com/jjcm/petalwake/blob/main/src/world/town.js), repository tree inspected at `25443cef0eba802052d9ef24c94ba3c4157b6f2e`.
-- License: **MIT License**, Copyright (c) 2026 Jacob Miller. [Upstream LICENSE](https://github.com/jjcm/petalwake/blob/main/LICENSE). This project retains the MIT notice in the adapted file below. Distribution must retain that notice.
+- License: **MIT License**, Copyright (c) 2026 Jacob Miller. [Upstream LICENSE](https://github.com/jjcm/petalwake/blob/main/LICENSE). This project retains the MIT notice in the adapted file below. The full upstream MIT license text is included verbatim at `assets/nyc/PETALWAKE_MIT_LICENSE.txt`; distribution must retain that notice.
 - Actual integrated code: `assets/nyc/petalwake-chunk-lod.js`. Petalwake's chunk AABB distance/three LOD choice was adapted to dependency-free JavaScript. This module additionally implements a PATROL-specific deterministic spatial budget. `assets/nyc/nyc-street-network.js` **uses a small inlined MIT-attributed version** of the same budget (legacy tests import this file through data: URLs, so relative imports break) for existing bridgehead and Manhattan street fixtures, retaining clearance/water and existing budget guards. This is an active runtime module, unlike PR #95's unconnected Midtown geometry prototype.
 - Do not copy Petalwake's `assets/town/*.bin`, `assets/terrain/height.u16`, textures, GLBs, Three.js shaders or post effects into New York. They depict another fictional environment, are often multi-megabyte assets, and their fit/attribution would need individual audit. **No model training or generation was used.**
 
