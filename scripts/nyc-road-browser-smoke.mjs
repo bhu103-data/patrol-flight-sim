@@ -367,14 +367,28 @@ try{
   // never treating an entire scene as one global LOD switch.
   const lodSweep=[];
   for(const zoom of [100,80,60,42,20,0]){
+   // Scenic camera interpolation makes 700ms wall-time waits unreliable on
+   // SwiftShader. Use the game's own selected-view change handler to reset
+   // camInitialized (QA only), then restore the 45° road-facing angle.
+   // Never infer LOD from a zoom slider before the *actual* camera arrives.
+   await page.locator('#hotelTarget').evaluate(el=>
+    el.dispatchEvent(new Event('change',{bubbles:true})));
+   await page.locator('#hotelAngle').evaluate(el=>{
+    el.value='45';el.dispatchEvent(new Event('input',{bubbles:true}));
+   });
    await page.locator('#hotelZoom').evaluate((el,z)=>{
     el.value=String(z);el.dispatchEvent(new Event('input',{bubbles:true}));
    },zoom);
-   await page.waitForTimeout(700);
+   const targetX=290+93*(1.24-.68*zoom/100);
+   await page.waitForFunction(expected=>{
+    const cam=window.__patrolNycRoadLodQa?.()?.camera;
+    return cam?.length===3&&Math.abs(cam[0]-expected)<1.0&&
+     Math.abs(cam[2]+363)<1.0;
+   },targetX,{timeout:20000});
    const frame=await page.evaluate(()=>window.__patrolNycRoadLodQa?.());
    check(frame?.chunks?.length===4,'Zoom sweep lost NYC chunks');
-   lodSweep.push({zoom,levels:frame.chunks.map(c=>c.lod),
-    camera:frame.camera});
+   lodSweep.push({zoom,expectedX:Number(targetX.toFixed(2)),
+    levels:frame.chunks.map(c=>c.lod),camera:frame.camera});
   }
   let changed=0;
   for(let i=1;i<lodSweep.length;i++)
