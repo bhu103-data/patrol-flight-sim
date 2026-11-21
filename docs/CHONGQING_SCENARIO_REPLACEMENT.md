@@ -1,6 +1,6 @@
 # Scenario for Blender → Chongqing Hongyadong
 
-**Status (CC0 photographic PBR version):** A real Blender 5.2.1 export from [run 44853989606](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853989606) replaced the earlier flat-color proof of concept. The **current** model at `assets/chongqing/generated/hongyadong-study.glb` was rebuilt with curved/corner-raised tiled roof sections, three physical timber mullions per window bay, cantilever braces and stilt posts. The 3D file is **4,425,416 bytes, 24,348 triangles and four embedded PBR images**, SHA-256 `4020b6a735b6e600d8f9249f43889b6b67c74a300e9f6b843afad3177458bd9e`, as verified by [Blender 5.2.1 run 44854459813](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44854459813). [Preview-only publishing run 44854533301](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44854533301) passed. Brick/concrete imagery reuses existing CC0 photographs; wood and roof photo inputs come from Poly Haven CC0. This is **not paid Scenario cloud generation** or a photogrammetric/AAA 1:1 reconstruction. The production `enabled` setting remains `false`; only the explicit `?scenario=hongyadong` URL requests this PBR preview.
+**Current status (three-wing phototextured Blender study, NOT a final AAA/photogrammetric model):** A real Blender 5.2.1 export from [build 44855993580](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44855993580) produced the current review model at `assets/chongqing/generated/hongyadong-study.glb`, **3,843,360 bytes, 15,996 triangles, four embedded CC0 PBR images**, SHA-256 `f370dec62721dff86df8ee5123fd84c97b69e9cfa78be55df36a821830613c42`. The artwork now uses three separately offset Bayu-style stilt-house wings per level, nonuniform roof coverage, carved window galleries, photographic roof/wood/concrete materials and shadowed eaves. The [non-force published review asset](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44856154286) and [actual Chromium WebGL2 validation](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44856194125) both passed with `scenario=ready`, `webgl2=true`, and a captured 1280×720 game screenshot. The production `enabled` flag stays **false**, so this is shown **only** when a player explicitly opens `?scenario=hongyadong`. This is **not** a surveyed 1:1 city asset, paid Scenario cloud generation, calibrated global ray tracing or final accepted photoreal scene.
 
 ## Files
 
@@ -70,6 +70,8 @@ GitHub Actions executes script syntax and Node tests. These **are not** proof of
 - Existing CC0 walls: `assets/nyc/concrete_wall_008_diff_1k.jpg` and `concrete_wall_008_nor_gl_1k.jpg` (credited in `assets/nyc/PBR_TEXTURE_SOURCES.md`).
 
 The downloaded source photos are temporary and not checked in; Blender embeds the required images in the review GLB. The renderer still uses only approved base PBR materials, not a real city scan. The manuscript keeps initial collision volumes for safe preview. The PBR GLB is suitable for inspection, not proof of survey accuracy, realistic street-level architecture or final game art acceptance.
+
+**Update:** The current GLB is the three-wing 15,996-triangle build above; older 24,348-triangle measurements below apply only to the superseded curved-roof prototype.
 
 ## Final isolated browser verification — November 20, 2026 (New York)
 
