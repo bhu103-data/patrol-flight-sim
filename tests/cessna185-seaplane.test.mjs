@@ -53,8 +53,10 @@ test('Alaska lodgings are land-only, while piers and boats are allowed on water'
   assert.match(html,/LAND_PAD_GUARD_V1/);
   assert.match(html,/function dryPad\(/);
   assert.match(html,/if\(!pad\)return/);
-  assert.match(html,/low<=WATER_H\+\.72/);
+  assert.match(html,/low<=WATER_H\+1\.0/);
   assert.match(html,/const beaconPad=dryPad/);
+  assert.match(html,/const annex=findScenerySite/);
+  assert.match(html,/const mast=findScenerySite/);
   assert.match(html,/if\(rampLands\)/);
   assert.match(html,/Math\.min\(a\[1\],b\[1\],c\[1\],d\[1\]\)<=WATER_H\+\.58/);
 });
