@@ -5874,7 +5874,9 @@ const CENTRAL_PARK_SITES=[
       // and roof elevations; only small authored architectural surface relief.
       // The near-view corridor is clipped to the original 100-footprint pilot,
       // preserving game road/collision indices and all existing landmarks.
-      const downtownRelief=detailBand===3 && y<20 &&
+      // Select a stable fraction of documented OTI DOITT_ID footprints.
+      // The full 100-building pilot must remain below its 9000-face budget.
+      const downtownRelief=(lot[8]%3===0) && detailBand===3 && y<20 &&
         x>-155&&x<-40&&z>-515&&z<-400 && h>=8 && !destroyed;
       const at=(t,yy,offset)=>[
         a[0]+dx*t+normal[0]*offset,yy,
