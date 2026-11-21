@@ -64,3 +64,10 @@ This is a **scale transition**, not an expansion of the terrain boundary into ph
 ### Recent Chongqing landmark improvements
 
 The Chongqing map now has a separate [Raffles City / Liziba modeling module](assets/chongqing/landmarks.js) with the eight Chongqing Raffles towers, The Crystal horizontal glass skybridge, and a three-car moving Line 2 monorail passing through a 19-floor Liziba-inspired station. These landmarks have dedicated landing/collision bounds, minimap markers and exploration objectives. Buildings are hand-authored procedural models; their relative positions are compressed and **not claimed to match surveyed Chongqing coordinates**. Smoke and regression tests: `node --test tests/chongqing-landmarks.test.mjs` and `node --test tests/chongqing-spatial.test.mjs`.
+
+
+### Chongqing photographic roof and timber detail
+
+The latest update adds two optional **CC0 1K photographic material streams** for timber beams and ceramic roofs, plus **33 curved pitched roof meshes** with raised eave corners and timber lattice window frames. Their provider names are not shown in the game; asset URLs and license information remain in [CHONGQING_LICENSES.md](CHONGQING_LICENSES.md). A local procedural material fallback is preserved for offline or failed requests. These are real material photographs, **not** a copyrighted 3D city scan or a 1:1 imported Hongyadong building model.
+
+Additional regression tests: `node --test tests/chongqing-detail.test.mjs` and `node --test tests/chongqing-visual.test.mjs`.
