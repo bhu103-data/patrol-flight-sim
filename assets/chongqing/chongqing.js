@@ -56,6 +56,7 @@ moon.shadow.bias=-.00012;
 moon.shadow.normalBias=.035;
 moon.shadow.radius=2;
 scene.add(moon,moon.target);
+const localShadowOffset=new THREE.Vector3(-110,170,-135);
 const glow = new THREE.PointLight(0xffbd76, 170, 235, 2);
 glow.position.set(160,105,125);
 scene.add(glow);
@@ -541,6 +542,7 @@ function applyQuality(){
   const low=qualityMode==='low';
   renderer.shadowMap.enabled=!low;
   moon.castShadow=!low;
+  trees.castShadow=qualityMode==='high';
   detailBuild.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
@@ -977,7 +979,7 @@ function frame(){
     Math.round(state.pos.y*.5)*2,
     Math.round(state.pos.z*.5)*2
   );
-  moon.position.copy(moon.target.position).add(new THREE.Vector3(-110,170,-135));
+  moon.position.copy(moon.target.position).add(localShadowOffset);
   move(dt);updateFlames(dt);updateCamera(dt);landmarkBuild.update(dt);atmosphere.update(dt);
   if(!orbitLaunchSent&&state.pos.y>=650&&state.vel.y>.4){
     orbitLaunchSent=true;
