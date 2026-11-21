@@ -6,6 +6,7 @@ on:
       - 'index.html'
       - 'tests/floatplane-wave-pose.test.mjs'
       - 'tools/aircraft/nyc-ocean-wave-qa.mjs'
+      - 'tools/aircraft/nyc-water-crest-compare.mjs'
       - '.github/workflows/nyc-c185-wave-qa.yml'
 permissions:
   contents: read
@@ -34,6 +35,8 @@ jobs:
           exit 1
       - name: NYC same-camera WebGL2 frames and RAF pacing
         run: node tools/aircraft/nyc-ocean-wave-qa.mjs
+      - name: Before and after NYC water color in fixed-camera WebGL2
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
         uses: actions/upload-artifact@v4

@@ -1998,7 +1998,11 @@ const CENTRAL_PARK_SITES=[
             waterCol=mix(waterCol,bottom*waterTransmission*(0.72+focus*0.62),shallowFloor*0.76);
             float back=pow(max(dot(normalize(uSun.xz+vec2(0.0001)),normalize(rd.xz+vec2(0.0001))),0.0),4.0);
             float crest=smoothstep(0.11,0.43,swell.x+chop.x);
-            waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;
+            // NYC harbor: sunlight highlights should be neutral, not
+            // broad teal-colored stripes. Keep the established spectrum,
+            // Fresnel, GGX glitter and every other map unchanged.
+            vec3 crestTint=uManhattan?vec3(0.032,0.041,0.046):vec3(0.025,0.24,0.18);
+            waterCol+=crestTint*crest*back*sunAbove*clearSky*litFactor;
           }
           vec3 sunTint = mix(vec3(1.0,0.56,0.27), vec3(1.0,0.95,0.82), smoothstep(0.02,0.3,uSun.y));
           vec3 H = normalize(uSun + V + vec3(0.0,0.00001,0.0));

@@ -97,3 +97,10 @@ test('only confirmed floating C185 avoids static waterline collision at wave tro
   assert.equal(trial({afloat:true,city:false}).length,1,'other maps retain original collision gate');
   assert.equal(trial({afloat:true,surface:13.4}).length,1,'shore and land remain solid');
 });
+
+test('NYC crest highlights are neutralized without modifying non-NYC shader',()=>{
+  assert.match(html,/vec3 crestTint=uManhattan\?vec3\(0\.032,0\.041,0\.046\):vec3\(0\.025,0\.24,0\.18\)/);
+  assert.match(html,/waterCol\+=crestTint\*crest\*back\*sunAbove\*clearSky\*litFactor/);
+  assert.match(html,/float oceanHeight\(vec2 xz, float depth, float pixel\)/,
+    'physical ocean displacement remains unchanged');
+});
