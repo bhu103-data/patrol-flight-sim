@@ -42,7 +42,7 @@ test('viewer audits polygon count, footprint, embedded atlas and orientation',()
 });
 test('preview never enables unreviewed models or edits manifests',()=>{
   for(const [kind,asset] of Object.entries(manifest.landmarks)){
-    if(kind==='trade'||kind==='empire'){
+    if(kind==='trade'||kind==='empire'||kind==='chrysler'){
       assert.equal(asset.enabled,true,'reviewed original GLB is activated');
       assert.match(asset.license,/Original/);
     }else assert.equal(asset.enabled,false,'other landmarks retain their original models');
