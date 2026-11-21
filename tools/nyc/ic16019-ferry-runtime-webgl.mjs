@@ -53,9 +53,17 @@ try{
    return document.getElementById('titleOverlay')?.hidden&&
      overlay?.classList.contains('done');
  },null,{timeout:140000});
- for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
-   await page.locator('#'+id).selectOption(value);
- }
+ // The environment flyout is intentionally hidden during flight. Set its
+ // existing native select values without requiring Playwright visibility,
+ // following the established NYC harbor screenshot QA convention.
+ await page.evaluate(()=>{
+   for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
+     const el=document.getElementById(id);
+     if(!el)throw Error('Missing flight environment '+id);
+     el.value=value;
+     el.dispatchEvent(new Event('change',{bubbles:true}));
+   }
+ });
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
    null,{timeout:20000});
