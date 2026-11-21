@@ -4781,7 +4781,7 @@ const CENTRAL_PARK_SITES=[
         }
         for(let j=0;j<5;j++)
           cityTraffic.push({kind:['sedan','suv','sedan','van','suv'][j],
-            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55});
+            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55,bridge:i===0});
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
@@ -5233,6 +5233,13 @@ const CENTRAL_PARK_SITES=[
       const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
       const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
       if (distanceSq>455*455) continue;
+      // PATROL_NYC_TRAFFIC_WATERLINE_V1: traffic on the authored bridge
+      // uses bridgeRoadHeight, but ordinary downtown streets are clipped at
+      // the coast. Do not render cars/pedestrians on an absent road in water.
+      // Expressway actors have their own elevated deck heights. Wrecks use
+      // separate impact physics rather than disappearing at the shoreline.
+      if(selectedMap.city && !actor.bridge && !actor.expressway &&
+         !actor.wreck && sampleTerrainHeight(x,z)<=WATER_H+.08)continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
       if(actor.kind==='walker'){
         drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45},distanceSq<130*130);
