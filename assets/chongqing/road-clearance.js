@@ -33,6 +33,18 @@ export function isRoadPassableAtElevation(a,b,building,roadThickness=1){
   const roadHigh=Math.max(a.y??0,b.y??0)+roadThickness;
   return roadHigh<(building.base??-Infinity)||roadLow>(building.top??Infinity);
 }
+// The road may cross an obstacle's 2D footprint but pass safely UNDER a
+// raised building or OVER a lower terrace. Compare heights ONLY at the
+// horizontal crossing interval, not at unrelated segment endpoints.
+// A global endpoint min/max test falsely rejects steep Chongqing roads.
+export function crossesRoadVolume(a,b,building,halfRoadWidth=0,margin=0,roadThickness=1){
+  const interval=sweptSegmentInterval(a,b,building,halfRoadWidth,margin);
+  if(!interval)return false;
+  const ay=a.y??0,by=b.y??0;
+  const at=t=>({y:ay+(by-ay)*t});
+  return !isRoadPassableAtElevation(
+    at(interval[0]),at(interval[1]),building,roadThickness);
+}
 export function clipRoadToFreeSegments(points,width,obstacles,padding=.7,minLength=3){
   const result=[],stats={testedSegments:0,clippedSegments:0,removedLength:0,keptLength:0};
   let open=null;
