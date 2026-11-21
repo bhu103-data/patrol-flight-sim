@@ -84,10 +84,25 @@ try{
  check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
    dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
  await page.screenshot({path:out+'/03-dumbo-warehouse.png',fullPage:true});
+ // Review the procedural Liberty crown from the dedicated close-up camera,
+ // rather than inferring statue quality from distant harbor screenshots.
+ await page.locator('#hotelTarget').selectOption({label:'Statue of Liberty'});
+ await page.waitForTimeout(1600);
+ const liberty=await page.evaluate(()=>{
+   const target=document.getElementById('hotelTarget');
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   return {camera:target?.options[target.selectedIndex]?.textContent,
+     webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(liberty.camera==='Statue of Liberty'&&liberty.webgl&&
+   liberty.graphicsError===0,
+   'Liberty Island close-up lost WebGL: '+JSON.stringify(liberty));
+ await page.screenshot({path:out+'/04-liberty-crown.png',fullPage:true});
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,dumbo,
+ result={passed:true,state,bridge,dumbo,liberty,
    screenshots:['00-harbor.png','01-city-loaded.png',
-     '02-brooklyn-bridgehead.png','03-dumbo-warehouse.png'],warnings};
+     '02-brooklyn-bridgehead.png','03-dumbo-warehouse.png',
+     '04-liberty-crown.png'],warnings};
 }catch(e){
  result={passed:false,error:e.stack||String(e),errors,warnings};
  try{await page.screenshot({path:out+'/FAILED.png',fullPage:true});}catch{}
