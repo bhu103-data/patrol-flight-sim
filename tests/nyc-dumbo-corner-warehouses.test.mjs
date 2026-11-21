@@ -35,6 +35,10 @@ test('two warehouse references use bounded, true inset glass and physical masonr
     assert.equal(stats.stories,6);
     assert.ok(stats.openings>=90&&stats.openings<=140);
     assert.ok(stats.arcs>=200&&stats.arcs<=500);
+    assert.equal(stats.headerStones,stats.arcs,
+      'each upper-floor arch strip must have a real raised brick header');
+    assert.ok(stats.headerStones>=200&&stats.headerStones<=500,
+      'bounded projecting masonry pieces per building');
     assert.ok(quads.length>1200&&quads.length<2400);
     assert.ok(quads.some(face=>face[5]===13),'inset windows actually generated');
     assert.ok(quads.some(face=>face[5]===12),'brick and window reveals actually generated');
