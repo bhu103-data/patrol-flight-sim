@@ -4898,13 +4898,53 @@ const CENTRAL_PARK_SITES=[
         box(0,1.895,-.105,.30,.045,.022,[.16,.17,.18]);
       }
     } else if(kind==='train') {
-      const z=0;
-      box(0,1.55,z,2.55,2.80,12.7,[0.67,0.72,0.74]);
-      box(0,0.35,z,2.0,0.61,11.8,rubber);
-      for(const side of [-1,1]) for(const w of [-4.4,-2.2,0,2.2,4.4]) {
-        box(1.28*side,1.84,z+w,0.065,0.66,1.04,glass);
+      // NYC-inspired stainless subway car; logo-free original geometry.
+      // Doors, glazing, trucks and roof vents replace a single white cuboid.
+      const steel=[.54,.59,.61],dark=[.18,.23,.27],
+        trim=[.68,.72,.73],blue=[.14,.30,.43];
+      box(0,1.50,0,2.48,2.66,12.62,steel);
+      box(0,.33,0,2.04,.55,11.96,dark);
+      box(0,2.91,0,2.35,.22,12.27,[.45,.50,.52]);
+      for(const side of [-1,1]){
+        const sx=side*1.275;
+        for(const wz of [-5.35,-2.22,2.22,5.35]){
+          box(sx,1.94,wz,.052,.78,.93,dark);
+          box(sx+side*.038,1.94,wz,.036,.64,.79,glass,5);
+          box(sx+side*.071,1.94,wz,.021,.055,.87,trim);
+        }
+        for(const dz of [-3.83,0,3.83]){
+          box(sx,1.48,dz,.058,1.94,1.40,trim);
+          for(const leaf of [-1,1]){
+            const zz=dz+leaf*.345;
+            box(sx+side*.037,1.47,zz,.045,1.77,.665,steel);
+            box(sx+side*.064,1.93,zz,.027,.66,.49,dark);
+            box(sx+side*.080,1.93,zz,.019,.57,.43,glass,5);
+          }
+          box(sx+side*.081,1.37,dz,.030,1.62,.029,dark);
+        }
+        box(sx+side*.055,.80,0,.029,.15,11.75,blue);
+        box(sx+side*.044,2.63,0,.032,.062,12.02,trim);
+        for(const vent of [-5,-3,-1,1,3,5])
+          box(sx+side*.049,.43,vent,.025,.13,.62,dark);
       }
-      box(0,2.12,z+6.38,1.9,0.65,0.065,glass);
+      for(const end of [-1,1]){
+        box(0,2.05,end*6.33,1.67,.77,.071,dark);
+        box(0,2.05,end*6.383,1.52,.61,.035,glass,5);
+        box(0,2.57,end*6.386,.62,.18,.034,blue);
+        for(const side of [-1,1]){
+          box(side*.89,.79,end*6.392,.18,.15,.052,[.85,.85,.75]);
+          box(side*.96,.43,end*6.392,.12,.11,.046,[.66,.16,.13]);
+        }
+      }
+      for(const bz of [-4.48,4.48]){
+        box(0,.22,bz,2.24,.33,1.52,dark);
+        for(const side of [-1,1])for(const dz of [-.44,.44]){
+          box(side*1.06,.31,bz+dz,.25,.56,.56,rubber);
+          box(side*1.20,.31,bz+dz,.055,.29,.28,trim);
+        }
+      }
+      for(const vent of [-4.6,-1.5,1.5,4.6])
+        box(0,3.075,vent,.72,.11,.96,[.33,.39,.42]);
     } else {
       box(0,1.12,0,0.48,0.65,0.29,clothing);
       box(0,1.63,0.035,0.27,0.33,0.26,skin);
