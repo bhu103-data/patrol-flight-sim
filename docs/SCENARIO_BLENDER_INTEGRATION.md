@@ -87,3 +87,18 @@ Each GLB is limited to **8 MiB and 25,000 triangles**; the runtime currently sup
 - An in-memory sample GLB **does not** prove an actual Scenario/Blender model is accurate or optimized. After exporting a landmark and enabling it explicitly, verify its real shape, UV seams, color space, correct collision alignment, lighting, memory and FPS in Manhattan.
 - If a new Pages file is temporarily 404 during rapid commits, inspect the **pages build and deployment** GitHub Actions runs; canceled builds do not serve newly committed files until a later successful deployment.
 
+
+
+## Review an exported GLB without publishing it
+
+Use the [local Blender model preview](https://bhu103-data.github.io/patrol-flight-sim/tools/scenario_model_preview.html) **before** enabling the asset in `scenario-manifest.json`.
+
+1. Open the preview. It initially displays the repository's existing bundled Statue of Liberty GLB, so the WebGL renderer can be checked without installing Scenario or generating anything paid.
+2. Choose the target landmark (its current *gameplay-scale* height), then choose your exported `.glb` file. The file is processed **in your browser only** — no server upload, account access or API key.
+3. Rotate the model by dragging, zoom with the mouse wheel or slider, use the model angle slider, and examine the silhouette, UV seams, diffuse color, roof, crown and width/depth proportions.
+4. Record the reported triangle count, footprint, height, diffuse atlas status and parse/upload duration. Click **Save review screenshot** and compare it against legally usable architectural references.
+5. If the renderer says FAIL (unsupported material, external texture URI, missing UV, excessive size or invalid GLB), fix the Blender export and re-preview. **Do not enable the manifest asset solely because a file exists.**
+6. After satisfactory visual QA, use the existing audited export command with `--activate`, commit both the .glb and manifest, then inspect it inside Manhattan's Scenic Views camera.
+
+Preview limits: one embedded Base Color PNG/JPEG atlas per GLB, currently downscaled to a 1024 px GPU texture; up to 8 MiB source and native GLB triangles. The viewer is a read-only staging tool, not a shared 3D asset store and not proof of geospatial 1:1 fidelity.
+
