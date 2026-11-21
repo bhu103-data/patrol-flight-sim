@@ -6,7 +6,7 @@
 import {chromium} from 'playwright';
 import {mkdirSync} from 'node:fs';
 const url=process.env.PATROL_TEST_URL || 'http://127.0.0.1:8765/';
-const errors=[],requests=[],glacierDetailLogs=[];
+const errors=[],requests=[],glacierDetailLogs=[],villageLogs=[];
 const browser=await chromium.launch({
   headless:true,
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -19,6 +19,7 @@ try{
     const m=message.text();
     if(message.type()==='error')errors.push('Console: '+m);
     if(m.includes('[PATROL] Alaska fjord detail'))glacierDetailLogs.push(m);
+    if(m.includes('[PATROL] Alaska surveyed village'))villageLogs.push(m);
     if(/Alaska|WebGL|photo|GPU/i.test(m))console.log('[BROWSER]',m.slice(0,300));
   });
   page.on('response',response=>{
@@ -68,6 +69,12 @@ try{
     throw new Error('Glacier serac and strata geometry not confirmed in live WebGL pass: '+
       glacierDetailLogs.join(' | '));
   }
+  const villageLine=villageLogs.find(m=>m.includes('[PATROL] Alaska surveyed village'));
+  const audit=villageLine && JSON.parse(villageLine.slice(
+    villageLine.indexOf('{')));
+  if(!audit||audit.cabins!==6||audit.sidingRows!==72||audit.roofSeams<45)
+    throw new Error('Alaska harbor lodge geometry not present in real WebGL: '+
+      JSON.stringify({audit,villageLogs}));
   // A second reproducible screenshot faces the actual glacier mouth.
   // This is opt-in inspection mode only; default Alaska spawn is unchanged.
   const focusUrl=new URL(url);
@@ -85,6 +92,27 @@ try{
     throw new Error('Alaska glacier focus did not load');
   await page.waitForTimeout(2300);
   await page.screenshot({path:'artifacts/alaska-glacier-closeup.png'});
+  // Third QA camera points at the actual surveyed six-cabin harbor scene.
+  // The default spawn and the public menu do not change.
+  focusUrl.searchParams.set('alaskaView','harbor');
+  await page.goto(focusUrl.toString(),{waitUntil:'domcontentloaded',timeout:30000});
+  await page.locator('input[name="flightMap"][value="alaska"]').check({force:true});
+  await page.locator('#startFlight').click({timeout:15000});
+  await page.waitForFunction(()=>{
+    const err=document.getElementById('menuError');
+    const loading=document.getElementById('loadOverlay');
+    const title=document.getElementById('titleOverlay');
+    return (err&&!err.hidden)||(loading?.classList.contains('done')&&title?.hidden);
+  },null,{timeout:110000});
+  await page.waitForTimeout(1400);
+  const harborState=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+  if(!harborState?.playing||harborState.map!=='alaska' ||
+     harborState.position[0]<70||harborState.position[0]>150||
+     harborState.altitude<25 || !Number.isFinite(harborState.yaw))
+    throw new Error('Alaska harbor visual QA camera failed: '+JSON.stringify(harborState));
+  await page.screenshot({path:'artifacts/alaska-surveyed-harbor-houses.png'});
+  console.log('Alaska village WebGL2 scene:',JSON.stringify(audit),
+    'camera:',JSON.stringify(harborState));
   if(errors.length)throw new Error(errors.join('\n'));
   console.log('PASS: Alaska measured DEM, real CC0 photo atlases, live WebGL2 and frame accepted.');
 }finally{
