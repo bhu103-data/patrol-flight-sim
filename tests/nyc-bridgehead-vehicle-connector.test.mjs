@@ -18,7 +18,8 @@ const connectorSource=sourceBetween('  function makeBrooklynBridgeheadCarRoute('
 const makeRoute=new Function(routeSource+'return makeTrafficRoute;')();
 const connect=new Function('makeTrafficRoute',clipSource+connectorSource+
   'return makeBrooklynBridgeheadCarRoute;')(makeRoute);
-const poseSource=sourceBetween('  function trafficPose(','  function prepareCityTraffic(');
+const turnSource=sourceBetween('  function bridgeheadTrafficPose(','  function trafficPose(');
+const poseSource=turnSource+sourceBetween('  function trafficPose(','  function prepareCityTraffic(');
 const lerp=(a,b,t)=>a+(b-a)*t;
 const bridgeRoadHeight=x=>lerp(bridge.deck+.60,STREET_Y,
   Math.max(0,Math.min(1,(Math.abs(x-bridge.x)-bridge.halfLength)/bridge.ramp)));
@@ -28,8 +29,11 @@ const clear=()=>20,empty=()=>null;
 test('uses existing CITY_STREETS bridgehead and dry DUMBO branches',()=>{
   const route=connect(streets,bridge,clear,empty,WATER_H);
   assert.ok(route,'connector should be available for unobstructed bank');
-  assert.deepEqual(route.points.slice(0,streets[0].length),streets[0]);
+  assert.equal(route.points[0][1],streets[0][0][1]);
+  assert.ok(route.points[0][0]>streets[0][0][0], 'turnaround is inset on deck');
+  assert.deepEqual(route.points[1],streets[0][1]);
   assert.deepEqual(route.points[streets[0].length],streets[2][1]);
+  assert.ok(route.points.at(-1)[0]<streets[2][3][0], 'end turn is inset from road end');
   assert.ok(route.points.length>=streets[0].length+1);
 });
 test('rejects river and full-road-sidewalk footprint intrusions',()=>{
@@ -37,6 +41,12 @@ test('rejects river and full-road-sidewalk footprint intrusions',()=>{
   // A wall beside the centreline is still inside the 12.1-wide envelope.
   const wall=(x,z)=>x>258&&x<265&&z>-338&&z<-332?{id:'warehouse'}:null;
   assert.equal(connect(streets,bridge,clear,wall,WATER_H),null);
+});
+test('declines connector if turnaround swept vehicle envelope is occupied',()=>{
+  const exposed=connect(streets,bridge,clear,empty,WATER_H);
+  const terminal=exposed.points.at(-1);
+  const obstacle=(x,z)=>Math.hypot(x-(terminal[0]+3.52),z-terminal[1])<.25?{id:'corner'}:null;
+  assert.equal(connect(streets,bridge,clear,obstacle,WATER_H),null);
 });
 test('uses deck height only on bridge, street height after bridge and reverses',()=>{
   const route=connect(streets,bridge,clear,empty,WATER_H);
@@ -48,12 +58,28 @@ test('uses deck height only on bridge, street height after bridge and reverses',
   const onStreet=pose(actor,route.lengths[1]+4);
   assert.equal(onStreet.onBridge,false);
   assert.ok(Math.abs(onStreet.y-(STREET_Y+.07))<1e-8);
-  const forward=pose(actor,route.total-3),reverse=pose(actor,route.total+3);
-  assert.equal(reverse.onBridge,false);
-  assert.ok(Math.abs(Math.hypot(forward.x-reverse.x,forward.z-reverse.z)-2.14)<1e-8,
-    'vehicle reverses into the opposite 1.07-unit offset lane');
-  assert.ok(Math.abs(Math.cos(forward.yaw-reverse.yaw)+1)<1e-8,
-    'heading should reverse for the return journey');
+  const rad=1.07,arc=Math.PI*rad,period=2*(route.total+arc);
+  const headingDelta=(p,q)=>Math.abs(Math.atan2(Math.sin(p.yaw-q.yaw),Math.cos(p.yaw-q.yaw)));
+  for(const boundary of [route.total,route.total+arc,2*route.total+arc,period]){
+    const prev=pose(actor,boundary-0.0001),next=pose(actor,boundary+0.0001);
+    assert.ok(Math.hypot(prev.x-next.x,prev.z-next.z)<0.005,
+      'turn boundary must not teleport the car');
+    assert.ok(headingDelta(prev,next)<0.005,
+      'turn boundary must not snap heading');
+    assert.ok(Math.abs(prev.y-next.y)<0.005,'height must stay continuous');
+  }
+  for(let d=route.lengths[1]-5;d<=route.lengths[1]+5;d+=.2){
+    const a=pose(actor,d),b=pose(actor,d+.01);
+    assert.ok(Math.hypot(a.x-b.x,a.z-b.z)<.025,
+      'corner lane offset must remain continuous');
+    assert.ok(headingDelta(a,b)<.05,'bridgehead corner yaw must be blended');
+  }
+  const endTurn=pose(actor,route.total+arc/2);
+  assert.equal(endTurn.turning,true);
+  assert.equal(endTurn.onBridge,false);
+  const startTurn=pose(actor,2*route.total+arc+arc/2);
+  assert.equal(startTurn.turning,true);
+  assert.equal(startTurn.onBridge,true);
 });
 test('traffic visibility uses per-pose bridge exemption only',()=>{
   assert.match(html,/!\(actor\.bridgehead&&pose\.onBridge\)/);
