@@ -6914,6 +6914,26 @@ const CENTRAL_PARK_SITES=[
         box(doorX+ox,floor+1.13,south-.08,.09,2.31,.075,ivory);
       box(doorX,floor+2.30,south-.09,1.39,.105,.092,ivory);
       box(doorX+.39,floor+1.05,south-.085,.083,.075,.083,[.74,.66,.44]);
+      // The two near-pier lodges have a largely blank entry-facing wall
+      // at low flight distance. Add original weathered timber sash and deep
+      // shadow reveals, not downloaded window decals. Keep panes separated
+      // from the doorway and fully beneath the established wall-top.
+      // These are surface details, not structural wall cut-outs.
+      if(closeDetail){
+        const sash=[.70,.69,.61],reveal=[.10,.15,.16],pane=[.17,.31,.33];
+        for(const fraction of [-.31,.35]){
+          const wx=x+w*fraction,wy=floor+2.18;
+          // Rebate sits behind the external frame, but outside cladding.
+          box(wx,wy,south+.012,1.27,1.14,.035,reveal);
+          box(wx,wy,south-.015,1.10,1.01,.025,pane);
+          for(const side of [-1,1]){
+            box(wx+side*.655,wy,south-.085,.105,1.32,.12,sash);
+            box(wx,wy+side*.645,south-.085,1.41,.095,.12,sash);
+          }
+          box(wx,wy,south-.077,.055,1.13,.085,sash);
+          box(wx,wy-.68,south-.15,1.48,.105,.24,[.46,.39,.29]);
+        }
+      }
       // A porch may extend from the house only where its OWN footprint has
       // surveyed dry ground; support posts terminate at terrain height.
       const porchZ=z-l/2-1.10;

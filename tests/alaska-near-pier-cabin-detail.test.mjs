@@ -38,8 +38,8 @@ test('exactly two cabins receive actual timber geometry without moving obstacles
   assert.equal(rich.obstacles.filter(o=>o.name==='harbor building').length,6);
   assert.equal(rich.beams.length-base.beams.length,8,
     'two cabins gain two gable ends with paired projecting roof bars');
-  assert.equal(rich.boxes.length-base.boxes.length,30,
-    'two dry porches gain four louver bars, rails and deck seams each');
+  assert.equal(rich.boxes.length-base.boxes.length,62,
+    'only two close cabins gain entry windows, louvers and dry-porch joinery');
   assert.ok(rich.boxes.every(b=>[b.x,b.y,b.z,b.w,b.h,b.d].every(Number.isFinite)));
   assert.ok(rich.boxes.every(b=>b.w>0&&b.h>0&&b.d>0));
 });
@@ -50,11 +50,33 @@ test('new porch joinery is absent when surveyed shoreline makes deck unsafe',()=
   assert.deepEqual(rich.obstacles,base.obstacles);
   assert.equal(rich.beams.length-base.beams.length,8);
   // Even when a porch is blocked, eaves/vents remain on dry cabins.
-  assert.ok(rich.boxes.length-base.boxes.length<=30);
+  assert.ok(rich.boxes.length-base.boxes.length<=62);
 });
 
 test('compatibility and other maps retain existing lifecycle guards',()=>{
   assert.match(source,/if\(selectedMap\.alaska && !graphicsCompat && smoothScenery\(\)\)/);
   assert.match(source,/if \(!selectedMap\.alaska\) return;/);
   assert.match(source,/disposeSceneMesh\(alaskaHarbor\)/);
+});
+
+test('only two near-pier cabin entry elevations get 3D glazed sash clear of doors',()=>{
+  const rich=render(current),base=render(minimal);
+  const pane=b=>b.color?.length===3 &&
+    b.color[0]===.17&&b.color[1]===.31&&b.color[2]===.33;
+  const windows=rich.boxes.filter(pane);
+  assert.equal(base.boxes.filter(pane).length,0,'distant huts keep original flat budget');
+  assert.equal(windows.length,4,'two windows on each of the two near-pier cabins');
+  const cabins=rich.obstacles.filter(o=>o.name==='harbor building');
+  for(const glass of windows){
+    const house=cabins.find(h=>
+      Math.abs(glass.x-h.x)<h.halfX&&
+      glass.z<h.z-h.halfZ&&glass.z>h.z-h.halfZ-.30);
+    assert.ok(house,'every entry-facing pane must sit on a cabin south facade');
+    const doorX=house.x+house.halfX*.24;
+    assert.ok(Math.abs(glass.x-doorX)>(1.48+1.39)*.5,
+      'window sash must not overlap the existing front door');
+    assert.ok(glass.y>house.y+1.5 && glass.y<house.top-1,
+      'window band stays in the existing wall below pitched gable');
+    assert.equal(glass.d,.025,'pane has explicit shallow depth behind sash');
+  }
 });
