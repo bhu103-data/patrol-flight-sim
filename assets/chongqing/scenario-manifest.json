@@ -1,0 +1,86 @@
+{
+  "schema": "patrol.chongqing.scenario-assets.v1",
+  "status": "AWAITING_REVIEWED_SCENARIO_GLB_EXPORTS",
+  "browserMode": "preview-only",
+  "maxAssetBytes": 8388608,
+  "maxTriangles": 25000,
+  "note": "These entries are NOT downloaded/generated; Scenario MCP is local to the user's Blender session. Keep disabled until a validated model and redistribution license exist.",
+  "entries": [
+    {
+      "id": "hongyadong",
+      "name": "洪崖洞",
+      "enabled": false,
+      "file": "./assets/chongqing/scenario/hongyadong.glb",
+      "anchor": [
+        155,
+        0,
+        145
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "license": "",
+      "prompt": "Chongqing Hongyadong eleven-level riverside timber stilt-house complex; curved dark-tile Chinese roofs, interlocking carved wood balcony corridors, realistic warm shop interiors, layered stone footings and hillside access road. Architectural reference accuracy prioritized; no fantasy pagoda blocks or copyrighted signs."
+    },
+    {
+      "id": "qiansimen",
+      "name": "千厮门大桥",
+      "enabled": false,
+      "file": "./assets/chongqing/scenario/qiansimen.glb",
+      "anchor": [
+        40,
+        0,
+        0
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "license": "",
+      "prompt": "Qiansimen Jialing River Bridge, Chongqing: distinctive single shuttle-shaped cable-stayed pylon, red steel main deck truss, roadway on upper tier and urban rail below, taut cable fan, accurately proportioned piers and supports, realistic metal/concrete PBR materials."
+    },
+    {
+      "id": "raffles",
+      "name": "朝天门来福士",
+      "enabled": false,
+      "file": "./assets/chongqing/scenario/raffles.glb",
+      "anchor": [
+        -355,
+        0,
+        176
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "license": "",
+      "prompt": "Raffles City Chongqing Chaotianmen: eight sail-shaped glass towers and elevated horizontal Crystal skybridge; eight individually curved slender profiles, realistic facade module mullions, steel and pale concrete podium, accurate urban silhouette and no generic block towers."
+    },
+    {
+      "id": "liziba",
+      "name": "李子坝站",
+      "enabled": false,
+      "file": "./assets/chongqing/scenario/liziba.glb",
+      "anchor": [
+        -121,
+        0,
+        -254
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "license": "",
+      "prompt": "Liziba Chongqing Line 2 urban straddle-beam monorail station occupying middle floors of residential block; genuine facade balconies AC compressors windows, concrete monorail guideway, station glass, realistic compact rail car and surrounding steep green hillside."
+    }
+  ]
+}
