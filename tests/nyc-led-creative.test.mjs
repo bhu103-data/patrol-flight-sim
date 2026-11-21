@@ -25,6 +25,14 @@ test('campaign identity is never silently reused within a long city tour',()=>{
     assert.notEqual(campaigns[i].theme,campaigns[i-1].theme);
 });
 
+test('old browsers with large creative histories never produce a negative theme',()=>{
+  for(const serial of [200000000,2147483647,4294967295,9007199254740990]){
+    const campaign=campaignDetails(serial,0);
+    assert.ok(Number.isInteger(campaign.theme)&&campaign.theme>=0&&campaign.theme<16);
+    assert.ok(campaign.headline&&campaign.strapline,'copy exists at high serial');
+  }
+});
+
 test('real WebGL atlas artwork contains original advert copy, not debug labels',()=>{
   const texts=[];
   const gradient=()=>({addColorStop(){}});
