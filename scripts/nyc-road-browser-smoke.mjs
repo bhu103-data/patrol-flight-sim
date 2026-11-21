@@ -95,17 +95,29 @@ const screenshots=[],pixels={},captureTimings={},controlPixels={};
 // Actual requestAnimationFrame intervals in Chromium SwiftShader, not PNG
 // capture latency. Use these as diagnostic frame pacing, NOT production FPS.
 const framePacing={};
-async function sampleFramePacing(label,frames=45){
+async function sampleFramePacing(label,frames=24){
+ // SwiftShader can render much more slowly than hardware. Bound diagnostic
+ // sampling so a zero-rAF tab cannot stall the entire NYC visual regression.
  const v=await page.evaluate(async count=>{
-  const durations=[];let last=null;
+  const durations=[];let last=null,done=false;
   await new Promise(resolve=>{
-   const tick=t=>{if(last!==null)durations.push(t-last);last=t;
-    if(durations.length>=count)resolve();else requestAnimationFrame(tick)};
+   const timeout=setTimeout(()=>{done=true;resolve()},12000);
+   const tick=t=>{
+    if(done)return;
+    if(last!==null)durations.push(t-last);
+    last=t;
+    if(durations.length>=count){
+     done=true;clearTimeout(timeout);resolve();
+    }else requestAnimationFrame(tick);
+   };
    requestAnimationFrame(tick);
   });
+  if(!durations.length)return {frames:0,complete:false,available:false,
+    reason:'No rAF intervals within bounded SwiftShader sample'};
   durations.sort((a,b)=>a-b);
   const at=p=>durations[Math.min(durations.length-1,Math.floor(p*(durations.length-1)))];
-  return {frames:durations.length,medianFrameMs:at(.5),p95FrameMs:at(.95),
+  return {frames:durations.length,complete:durations.length>=count,
+    available:true,medianFrameMs:at(.5),p95FrameMs:at(.95),
     minFrameMs:durations[0],maxFrameMs:durations.at(-1)};
  },frames);
  framePacing[label]=v;
