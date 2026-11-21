@@ -8975,7 +8975,12 @@ const CENTRAL_PARK_SITES=[
     const stone=[[.47,.37,.29],[.43,.34,.27],[.38,.31,.26],
       [.52,.41,.32],[.46,.36,.28]];
     let triangles=0;
-    const face=(a,b,c,color)=>{addTri(a,b,c,color);triangles++;};
+    const face=(a,b,c,color)=>{
+      // Correct both 2D source and fallback winding without mesh duplication.
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      addTri(a,normalY<0?c:b,normalY<0?b:c,color);
+      triangles++;
+    };
     // Combine non-repeating long ridges, secondary crests and smaller
     // weathered outcrops; avoid the former five-sample sawtooth skyline.
     const ridgeHeight=(i,side)=>{
@@ -8986,7 +8991,7 @@ const CENTRAL_PARK_SITES=[
         // so only the *shape* of source-derived relative relief is mapped
         // to distant display geometry (not a 1:1 elevation model).
         const relative=data[side<0?'west':'east'][i]-data.center[i];
-        return Math.max(12,Math.min(160,relative*.23));
+        return Math.max(12,Math.min(160,relative*(side<0?.14:.23)));
       }
       const phase=side===1?.35:1.47;
       return Math.max(28,61+17*Math.sin(i*.17+phase)+
@@ -9012,9 +9017,11 @@ const CENTRAL_PARK_SITES=[
             // Blend the first three source columns into the existing
             // desert grade. This is a *display seam* adaptation, not an
             // alteration to the measured USGS elevations in the asset.
-            const foothillBlend=Math.min(1,j/3);
+            const foothillBlend=Math.max(0,Math.min(1,j/3,(cols-1-j)/2));
+            // West-scale protects source relief from the 160-unit flat cap.
+            const scale=side<0?.14:.23;
             const y=sampleTerrainHeight(x,z)+
-              Math.max(0,Math.min(160,relief*.23))*foothillBlend;
+              Math.max(0,Math.min(160,relief*scale))*foothillBlend;
             return [x,y,z];
           });
         });
@@ -9040,8 +9047,9 @@ const CENTRAL_PARK_SITES=[
             const x=side*depth;
             return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
           };
-          return [point(686,.018),point(720,.25),point(754,.59),
-            point(811,1),point(847,.12)];
+          // Keep procedural fallback terrain skirts grounded as well.
+          return [point(686,0),point(720,.25),point(754,.59),
+            point(811,1),point(847,0)];
         };
         const a=profile(z,h0),b=profile(zn,h1);
         for(let band=0;band<4;band++){

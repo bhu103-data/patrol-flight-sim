@@ -65,3 +65,12 @@ Central QA must compare the same four settings against baseline `6d50bfd` and in
 - West longitude samples run from `-115.305°` towards `-115.391°`; east from `-115.045°` towards `-114.968°`; latitude samples span `36.035°N` to `36.245°N`, with 49 rows. Elevation values are stored as little-endian unsigned 16-bit **decimeters** with Base64 encoding. These 882 source pixels are original USGS 3DEP samples, not interpolated from the 1D maxima/median samples.
 - The gameplay build maps this reduced raster into **1,536 terrain triangles**, retains original Vegas city/roads/landmarks and flight collision rules, and continues to use a safe fallback if the gridded file fails strict checks. No material/texture download is introduced.
 - This is a **genuine georeferenced, resampled and spatially compressed source-driven terrain replacement for the distant mountain wings**; it is NOT a full-native-resolution 3DEP triangulated city ground, and the chosen 256×128 service export should not be described as 1-meter DEM resolution. Collisions and flyable ground are not 1:1 GIS matched.
+
+## Stacked #108: USGS 2D normals, terrain skirts, six cameras and native Chrome
+- The 2D 49x9 USGS sample grid has **1,536 mountain triangles** plus 18 road triangles, while the fully procedural fallback has **768 + 18**. Distant visual terrain only.
+- Both measured and fallback mountain wings now enforce upward-facing triangle normals. Both edge columns at |x|=686 and |x|=847 are attached to the existing terrain sampler, preventing floating skirts.
+- West visual relief uses 0.14 world units per relative source meter versus east 0.23, avoiding the previous flat 160-unit height clipping. Original EPSG:4326 source values are unchanged.
+- Two additional real scenic cameras (Bellagio west, Venetian east) complement four street/day/night captures. The same script records six PNG images from untouched 6d50bfd and the candidate.
+- Default CI is SwiftShader compatibility mode; native Windows Chrome is an explicit local opt-in: PATROL_BROWSER_CHANNEL=chrome, PATROL_GRAPHICS_PROFILE=default, optional PATROL_HEADFUL=1. Logs attempt to record the GL renderer. Browser RAF interval is **not GPU time**.
+- Independent USGS EPQS 24-point evidence is read-only; it is not another 3D mesh. Collisions, other maps, roads and controls remain outside this patch.
+- This is still a compressed game-space representation, **not 1:1 site survey / authentic building photos and models**, and hardware 30 FPS remains unverified.
