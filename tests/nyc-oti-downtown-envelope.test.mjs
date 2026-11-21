@@ -49,3 +49,28 @@ test('no new lot files, collision rules, roads or flying controls',()=>{
  assert.match(html,/official-financial-footprints\.json/);
  assert.match(html,/officialLotAt\(east,north\)\|\|cityParcels\.get/);
 });
+
+test('solid cornices stay within the official-footprint batch budget and face outward',()=>{
+ let totalQuads=0;
+ for(const lot of source.footprints)totalQuads+=build(lot).quads.length;
+ assert.equal(totalQuads,8832,'100-footprint pilot mesh quad count');
+ assert.ok(totalQuads<9000,'original OTI facade batch budget');
+ const outline=[[-105,-455],[-93,-455],[-93,-447],[-105,-447]];
+ // Both valid NYC polygon winding directions must keep cap normals correct.
+ for(const [id,poly] of [[300,outline],[303,[...outline].reverse()]]){
+  const {stats,quads}=build([id,-100,-450,12,8,20,poly]);
+  const roofY=14.58+20;
+  const atLevel=height=>quads.filter(q=>q[5]===9&&
+    q.slice(0,4).every(p=>Math.abs(p[1]-height)<1e-7));
+  const normalY=q=>{
+    const [a,b,c]=q;
+    return (b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+  };
+  const tops=atLevel(roofY-.19),bottoms=atLevel(roofY-.30);
+  assert.ok(stats.corniceBands>0);
+  assert.equal(tops.length,stats.corniceBands);
+  assert.equal(bottoms.length,stats.corniceBands);
+  assert.ok(tops.every(q=>normalY(q)>0),'top cap faces sky');
+  assert.ok(bottoms.every(q=>normalY(q)<0),'bottom cap faces ground');
+ }
+});
