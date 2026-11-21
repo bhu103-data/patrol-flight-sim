@@ -1,0 +1,87 @@
+name: Generate original NYC One World Trade Center GLB
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/build_trade_original.py'
+      - '.github/workflows/generate-trade-asset.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-original-trade-asset
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout the current primary branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Python dependencies for offline original asset creation
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.2.6 pillow==11.3.0 trimesh==4.11.1
+      - name: Bake high-resolution original One WTC with embedded glass atlas
+        run: |
+          python tools/build_trade_original.py
+      - name: Validate file size and GLB structure before committing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, struct
+          p=Path('assets/nyc/scenario/trade.glb')
+          raw=p.read_bytes()
+          assert 10000<len(raw)<8388608,len(raw)
+          assert raw[:4]==b'glTF' and struct.unpack_from('<I',raw,4)[0]==2
+          assert struct.unpack_from('<I',raw,8)[0]==len(raw)
+          length=struct.unpack_from('<I',raw,12)[0]
+          assert raw[16:20]==b'JSON'
+          doc=json.loads(raw[20:20+length])
+          count=0
+          textured=0
+          for m in doc['meshes']:
+              for primitive in m['primitives']:
+                  attrs=primitive['attributes']
+                  assert 'POSITION' in attrs and 'NORMAL' in attrs
+                  accessor=doc['accessors'][primitive['indices']]
+                  count+=accessor['count']//3
+                  mat=doc.get('materials',[])
+                  if 'TEXCOORD_0' in attrs: textured+=1
+          assert 600<=count<=25000,count
+          assert textured>=2
+          assert len(doc.get('textures',[]))==1
+          assert len(doc.get('images',[]))==1
+          assert doc['images'][0]['mimeType']=='image/png'
+          assert 'bufferView' in doc['images'][0]
+          audit=json.loads(Path('assets/nyc/scenario/trade-provenance.json').read_text())
+          assert audit['triangles']==count
+          assert audit['generation'].startswith('Original procedural')
+          print('VERIFIED original GLB:',count,'triangles,',len(raw),'bytes, 1 embedded atlas')
+          PY
+      - name: Commit only new GLB and provenance to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/nyc/scenario/trade.glb assets/nyc/scenario/trade-provenance.json
+          if git diff --cached --quiet; then
+            echo "Already built at this revision"
+            exit 0
+          fi
+          git commit -m "assets(nyc): bake original detailed One WTC GLB with atlas and real normals"
+          for try in 1 2 3 4; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              echo "One WTC GLB committed to main"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Upload blocked by concurrent updates or protected branch" >&2
+          exit 1
