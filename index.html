@@ -6001,11 +6001,137 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
+
+  // PATROL_DUMBO_CORNER_WAREHOUSE_V1 — not surveyed GIS geometry.
+  // Source-inspired 30 Washington (round arches) and 50 Bridge (soap works).
+  function buildDumboCornerWarehouseFacade(addQuad,box,beam,site){
+    const {x,y,z,w,d,h,variant}=site;
+    const brick=variant===0?[.55,.33,.27]:[.48,.29,.26];
+    const stone=variant===0?[.68,.62,.53]:[.63,.58,.51];
+    const mortar=[.32,.29,.27],steel=[.22,.26,.28];
+    const glass=variant===0?[.17,.25,.28]:[.15,.23,.27];
+    const stories=Math.max(5,Math.min(7,Math.round(h/2.75)));
+    const spacing=h/stories;
+    let openings=0,arcs=0,quads=0;
+    for(const axis of ['x','z'])for(const side of [-1,1]){
+      const span=axis==='x'?w:d,half=span*.5,edge=.12;
+      const bays=Math.max(axis==='x'?2:3,
+        Math.min(axis==='x'?5:7,Math.floor((span-.3)/2.45)));
+      const pitch=(span-edge*2)/bays;
+      const at=(u,v,depth=0)=>axis==='x'
+        ?[x+u,y+v,z+side*(d*.5+depth)]
+        :[x+side*(w*.5+depth),y+v,z+u];
+      const shape=(u0,u1,a0,a1,b0,b1,color,tag=12,depth=0)=>{
+        const p=at(u0,a0,depth),q=at(u1,a1,depth);
+        const r=at(u1,b1,depth),t=at(u0,b0,depth);
+        if((axis==='x')===(side>0))addQuad(p,q,r,t,color,tag);
+        else addQuad(t,r,q,p,color,tag);
+        quads++;
+      };
+      const rect=(u0,u1,v0,v1,color,tag=12,depth=0)=>{
+        if(u1-u0>1e-5&&v1-v0>1e-5)
+          shape(u0,u1,v0,v0,v1,v1,color,tag,depth);
+      };
+      rect(-half,-half+edge,0,h,brick);
+      rect(half-edge,half,0,h,brick);
+      for(let floor=0;floor<stories;floor++){
+        const y0=floor*spacing,y1=Math.min(h,(floor+1)*spacing);
+        const sill=y0+(floor===0?.16:.34);
+        const crown=y1-(floor===0?.23:.33);
+        for(let bay=0;bay<bays;bay++){
+          const c0=-half+edge+bay*pitch,c1=c0+pitch;
+          const loading=floor===0&&(
+            (variant===0&&axis==='z'&&side===1&&bay===1)||
+            (variant===1&&axis==='x'&&side===1&&bay===Math.floor(bays/2)));
+          const width=pitch*(loading?.78:variant===0?.66:.62);
+          const left=(c0+c1-width)*.5,right=left+width;
+          const rise=floor===0?.09:variant===0?.32:.16;
+          const arc=u=>{
+            const t=(u-(left+right)*.5)/(width*.5);
+            return crown-rise*t*t;
+          };
+          rect(c0,left,y0,y1,brick);rect(right,c1,y0,y1,brick);
+          const bottom=loading?y0+.10:sill;
+          rect(left,right,y0,bottom,brick);
+          const N=floor===0?1:4;
+          for(let k=0;k<N;k++){
+            const u0=left+width*k/N,u1=left+width*(k+1)/N;
+            const a=arc(u0),b=arc(u1);
+            shape(u0,u1,a,b,y1,y1,brick,12,0);
+            shape(u0,u1,bottom,bottom,a-.04,b-.04,
+              loading?[.12,.15,.17]:glass,13,-.13);
+            if(floor>0){
+              shape(u0,u1,a-.04,b-.04,a,b,mortar,12,-.04);
+              arcs++;
+            }
+          }
+          // Four actual reveal surfaces around the cutout, glass is inset.
+          for(const u of [left,right]){
+            const a=at(u,bottom),b=at(u,bottom,-.13);
+            const c=at(u,crown-rise,-.13),t=at(u,crown-rise);
+            addQuad(a,b,c,t,mortar,12);quads++;
+          }
+          if(loading){
+            rect(left+.05,right-.05,bottom+.13,bottom+.20,steel,12,-.06);
+            for(let k=1;k<3;k++){
+              const v=bottom+(crown-bottom)*k/4;
+              rect(left+.05,right-.05,v,v+.03,steel,12,-.06);
+            }
+          }else{
+            rect(left-.03,right+.03,sill-.065,sill+.027,stone,12,.048);
+            const mid=(left+right)*.5;
+            rect(mid-.022,mid+.022,bottom+.04,crown-rise*.19,
+              steel,12,-.06);
+            const v=bottom+(crown-bottom)*.52;
+            rect(left+.025,right-.025,v,v+.032,steel,12,-.06);
+          }
+          openings++;
+        }
+        // Course at floor slab height, with restrained stone cap/sill.
+        rect(-half+edge,half-edge,y1-.055,y1,stone,12,.038);
+      }
+      rect(-half,half,h-.27,h-.18,mortar,12,.065);
+      rect(-half,half,h-.18,h-.055,stone,12,.083);
+    }
+    // Roof parapet + small anchored bulkhead, no new collision footprint.
+    for(const side of [-1,1]){
+      box(x,y+h-.18,z+side*(d*.5-.17),w-.24,.26,.16,stone,12);
+      box(x+side*(w*.5-.17),y+h-.18,z,.16,.26,d-.24,stone,12);
+    }
+    const bw=Math.min(1.7,w*.25),bd=Math.min(2.1,d*.21);
+    box(x-w*.20,y+h+.23,z+d*.1,bw,.46,bd,brick,12);
+    box(x-w*.20,y+h+.50,z+d*.1,bw+.08,.08,bd+.08,steel,12);
+    for(const u of [-w*.29,w*.29])for(const level of [2,4]){
+      const yy=y+Math.min(h-.7,level*spacing-.4);
+      if(yy>y+.4)beam([x+u-.12,yy,z+d*.5+.052],
+        [x+u+.12,yy,z+d*.5+.052],.034,steel);
+    }
+    return {variant,stories,openings,arcs,quads};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
+    // Reuse only two already road-cleared, accepted procedural parcels.
+    // Stable chosen lot identity survives rebuild/demolition.
+    const warehouseStyles=new Map();
+    if(!local && parcels.length>=32){
+      const eligible=parcels.filter(p=>!p[7] &&
+        p[0]>205&&p[0]<435&&p[1]>-415&&p[1]<-195 &&
+        p[2]>=7.2&&p[3]>=10&&p[4]>=14&&p[4]<=23 &&
+        nycDetailBand(p[0],p[1])===3);
+      for(const [kind,[ax,az]] of [[0,[285,-330]],[1,[372,-285]]]){
+        let nearest=null,d2=85*85;
+        for(const p of eligible){
+          const value=(p[0]-ax)**2+(p[1]-az)**2;
+          if(!warehouseStyles.has(p)&&value<d2){nearest=p;d2=value;}
+        }
+        if(nearest)warehouseStyles.set(nearest,kind);
+      }
+    }
     for(const lot of parcels){
       const [east,north,w,d,h,tone,destroyed]=lot;
+      const cornerWarehouse=warehouseStyles.has(lot);
       // Local collapsing rubble must bypass regional LOD; it is positioned
       // later by a model transform and does not live at world origin.
       const detailBand=local?2:nycDetailBand(east,north);
@@ -6135,11 +6261,12 @@ const CENTRAL_PARK_SITES=[
         addModelBox(addQuad,x,y+h*(1+k)*.5,z,w*(.68+(archType%3)*.05),
           h*(1-k),d*(.69+(archType%4)*.045),material);
       }else{
-        addModelBox(addQuad,x,y+h/2,z,w,h,d,material,
+        addModelBox(addQuad,x,y+h/2,z,
+          cornerWarehouse?w-.38:w,h,cornerWarehouse?d-.38:d,material,
           bridgeheadBrooklyn?12:0);
       }
-      addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,
-        material.map(value=>value*0.69));
+      if(!cornerWarehouse)addModelBox(addQuad,x,y+0.77,z,
+        w+0.10,1.54,d+0.10,material.map(value=>value*0.69));
       // Roof coping follows the topmost crown, never the podium outline.
       addModelBox(addQuad,roofProfile.x,y+h-.16,z,
         roofProfile.w+.12,.29,roofProfile.d+.12,trim);
@@ -6176,7 +6303,7 @@ const CENTRAL_PARK_SITES=[
           y+h+.21,z+roofProfile.d*.20,
           roofProfile.w*.19,.42,roofProfile.d*.18,[.44,.46,.46]);
       }
-      if(detailBand>=2 && tone>0.52){
+      if(!cornerWarehouse && detailBand>=2 && tone>0.52){
         // Vertical front piers terminate at the first setback; otherwise
         // they hang in midair beside the narrowed upper floors.
         const lowerFraction=[.57,.68,.77,.63,.73][archType%5];
@@ -6189,7 +6316,7 @@ const CENTRAL_PARK_SITES=[
               z+side*(d/2+.022),.38,height,.13,trim);
           }
         }
-      } else if(detailBand>=2 && h>7){
+      } else if(!cornerWarehouse && detailBand>=2 && h>7){
         for(let level=3.7;level<h-.6;level+=tone>.24?3.5:5.3){
           const tier=facadeTier(level);
           addModelBox(addQuad,tier.x,y+level,z,
@@ -6200,7 +6327,7 @@ const CENTRAL_PARK_SITES=[
       // DUMBO / Brooklyn Bridge bounded architectural relief.
       // Batched into the existing building mesh; small offsets are well inside
       // the reserved sidewalk margin. This is stylized game geometry, not GIS.
-      if(bridgeheadBrooklyn && !destroyed && h>9){
+      if(bridgeheadBrooklyn && !destroyed && h>9 && !cornerWarehouse){
         const mortar=material.map(v=>Math.max(.10,v*.75));
         const fireSteel=[.22,.26,.28],stepSteel=[.35,.38,.39];
         for(const side of [-1,1]){
@@ -6263,7 +6390,7 @@ const CENTRAL_PARK_SITES=[
       // cartoon tower. Every curved face shares the existing city mesh.
       // Fit entirely inside an established Brooklyn building footprint.
       if(bridgeheadBrooklyn && !destroyed && detailBand===3 &&
-         h>12 && w>7 && d>10 && archType%5===2){
+         h>12 && w>7 && d>10 && archType%5===2 && !cornerWarehouse){
         const tx=x+w*.16,tz=z+d*.12,roofY=y+h;
         const n=16,r=.76+(archType%3)*.055;
         const lower=roofY+1.13,upper=lower+1.43;
@@ -6290,6 +6417,11 @@ const CENTRAL_PARK_SITES=[
             [tx,roofY+.77,tz],.034,darkHoop);
         }
       }
+      if(cornerWarehouse && bridgeheadBrooklyn && detailBand===3)
+        buildDumboCornerWarehouseFacade(addQuad,
+          (...args)=>addModelBox(addQuad,...args),
+          (a,b,r,color)=>addRideBeam(addQuad,a,b,r,color),
+          {x,y,z,w,d,h,variant:warehouseStyles.get(lot)});
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
@@ -6300,7 +6432,7 @@ const CENTRAL_PARK_SITES=[
       // The official FID-protected buildings already took their own path.
       const timesShortStorefront=!local && h>4.2 && h<=7.5 &&
         east>-45 && east<65 && north>-100 && north<75;
-      if(!local && !destroyed && detailBand>=2 &&
+      if(!local && !destroyed && detailBand>=2 && !cornerWarehouse &&
          (h>7.5 || timesShortStorefront)){
         const steel=heroDowntown?[.26,.32,.37]:[.235,.27,.30];
         const stone=heroDowntown?
