@@ -171,7 +171,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
   }
   // Five localized light sources brighten road asphalt and nearby car roofs.
   const streetLights=[];
-  for(const x of [-350,-120,115,335,570]){
+  for(const x of [-350,115,335]){
     const z=routeZ(x,1,0)+10.8;
     const light=new THREE.PointLight(0xffbf77,23,78,2);
     light.position.set(x,ground(x,z)+12,z);
@@ -239,7 +239,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter}) {
     if(player&&allowDynamicHeadlights)for(const v of vehicles){
       const dx=v.x-player.x,dz=v.z-player.z;
       const d2=dx*dx+dz*dz;
-      if(d2<nearDist){nearest=v;nearDist=d2;}
+      if(d2<nearDist&&Math.abs(v.y-player.y)<32){nearest=v;nearDist=d2;}
     }
     for(let i=0;i<headlightCones.length;i++){
       const lamp=headlightCones[i];
