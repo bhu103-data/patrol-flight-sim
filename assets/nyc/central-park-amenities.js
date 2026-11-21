@@ -84,8 +84,9 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
       [x,hy+2.40,hz-4.05],.070,bronze);
   }
   if(quality==='high'){
-    // Longitudinal raised seams are geometrically separate roof details,
-    // rather than one large featureless triangular face.
+    // Seven seams per roof slope keep the batched scene strictly below
+    // its inherited 250-beam budget (high: 246, low: 166).
+    // Longitudinal raised seams create actual parallax on the roof faces.
     for(let i=0;i<7;i++){
       const z=hz-2.64+i*.88;
       for(const side of [-1,1])
