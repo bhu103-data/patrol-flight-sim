@@ -472,7 +472,7 @@
   ];
   const EAST_RIVER_BRIDGE = { x: 82, z: -342, halfLength:109,deck:24,halfWidth:4.2,ramp:62,towers:[-28,50] };
   const STREET_Y = 14.86;
-  const BROOKLYN_RAIL = { west:236,east:397,z:-275,radius:16,height:19.8 };
+  const BROOKLYN_RAIL = { west:236,east:397,z:-275,radius:16,height:19.8,enabled:false };
   const HARBOR_RUNWAY = { x: 354, z: -389, halfLength: 82, halfWidth: 8 };
   const CITY_EXPRESSWAY={
     name:'Brooklyn Waterfront Expressway',
@@ -1115,7 +1115,7 @@ const CENTRAL_PARK_SITES=[
         const inStreet=generatedCityRoadOverlap([x,z,width,length],5.85);
         const track=city.railway;
         const trackDistance=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
-        if(Math.abs(trackDistance-track.radius)<4+Math.hypot(width,length)*0.43) continue;
+        if(track?.enabled && Math.abs(trackDistance-track.radius)<4+Math.hypot(width,length)*0.43) continue;
         const runway=city.runway;
         if(inStreet || (Math.abs(x-runway.x)<runway.halfLength+width/2+5 &&
           Math.abs(z-runway.z)<runway.halfWidth+length/2+5)) continue;
@@ -1176,7 +1176,7 @@ const CENTRAL_PARK_SITES=[
             if(generatedCityRoadOverlap([x,z,width,length],5.85))continue;
             const track=city.railway;
             const dist=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
-            if(Math.abs(dist-track.radius)<4+Math.hypot(width,length)*.43)
+            if(track?.enabled && Math.abs(dist-track.radius)<4+Math.hypot(width,length)*.43)
               continue;
             const runway=city.runway;
             if(Math.abs(x-runway.x)<runway.halfLength+width/2+5 &&
@@ -4791,7 +4791,11 @@ const CENTRAL_PARK_SITES=[
         box(x,STREET_Y+3.53,z-side*0.15,0.17,0.15,0.06,[0.30,0.66,0.39]);
       }
     }
-    // An elevated train line on the Brooklyn side.
+    // The old elevated loop is fictional in present-day DUMBO. Preserve it
+    // as opt-in legacy scenery, but do not place a railway through a modern
+    // waterfront neighborhood by default (York St F station is underground).
+    if(BROOKLYN_RAIL.enabled){
+    // Legacy elevated railway scenery: not present in the realistic default.
     const metal = [0.32,0.35,0.37], rail = [0.57,0.60,0.61];
     const track=BROOKLYN_RAIL;
     const route=makeTrafficRoute(railwayPoints(track));
@@ -4819,6 +4823,7 @@ const CENTRAL_PARK_SITES=[
     for(const xx of [324,336,348])
       box(xx,track.height+1.70,platformZ,.27,3.30,.34,metal);
     box(336,track.height+3.30,platformZ,35,.40,2.10,metal);
+    }
   }
 
   function updateBridgeRails() {
@@ -4927,7 +4932,8 @@ const CENTRAL_PARK_SITES=[
         cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,
           route:seventh,offset:11+seventh.total*(j+.34)/10.3,
           pace:5.2+(j%4)*.45,livery:(j+Math.floor(j/3))%3});
-      cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
+      if(BROOKLYN_RAIL.enabled)
+        cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
       civilAirTraffic.push(
         {center:[18,-282],rx:250,rz:138,altitude:62,phase:0.2,pace:0.075,scale:2.15,livery:0},
         {center:[-112,-210],rx:185,rz:96,altitude:78,phase:2.5,pace:-0.057,scale:1.82,livery:1},
