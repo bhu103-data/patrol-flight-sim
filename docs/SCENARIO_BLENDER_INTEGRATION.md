@@ -79,3 +79,11 @@ Each GLB is limited to **8 MiB and 25,000 triangles**; the runtime currently sup
 - Test on the published https://bhu103-data.github.io/patrol-flight-sim/ using **Manhattan → Free Flight**, plus **Scenic Views** for the relevant landmark. Watch for scale, rotation, material color, shadowing, black-screen errors, memory use and FPS.
 - PATROL's map uses compressed fictional gameplay coordinates. GLB assets with a visually realistic form cannot make the whole NYC map physically **1:1** without independent geospatial data and a scale-system rebuild.
 - Brooklyn Bridge, ships and moving traffic need their own optional GLB placement/animation adapters before Scenario outputs can replace them. Do not mislabel building-asset support as full bridge/vehicle support.
+
+## Verify the import pipeline before enabling a model
+
+- [Real WebGL2 GLB texture smoke test](https://bhu103-data.github.io/patrol-flight-sim/tools/scenario_glb_selftest.html) generates a temporary triangle GLB with an original embedded PNG, uploads its UV atlas and samples a rendered pixel. A green square and `PASS` mean the production decoder actually displays the Base Color map in that browser. It separately verifies that external image URIs are rejected. The page does not require Blender, logins or cloud credits.
+- Run `node --test tests/scenario-glb.test.mjs` for the native loader's CI checks: textured quad, remote URI rejection, multi-atlas rejection and missing UV rejection. GitHub Actions automatically checks it for relevant asset changes.
+- An in-memory sample GLB **does not** prove an actual Scenario/Blender model is accurate or optimized. After exporting a landmark and enabling it explicitly, verify its real shape, UV seams, color space, correct collision alignment, lighting, memory and FPS in Manhattan.
+- If a new Pages file is temporarily 404 during rapid commits, inspect the **pages build and deployment** GitHub Actions runs; canceled builds do not serve newly committed files until a later successful deployment.
+
