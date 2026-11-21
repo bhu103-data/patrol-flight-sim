@@ -92,7 +92,10 @@ function riverDist(x,z){
 function ground(x,z) {
   const d=riverDist(x,z);
   if(d<0) return -13;
-  const terraces=Math.round(d/72)*2.1;
+  // Rounded ledges form a stepped mountain city without abrupt discontinuous ground jumps.
+  const tier=d/72,tierFrac=tier-Math.floor(tier);
+  const sm=tierFrac*tierFrac*(3-2*tierFrac);
+  const terraces=(Math.floor(tier)+sm)*2.1;
   const relief=3.4*Math.sin(x/105)*Math.cos(z/150)+2.2*Math.sin(x/39+z/57);
   return Math.max(8, 9+d*0.172+terraces+relief);
 }
@@ -100,7 +103,7 @@ function ground(x,z) {
 const worldGeometry=new THREE.BufferGeometry();
 const positions=[],colors=[],indexes=[],uvs=[];
 const color=new THREE.Color();
-const gx=128,gz=102;
+const gx=208,gz=148;
 for(let iz=0;iz<=gz;iz++){
   const z=-690+1380*iz/gz;
   for(let ix=0;ix<=gx;ix++){
@@ -348,12 +351,31 @@ for(let i=1;i<=3;i++){
   cylinderBetween(p,new THREE.Vector3(p.x,p.y-4,p.z),.4,M.rail);
 }
 
-// Small river boats, riverside lights and street trees.
+// River passenger boats: tapered curved hulls and glazed passenger cabins,
+// rather than simple rectangular white boxes.
+const boatPlan=new THREE.Shape();
+boatPlan.moveTo(-17,-5.3);boatPlan.lineTo(10.2,-5.3);
+boatPlan.quadraticCurveTo(18,-4.8,20,0);
+boatPlan.quadraticCurveTo(18,4.8,10.2,5.3);
+boatPlan.lineTo(-17,5.3);boatPlan.quadraticCurveTo(-20,0,-17,-5.3);
+const boatGeometry=new THREE.ExtrudeGeometry(boatPlan,{depth:3.3,steps:1,bevelEnabled:true,bevelThickness:.6,bevelSize:.5,bevelSegments:2,curveSegments:5});
+boatGeometry.rotateX(Math.PI/2);
+const deckMaterial=new THREE.MeshStandardMaterial({color:0x555f66,metalness:.48,roughness:.49});
 for(let i=0;i<6;i++){
-  const x=-800+i*280,z=riverCenter(x),y=0.6;
-  box(x,y,z,27,4.5,12,M.stone);
-  box(x,y+4.2,z,18,6.8,9,M.glass);
-  box(x,y+8.6,z,14,1.2,10,M.gold);
+  const x=-800+i*280,z=riverCenter(x),y=1.1;
+  const hull=new THREE.Mesh(boatGeometry,deckMaterial);
+  hull.position.set(x,y+1.9,z);scene.add(hull);
+  box(x-2,y+3.7,z,23,.55,8.4,M.stone);
+  box(x-2,y+6.4,z,20,4.4,7,M.glass);
+  box(x-2,y+8.9,z,21,.65,8.6,M.stone);
+  box(x+3,y+10,z,11,1.8,6,M.glass);
+  for(let w=0;w<7;w++){
+    const wx=x-11+w*3.1;
+    box(wx,y+6.9,z+3.58,2.0,2.1,.12,M.window);
+    box(wx,y+6.9,z-3.58,2.0,2.1,.12,M.window);
+  }
+  box(x-16,y+7,z,.4,5,.5,M.rail);
+  ball(x-16,y+9.5,z,.43,M.gold);
 }
 const treeGeo=new THREE.ConeGeometry(1,2.7,6);
 const trunkGeo=new THREE.CylinderGeometry(.22,.27,1,5);
@@ -406,12 +428,12 @@ applyQuality();
 
 // Stars are sparse to keep the city's orange glow dominant.
 const stars=[];
-for(let i=0;i<380;i++){
+for(let i=0;i<52;i++){
   const r=1400+rand()*1000,a=rand()*TAU,el=rand()*1.25+.2;
   stars.push(Math.cos(a)*Math.cos(el)*r,Math.sin(el)*r,Math.sin(a)*Math.cos(el)*r);
 }
 const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
-scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xc5dafa,size:2.4,sizeAttenuation:false})));
+scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0x8fa5b4,size:1.2,sizeAttenuation:false,transparent:true,opacity:.4})));
 
 // The pilot uses rounded anatomical proportions, tapered limbs and a small detailed helmet.
 // All shapes are original game geometry, not an unlicensed third-party character mesh.
