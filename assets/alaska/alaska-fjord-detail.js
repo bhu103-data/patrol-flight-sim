@@ -13,6 +13,9 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
+  // Surface 12 requests Alaska's PBR ice photo/normal/roughness shader.
+  const iceQuad=(a,b,c,d,color)=>addQuad(a,b,c,d,color,12);
+  const iceTri=(a,b,c,color)=>addTri(a,b,c,color,12);
   // Match the existing Glacier Head mesh in index.html. These cracks are a
   // surface-only detail pass; they must not alter sampled collision elevations.
   const cols=20,rows=17;
@@ -32,13 +35,13 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       const a=glacierPoint(col,r),b=glacierPoint(col+span,r+.21);
       const c=glacierPoint(col+span+.13,r+.21+width);
       const d=glacierPoint(col+.08,r+width);
-      const trench=[.045,.205,.285],inner=[.14,.39,.48];
-      addQuad(lift(a,.15),lift(b,.15),lift(c,.13),lift(d,.13),trench);
+      const trench=[.16,.33,.40],inner=[.25,.48,.57];
+      iceQuad(lift(a,.15),lift(b,.15),lift(c,.13),lift(d,.13),trench);
       // Asymmetric turquoise fracture wall and snow-rich windward lip.
-      addQuad(lift(d,.14),lift(c,.14),lift(c,.41),lift(d,.36),inner);
+      iceQuad(lift(d,.14),lift(c,.14),lift(c,.41),lift(d,.36),inner);
       const lip0=glacierPoint(col+.03,r+width+.045);
       const lip1=glacierPoint(col+span+.15,r+.21+width+.04);
-      addQuad(lift(d,.37),lift(c,.42),lift(lip1,.14),lift(lip0,.14),
+      iceQuad(lift(d,.37),lift(c,.42),lift(lip1,.14),lift(lip0,.14),
         [.73+.1*jitter,.88+.04*jitter,.92]);
       stats.crevasses++;
     }
@@ -59,20 +62,20 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const forward=.68+.84*hash(i*31+1);
     const zL=L[2]-forward,zR=R[2]-forward;
     const deepFracture=i%9===3;
-    const muted=deepFracture?[.11,.30,.36]:
-      [.26+.065*j,.49+.065*j,.57+.055*j];
+    const muted=deepFracture?[.20,.38,.46]:
+      [.32+.065*j,.54+.065*j,.63+.055*j];
     const light=[.49+.075*j,.68+.085*j,.76+.055*j];
     const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
     const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
           c=[R[0],topR,zR],d=[L[0],topL,zL];
-    addQuad(a,b,c,d,muted);
+    iceQuad(a,b,c,d,muted);
     // Not every section has a rooftop. Rare undercut, broad sloping crowns
     // create realistic ice mass shapes instead of same-height vertical teeth.
     if(i%4===1 || i%9===7){
       const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.28+.52*j,
         (zL+zR)*.5+1.45+.8*q];
-      addTri(d,c,roof,light);
-      if(i%3===1)addTri([L[0],topL,zL+1.0],d,roof,undercut);
+      iceTri(d,c,roof,light);
+      if(i%3===1)iceTri([L[0],topL,zL+1.0],d,roof,undercut);
     }
     // Subtle sediment/ice layering in non-uniform elevation bands.
     // A few sections have a third band; most have only two.
@@ -83,14 +86,14 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       const hL=waterY-.23+(topL-waterY+.23)*t+jitter;
       const hR=waterY-.23+(topR-waterY+.23)*t-jitter*.53;
       const color=band===1?[.28,.45,.51]:band===2?[.38,.56,.61]:[.50,.68,.71];
-      addQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
+      iceQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
         [R[0],hR+.06,zR-.067],[L[0],hL+.06,zL-.067],color);
       stats.iceStrata++;
     }
     if(i%6===2){
       const width=Math.max(.14,(R[0]-L[0])*.23);
       const xc=L[0]+(R[0]-L[0])*(.25+.33*q),z=(zL+zR)*.5-.10;
-      addQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
+      iceQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
         [xc+width,Math.min(topL,topR)*.85,z],
         [xc,Math.min(topL,topR)*.96,z],[.075,.20,.27]);
     }
@@ -159,7 +162,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   // cloned cuboids or unique textures. Geographically sampled ground altitude
   // and slope determine placement, rather than repeating six tree clusters.
   // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
-  stats.conifers=0;
+  stats.conifers=0;stats.foliageWhorls=0;stats.snowBoughs=0;
   // Jittered shoreline corridors put visible forest where the pilot actually
   // sees the Alaska landscape, while preserving a strict single-batch cap.
   for(let i=0;i<4550 && stats.conifers<940;i++){
@@ -189,42 +192,57 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const trunk=[.25+.07*seed,.22+.05*seed,.18+.035*seed];
     const dark=[.065+.045*seed,.14+.065*seed,.11+.034*seed];
     const bright=[.11+.065*seed,.23+.085*seed,.16+.040*seed];
-    const trunkBase=[x,y+.1,z],trunkTop=[x,y+treeH*.55,z],stem=.075+.028*seed;
+    const stem=.064+.033*seed;
     addQuad([x-stem,y,z],[x+stem,y,z],
-      [x+stem,y+treeH*.57,z],[x-stem,y+treeH*.57,z],trunk);
+      [x+stem,y+treeH*.87,z],[x-stem,y+treeH*.87,z],trunk);
     addQuad([x,y,z-stem],[x,y,z+stem],
-      [x,y+treeH*.57,z+stem],[x,y+treeH*.57,z-stem],trunk);
-    for(let layer=0;layer<3;layer++){
-      const start=y+treeH*(.11+.175*layer),tip=start+treeH*(.45-.038*layer);
-      const radius=treeH*(.20-.033*layer),phase=seed*6.28+layer*.36;
+      [x,y+treeH*.87,z+stem],[x,y+treeH*.87,z-stem],trunk);
+    // Ragged layered branches, not three stacked identical conical crowns.
+    // 5-6 irregular whorls and 7 uneven needles per whorl: ~40 tiny faces.
+    // The two shades and sparse snow catches add volume at close distances.
+    const whorlCount=5+(i%3===0?1:0);
+    for(let layer=0;layer<whorlCount;layer++){
+      const t=layer/(whorlCount-1);
+      const start=y+treeH*(.09+.70*t);
+      const tip=y+treeH*(.40+.58*t);
+      const radius=treeH*.24*Math.pow(1.0-t,.86)*(1.0+.10*Math.sin(layer*1.73+seed*5));
+      const phase=seed*6.28+layer*.48;
       const tone=layer%2===0?dark:bright;
-      for(let j=0;j<6;j++){
-        const a=phase+j*Math.PI/3,b=a+Math.PI/3;
-        const r1=radius*(.84+.26*hash(i*11+j*7+layer*9));
-        const r2=radius*(.83+.27*hash(i*19+j*13+layer*17));
-        const faceTint=1-(j%3)*.055;
-        const iceDust=winter*(j%5===0?.42:.16);
+      for(let j=0;j<7;j++){
+        const a=phase+j*Math.PI*2/7,b=phase+(j+1)*Math.PI*2/7;
+        const r1=radius*(.76+.39*hash(i*11+j*7+layer*9));
+        const r2=radius*(.78+.38*hash(i*19+j*13+layer*17));
+        const drop=treeH*(.025+.042*hash(i*23+j*31+layer*27))*(1.0-t);
+        const iceDust=winter*(j%5===0?.35:.075);
+        const faceTint=1.0-(j%4)*.038;
         const color=tone.map((value,k)=>
-          Math.min(1,value*faceTint*(1-iceDust)+[.76,.86,.87][k]*iceDust));
-        addTri([x+Math.cos(a)*r1,start,z+Math.sin(a)*r1],
-               [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
-               [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
+          Math.min(1,value*faceTint*(1-iceDust)+[.72,.84,.85][k]*iceDust));
+        addTri([x+Math.cos(a)*r1,start-drop,z+Math.sin(a)*r1],
+               [x+Math.cos(b)*r2,start-drop*.68,z+Math.sin(b)*r2],
+               [x+Math.sin(phase)*radius*.14,tip,z+Math.cos(phase)*radius*.10],
                color);
-        // Fine asymmetric branchlet curtains improve nearby spruce shape
-        // with a bounded polygon budget. No repeated cone layers or billboards.
-        if(i%7===0 && layer<2 && j%2===0){
-          const a2=a+.22,b2=b-.16,twigY=start+treeH*.19;
-          const spread=radius*.77,topY=tip-treeH*.10;
+        // Sparse branch feathers break a large triangular silhouette,
+        // rather than another whole ring of billboard foliage.
+        if(i%7===0 && layer<2 && j%3===0){
+          const a2=a+.22,b2=b-.16;
           const green=tone.map((v,k)=>Math.min(1,v*(k===1?1.18:.92)));
           addTri(
-            [x+Math.cos(a2)*spread,start,z+Math.sin(a2)*spread],
-            [x+Math.cos(b2)*spread*.86,start+treeH*.04,z+Math.sin(b2)*spread*.86],
-            [x+Math.cos(a2+.1)*radius*.26,Math.max(twigY,topY),
-              z+Math.sin(a2+.1)*radius*.26],
+            [x+Math.cos(a2)*r1*.87,start-drop*.5,z+Math.sin(a2)*r1*.87],
+            [x+Math.cos(b2)*r2*.72,start+treeH*.02,z+Math.sin(b2)*r2*.72],
+            [x+Math.cos(a2+.1)*radius*.28,tip-treeH*.08,z+Math.sin(a2+.1)*radius*.28],
             green);
           stats.branchlets++;
         }
+        if(winter>.39 && j%4===0 && layer<whorlCount-1 && i%3===0){
+          const snow=[.65+.17*winter,.78+.12*winter,.82+.10*winter];
+          addTri([x+Math.cos(a)*r1*.82,start+.035,z+Math.sin(a)*r1*.82],
+                 [x+Math.cos(b)*r2*.83,start+.03,z+Math.sin(b)*r2*.83],
+                 [x+Math.sin(phase)*radius*.14,tip+.045,z+Math.cos(phase)*radius*.12],
+                 snow);
+          stats.snowBoughs++;
+        }
       }
+      stats.foliageWhorls++;
     }
     // Irregular understorey tufts, not repeated billboard trees. Vary by
     // altitude and local measured slope; hide when collision ground differs.
