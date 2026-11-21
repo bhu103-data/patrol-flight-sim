@@ -12722,8 +12722,16 @@ const CENTRAL_PARK_SITES=[
         const perpendicular=Math.abs(Math.sin(yaw-heading));
         const marginAlong=halfLength*parallel+halfSpan*perpendicular+buffer;
         const marginAcross=halfLength*perpendicular+halfSpan*parallel+buffer;
-        if(Math.abs(along)<ship.halfLength+marginAlong &&
-           Math.abs(across)<ship.halfWidth+marginAcross)return false;
+        // Four-axis separation (both hull axes and both aircraft axes).
+        // Two-axis AABB rejection alone blocks safe diagonal taxi gaps.
+        if(Math.abs(along)>=ship.halfLength+marginAlong ||
+           Math.abs(across)>=ship.halfWidth+marginAcross)continue;
+        const alongPlane=dx*Math.sin(yaw)+dz*Math.cos(yaw);
+        const acrossPlane=dx*Math.cos(yaw)-dz*Math.sin(yaw);
+        const shipAlong=ship.halfLength*parallel+ship.halfWidth*perpendicular;
+        const shipAcross=ship.halfLength*perpendicular+ship.halfWidth*parallel;
+        if(Math.abs(alongPlane)<halfLength+shipAlong+buffer &&
+           Math.abs(acrossPlane)<halfSpan+shipAcross+buffer)return false;
       }
     }
     // Audit the entire twin-pontoon water contact envelope, not just its
