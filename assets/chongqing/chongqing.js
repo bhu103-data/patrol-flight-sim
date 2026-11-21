@@ -685,14 +685,22 @@ function updateCamera(dt){
   cameraAim.copy(cameraFocus);
   camera.lookAt(cameraAim);
   const desiredFov=68+clamp((speed-26)*.24,0,15);
-  camera.fov+=(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
-  camera.updateProjectionMatrix();
+  const newFov=camera.fov+(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
+  if(Math.abs(newFov-camera.fov)>.015){camera.fov=newFov;camera.updateProjectionMatrix();}
 }
-let time=0,mapTimer=0;
+let time=0,mapTimer=0,graphicsLost=false;
+canvas.addEventListener('webglcontextlost',event=>{
+  event.preventDefault();graphicsLost=true;keys.clear();
+  message('显卡连接中断，等待浏览器恢复图形。',5);
+});
+canvas.addEventListener('webglcontextrestored',()=>{
+  // Rebuild all procedural GPU assets safely after WebGL context restoration.
+  location.reload();
+});
 function frame(){
   requestAnimationFrame(frame);
   const raw=clock.getDelta(),dt=Math.min(raw,.04);
-  if(document.hidden)return;
+  if(document.hidden||graphicsLost)return;
   time+=dt;
   waterUniforms.uTime.value=time;
   move(dt);updateFlames(dt);updateCamera(dt);
