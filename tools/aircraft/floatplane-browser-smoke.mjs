@@ -86,23 +86,34 @@ async function testMap(map,exercise){
       // Software SwiftShader can render at only a few frames per second.
       // PATROL intentionally caps per-frame dt, so 3s of simulated power-up
       // may require much longer wall-clock time in headless Chromium.
+      const getFlight=()=>page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
       try{
         await page.waitForFunction(()=>{
-          const label=document.querySelector('#gearStatus')?.textContent||'';
-          return label.includes('WATER LANDING')||
-            !document.querySelector('#crashOverlay')?.hidden;
-        },null,{timeout:65000});
+          const state=window.PatrolSpaceBridge?.getState?.();
+          const crashed=!!document.querySelector('#crashOverlay:not([hidden])');
+          // Do not count the water-to-air HUD transition as a real takeoff:
+          // real altitude and live flight state must both be confirmed.
+          return crashed || (state && !state.playing) ||
+            (state?.playing && state.altitude>=18.5 && state.climb>0);
+        },null,{timeout:95000});
       }catch(error){
+        const flight=await getFlight();
         const label=await page.locator('#gearStatus').textContent();
         await page.screenshot({path:'artifacts/floatplane-'+map+'-takeoff-timeout.png'});
-        throw Error('C185 rotate timeout (last HUD '+label+'): '+error.message);
+        throw Error('C185 failed to gain height (HUD '+label+', state '+
+          JSON.stringify(flight)+'): '+error.message);
       }
       await page.keyboard.up('w');
       await page.keyboard.up('Shift');
+      // Release the throttle and let at least one more rendered frame pass.
+      // Early shoreline collisions must not pass the flight acceptance gate.
+      await page.waitForTimeout(1300);
       const after=(await page.locator('#gearStatus').textContent())||'';
-      if(!after.includes('WATER LANDING'))
-        throw Error('Floatplane failed to rotate into flight: '+after);
+      const flight=await getFlight();
       await page.screenshot({path:'artifacts/floatplane-'+map+'-airborne.png'});
+      if(!flight?.playing || flight.aircraft!=='seaplane' ||
+         flight.altitude<17.5 || !after.includes('WATER LANDING'))
+        throw Error('C185 did not sustain airborne flight: '+JSON.stringify({after,flight}));
     }
     if(errors.length)throw Error(errors.join('\n'));
     results.push({map,aircraft:state.aircraft,waterStart:state.floats,
