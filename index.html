@@ -5836,6 +5836,13 @@ const CENTRAL_PARK_SITES=[
         const k=.43+(archType%3)*.10;
         return {x,w:w*k,d:d*k};
       }
+      // A setback tower's real upper roof is much smaller than its base.
+      // Keep rooftop trim and equipment on the actual tier; the old code
+      // used full ground-floor width and made floating slabs over the city.
+      // Distant LOD1 towers have a separate two-stage stepped footprint.
+      const roofProfile=!local && detailBand===1 && h>20 ?
+        {x,w:w*(.68+(archType%3)*.05),d:d*(.69+(archType%4)*.045)}:
+        facadeTier(h-.01);
       const facadeSet=[
         [.67,.65,.58], [.50,.37,.31], [.37,.43,.47],
         [.29,.42,.48], [.61,.59,.55], [.67,.56,.45],
@@ -5888,21 +5895,26 @@ const CENTRAL_PARK_SITES=[
         // Distinct roofline from harbor: sandstone crowns, glass mechanical
         // penthouses, terracotta fins and twin thin antenna masts.
         if(split===0){
-          for(const side of [-1,1]){
-            addModelBox(addQuad,x+side*w*.28,y+h*.57,z+d*.15,
-              .18,h*.30,.20,trim);
-          }
-        }else if(split===1 || split===3){
+          // Art Deco fins stay attached to the lower masonry shaft, rather
+          // than crossing the setback where the shifted wall no longer exists.
+          const finH=baseH*.34;
           for(const side of [-1,1])
-            addModelBox(addQuad,x+side*w*.21,y+h+.38,z,
+            addModelBox(addQuad,x+side*w*.28,
+              y+baseH-finH*.5,z+d*.15,.18,finH,.20,trim);
+        }else if(split===1 || split===3){
+          // Twin aerials must sit ON the narrow crown, not outside its edge.
+          for(const side of [-1,1])
+            addModelBox(addQuad,
+              roofProfile.x+side*roofProfile.w*.24,y+h+.38,z,
               .11,.77,.11,[.35,.39,.43]);
         }else if(split===2){
           addModelBox(addQuad,x,y+h+.34,z,crown*w*.69,.64,
             crown*d*.68,[.25,.33,.38]);
         }else{
+          const finH=baseH*.27;
           for(const side of [-1,1])
-            addModelBox(addQuad,x+side*w*.29,y+h*.80,
-              z+side*d*.19,.14,h*.26,.16,trim);
+            addModelBox(addQuad,x+side*w*.29,
+              y+baseH-finH*.5,z+side*d*.19,.14,finH,.16,trim);
         }
       }else if(!local && detailBand===1 && h>20){
         // Distant downtown towers receive setbacks rather than plain boxes.
@@ -5916,7 +5928,23 @@ const CENTRAL_PARK_SITES=[
       }
       addModelBox(addQuad,x,y+0.77,z,w+0.10,1.54,d+0.10,
         material.map(value=>value*0.69));
-      addModelBox(addQuad,x,y+h-0.16,z,w+0.12,0.29,d+0.12,trim);
+      // Roof coping follows the topmost crown, never the podium outline.
+      addModelBox(addQuad,roofProfile.x,y+h-.16,z,
+        roofProfile.w+.12,.29,roofProfile.d+.12,trim);
+      // Four small, solid parapet courses form a convincing roof edge,
+      // always INSIDE the surveyed parcel; no floating wide roof plate.
+      if(heroDowntown && roofProfile.w>3.2 && roofProfile.d>4.2){
+        const parapetH=.27+(archType%3)*.07;
+        const parapetY=y+h-.015+parapetH*.5;
+        const masonry=trim.map(value=>value*.87);
+        for(const side of [-1,1]){
+          addModelBox(addQuad,roofProfile.x,parapetY,
+            z+side*(roofProfile.d*.5-.13),
+            roofProfile.w-.18,parapetH,.16,masonry);
+          addModelBox(addQuad,roofProfile.x+side*(roofProfile.w*.5-.13),
+            parapetY,z,.16,parapetH,roofProfile.d-.18,masonry);
+        }
+      }
       // Source-aware tag 14: a thin gravel rooftop plane. Body surfaces
       // use procedural Brooklyn brick tag 12; window glazing uses tag 13.
       if(bridgeheadBrooklyn && !destroyed){
@@ -5927,18 +5955,33 @@ const CENTRAL_PARK_SITES=[
       }
       const roof=[0.31,0.34,0.35];
       if(detailBand>=2 && h>13){
-        addModelBox(addQuad,x+w*(tone-0.5)*0.32,y+h+0.48,z-d*0.12,w*0.40,0.96,d*0.44,roof);
-        addModelBox(addQuad,x-w*0.24,y+h+0.21,z+d*0.20,w*0.19,0.42,d*0.18,[0.44,0.46,0.46]);
+        addModelBox(addQuad,
+          roofProfile.x+roofProfile.w*(tone-.5)*.20,
+          y+h+.48,z-roofProfile.d*.12,
+          roofProfile.w*.40,.96,roofProfile.d*.43,roof);
+        addModelBox(addQuad,
+          roofProfile.x-roofProfile.w*.24,
+          y+h+.21,z+roofProfile.d*.20,
+          roofProfile.w*.19,.42,roofProfile.d*.18,[.44,.46,.46]);
       }
       if(detailBand>=2 && tone>0.52){
+        // Vertical front piers terminate at the first setback; otherwise
+        // they hang in midair beside the narrowed upper floors.
+        const lowerFraction=[.57,.68,.77,.63,.73][archType%5];
+        const stepped=heroDowntown && h>=9.2;
+        const height=stepped?Math.max(.25,h*lowerFraction-.32):h*.91;
+        const centerY=stepped?y+.16+height*.5:y+h*.51;
         for(const side of [-1,1]){
           for(const tip of [-1,1]){
-            addModelBox(addQuad,x+tip*(w/2-0.24),y+h*0.51,z+side*(d/2+0.022),0.38,h*0.91,0.13,trim);
+            addModelBox(addQuad,x+tip*(w/2-.24),centerY,
+              z+side*(d/2+.022),.38,height,.13,trim);
           }
         }
       } else if(detailBand>=2 && h>7){
-        for(let level=3.7;level<h-0.6;level+=tone>0.24?3.5:5.3){
-          addModelBox(addQuad,x,y+level,z,w+0.08,0.12,d+0.08,trim);
+        for(let level=3.7;level<h-.6;level+=tone>.24?3.5:5.3){
+          const tier=facadeTier(level);
+          addModelBox(addQuad,tier.x,y+level,z,
+            tier.w+.08,.12,tier.d+.08,trim);
         }
       }
 
@@ -6170,16 +6213,31 @@ const CENTRAL_PARK_SITES=[
             }
           }
         }
-        // Air-handling equipment, vent cowls and maintenance roof coping.
+        // Air handlers, vents and access housings fit the REAL crown,
+        // including narrow Art Deco tops; no disconnected floating cubes.
         if(h>13.0){
           const roofY=y+h;
-          const offset=tone>0.5?-0.23:0.20;
-          addModelBox(addQuad,x+w*offset,roofY+0.38,z,Math.min(2.3,w*0.29),0.69,Math.min(2.7,d*0.30),steel);
-          addModelBox(addQuad,x+w*offset,roofY+0.76,z,Math.min(2.5,w*0.31),0.078,Math.min(2.9,d*0.32),mullion);
+          const offset=tone>.5?-.12:.12;
+          const mx=roofProfile.x+roofProfile.w*offset;
+          const unitW=Math.min(2.3,roofProfile.w*.29);
+          const unitD=Math.min(2.7,roofProfile.d*.30);
+          addModelBox(addQuad,mx,roofY+.38,z,
+            unitW,.69,unitD,steel);
+          addModelBox(addQuad,mx,roofY+.76,z,
+            unitW+.12,.078,unitD+.12,mullion);
           for(let i=0;i<3;i++)
-            addModelBox(addQuad,x+w*offset-0.45+i*0.45,roofY+0.42,z+d*0.16,0.07,0.40,0.26,recess);
-          addModelBox(addQuad,x-w*0.26,roofY+0.55,z+d*0.20,0.34,1.10,0.34,stone);
-          addModelBox(addQuad,x-w*0.26,roofY+1.10,z+d*0.20,0.58,0.10,0.54,steel);
+            addModelBox(addQuad,
+              mx+(i-1)*Math.min(.27,unitW*.20),
+              roofY+.42,z+roofProfile.d*.16,
+              .07,.40,.26,recess);
+          const ventX=roofProfile.x-roofProfile.w*.26;
+          const ventZ=z+roofProfile.d*.18;
+          addModelBox(addQuad,ventX,roofY+.55,ventZ,
+            Math.min(.34,roofProfile.w*.16),1.10,
+            Math.min(.34,roofProfile.d*.16),stone);
+          addModelBox(addQuad,ventX,roofY+1.10,ventZ,
+            Math.min(.58,roofProfile.w*.25),.10,
+            Math.min(.54,roofProfile.d*.25),steel);
         }
       }
       // This geometry follows the same rebuild/demolition lifecycle as the lots.
