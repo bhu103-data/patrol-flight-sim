@@ -12946,13 +12946,23 @@ const CENTRAL_PARK_SITES=[
     // water runway to accelerate, rotate and climb away from shore.
     // The original Alaska spawn faces dry USGS land just ~40 units ahead;
     // try perpendicular headings before relocating the aircraft.
+    // Keep Alaska's water lane clear through the initial climb and out
+    // of the world-edge auto-turn zone, not just during the first taxi.
+    const runwayLength=selectedMap.alaska?132:94;
+    const approachLimit=selectedMap.alaska
+      ?FLIGHT_RADIUS-WARNING_DISTANCE-8:limit;
     const runwayClear=(x,z,yaw)=>{
       const fx=Math.sin(yaw),fz=Math.cos(yaw);
-      for(const advance of [0,18,36,54,76,94]){
+      const endX=x+fx*runwayLength,endZ=z+fz*runwayLength;
+      // A line segment stays within this disk if both ends are inside.
+      if(Math.hypot(x,z)>approachLimit ||
+         Math.hypot(endX,endZ)>approachLimit)return false;
+      for(let advance=0;advance<runwayLength;advance+=6){
         const px=x+fx*advance,pz=z+fz*advance;
         if(!safe(px,pz,yaw))return false;
       }
-      return true;
+      // The 94m general-water runway needs its final 4m checked too.
+      return safe(endX,endZ,yaw);
     };
     const headings=primary=>[primary,primary+Math.PI/2,
       primary-Math.PI/2,primary+Math.PI];
