@@ -123,6 +123,25 @@ test('pedestrian scenic camera is anchored to an actual OTI doorway source edge'
  const midpoint=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
  assert.ok(Math.abs(midpoint[0]+102.88)<.02);
  assert.ok(Math.abs(midpoint[1]+487.14)<.02);
- assert.match(html,/name:'Lower Manhattan · Street Entrance',x:-102\.88,z:-487\.14,height:1\.50/);
- assert.match(html,/bearing:201\.7,radius:11\.8,rise:1\.30/);
+ assert.match(html,/name:'Lower Manhattan · Street Entrance',x:-102\.88,z:-487\.14,height:3\.50/);
+ assert.match(html,/bearing:201\.7,radius:5\.6,rise:\.55/);
+ // Scenic zoom 68 now places the camera close to the original OTI edge,
+ // not 9+ units down the generic urban canyon. Never enter an OTI polygon.
+ const zoom=.68,distance=5.6*(1.24+(.56-1.24)*zoom);
+ const angle=201.7*Math.PI/180;
+ const eye=[midpoint[0]+distance*Math.sin(angle),
+            midpoint[1]+distance*Math.cos(angle)];
+ assert.ok(distance>3&&distance<5,'near view remains outside source wall');
+ const inside=(p,poly)=>{
+  let value=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+   const a=poly[i],b=poly[j];
+   if((a[1]>p[1])!==(b[1]>p[1]) &&
+     p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])
+    value=!value;
+  }
+  return value;
+ };
+ assert.ok(!source.footprints.some(l=>inside(eye,l[6])),
+   'source-aligned camera must remain outside all existing OTI buildings');
 });
