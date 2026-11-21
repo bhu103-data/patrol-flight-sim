@@ -12,7 +12,7 @@
   html,body{width:100%;height:100%;overflow:hidden;background:#0e0b16;font-family:'Share Tech Mono',monospace;color:#f5d5b8;}
   #wrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0b0912;}
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
-  #glCanvas{image-rendering:pixelated;image-rendering:crisp-edges;}
+  #glCanvas{image-rendering:auto;}
   #hudCanvas{pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;}
   #flightMap{position:absolute;top:14px;left:14px;z-index:16;width:min(190px,37vw);
     padding:6px;background:rgba(14,10,24,.88);border:1px solid #a97458;color:#ffd699;}
@@ -421,6 +421,8 @@
     const lateral=Math.hypot(x-(start[0]+t*dx),z-(start[1]+t*dz));
     if(z>-558 && z<-215 && lateral<69+91*t)return 3;
     let band=distance<NYC_HERO_ROUTE.skylineRadius?1:0;
+    // Connect skyline strips between landmark zones at low geometric cost.
+    if(x>-158 && x<163 && z>-525 && z<275)band=Math.max(1,band);
     for(const zone of NYC_FOCUS_ZONES){
       const dx=x-zone[0],dz=z-zone[1],d2=dx*dx+dz*dz;
       if(d2<zone[2]*zone[2])return 2;
@@ -4378,6 +4380,20 @@
         MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
       const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);
       const archType=((gridX*3+gridZ*5)%13+13)%13;
+      // Align windows with the lower/middle/crown setback geometry.
+      function facadeTier(alt){
+        if(!heroDowntown || h<9.2)return {x,w,d};
+        const kind=archType%5;
+        const lower=kind===0?.57:kind===1?.68:kind===2?.77:kind===3?.63:.73;
+        const mid=kind===0?.87:kind===1?.91:kind===2?.94:kind===3?.83:.89;
+        if(alt<h*lower-.16)return {x,w,d};
+        if(alt<h*mid-.16){
+          const k=.68+(archType%4)*.055;
+          return {x:x+(kind%2?.12:-.12)*w,w:w*k,d:d*k};
+        }
+        const k=.43+(archType%3)*.10;
+        return {x,w:w*k,d:d*k};
+      }
       const facadeSet=[
         [.67,.65,.58], [.50,.37,.31], [.37,.43,.47],
         [.29,.42,.48], [.61,.59,.55], [.67,.56,.45],
@@ -4437,6 +4453,12 @@
             addModelBox(addQuad,x+side*w*.29,y+h*.80,
               z+side*d*.19,.14,h*.26,.16,trim);
         }
+      }else if(!local && detailBand===1 && h>20){
+        // Distant downtown towers receive setbacks rather than plain boxes.
+        const k=.62+(archType%3)*.09;
+        addModelBox(addQuad,x,y+h*k*.5,z,w,h*k,d,material);
+        addModelBox(addQuad,x,y+h*(1+k)*.5,z,w*(.68+(archType%3)*.05),
+          h*(1-k),d*(.69+(archType%4)*.045),material);
       }else{
         addModelBox(addQuad,x,y+h/2,z,w,h,d,material);
       }
@@ -4480,8 +4502,9 @@
         const bays=heroDowntown?Math.max(2,Math.min(7,Math.floor(w/
           (.86+(archType%5)*.25)))):
           Math.max(2,Math.min(4,Math.floor(w/2.9)));
-        const levels=Math.max(0,Math.min(heroDowntown?10:6,
-          Math.floor((h-3.7)/(heroDowntown?2.48:2.78))));
+        const floorSpacing=heroDowntown?Math.max(2.48,(h-4.9)/22):2.78;
+        const levels=Math.max(0,Math.min(heroDowntown?22:6,
+          Math.floor((h-4.2)/floorSpacing)));
         const bayWidth=Math.min(1.52,(w-0.85)/bays*0.68);
         for(const side of [-1,1]){
           const wall=z+side*d/2;
@@ -4491,25 +4514,38 @@
           addModelBox(addQuad,x,y+1.39,wall+side*0.079,w*0.83,1.78,0.14,recess);
           for(let col=0;col<bays;col++){
             const bx=x+(col-(bays-1)/2)*((w-0.72)/bays);
-            addModelBox(addQuad,bx,y+1.42,wall+side*0.19,bayWidth,1.59,0.065,glass);
+            addModelBox(addQuad,bx,y+1.42,wall+side*0.19,bayWidth,1.59,0.065,glass,5);
             addModelBox(addQuad,bx,y+2.28,wall+side*0.22,bayWidth+0.14,0.075,0.11,mullion);
             addModelBox(addQuad,bx,y+0.62,wall+side*0.22,bayWidth+0.14,0.072,0.11,mullion);
             addModelBox(addQuad,bx,y+1.45,wall+side*0.24,0.065,1.55,0.10,mullion);
           }
+          // Match window elevations and facade offsets to every tower tier.
+          // Planar glass panes replace numerous opaque solid cubes.
           for(let floor=0;floor<levels;floor++){
-            const py=y+4.0+floor*(heroDowntown?2.48:2.78);
-            const band=py-1.02;
-            if(band<y+h-0.20)
-              addModelBox(addQuad,x,band,wall+side*0.095,w*0.92,0.085,0.18,trim);
-            if(py+0.97>y+h-0.24)break;
-            for(let col=0;col<bays;col++){
-              const bx=x+(col-(bays-1)/2)*((w-0.72)/bays);
-              addModelBox(addQuad,bx,py,wall+side*0.060,bayWidth+0.19,1.76,0.08,recess);
-              addModelBox(addQuad,bx,py,wall+side*0.116,bayWidth,1.58,0.068,glass);
-              addModelBox(addQuad,bx,py-0.80,wall+side*0.155,bayWidth+0.17,0.09,0.12,mullion);
-              addModelBox(addQuad,bx,py+0.81,wall+side*0.151,bayWidth+0.17,0.09,0.12,mullion);
-              if((col+floor+Math.round(tone*11))%4===0)
-                addModelBox(addQuad,bx,py,wall+side*0.161,0.043,1.52,0.09,mullion);
+            const py=y+4+floor*floorSpacing;
+            if(py+.96>y+h-.15)break;
+            const tier=facadeTier(py-y),face=z+side*tier.d*.5;
+            const columns=Math.max(2,Math.min(bays,Math.floor(tier.w/1.18)));
+            const stride=(tier.w-.2)/columns;
+            const paneW=Math.max(.24,Math.min(1.42,stride*.68));
+            const paneH=Math.min(1.65,floorSpacing*.65);
+            if(floor%2===0)
+              addModelBox(addQuad,tier.x,py-paneH*.57,face+side*.045,
+                tier.w*.94,.07,.09,trim);
+            for(let col=0;col<columns;col++){
+              const cx=tier.x+(col-(columns-1)/2)*stride;
+              const zf=face+side*.074;
+              const a=[cx-paneW*.5,py-paneH*.5,zf],
+                b=[cx+paneW*.5,py-paneH*.5,zf],
+                cc=[cx+paneW*.5,py+paneH*.5,zf],
+                d0=[cx-paneW*.5,py+paneH*.5,zf];
+              const tint=((archType*17+floor*11+col*7)%19<3)?[.39,.38,.33]:glass;
+              if(side>0)addQuad(a,b,cc,d0,tint,5);
+              else addQuad(d0,cc,b,a,tint,5);
+              addModelBox(addQuad,cx,py-paneH*.5,zf+side*.02,
+                paneW+.1,.07,.07,mullion);
+              if(col%2===0)addModelBox(addQuad,cx,py,zf+side*.02,
+                .045,paneH,.06,mullion);
             }
           }
           // Metal entrance canopies and limestone upper-frieze vary by
@@ -4525,17 +4561,25 @@
             }
           }
         }
+        // Side glazing follows the real setback silhouette above the fifth floor.
         for(const side of [-1,1]){
-          const xWall=x+side*w/2;
-          addModelBox(addQuad,xWall+side*0.075,y+h*0.5,z,0.17,h*0.94,0.16,stone);
-          for(let row=0;row<Math.min(levels,5);row++){
-            const py=y+4.0+row*(heroDowntown?2.48:2.78);
-            if(py+0.9>=y+h)break;
-            const sideBays=Math.max(1,Math.min(3,Math.floor(d/3.8)));
-            for(let col=0;col<sideBays;col++){
-              const pz=z+(col-(sideBays-1)/2)*(d-0.75)/sideBays;
-              addModelBox(addQuad,xWall+side*0.065,py,pz,0.08,1.52,Math.min(1.32,d/sideBays*0.60),glass);
-              addModelBox(addQuad,xWall+side*0.105,py-0.77,pz,0.14,0.10,Math.min(1.49,d/sideBays*0.72),mullion);
+          for(let floor=0;floor<levels;floor++){
+            const py=y+4+floor*floorSpacing;
+            if(py+.94>y+h-.2)break;
+            const tier=facadeTier(py-y);
+            const xx=tier.x+side*(tier.w*.5+.074);
+            const count=Math.max(1,Math.min(4,Math.floor(tier.d/2.65)));
+            const stride=(tier.d-.26)/count;
+            const pw=Math.max(.24,Math.min(1.45,stride*.63));
+            const ph=Math.min(1.58,floorSpacing*.63);
+            for(let col=0;col<count;col++){
+              const zz=z+(col-(count-1)/2)*stride;
+              const a=[xx,py-ph*.5,zz-pw*.5],
+                b=[xx,py+ph*.5,zz-pw*.5],
+                cc=[xx,py+ph*.5,zz+pw*.5],
+                d0=[xx,py-ph*.5,zz+pw*.5];
+              if(side>0)addQuad(a,b,cc,d0,glass,5);
+              else addQuad(d0,cc,b,a,glass,5);
             }
           }
         }
@@ -8087,6 +8131,10 @@
   // Start with a small buffer so the first raymarch does not submit a
   // full-resolution workload before the frame-time controller can react.
   const startupScale = 0.35;
+  // More detailed 3D maps start sharp; adaptive scaling still handles slower GPUs.
+  const cityScaleFloor=()=>Math.min(innerWidth,innerHeight)<620?.43:.55;
+  const cityScaleStart=()=>Math.min(innerWidth,innerHeight)<620?.59:.73;
+  const sceneScaleFloor=()=>smoothScenery()?cityScaleFloor():startupScale;
   let resScale = startupScale, scaleCeiling = 1, fastFrames = 0;
   let fboW, fboH, hudW, hudH;
   let sceneFbo = null, sceneTex = null, sceneDepth = null;
@@ -9729,7 +9777,7 @@
     }
     if(selectedMap.dc)loadDcTextures();
     document.getElementById('wrap').classList.toggle('smooth-city', smoothScenery());
-    resScale = startupScale;
+    resScale = smoothScenery()?cityScaleStart():startupScale;
     scaleCeiling = 1;
     fastFrames = slowFrames = 0;
     resizeTargets();
@@ -10745,8 +10793,8 @@
       const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
       fastFrames = rawDt < 0.023 ? fastFrames + 1 : 0;
       slowFrames = rawDt > 0.040 ? slowFrames + 1 : 0;
-      if (slowFrames >= 6 && resScale > startupScale) {
-        scaleCeiling = resScale = Math.max(startupScale, resScale - 0.10);
+      if (slowFrames >= 6 && resScale > sceneScaleFloor()) {
+        scaleCeiling = resScale = Math.max(sceneScaleFloor(), resScale - 0.10);
         fastFrames = slowFrames = 0;
         resizeTargets();
       } else if (fastFrames >= 40 && resScale < limit) {
