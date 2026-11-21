@@ -15,12 +15,12 @@ export const CHONGQING_MARKET_SITES=Object.freeze([
 export function makeChongqingMarketTileRoof(THREE){
   const vertices=[],uvs=[],indices=[],nx=32,nz=12;
   for(let i=0;i<=nx;i++){
-    const x=-12.1+24.2*i/nx;
+    const x=-11.8+23.6*i/nx;
     for(let j=0;j<=nz;j++){
       const z=-10.4+20.8*j/nz;
       const shoulder=Math.max(0,1-Math.abs(z)/10.4);
       const rib=.052*Math.cos(i*Math.PI/2)*shoulder;
-      const corner=.23*Math.pow(Math.abs(x)/12.1,8);
+      const corner=.23*Math.pow(Math.abs(x)/11.8,8);
       vertices.push(x,.18+2.2*shoulder+rib+corner,z);
       uvs.push(i/8,j/4);
     }
