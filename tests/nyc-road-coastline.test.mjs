@@ -44,3 +44,15 @@ test('a water inlet under only the sidewalk also clips avenue asphalt',()=>{
   assert.equal(crossingAtEight(scene.ribbons),false);
   assert.ok(scene.stats.skippedRoadFootprints>0);
 });
+
+test('coastal food carts need a dry footprint, not merely a dry center',()=>{
+  const dry=build(()=>100);
+  assert.ok(dry.stats.hotDogCarts>=4,'fixture baseline must include vendor stands');
+  // The Times Square vendor at (-4.4, 9.1) has a dry center, but this
+  // tiny diagonal inlet floods the edge of its 2.35-unit footprint.
+  const wet=(x,z)=>Math.hypot(x-(-4.4+2.35),z-(9.1+2.35))<.22?0:100;
+  const harbor=build(wet);
+  assert.equal(harbor.stats.hotDogCarts,dry.stats.hotDogCarts-1,
+    'a dry cart center must not allow the kiosk to extend into water');
+  assert.ok(harbor.stats.skippedWater>0);
+});
