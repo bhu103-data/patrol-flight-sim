@@ -67,7 +67,6 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     {length:35,width:9.2,speed:10.1,start:-40,dir:-1,lane:22,material:hullLight},
     {length:28,width:7.7,speed:15.4,start:585,dir:1,lane:-11,material:hullMat}
   ];
-  const glassBands=new THREE.Group();scene.add(glassBands);
   for(let i=0;i<detailConfig.length;i++){
     const cfg=detailConfig[i];
     const boat=new THREE.Group();scene.add(boat);groups.push(boat);
