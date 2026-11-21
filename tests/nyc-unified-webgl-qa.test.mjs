@@ -26,6 +26,11 @@ test('ten NYC cameras include near-field building facades and nonblank PNG check
    'DUMBO · Warehouse Blocks','Lower Manhattan · Window Facades']){
   assert.ok(script.includes(label),'missing physical camera '+label);
  }
+ assert.ok(script.includes('PATROL_NYC_QA_DAYLIGHT_LOCK_V1'));
+ assert.ok(script.includes("['skyTime','12']"));
+ assert.ok(script.includes("['skySeason','1']"));
+ assert.ok(script.includes("['skyWeather','Clear']"));
+ assert.ok(script.includes("el.dispatchEvent(new Event('change',{bubbles:true}))"));
  assert.match(script,/function screenshotPixels\(bytes\)/);
  assert.match(script,/PNG\.sync\.read\(bytes\)/);
  assert.match(script,/stats\.colorBins>32/);
