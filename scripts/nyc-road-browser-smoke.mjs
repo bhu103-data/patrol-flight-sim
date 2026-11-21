@@ -177,6 +177,22 @@ try{
   await capture(name);
  }
 
+
+ // Inspect the newly physical OTI window surrounds with the same real
+ // headless WebGL pipeline; a distant spawn skyline cannot reveal their
+ // geometry or catch the camera facing the wrong side of the city.
+ await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Window Facades'});
+ await page.waitForTimeout(1600);
+ const facadeView=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null};
+ });
+ check(facadeView.label==='Lower Manhattan · Window Facades'&&
+   facadeView.webgl&&facadeView.error===0,
+   'Lower Manhattan facade camera failed: '+JSON.stringify(facadeView));
+ await capture('09-manhattan-window-facades.png');
+
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
  result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,captureTimings,warnings};
 }catch(e){

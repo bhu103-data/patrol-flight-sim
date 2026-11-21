@@ -10,19 +10,20 @@ const workflowUrl=new URL('../.github/workflows/nyc-bridgehead-browser.yml',impo
 const script=await readFile(scriptUrl,'utf8');
 const workflow=await readFile(workflowUrl,'utf8');
 
-test('nine NYC cameras are captured with nonblank PNG checks',()=>{
+test('ten NYC cameras include near-field building facades and nonblank PNG checks',()=>{
  const named=[
   '00-harbor.png','01-city-loaded.png','02-brooklyn-bridgehead.png',
   '03-dumbo-warehouse.png','04-liberty-crown.png',
   '05-times-square-street.png','06-times-square-led-canyon.png',
-  '07-one-times-square.png','08-duffy-square.png'
+  '07-one-times-square.png','08-duffy-square.png',
+  '09-manhattan-window-facades.png'
  ];
  for(const file of named){
   assert.ok(script.includes(file),'missing actual screenshot '+file);
  }
  for(const label of ['Times Square Street Level','44th Street LED Canyon',
    'One Times Square','Duffy Square Street View','Statue of Liberty',
-   'DUMBO · Warehouse Blocks']){
+   'DUMBO · Warehouse Blocks','Lower Manhattan · Window Facades']){
   assert.ok(script.includes(label),'missing physical camera '+label);
  }
  assert.match(script,/function screenshotPixels\(bytes\)/);
