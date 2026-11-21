@@ -174,5 +174,63 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
       stats.benches++;
     }
   }
+
+  // East Lake / Loeb Boathouse: original seven-slat park settee.
+  // A deliberately single, game-scale near-view landmark, not a surveyed
+  // Conservancy bench or an imported CC0 candidate (see independent audit #98).
+  // Check all footprint corners against the SAME irregular Lake shore used
+  // by central-park.js, not just the dry center point.
+  const benchU=9,benchZ=163;
+  const lakeClearance=(u,z)=>{
+    const dx=(u+14)/24,dz=(z-150)/16.2;
+    const angle=Math.atan2(dz,dx);
+    const shore=1+.055*Math.sin(3*angle+1.15)+
+      .025*Math.cos(7*angle-1.15);
+    return Math.hypot(dx,dz)/shore;
+  };
+  const dryBench=[-0.58,0.58].every(du=>
+    [-0.95,0.95].every(dz=>
+      lakeClearance(benchU+du,benchZ+dz)>1.19));
+  if(quality==='high' && dryBench &&
+     Math.abs(benchU)+1<grid.parkHalfWidth){
+    const bx=ex(benchU,benchZ),bz=benchZ,by=y(benchU,benchZ);
+    const iron=[.15,.20,.18],plankA=[.37,.25,.17],plankB=[.39,.27,.18];
+    // Five independent seat slats, each fully three-dimensional with narrow
+    // gaps and subtle alternating weathered timber colors.
+    for(let slat=0;slat<5;slat++){
+      const u=benchU-.31+slat*.155;
+      box(ex(u,bz),by+.475,bz,.135,.065,1.80,
+        slat%2?plankB:plankA);
+    }
+    // Two broad back slats, behind the seat facing the lake (-x).
+    for(const [j,h] of [.69,.855].entries()){
+      box(ex(benchU+.475+j*.035,bz),by+h,bz,.075,.145,1.80,
+        j?plankA:plankB);
+    }
+    // Four feet land on individually sampled dry terrain heights.
+    // The curved cast-iron frame, arm rests and under-seat straps remain in
+    // the existing NYC batched mesh; no colliders or texture fetches.
+    for(const end of [-.76,.76]){
+      const z=bz+end;
+      for(const du of [-.29,.30]){
+        const u=benchU+du,x=ex(u,z),foot=y(u,z);
+        box(x,foot+.031,z,.16,.06,.19,iron);
+        beam([x,foot+.06,z],[x,by+.43,z],.052,iron);
+      }
+      beam([ex(benchU-.37,z),by+.425,z],
+        [ex(benchU+.34,z),by+.425,z],.065,iron);
+      beam([ex(benchU+.30,z),by+.42,z],
+        [ex(benchU+.55,z),by+.92,z],.055,iron);
+      beam([ex(benchU-.39,z),by+.65,z],
+        [ex(benchU+.37,z),by+.65,z],.042,iron);
+      beam([ex(benchU-.39,z),by+.65,z],
+        [ex(benchU-.30,z),by+.43,z],.038,iron);
+      // Visible bolt heads at seat-to-frame and backrest joints.
+      for(const h of [.48,.70,.86]){
+        box(ex(benchU+.40,z),by+h,z,.043,.043,.085,bronze);
+      }
+    }
+    stats.benches++;
+  }
   return stats;
 }
