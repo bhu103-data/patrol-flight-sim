@@ -5360,7 +5360,12 @@ const CENTRAL_PARK_SITES=[
       // HEAT is a VISUAL reference only; no third-party code or assets copied.
       // Building styles combine Indiana-limestone-like stone, terracotta,
       // brick, blue/neutral glass and darker late-20th-century curtain walls.
-      const heroDowntown=!local && detailBand>=2 && north>-526 && north<-195;
+      // Keep Manhattan's financial-district tower styles on Manhattan.
+      // Brooklyn Bridge/DUMBO has a distinct low-/mid-rise brick streetscape.
+      const bridgeheadBrooklyn=!local && detailBand>=2 &&
+        east>205&&east<435&&north>-415&&north<-195;
+      const heroDowntown=!local && detailBand>=2 &&
+        east>-180&&east<170&&north>-526&&north<-195;
       const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-
         MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
       const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);
@@ -5391,11 +5396,19 @@ const CENTRAL_PARK_SITES=[
         [.39,.52,.56], [.74,.69,.58], [.47,.51,.52],
         [.57,.45,.39]
       ];
-      const material=heroDowntown?facadeSet[archType]:
+      const brooklynBrick=[
+        [.52,.30,.25],[.59,.36,.29],[.46,.29,.27],
+        [.63,.44,.33],[.55,.35,.31],[.50,.40,.36],
+        [.61,.46,.37]
+      ];
+      const material=bridgeheadBrooklyn?brooklynBrick[archType%brooklynBrick.length]:
+        heroDowntown?facadeSet[archType]:
         tone<0.35?[0.41,0.48,0.52]:
         tone<0.68?[0.65,0.61,0.53]:[0.53,0.39,0.32];
-      const trim=material.map((value,i)=>Math.min(.95,
-        value*(heroDowntown?(i===0?1.12:1.07):1.26)));
+      const trim=bridgeheadBrooklyn?
+        (archType%3===0?[.75,.71,.63]:archType%3===1?[.68,.64,.58]:[.60,.58,.53]):
+        material.map((value,i)=>Math.min(.95,
+          value*(heroDowntown?(i===0?1.12:1.07):1.26)));
       if(destroyed){
         addModelBox(addQuad,x,y+0.34,z,w*0.89,0.68,d*0.88,[0.35,0.33,0.30]);
         for(let i=0;i<11;i++){
@@ -5472,6 +5485,45 @@ const CENTRAL_PARK_SITES=[
         }
       }
 
+      // DUMBO / Brooklyn Bridge bounded architectural relief.
+      // Batched into the existing building mesh; small offsets are well inside
+      // the reserved sidewalk margin. This is stylized game geometry, not GIS.
+      if(bridgeheadBrooklyn && !destroyed && h>9){
+        const mortar=material.map(v=>Math.max(.10,v*.75));
+        const fireSteel=[.22,.26,.28],stepSteel=[.35,.38,.39];
+        for(const side of [-1,1]){
+          const frontage=z+side*(d*.5+.095);
+          // Layered masonry spandrels and light stone window lintels.
+          addModelBox(addQuad,x,y+h-.57,frontage,w*.93,.23,.17,trim);
+          addModelBox(addQuad,x,y+h-.94,frontage,w*.95,.085,.14,mortar);
+          for(let level=3.78;level<h-1.28;level+=3.12){
+            addModelBox(addQuad,x,y+level,frontage,
+              w*.88,.105,.13,trim);
+          }
+          for(const wing of [-1,1]){
+            addModelBox(addQuad,x+wing*(w*.5-.18),y+h*.50,
+              frontage,.24,h*.86,.13,mortar);
+          }
+        }
+        // Exterior service/fire escape on one facade: narrow mesh platforms,
+        // railings and angled stair braces, not solid balcony cubes.
+        const fireSide=(archType&1)?1:-1;
+        const fireZ=z+fireSide*(d*.5+.22);
+        for(let level=4.45;level<h-1.25&&level<15.5;level+=3.25){
+          addModelBox(addQuad,x,y+level,fireZ,w*.43,.085,.38,fireSteel);
+          for(const side of [-1,1]){
+            const railX=x+side*w*.21;
+            addRideBeam(addQuad,[railX,y+level,fireZ],
+              [railX,y+level+.95,fireZ],.034,fireSteel);
+          }
+          addRideBeam(addQuad,[x-w*.21,y+level+.95,fireZ],
+            [x+w*.21,y+level+.95,fireZ],.035,fireSteel);
+          if(level+3.25<h-1.2){
+            addRideBeam(addQuad,[x+w*.19,y+level,fireZ],
+              [x-w*.19,y+level+3.25,fireZ],.065,stepSteel);
+          }
+        }
+      }
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
       // windows, shopfronts, rooftop clutter and architectural depth are
       // batched into this EXISTING mesh (no new per-object draw calls).
