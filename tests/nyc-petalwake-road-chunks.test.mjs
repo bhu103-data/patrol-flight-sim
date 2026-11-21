@@ -39,6 +39,15 @@ test('deterministic contiguous blocks and upward-facing painted utility grates',
   for(const chunk of a){
     assert.equal(chunk.mid.quads.length,5);
     assert.equal(chunk.near.quads.length,7);
+    // The game shader identifies asphalt by a color-key neighborhood.
+    // Metal drain covers must not inherit asphalt's wet-road reflection.
+    for(const quad of [...chunk.mid.quads,...chunk.near.quads]){
+      const tint=quad[4];
+      const asphaltA=[.25,.28,.30],asphaltB=[.28,.29,.32];
+      const dist=key=>Math.hypot(...tint.map((v,k)=>v-key[k]));
+      assert.ok(dist(asphaltA)>=.137&&dist(asphaltB)>=.128,
+        'street utility metal overlaps wet asphalt shader color key');
+    }
     for(const q of [...chunk.mid.quads,...chunk.near.quads]){
       const [A,B,C]=q,d1=B.map((x,i)=>x-A[i]),d2=C.map((x,i)=>x-A[i]);
       // PATROL's geometric cross-product must face upward for culling.
