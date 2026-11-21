@@ -575,15 +575,17 @@ for(const plan of plannedRoads){
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
 // The old collision boxes and all other scenic geometry remain intact.
 const previewScenario=new URLSearchParams(location.search).get('scenario')==='hongyadong';
+const originalRequested=new URLSearchParams(location.search).get('scenario')==='original';
 const blenderToggle=document.getElementById('cqBlenderToggle');
 if(blenderToggle){
-  blenderToggle.textContent=previewScenario?'还原原始建筑':'Blender 写实预览';
-  blenderToggle.setAttribute('aria-pressed',String(previewScenario));
+  blenderToggle.textContent='检查写实建筑…';
+  blenderToggle.disabled=true;
   blenderToggle.addEventListener('click',()=>{
-    // Preserve day/time, pilot and quality query parameters during a reload.
-    // This is a preview toggle, not a paid Scenario cloud generation call.
+    // Preserve all other query parameters during explicit facade-only rollback.
     const next=new URL(location.href);
-    if(previewScenario)next.searchParams.delete('scenario');
+    const active=document.documentElement.dataset.scenarioHongyadong==='ready';
+    if(active)next.searchParams.set('scenario','original');
+    else if(originalRequested)next.searchParams.delete('scenario');
     else next.searchParams.set('scenario','hongyadong');
     location.assign(next.href);
   });
@@ -591,6 +593,11 @@ if(blenderToggle){
 void loadOptionalHongyadong({THREE,scene,detailBuild,search:location.search})
   .then(replacement=>{
     document.documentElement.dataset.scenarioHongyadong=replacement.active?'ready':'off';
+    if(blenderToggle){
+      blenderToggle.disabled=false;
+      blenderToggle.textContent=replacement.active?'查看原始建筑':'切换 Blender 写实';
+      blenderToggle.setAttribute('aria-pressed',String(replacement.active));
+    }
     if(replacement.active){
       // A flat floating canvas billboard conflicts with the physical Bayu roofline.
       // It belongs to the procedural landmark only, not the vetted GLB preview.
@@ -601,6 +608,11 @@ void loadOptionalHongyadong({THREE,scene,detailBuild,search:location.search})
   })
   .catch(error=>{
     document.documentElement.dataset.scenarioHongyadong='fallback';
+    if(blenderToggle){
+      blenderToggle.textContent='写实模型加载失败';
+      blenderToggle.setAttribute('aria-pressed','false');
+      blenderToggle.disabled=true;
+    }
     originalHongyadongSign.visible=true;
     console.warn('Scenario Hongyadong unavailable; preserving original scene:',error);
     if(previewScenario)message('Blender 模型不可用，已保留原本洪崖洞场景',4);
