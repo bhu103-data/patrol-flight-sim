@@ -22,7 +22,8 @@ async function testMap(map,exercise){
   });
   page.on('response',response=>{
     if(response.url().includes('/assets/aircraft/cessna185-floats.glb'))
-      requests.push(response.status());
+      requests.push({status:response.status(),
+        bytes:Number(response.headers()['content-length']||0)});
   });
   try{
     await page.goto(base,{waitUntil:'domcontentloaded',timeout:30000});
@@ -59,8 +60,10 @@ async function testMap(map,exercise){
     },null,{timeout:15000});
     // Guard the actual GLB, not an unreported procedural fallback.
     await page.waitForTimeout(3500);
-    if(!requests.includes(200)||!log.some(m=>m.includes('[PATROL] Blender Cessna 185 loaded')))
-      throw Error('Real Blender C185 GLB did not load: '+JSON.stringify({requests,log:log.slice(-10)}));
+    if(!requests.some(r=>r.status===200 && r.bytes>=74000)||
+       !log.some(m=>m.includes('[PATROL] Blender Cessna 185 loaded')))
+      throw Error('Upgraded Blender C185 geometry not loaded: '+
+        JSON.stringify({requests,log:log.slice(-10)}));
     await page.screenshot({path:'artifacts/floatplane-'+map+'-afloat.png'});
     if(exercise){
       // Keep the flight canvas focused; wait for simulated velocity, not
@@ -121,7 +124,7 @@ async function testMap(map,exercise){
     }
     if(errors.length)throw Error(errors.join('\n'));
     results.push({map,aircraft:state.aircraft,waterStart:state.floats,
-      blenderGLB:requests.includes(200),takeoff:exercise});
+      blenderGLB:requests.some(r=>r.status===200),modelBytes:requests[0]?.bytes,takeoff:exercise});
     console.log('PASS floatplane WebGL2: '+JSON.stringify(results.at(-1)));
   }finally{
     await page.close();
