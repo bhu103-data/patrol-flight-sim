@@ -330,22 +330,81 @@ export function buildCentralPark({
       .045,[.65,.80,.81]);
   }
   stats.majorLandmarks++;
-  // Bow Bridge: arched cast-iron bridge over the lake's western channel.
+  // Bow Bridge: add its visible cast-iron arch, spandrels and abutments.
+  // The previous single-sided stone strip had no underside or structure;
+  // viewed from a low aircraft it appeared to hover above the Lake.
+  // This is a compact artistic reconstruction in game coordinates, not a
+  // surveyed Bow Bridge model. Everything is baked into the park mesh.
   const bowZ=151,bowU=-14;
+  const whiteIron=[.57,.61,.60],shadowIron=[.25,.31,.31];
+  const bridgeDeckY=t=>waterTop+1.12+Math.sin(t*Math.PI)*.85;
+  const bridgeArchY=t=>waterTop+.28+Math.sin(t*Math.PI)*.86;
+  stats.bowBridgeTrussMembers=0;
+  stats.bowBridgeAbutments=0;
   for(let j=0;j<20;j++){
     const t0=j/20,t1=(j+1)/20;
     const u0=bowU-11+t0*22,u1=bowU-11+t1*22;
-    const y0=waterTop+1.12+Math.sin(t0*Math.PI)*.85;
-    const y1=waterTop+1.12+Math.sin(t1*Math.PI)*.85;
+    const y0=bridgeDeckY(t0),y1=bridgeDeckY(t1);
+    const arch0=bridgeArchY(t0),arch1=bridgeArchY(t1);
     const px0=ex(u0,bowZ),px1=ex(u1,bowZ);
-    addQuad([px0,y0,bowZ-1.32],[px0,y0,bowZ+1.32],
-      [px1,y1,bowZ+1.32],[px1,y1,bowZ-1.32],limestone);
+    const left=bowZ-1.32,right=bowZ+1.32;
+    // Walkable top, continuous dark soffit and two stone edge fascias;
+    // keeping the former surface makes existing scenic views compatible.
+    addQuad([px0,y0,left],[px0,y0,right],
+      [px1,y1,right],[px1,y1,left],limestone);
+    addQuad([px0,y0-.19,left],[px1,y1-.19,left],
+      [px1,y1-.19,right],[px0,y0-.19,right],shadowIron);
     for(const side of [-1,1]){
-      const zz=bowZ+side*1.35;
-      beam([px0,y0+.17,zz],[px1,y1+.17,zz],.062,bronze);
-      beam([px0,y0+1.06,zz],[px1,y1+1.06,zz],.055,bronze);
-      if(j%2===0)beam([px0,y0+.18,zz],[px0,y0+1.06,zz],.037,bronze);
+      const edge=bowZ+side*1.32,rail=bowZ+side*1.35,
+        truss=bowZ+side*1.25;
+      addQuad([px0,y0-.19,edge],[px1,y1-.19,edge],
+        [px1,y1,edge],[px0,y0,edge],granite);
+      // The arch is a structural curve below the deck, NOT a railing
+      // floating at the same height. Cast-iron webbing meets the bridge
+      // fascia and includes real diagonal bracing at high quality.
+      beam([px0,arch0,truss],[px1,arch1,truss],.091,shadowIron);
+      beam([px0,y0-.12,truss],[px1,y1-.12,truss],.057,whiteIron);
+      stats.bowBridgeTrussMembers+=2;
+      if(j%2===0){
+        beam([px0,arch0,truss],[px0,y0-.12,truss],.040,whiteIron);
+        stats.bowBridgeTrussMembers++;
+      }
+      if(high){
+        const diagStart=j%2===0?[px0,arch0,truss]:
+          [px0,y0-.12,truss];
+        const diagEnd=j%2===0?[px1,y1-.12,truss]:
+          [px1,arch1,truss];
+        beam(diagStart,diagEnd,.031,whiteIron);
+        stats.bowBridgeTrussMembers++;
+      }
+      // Existing graceful two-rail barrier now sits on a built-up deck.
+      beam([px0,y0+.17,rail],[px1,y1+.17,rail],.062,whiteIron);
+      beam([px0,y0+1.06,rail],[px1,y1+1.06,rail],.055,whiteIron);
+      if(j%2===0)
+        beam([px0,y0+.18,rail],[px0,y0+1.06,rail],.037,whiteIron);
     }
+    if(j%5===0){
+      // Cross-girders connect the two arch ribs beneath the deck.
+      beam([px0,y0-.19,bowZ-1.25],
+        [px0,y0-.19,bowZ+1.25],.085,shadowIron);
+      stats.bowBridgeTrussMembers++;
+    }
+  }
+  // Exposed, masonry-faced pier ends tie the arch into the underlying
+  // terrain. Their feet extend below both the waterline and local terrain
+  // height instead of starting visibly in mid-air.
+  for(const side of [-1,1]){
+    const endU=bowU+side*11,endX=ex(endU,bowZ),
+      footingBase=Math.min(waterTop-.55,ground(endU,bowZ)-.18),
+      cap=bridgeDeckY(side<0?0:1)-.19,
+      height=Math.max(.35,cap-footingBase);
+    box(endX,footingBase+height*.5,bowZ,1.54,height,2.78,granite);
+    box(endX,cap+.04,bowZ,1.75,.14,3.00,limestone);
+    // Stone joints and slightly projecting spring blocks make the load
+    // path legible without burying or replacing the existing lake mesh.
+    for(const edge of [-1,1])
+      box(endX,cap-.29,bowZ+edge*1.41,1.61,.15,.10,dark);
+    stats.bowBridgeAbutments++;
   }
   stats.majorLandmarks++;
   // Belvedere Castle: textured limestone keep, asymmetric turrets and roofline.
