@@ -110,6 +110,15 @@ obj.data.materials.append(material)
 for poly in obj.data.polygons:
     poly.material_index = 0
 
+# The original UV survives the bake only to sample source textures. Blender's
+# glTF exporter otherwise writes the new atlas as TEXCOORD_1. PATROL's
+# native WebGL2 loader intentionally permits only TEXCOORD_0.
+for layer in list(obj.data.uv_layers):
+    if layer.name != "PATROL_BASECOLOR_ATLAS":
+        obj.data.uv_layers.remove(layer)
+obj.data.uv_layers.active = obj.data.uv_layers.get("PATROL_BASECOLOR_ATLAS")
+obj.data.uv_layers.active.active_render = True
+
 bpy.ops.export_scene.gltf(
     filepath=str(dst), export_format='GLB', use_selection=True,
     export_texcoords=True, export_normals=True, export_yup=True)
