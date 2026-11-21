@@ -7,12 +7,24 @@ on:
       - '.agents/skills/scenario-blender/**'
       - '.agents/skills/patrol-scenario-chongqing/**'
       - '.github/workflows/scenario-blender-static.yml'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/scenario-textures.js'
+      - 'assets/nyc/scenario-manifest.json'
+      - 'tools/scenario_blender_export.py'
+      - 'tools/scenario_glb_selftest.html'
+      - 'tests/scenario-glb.test.mjs'
   pull_request:
     paths:
       - 'tools/blender/**'
       - '.agents/skills/scenario-blender/**'
       - '.agents/skills/patrol-scenario-chongqing/**'
       - '.github/workflows/scenario-blender-static.yml'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/scenario-textures.js'
+      - 'assets/nyc/scenario-manifest.json'
+      - 'tools/scenario_blender_export.py'
+      - 'tools/scenario_glb_selftest.html'
+      - 'tests/scenario-glb.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -32,6 +44,9 @@ jobs:
       - name: Check existing Chongqing landmarks and visual interfaces
         run: |
           node --test tests/chongqing-landmarks.test.mjs tests/chongqing-visual.test.mjs
+      - name: Test Scenario glTF importer with embedded atlas and hostile URLs
+        run: |
+          node --test tests/scenario-glb.test.mjs
       - name: No Blender render or Scenario API call
         run: |
           echo "Static checks only; visual Blender render, paid Scenario generation and live GPU FPS are NOT verified."
