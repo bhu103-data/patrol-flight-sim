@@ -18,12 +18,14 @@ function generate(x,z,h=6,detail=2,official=false){
  const boxes=[],quads=[];
  const fn=new Function('createTriangleMesh','addModelBox','addRideBeam',
   'nycDetailBand','MANHATTAN_GRID','WATER_H','tintSeed',
-  'addDowntownFacadeRelief','return ('+source+')')(
+  'addDowntownFacadeRelief','buildOfficialFootprintMesh',
+  'return ('+source+')')(
    ()=>({addTri(){},addQuad(...args){quads.push(args)},
      upload(){return {boxes,quads};}}),
    (_addQuad,...args)=>boxes.push(args),()=>{},
    ()=>detail,{tilt:.24,offset:30,blockWidth:24,blockLength:33},
-   12.2,()=>.45,()=>0
+   12.2,()=>.45,()=>0,
+   (_tri,addQuad)=>{addQuad([0,0,0],[0,0,1],[1,0,1],[1,0,0],[.3,.3,.3]);}
   );
  const lot=[x,z,9,11,h,.45,false];
  if(official)lot[7]=[[x-4,z-5],[x+4,z-5],[x+4,z+5],[x-4,z+5]];
