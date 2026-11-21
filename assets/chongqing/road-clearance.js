@@ -56,9 +56,14 @@ export function clipRoadToFreeSegments(points,width,obstacles,padding=.7,minLeng
     stats.testedSegments++;
     const hits=[];
     for(const obstacle of obstacles){
-      if(isRoadPassableAtElevation(a,b,obstacle))continue;
       const interval=sweptSegmentInterval(a,b,obstacle,width*.5,padding);
-      if(interval)hits.push(interval);
+      if(!interval)continue;
+      // Test elevation where the road is actually beside the obstacle.
+      // Checking the entire sloped segment incorrectly removes safe
+      // approaches to mountain tunnels and elevated Chongqing streets.
+      const at=t=>({y:(a.y??0)+((b.y??0)-(a.y??0))*t});
+      if(isRoadPassableAtElevation(at(interval[0]),at(interval[1]),obstacle))continue;
+      hits.push(interval);
     }
     if(!hits.length){add(a,b);continue;}
     hits.sort((x,y)=>x[0]-y[0]);stats.clippedSegments++;
