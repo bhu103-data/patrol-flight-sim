@@ -1,0 +1,124 @@
+// Run: node --test tests/chongqing-landmarks.test.mjs
+// Regression test for the procedural, browser-independent building module.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const code=await readFile(new URL('../assets/chongqing/landmarks.js',import.meta.url),'utf8');
+const { buildChongqingLandmarks }=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+
+class Vec {
+  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
+  set(x,y,z){this.x=x;this.y=y;this.z=z;return this}
+}
+class Obj {
+  constructor(){
+    this.position=new Vec();
+    this.scale=new Vec(1,1,1);
+    this.rotation={set(){}};
+    this.matrix={};
+    this.children=[];
+  }
+  add(v){this.children.push(v)}
+  updateMatrix(){}
+}
+class Geometry {
+  constructor(){this.attributes={};this.index=null}
+  setAttribute(k,v){this.attributes[k]=v}
+  setIndex(a){this.index=a}
+  computeVertexNormals(){}
+}
+class Material {
+  constructor(options={}){Object.assign(this,options)}
+  clone(){return new Material(this)}
+}
+class Mesh extends Obj {
+  constructor(g,m){super();this.geometry=g;this.material=m}
+}
+class InstancedMesh extends Mesh {
+  constructor(geo,material,capacity){
+    super(geo,material);
+    this.capacity=capacity;
+    this.count=0;
+    this.instanceMatrix={needsUpdate:false};
+    this.written=0;
+  }
+  setMatrixAt(index,m){
+    assert.ok(index<this.capacity,'instanced buffer overflow');
+    this.written++;
+  }
+  computeBoundingSphere(){}
+}
+const FakeThree={
+  BoxGeometry:Geometry,CylinderGeometry:Geometry,TorusGeometry:Geometry,
+  BufferGeometry:Geometry,Float32BufferAttribute:Geometry,
+  MeshStandardMaterial:Material,MeshPhysicalMaterial:Material,MeshBasicMaterial:Material,
+  Object3D:Obj,Mesh,Group:Obj,InstancedMesh,PointLight:Obj,
+  DoubleSide:2
+};
+
+function setup(){
+  const meshes=[],obstacles=[],signs=[];
+  const scene={add(o){meshes.push(o)}};
+  const pbr={concrete:new Material({color:0xb2b2b2}),glass:new Material({roughness:.2}),window:new Material({color:0xdddddd})};
+  const ground=(x,z)=>Math.max(8,22+z*.12);
+  const box=(x,y,z,w,h,d,mat,parent=scene)=>{
+    const mesh=new Mesh(new Geometry(),mat);
+    mesh.position.set(x,y,z);mesh.scale.set(w,h,d);parent.add(mesh);return mesh;
+  };
+  const monument=buildChongqingLandmarks({
+    THREE:FakeThree,scene,ground,pbr,box,sign:(...items)=>signs.push(items),obstacles
+  });
+  return {monument,meshes,obstacles,signs,ground};
+}
+
+test('eight towers and the 300-metre Crystal are present',()=>{
+  const {monument}=setup();
+  assert.equal(monument.stats.towers,8);
+  assert.equal(monument.stats.crystalLength,300);
+  assert.equal(monument.stats.trainCars,3);
+  assert.equal(monument.stats.facadeBands>500,true);
+  assert.equal(monument.stats.mullions>1000,true);
+});
+
+test('Raffles podium and Crystal have collision envelopes and landable tops',()=>{
+  const {monument,obstacles}=setup();
+  const podium=obstacles.find(o=>o.w===324&&o.d===115);
+  const crystal=obstacles.find(o=>o.w===300&&o.d===32.5);
+  assert.ok(podium);
+  assert.ok(crystal);
+  assert.ok(crystal.top>monument.raffles.y);
+  assert.ok(crystal.base>200);
+});
+
+test('Liziba retains an actual open train-height corridor through the building',()=>{
+  const {monument,obstacles}=setup();
+  const station=obstacles.filter(o=>Math.abs(o.x-monument.liziba.x)<1&&Math.abs(o.z-monument.liziba.z)<=20);
+  assert.equal(station.length,4);
+  const [lower,upper]=station;
+  assert.ok(lower.top<monument.liziba.y);
+  assert.ok(upper.base>monument.liziba.y);
+  assert.ok(upper.top>lower.top+50);
+});
+
+test('three carriages move with the elevated rail curve',()=>{
+  const {monument,meshes}=setup();
+  const cars=meshes.filter(x=>x instanceof Obj && !(x instanceof Mesh) && x.children.length>10);
+  assert.equal(cars.length,3);
+  const before=cars.map(c=>[c.position.x,c.position.y,c.position.z]);
+  monument.update(.016);
+  monument.update(.040);
+  const after=cars.map(c=>[c.position.x,c.position.y,c.position.z]);
+  for(let i=0;i<3;i++){
+    assert.notEqual(after[i][0],before[i][0]);
+    assert.ok(after[i].every(Number.isFinite));
+  }
+});
+
+test('landmark mesh batching fits the indexed capacities',()=>{
+  const {monument,meshes}=setup();
+  const instances=meshes.filter(x=>x instanceof InstancedMesh);
+  assert.ok(instances.length>=4);
+  assert.ok(instances.every(i=>i.written<=i.capacity));
+  assert.ok(monument.stats.lizibaWindows>350);
+});
