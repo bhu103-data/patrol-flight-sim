@@ -13,6 +13,9 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
+  // Surface 12 requests Alaska's PBR ice photo/normal/roughness shader.
+  const iceQuad=(a,b,c,d,color)=>addQuad(a,b,c,d,color,12);
+  const iceTri=(a,b,c,color)=>addTri(a,b,c,color,12);
   // Match the existing Glacier Head mesh in index.html. These cracks are a
   // surface-only detail pass; they must not alter sampled collision elevations.
   const cols=20,rows=17;
@@ -33,12 +36,12 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       const c=glacierPoint(col+span+.13,r+.21+width);
       const d=glacierPoint(col+.08,r+width);
       const trench=[.045,.205,.285],inner=[.14,.39,.48];
-      addQuad(lift(a,.15),lift(b,.15),lift(c,.13),lift(d,.13),trench);
+      iceQuad(lift(a,.15),lift(b,.15),lift(c,.13),lift(d,.13),trench);
       // Asymmetric turquoise fracture wall and snow-rich windward lip.
-      addQuad(lift(d,.14),lift(c,.14),lift(c,.41),lift(d,.36),inner);
+      iceQuad(lift(d,.14),lift(c,.14),lift(c,.41),lift(d,.36),inner);
       const lip0=glacierPoint(col+.03,r+width+.045);
       const lip1=glacierPoint(col+span+.15,r+.21+width+.04);
-      addQuad(lift(d,.37),lift(c,.42),lift(lip1,.14),lift(lip0,.14),
+      iceQuad(lift(d,.37),lift(c,.42),lift(lip1,.14),lift(lip0,.14),
         [.73+.1*jitter,.88+.04*jitter,.92]);
       stats.crevasses++;
     }
@@ -65,14 +68,14 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
     const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
           c=[R[0],topR,zR],d=[L[0],topL,zL];
-    addQuad(a,b,c,d,muted);
+    iceQuad(a,b,c,d,muted);
     // Not every section has a rooftop. Rare undercut, broad sloping crowns
     // create realistic ice mass shapes instead of same-height vertical teeth.
     if(i%4===1 || i%9===7){
       const roof=[(L[0]+R[0])*.5,Math.max(topL,topR)+.28+.52*j,
         (zL+zR)*.5+1.45+.8*q];
-      addTri(d,c,roof,light);
-      if(i%3===1)addTri([L[0],topL,zL+1.0],d,roof,undercut);
+      iceTri(d,c,roof,light);
+      if(i%3===1)iceTri([L[0],topL,zL+1.0],d,roof,undercut);
     }
     // Subtle sediment/ice layering in non-uniform elevation bands.
     // A few sections have a third band; most have only two.
@@ -83,14 +86,14 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       const hL=waterY-.23+(topL-waterY+.23)*t+jitter;
       const hR=waterY-.23+(topR-waterY+.23)*t-jitter*.53;
       const color=band===1?[.28,.45,.51]:band===2?[.38,.56,.61]:[.50,.68,.71];
-      addQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
+      iceQuad([L[0],hL,zL-.064],[R[0],hR,zR-.065],
         [R[0],hR+.06,zR-.067],[L[0],hL+.06,zL-.067],color);
       stats.iceStrata++;
     }
     if(i%6===2){
       const width=Math.max(.14,(R[0]-L[0])*.23);
       const xc=L[0]+(R[0]-L[0])*(.25+.33*q),z=(zL+zR)*.5-.10;
-      addQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
+      iceQuad([xc,waterY-.09,z],[xc+width,waterY-.09,z],
         [xc+width,Math.min(topL,topR)*.85,z],
         [xc,Math.min(topL,topR)*.96,z],[.075,.20,.27]);
     }
