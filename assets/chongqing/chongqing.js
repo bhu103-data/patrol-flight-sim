@@ -14,6 +14,7 @@ import { createChongqingUrbanArchitecture } from './urban-architecture.js';
 import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
+import { buildHongyadongStreetPrototype } from './hongyadong-street.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -555,12 +556,17 @@ function streetSpaceClear(x,z,y,radius=0){
 }
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
+// One representative riverside street segment: surface dressing only; existing
+// landmark geometry, collision and flight clearance remain unchanged.
+const hongyadongStreetBuild=buildHongyadongStreetPrototype({THREE,scene,ground,riverCenter,pbr});
 // Match electrical street lighting to the independently selected city environment.
 streetBuild.setTimeOfDay(cqTimeSelect.value);
 wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+hongyadongStreetBuild.setTimeOfDay(cqTimeSelect.value);
 cqTimeSelect.addEventListener('change',()=>{
   streetBuild.setTimeOfDay(cqTimeSelect.value);
   wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+  hongyadongStreetBuild.setTimeOfDay(cqTimeSelect.value);
   skyline.setTimeOfDay(cqTimeSelect.value);
 });
 const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
@@ -674,6 +680,7 @@ function applyQuality(){
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  hongyadongStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
   riverBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
@@ -1347,6 +1354,7 @@ function frame(){
         '\nSkyline profiles '+skyline.stats.towers+' / 5'+
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
         '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips+
+        '\nHongyadong '+hongyadongStreetBuild.stats.meshes+' surface meshes / '+hongyadongStreetBuild.stats.drains+' drains'+
         '\nJialing River ferries '+riverBuild.stats.boats+
         '\nStreet cuts '+roadClearanceStats.clipped+' / clear strips '+roadClearanceStats.paths;
     }
@@ -1357,6 +1365,11 @@ window.PatrolSpaceBridge={getState:()=>({
   altitude:state.pos.y,climb:state.vel.y,
   position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
 })};
+window.PatrolSpaceBridge.getChongqingStreetDebug=()=>({
+  prototype:hongyadongStreetBuild.getDebug(),
+  renderer:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderRatio},
+  pbr:{textures:['assets/nyc/asphalt_04_diff_1k.jpg','assets/nyc/asphalt_04_nor_gl_1k.jpg','assets/nyc/asphalt_04_arm_1k.jpg','assets/nyc/concrete_wall_008_diff_1k.jpg','assets/nyc/concrete_wall_008_nor_gl_1k.jpg','assets/nyc/concrete_wall_008_arm_1k.jpg']}
+});
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);
