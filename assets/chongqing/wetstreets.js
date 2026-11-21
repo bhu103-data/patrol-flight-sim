@@ -64,8 +64,12 @@ export function buildChongqingWetStreets({THREE,scene,ground,riverCenter,isRoadC
       [-length,-width,0,0],[length,-width,1,0],
       [length,width,1,1],[-length,width,0,1]
     ]){
-      glowPositions.push(center.x+dx*cs-dz*sn,center.y,
-        center.z+dx*sn+dz*cs);
+      const px=center.x+dx*cs-dz*sn,pz=center.z+dx*sn+dz*cs;
+      // The asphalt follows the centerline grade. Keep every streak vertex
+      // at that local grade: a flat quad on steep terraces visibly floats
+      // above the uphill end and disappears into the downhill road.
+      const roadHeight=ground(px,roadZ(px,side,tier))+1.755;
+      glowPositions.push(px,roadHeight,pz);
       glowUvs.push(u,v);
     }
     glowIndices.push(base,base+2,base+1,base,base+3,base+2);
