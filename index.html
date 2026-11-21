@@ -2373,6 +2373,62 @@
         roughness=mix(roughness,.24,near*.30);
       }
     }
+    // PATROL_NYC_GIS_PBR_V12: geometry from official City Building Footprints.
+    // Flat interpolated aHarborSurface tags 6/7/8 distinguish genuine
+    // polygon masonry, authored window planes and triangulated rooftops.
+    // Original Poly Haven CC0 maps are already bound by NYC material atlas.
+    void nyOfficialGisPbr(inout vec3 albedo,inout vec3 n,inout float roughness){
+      if(!uManhattanView || !uSmooth || uNyStreetQuality<1.5 ||
+          vHarborSurface<5.5 || vHarborSurface>8.5)return;
+      float nearDetail=1.0-smoothstep(98.0,340.0,distance(vWorld,uEye));
+      if(nearDetail<0.002)return;
+      if(vHarborSurface<6.5){
+        // Stable world-space stone/brick mapping keeps scale consistent even
+        // across non-axis-aligned official building footprint edges.
+        vec3 t=normalize(vec3(-n.z,0.0,n.x)+vec3(0.00001,0.0,0.00001));
+        vec2 uv=vec2(dot(vWorld,t),vWorld.y)*vec2(.30,.29);
+        float pattern=nyStreetNoise(uv*.65+vec2(11.5,9.4));
+        float modulation=.92+.16*pattern;
+        float roughTarget=.77;
+        if(uNyPhotoReady>0.5){
+          vec3 photograph=texture(uNyWallDiffuse,uv).rgb;
+          vec3 arm=texture(uNyWallARM,uv).rgb;
+          vec3 bump=texture(uNyWallNormal,uv).rgb*2.0-1.0;
+          float lum=dot(photograph,vec3(.2126,.7152,.0722));
+          modulation*=clamp(.68+.65*lum,.60,1.35);
+          roughTarget=clamp(arm.g,.44,.94);
+          n=normalize(n+(t*bump.x+vec3(0.0,bump.y,0.0))*
+              .072*nearDetail);
+        }
+        float damping=(1.0-smoothstep(15.2,23.0,vWorld.y))*
+                       clamp(uNyStreetWetness,0.0,1.0);
+        albedo*=mix(1.0,modulation*(1.0-.18*damping),nearDetail*.80);
+        roughness=mix(roughness,roughTarget,nearDetail*.70);
+      }else if(vHarborSurface<7.5){
+        // Embedded window quads receive Fresnel glazing and deterministic
+        // varied indoor light, not a second procedural window grid.
+        vec3 view=normalize(uEye-vWorld);
+        float facing=abs(dot(view,n));
+        float fresnel=.04+.96*pow(1.0-clamp(facing,0.0,1.0),5.0);
+        vec3 sky=mix(vec3(.14,.23,.32),vec3(.40,.55,.66),uAtmosphere.x);
+        vec3 pane=albedo*.67+sky*(.33+.49*fresnel);
+        vec2 cell=floor(vec2(vWorld.x*.68+vWorld.z*.57,
+                             vWorld.y*.43));
+        float lights=step(.76,nyStreetHash(cell+vec2(37.2,19.5)))*
+          (1.0-uAtmosphere.x*.94);
+        pane+=vec3(.58,.39,.18)*lights*.24;
+        albedo=mix(albedo,pane,nearDetail*.89);
+        roughness=mix(roughness,.19+fresnel*.05,nearDetail*.92);
+      }else{
+        // Gravel-coated roof with roughness variation and no road shader
+        // classification. Small skylight-like roof fixtures remain geometry.
+        vec2 uv=vWorld.xz*.58;
+        float aggregate=nyStreetNoise(uv*3.4);
+        albedo*=1.0+nearDetail*(aggregate-.50)*.19;
+        float wet=clamp(uNyStreetWetness*.39,0.0,.37);
+        roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
+      }
+    }
     void main() {
       if(uSphereShow){
         vec3 radial=normalize(vWorld-uSphereCenter);
@@ -2417,6 +2473,7 @@
         nyFacadeRainStreaks(material,n);
         nyLayeredMaterial(material,n);
         nyBuildingPbr(material,n,surfaceRoughness);
+        nyOfficialGisPbr(material,n,surfaceRoughness);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       if(uDcSurface==5 && n.y>0.8){
@@ -6182,7 +6239,10 @@
           if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
           const dataMesh=createTriangleMesh();
           const stats=module.buildTimesSquareGisInfill(asset,{
-            addQuad:dataMesh.addQuad,addTri:dataMesh.addTri,
+            addQuad:(a,b,c,d,color,surface=0)=>
+              dataMesh.addQuad(a,b,c,d,color,surface),
+            addTri:(a,b,c,color,surface=0)=>
+              dataMesh.addTri(a,b,c,color,surface),
             box:(...args)=>addModelBox(dataMesh.addQuad,...args),
             ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
             protectedSites:protectedTimesSites
