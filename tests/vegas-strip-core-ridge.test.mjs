@@ -13,9 +13,9 @@ const sampleSource=extract('  function buildVegasCoreRidgeSample(geometry) {',
   '  function buildVegasStrip(geometry) {');
 function scene(measured=null){
  const triangles=[],quads=[];
- const build=new Function('sampleTerrainHeight','VEGAS_BOULEVARD','vegasMeasuredRidges',
+ const build=new Function('sampleTerrainHeight','VEGAS_BOULEVARD','vegasMeasuredRidges','vegasMeasuredStripX',
   sampleSource+'return buildVegasCoreRidgeSample;')(
-    (x,z)=>13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7,-35,measured);
+    (x,z)=>13.6+Math.sin(x/60)*.4+Math.sin(z/75)*.7,-35,measured,()=>-35);
  const stats=build({
    addTri:(a,b,c,rgb)=>triangles.push({a,b,c,rgb}),
    addQuad:(a,b,c,d,rgb)=>quads.push({a,b,c,d,rgb})
