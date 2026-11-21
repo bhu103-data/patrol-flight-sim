@@ -373,11 +373,11 @@ export function buildNycStreetNetwork({
     }
   }
   // PATROL_NYC_BRIDGEHEAD_APPROACH_FINISH_V1
-  // Reuse only the already accepted DUMBO grid street at z=-330.
-  // i=13..14 lies east of the Brooklyn Bridge terminal (253,-342).
+  // Reuse only existing, cleared DUMBO cross street j=-11 (z=-363).
+  // i=13..14 lies just east/south of the Brooklyn Bridge terminal (253,-342).
   // All road topology and clearance gates remain in streetSegment().
   function bridgeheadApproachFinish(a,b,width,kind,i,j){
-    if(kind!=='street'||j!==-10||i<13||i>14)return;
+    if(kind!=='street'||j!==-11||i<13||i>14)return;
     const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(length<14)return;
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
@@ -396,9 +396,11 @@ export function buildNycStreetNetwork({
     // bridge-facing side. Keep both intersections open (18% end insets),
     // verify all post footprints before adding any rail, and never extend
     // beyond the full-footprint dry/collision-clear swept road corridor.
-    // Match streetFurniture's per-block hash to avoid placing a rail
-    // through a same-side bike rack or shelter at this bridgehead.
-    if(hash(i,j,49)>=.76)return;
+    // Match streetFurniture's per-block choice. Existing furniture
+    // on the OPPOSITE sidewalk is fine; a same-side shelter/rack is not.
+    const otherFixture=hash(i,j,49)>=.76;
+    const otherSide=hash(i,j,58)<.5?-1:1;
+    if(otherFixture&&otherSide===1)return;
     const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
     const nx=dz,nz=-dx,offset=width*.5+1.16;
     const at=t=>[
