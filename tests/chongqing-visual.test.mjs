@@ -133,6 +133,12 @@ test('cinematic Chongqing uses PBR curved hotpot roof and grounded river-facing 
     'recessed eaves receive real shadow passes');
   assert.equal(manifest.hongyadong.enabled,false,
     'the unapproved landmark must remain opt-in');
+  const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');
+  assert.match(html,/id="cqBlenderToggle"/,'visual opt-in available inside the game');
+  assert.match(source,/searchParams\.set\('scenario','hongyadong'\)/,
+    'the toggle should request the reviewed Blender asset without cloud generation');
+  assert.match(source,/searchParams\.delete\('scenario'\)/,
+    'the original scene remains one click away');
 });
 
 process.on('exit',()=>{globalThis.document=oldDocument});
