@@ -5013,7 +5013,10 @@ const CENTRAL_PARK_SITES=[
     const [x,z,w,d]=lot;
     const minX=x-w*.5-roadMargin,maxX=x+w*.5+roadMargin;
     const minZ=z-d*.5-roadMargin,maxZ=z+d*.5+roadMargin;
-    for(const path of CITY_STREETS)for(let j=1;j<path.length;j++){
+    // Reserve both ordinary streets and waterfront expressway/ramp corridors.
+    // A conservative footprint clear keeps elevated decks from crossing roofs.
+    for(const path of [...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp])
+      for(let j=1;j<path.length;j++){
       const a=path[j-1],b=path[j];
       if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
          Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
