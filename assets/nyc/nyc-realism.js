@@ -64,6 +64,13 @@ export async function decodeGLB(gl,buffer,targetHeight){
   function walk(id,parent,depth=0){
     if(depth>32)throw Error('GLB hierarchy too deep');
     const node=document.nodes[id],matrix=product(parent,nodeMatrix(node));
+    // Cofactor columns give the inverse-transpose normal transform.
+    const c0=[matrix[0],matrix[1],matrix[2]];
+    const c1=[matrix[4],matrix[5],matrix[6]];
+    const c2=[matrix[8],matrix[9],matrix[10]];
+    const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+    const n0=cross(c1,c2),n1=cross(c2,c0),n2=cross(c0,c1);
+    const det=c0[0]*n0[0]+c0[1]*n0[1]+c0[2]*n0[2];
     if(node.mesh!==undefined){
       for(const primitive of document.meshes[node.mesh].primitives||[]){
         if(primitive.mode!==undefined&&primitive.mode!==4)continue;
@@ -107,12 +114,13 @@ export async function decodeGLB(gl,buffer,targetHeight){
             minZ=Math.min(minZ,wz);maxZ=Math.max(maxZ,wz);
             if(n){
               const nx=n.result[index*3],ny=n.result[index*3+1],nz=n.result[index*3+2];
-              const ax=matrix[0]*nx+matrix[4]*ny+matrix[8]*nz;
-              const ay=matrix[1]*nx+matrix[5]*ny+matrix[9]*nz;
-              const az=matrix[2]*nx+matrix[6]*ny+matrix[10]*nz;
+              const sign=Math.sign(det||1);
+              const ax=(n0[0]*nx+n1[0]*ny+n2[0]*nz)*sign;
+              const ay=(n0[1]*nx+n1[1]*ny+n2[1]*nz)*sign;
+              const az=(n0[2]*nx+n1[2]*ny+n2[2]*nz)*sign;
               const len=Math.hypot(ax,ay,az)||1;
               nor.push(ax/len,ay/len,az/len);
-            }else nor.push(0,1,0);
+            }else nor.push(0,0,0);
             const tint=color0
               ?[color0.result[index*color0.components],
                 color0.result[index*color0.components+1],
@@ -122,6 +130,18 @@ export async function decodeGLB(gl,buffer,targetHeight){
               faceColor[2]*tint[2]);
             uvMask.push(uv?uv.result[index*2]:0,
               uv?uv.result[index*2+1]:0,uv?1:0);
+          }
+          // Reconstruct face normals for GLBs that omit the NORMAL accessor.
+          if(!n){
+            const p0=pos.length-9;
+            const ax=pos[p0+3]-pos[p0],ay=pos[p0+4]-pos[p0+1],az=pos[p0+5]-pos[p0+2];
+            const bx=pos[p0+6]-pos[p0],by=pos[p0+7]-pos[p0+1],bz=pos[p0+8]-pos[p0+2];
+            const nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;
+            const len=Math.hypot(nx,ny,nz)||1;
+            for(let j=0;j<3;j++){
+              const at=nor.length-9+j*3;
+              nor[at]=nx/len;nor[at+1]=ny/len;nor[at+2]=nz/len;
+            }
           }
         }
       }
