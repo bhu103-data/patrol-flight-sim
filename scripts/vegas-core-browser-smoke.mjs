@@ -25,6 +25,7 @@ const browser=await chromium.launch({
   '--enable-unsafe-swiftshader'
  ]:[]
 });
+const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
