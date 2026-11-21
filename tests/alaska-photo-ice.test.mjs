@@ -86,3 +86,27 @@ test('four bounded CC0 photographic PBR materials are present',()=>{
     assert.equal(header.subarray(8,12).toString(),'WEBP');
   }
 });
+
+test('drifting floe checks diagonal banks across its complete rotating hull',()=>{
+  const actor={kind:'floe',anchor:[0,0],radius:4,phase:0,yaw:0};
+  const edge=actor.radius*1.12*Math.SQRT1_2;
+  // At time zero the drift is +5.1 z units. The diagonal shore is outside
+  // the old center / four-cardinal probes, but inside the real floe width.
+  const land=(x,z)=>Math.hypot(x-edge,z-(5.1+edge))<.22?20:11.7;
+  const pose=poseAlaskaIce(actor,0,land,12.2);
+  assert.equal(pose.visible,true);
+  assert.deepEqual([pose.x,pose.z],actor.anchor,
+    'unsafe diagonal drift must fall back to its verified mooring');
+});
+
+test('initial Alaska ice anchorage reserves full mesh radius',()=>{
+  const makeMesh=testMeshFactory();
+  const clean=createAlaskaIceActors({makeMesh,terrainAt:flatWater,waterY:12.2});
+  const first=clean[0],edge=first.radius*1.12*Math.SQRT1_2;
+  const land=(x,z)=>Math.hypot(x-(first.anchor[0]+edge),
+    z-(first.anchor[1]+edge))<.22?20:11.7;
+  const coast=createAlaskaIceActors({makeMesh,terrainAt:land,waterY:12.2});
+  assert.ok(coast.length>2,'waterborne actors remain viable');
+  assert.notDeepEqual(coast[0].anchor,first.anchor,
+    'initial placement must avoid terrain under a diagonal hull corner');
+});
