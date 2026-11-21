@@ -24,11 +24,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p assets/chongqing/generated
+          mkdir -p /tmp/patrol-pbr-review assets/chongqing/generated
           gh run download 44853989606 -R bhu103-data/patrol-flight-sim \
             --name hongyadong-blender-pbr-review \
-            --dir assets/chongqing/generated
-          echo "b66cb4e8680fb52324d833447ddacb1ac805d071f711ffe7ef088dd64076a5d3  assets/chongqing/generated/hongyadong-study.glb" | sha256sum -c -
+            --dir /tmp/patrol-pbr-review
+          echo "b66cb4e8680fb52324d833447ddacb1ac805d071f711ffe7ef088dd64076a5d3  /tmp/patrol-pbr-review/hongyadong-study.glb" | sha256sum -c -
+          cp /tmp/patrol-pbr-review/hongyadong-study.glb assets/chongqing/generated/hongyadong-study.glb
       - name: Recheck using the production WebGL gate
         run: |
           node --input-type=module <<'NODE'
