@@ -6,14 +6,53 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   const up=new THREE.Vector3(0,1,0);
   const dummy=new THREE.Object3D();
   const color={};
+  // Tiny procedural material atlases instead of large downloaded photographs.
+  function tiledTexture(type) {
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+    const c=canvas.getContext('2d');
+    c.fillStyle=type==='roof'?'#bcb1ac':type==='stone'?'#d0c6bb':'#bda996';
+    c.fillRect(0,0,256,256);
+    if(type==='roof'){
+      for(let row=0;row<14;row++)for(let col=-1;col<15;col++){
+        const x=col*20+(row%2)*10,y=row*20;
+        c.fillStyle=['#a99e94','#c0b3a8','#d2bda9','#998b82'][(col*13+row*7+1000)%4];
+        c.fillRect(x+1,y+1,18,17);
+        c.strokeStyle='#756a66';c.lineWidth=1.1;
+        c.beginPath();c.moveTo(x+1,y+18);c.quadraticCurveTo(x+10,y+11,x+19,y+18);c.stroke();
+        c.fillStyle='#e0d0bf';c.fillRect(x+2,y+2,15,1.2);
+      }
+    }else if(type==='stone'){
+      for(let row=0;row<14;row++)for(let col=-1;col<15;col++){
+        const x=col*22+(row%2)*11,y=row*19;
+        c.fillStyle=['#bbb5b0','#d2ccc2','#ada9a4','#c8bfb2'][(row*9+col*11+1000)%4];
+        c.fillRect(x+1,y+1,21,18);
+        c.strokeStyle='#817c79';c.lineWidth=.9;c.strokeRect(x+1,y+1,21,18);
+      }
+    }else{
+      for(let i=0;i<70;i++){
+        const y=(i*73)%256;
+        c.strokeStyle=i%3===0?'#7f695b':'#dac3ad';
+        c.globalAlpha=.18+(i%5)*.08;c.lineWidth=i%7===0?2:.7;
+        c.beginPath();c.moveTo(0,y);c.bezierCurveTo(65,y+Math.sin(i)*4,185,y-Math.cos(i)*3,256,y);c.stroke();
+      }
+      c.globalAlpha=1;
+    }
+    const texture=new THREE.CanvasTexture(canvas);
+    texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+    texture.repeat.set(type==='roof'?3:2,type==='roof'?2:3);
+    texture.colorSpace=THREE.SRGBColorSpace;
+    texture.anisotropy=4;texture.generateMipmaps=true;
+    return texture;
+  }
+  const roofTexture=tiledTexture('roof'),stoneTexture=tiledTexture('stone'),woodTexture=tiledTexture('wood');
   const materials={
-    timber:new THREE.MeshStandardMaterial({color:0x583028,roughness:.75}),
-    carved:new THREE.MeshStandardMaterial({color:0x975d3c,roughness:.62}),
-    terra:new THREE.MeshStandardMaterial({color:0x713339,roughness:.66}),
+    timber:new THREE.MeshStandardMaterial({color:0x9f6855,map:woodTexture,bumpMap:woodTexture,bumpScale:.025,roughness:.79}),
+    carved:new THREE.MeshStandardMaterial({color:0xbd8b62,map:woodTexture,roughness:.67}),
+    terra:new THREE.MeshStandardMaterial({color:0x8c5555,map:roofTexture,bumpMap:roofTexture,bumpScale:.05,roughness:.72}),
     rail:new THREE.MeshStandardMaterial({color:0x7e8791,metalness:.52,roughness:.5}),
-    stone:new THREE.MeshStandardMaterial({color:0x96939a,roughness:.89}),
+    stone:new THREE.MeshStandardMaterial({color:0xb6adb0,map:stoneTexture,bumpMap:stoneTexture,bumpScale:.04,roughness:.91}),
     paving:new THREE.MeshStandardMaterial({color:0x55545a,roughness:.96}),
-    steps:new THREE.MeshStandardMaterial({color:0x88868a,roughness:.85}),
+    steps:new THREE.MeshStandardMaterial({color:0xbdb2a9,map:stoneTexture,roughness:.89}),
     window:new THREE.MeshBasicMaterial({color:0xffcf86}),
     neon:new THREE.MeshBasicMaterial({color:0xffbd70}),
     red:new THREE.MeshBasicMaterial({color:0xff4142}),
@@ -241,7 +280,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const short=Math.min(b.w,b.d);
     if(++roofRank%2===0){
       put('stone',x,y+.8,z,b.w*.82,1.6,b.d*.74);
-      put('glass',x,y+1.8,z,short*.3,2.8,short*.35);
+      put('window',x,y+1.8,z,short*.3,2.8,short*.35);
       put('neon',x,y+1.55,z+b.d*.39,b.w*.68,.18,.25);
     }
     if(roofRank%4===0){
