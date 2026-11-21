@@ -40,5 +40,6 @@ test('Preserves active Hongyadong GLB loader and wet street FX while replacing c
  assert.match(main,/PATROL_CQ_CINEMATIC_V3/);
  assert.match(read('assets/chongqing/atmosphere.js'),/setDaylight/);
  const existing=JSON.parse(read('assets/chongqing/scenario-manifest.json'));
- assert.equal(existing.hongyadong.enabled,false,'Do not activate unapproved Scenario GLBs');
+ assert.equal(existing.hongyadong.enabled,true,'Activate verified CC0 GLB with original fallback');
+ assert.match(existing.hongyadong.license,/CC0/);
 });
