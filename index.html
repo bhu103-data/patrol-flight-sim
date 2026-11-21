@@ -6133,11 +6133,14 @@ const CENTRAL_PARK_SITES=[
         }
       }
       for(const [cx,cz] of candidates){
-        const heights=[];
-        for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
+        // Test the full cabin/footing envelope, including quarter-points.
+        // A nine-point grid can miss narrow shore inlets beneath a floor.
+        const offsets=[-.5,-.25,0,.25,.5],heights=[];
+        for(const ux of offsets)for(const uz of offsets)
           heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
         const low=Math.min(...heights),high=Math.max(...heights);
-        if(low<=WATER_H+1.0||high-low>maxSlope)continue;
+        if(!Number.isFinite(low)||!Number.isFinite(high)||
+           low<=WATER_H+1.0||high-low>maxSlope)continue;
         if(alaskaObstacles.some(o=>Math.abs(cx-o.x)<w*.5+o.halfX+2.2 &&
            Math.abs(cz-o.z)<d*.5+o.halfZ+2.2))continue;
         return {x:cx,z:cz,y:low,top:high};
