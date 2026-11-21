@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "description": "Optional Scenario for Blender landmark replacements. All disabled until a verified GLB is exported and reviewed.",
+  "source_plugin": "https://github.com/scenario-labs/blender-plugin",
+  "max_glb_bytes": 8388608,
+  "landmarks": {
+    "liberty": {
+      "enabled": false,
+      "file": "scenario/liberty.glb",
+      "target_height": 31.3,
+      "min_triangles": 500,
+      "license": ""
+    },
+    "trade": {
+      "enabled": false,
+      "file": "scenario/trade.glb",
+      "target_height": 77,
+      "min_triangles": 600,
+      "license": ""
+    },
+    "empire": {
+      "enabled": false,
+      "file": "scenario/empire.glb",
+      "target_height": 79,
+      "min_triangles": 700,
+      "license": ""
+    },
+    "chrysler": {
+      "enabled": false,
+      "file": "scenario/chrysler.glb",
+      "target_height": 68,
+      "min_triangles": 600,
+      "license": ""
+    },
+    "flatiron": {
+      "enabled": false,
+      "file": "scenario/flatiron.glb",
+      "target_height": 17,
+      "min_triangles": 450,
+      "license": ""
+    },
+    "times": {
+      "enabled": false,
+      "file": "scenario/times.glb",
+      "target_height": 35.6,
+      "min_triangles": 500,
+      "license": ""
+    }
+  }
+}
