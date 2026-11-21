@@ -46,7 +46,7 @@ test('at peak dusk Manhattan fog matches at near and far ranges',()=>{
 
 test('noon, midnight and non-Manhattan shaders keep their original result',()=>{
   assert.ok(mesh.includes('if(uManhattanView){'));
-  assert.ok(mesh.includes('}else{\n          horizon=mix(horizon,vec3(0.48,0.33,0.35)'));
+  assert.match(mesh,/\}else\{\s+horizon=mix\(horizon,vec3\(0\.48,0\.33,0\.35\)/);
   for(const day of [0,1]){
     for(const fog of [0,.12,.88]){
       assert.equal(nyMeshExtinction(fog,0),oldMeshExtinction(fog));
