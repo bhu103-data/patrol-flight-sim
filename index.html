@@ -45,7 +45,7 @@
   #skyPanel{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px 10px;
     padding:10px;background:#142334eb;border:1px solid #a8c6dc90;border-radius:6px;min-width:233px;}
   #skyStatus{grid-column:1/-1;color:#e6d4ab;font-variant-numeric:tabular-nums;}
-  #hotelViewButton,#hotelViews button,#hotelViews select{
+  #hotelViewButton,#bridgeShortcutButton,#hotelViews button,#hotelViews select{
     border:1px solid #96bac988;border-radius:4px;background:#234151;color:#eff7fb;
     padding:5px 8px;font:inherit;cursor:pointer;
   }
@@ -304,6 +304,7 @@
     </div>
     <div class="bar-right">
       <button id="hotelViewButton" type="button" aria-controls="hotelViews" aria-expanded="false" hidden>Scenic Views <span class="desktop-only">[H]</span></button>
+      <button id="bridgeShortcutButton" type="button" title="Open Brooklyn Bridge close view" hidden>Bridge View</button>
       <button id="flightMenuBtn" type="button">Flight Menu</button>
       <button id="audioBtn" type="button">SOUND: OFF</button>
     </div>
@@ -339,6 +340,7 @@
   const scenicAngleLabel = document.getElementById('scenicAngleLabel');
   const rescueViewButton = document.getElementById('rescueViewButton');
   const bridgeFocusButton = document.getElementById('bridgeFocusButton');
+  const bridgeShortcutButton = document.getElementById('bridgeShortcutButton');
   rescueViewButton.addEventListener('click',triggerSkylineRescue);
   const resumeFlight = document.getElementById('resumeFlight');
   const runwayChoice = document.getElementById('runwayChoice');
@@ -8761,6 +8763,7 @@
     setDcAutoTour(false);
     rescueViewButton.hidden=!selectedMap.city;
     bridgeFocusButton.hidden=!selectedMap.city;
+    bridgeShortcutButton.hidden=!selectedMap.city;
     rescueStart=null;
     rescueForm=RESCUE_FORMS.length-1;
     if(hasScenicViews())for(const {site} of scenicViews())hotelTarget.add(new Option(site.name));
@@ -8837,7 +8840,7 @@
     return {eye:[x,height,z],look:[view.x,ground+view.height,view.z],up:worldUp,fov:lerp(66,43,zoom)};
   }
   hotelViewButton.addEventListener('click',()=>setScenicView(!scenicViewActive));
-  bridgeFocusButton.addEventListener('click',()=>{
+  function openBrooklynCloseView(){
     if(!selectedMap.city||!flying||crash)return;
     if(!scenicViewActive)setScenicView(true);
     const bridgeIndex=scenicViews().findIndex(v=>v.name==='Brooklyn Bridge · Deck View');
@@ -8847,7 +8850,9 @@
     hotelZoom.value='68';
     onboardView=false;
     updateScenicView();
-  });
+  }
+  bridgeFocusButton.addEventListener('click',openBrooklynCloseView);
+  bridgeShortcutButton.addEventListener('click',openBrooklynCloseView);
   resumeFlight.addEventListener('click',()=>setScenicView(false));
   hotelTarget.addEventListener('change',()=>{
     setDcAutoTour(false);
