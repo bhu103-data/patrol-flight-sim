@@ -53,3 +53,17 @@ test('capture pipelines check actual sky share for the single tenth view',async(
     assert.match(source,/upperSkyFraction/);
   }
 });
+
+test('full ten-view tour inspects OTI facades in daylight before bridge zoom',async()=>{
+  const script=await readFile(new URL('../scripts/nyc-road-browser-smoke.mjs',import.meta.url),'utf8');
+  const harbor=script.indexOf("await capture('09-manhattan-window-facades.png')");
+  const city=script.indexOf("await capture('01-city-loaded.png')");
+  const bridge=script.indexOf("const bridgeShortcut=");
+  const lastTimes=script.indexOf("const timesViews=");
+  assert.ok(city>=0&&harbor>city&&bridge>harbor&&lastTimes>harbor,
+    'harbor view must happen before bridge zoom=68 and late-night Times Square');
+  assert.match(script,/el\.value='42'/,
+    'harbor camera zoom must match the independently verified one-view camera');
+  assert.match(script,/facadeView\.zoom==='42'/,
+    'the smoke must verify the correct camera zoom before screenshot');
+});
