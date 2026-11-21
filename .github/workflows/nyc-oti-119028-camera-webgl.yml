@@ -1,0 +1,49 @@
+name: NYC OTI119028 upper-window source camera WebGL QA
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'scripts/nyc-oti-119028-camera-webgl.mjs'
+      - '.github/workflows/nyc-oti-119028-camera-webgl.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oti119028-window-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-window-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check window geometry and original scene semantics
+        run: node --test tests/nyc-oti-119028-recessed-upper-window.test.mjs tests/nyc-oti-window-visual-gate.test.mjs
+      - name: Install the existing Chromium / PNG QA dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unmodified local PATROL game
+        run: |
+          python3 -m http.server 8927 --bind 127.0.0.1 >/tmp/oti119028-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8927/index.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture source-anchored mid and near WebGL scene screenshots
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8927
+        run: node scripts/nyc-oti-119028-camera-webgl.mjs
+        timeout-minutes: 8
+      - name: Preserve screenshots and timing diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-oti-119028-upper-window-webgl
+          path: artifacts/nyc-oti-119028/
+          if-no-files-found: warn
+          retention-days: 7
