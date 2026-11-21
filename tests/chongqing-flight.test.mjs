@@ -41,13 +41,13 @@ function makeFlight(y=302,ceiling=Infinity){
     'state','keys','temp','viewYaw','touchForward','touchSideways',
     'clamp','jumpQueued','intersectsBuilding','streetBuild','riverBuild',
     'obstacleIndex','ground','avatar','pilotLimbs','flyingScarf',
-    'flameLight','time','message',
+    'flameLight','time','message','seaplaneMode','moveSharedFloatplane',
     movement+';return move;'
   );
   const move=fn(state,keys,new Vector(),0,0,0,
     (v,min,max)=>Math.max(min,Math.min(max,v)),
     false,()=>false,streetBuild,riverBuild,obstacleIndex,()=>10,
-    avatar,pilotLimbs,flyingScarf,flameLight,0,()=>{});
+    avatar,pilotLimbs,flyingScarf,flameLight,0,()=>{},false,()=>{});
   return {state,keys,move};
 }
 test('ascending past the old 300-unit limit reaches 350m towers and 650m portal',()=>{
