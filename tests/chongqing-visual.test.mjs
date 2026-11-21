@@ -131,8 +131,10 @@ test('cinematic Chongqing uses PBR curved hotpot roof and grounded river-facing 
     'a varied roofline rather than identical continuous slabs');
   assert.match(bridge,/node\.castShadow=true/,
     'recessed eaves receive real shadow passes');
-  assert.equal(manifest.hongyadong.enabled,false,
-    'the unapproved landmark must remain opt-in');
+  assert.equal(manifest.hongyadong.enabled,true,
+    'reviewed CC0 Blender facade becomes the default while rollback remains available');
+  assert.ok(manifest.hongyadong.license.includes('CC0'));
+  assert.match(source,/searchParams\.set\('scenario','original'\)/);
   const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');
   assert.match(html,/id="cqBlenderToggle"/,'visual opt-in available inside the game');
   assert.match(source,/searchParams\.set\('scenario','hongyadong'\)/,
