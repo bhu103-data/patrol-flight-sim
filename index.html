@@ -3925,12 +3925,19 @@
         if (i>0) for(let j=0;j<7;j++) {
           cityTraffic.push({kind:'walker',route,offset:10+j*route.total*0.22,pace:1.0+(j%3)*0.2});
         }
+        for(let j=0;j<5;j++)
+          cityTraffic.push({kind:['sedan','suv','sedan','van','suv'][j],
+            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55});
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
       for(let i=0;i<8;i++)cityTraffic.push({kind:'taxi',oneWay:true,route:seventh,
         offset:seventh.total*i/8,pace:5.7});
       cityTraffic.push({kind:'police',oneWay:true,route:seventh,offset:seventh.total/16,pace:5.7});
+      for(let j=0;j<9;j++)
+        cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,
+          route:seventh,offset:11+seventh.total*(j+.34)/10.3,
+          pace:5.2+(j%4)*.45});
       cityTraffic.push({kind:'train',route:makeTrafficRoute(railwayPoints(BROOKLYN_RAIL)),offset:74,pace:8.2});
       civilAirTraffic.push(
         {center:[18,-282],rx:250,rz:138,altitude:62,phase:0.2,pace:0.075,scale:2.15,livery:0},
@@ -3948,6 +3955,10 @@
       const route=makeTrafficRoute(expresswayRoute(design));
       const ramp=makeTrafficRoute(expresswayRoute(design,design.ramp));
       for(let i=0;i<6;i++)cityTraffic.push({kind:'taxi',expressway:true,route,offset:i*route.total/3.0,pace:8.2+i%2});
+      if(selectedMap.city)for(let i=0;i<8;i++)
+        cityTraffic.push({kind:['suv','sedan','van','sedan'][i%4],
+          expressway:true,route,offset:31+route.total*i/8.3,
+          pace:7.5+(i%3)*.65});
       for(let i=0;i<2;i++)cityTraffic.push({kind:'taxi',expressway:true,route:ramp,laneOffset:0.95,offset:i*ramp.total,pace:6.9});
     }
     updateBridgeRails();
@@ -3957,8 +3968,13 @@
     const { addTri,addQuad,upload }=createTriangleMesh();
     const box=(...args)=>addModelBox(addQuad,...args);
     const glass=[0.25,0.39,0.44], rubber=[0.12,0.14,0.15];
-    if(kind==='taxi'||kind==='police') {
-      const police=kind==='police',body=police?[0.80,0.83,0.86]:[0.96,0.66,0.11];
+    if(['taxi','police','sedan','suv','van'].includes(kind)) {
+      // PATROL_NYC_CIVILIAN_FLEET_V10: additional resident/fleet silhouettes.
+      // Generic Camry-style sedan, RAV4-style SUV and local delivery van,
+      // not licensed or dimension-verified manufacturer models.
+      const police=kind==='police',suv=kind==='suv',van=kind==='van';
+      const body=police?[.80,.83,.86]:kind==='taxi'?[.96,.66,.11]:
+        kind==='sedan'?[.24,.28,.34]:suv?[.65,.69,.70]:[.88,.89,.87];
 
       // Six longitudinal sections create a sculpted hood, tapered bumpers,
       // chamfered shoulder line and curved boot instead of a single cuboid.
@@ -3989,14 +4005,33 @@
       // Sloped sedan glazing replaces the rectangular greenhouse.
       const low=[[-.72,1.01,.70],[.72,1.01,.70],
         [.72,1.01,-1.04],[-.72,1.01,-1.04]];
-      const high=[[-.59,1.59,.47],[.59,1.59,.47],
-        [.59,1.59,-.77],[-.59,1.59,-.77]];
+      const roof=van?1.96:suv?1.79:1.59;
+      const roofFront=van?.59:suv?.49:.47;
+      const roofBack=van?-1.31:suv?-1.13:-.77;
+      const roofWidth=van?.68:suv?.62:.59;
+      const high=[[-roofWidth,roof,roofFront],[roofWidth,roof,roofFront],
+        [roofWidth,roof,roofBack],[-roofWidth,roof,roofBack]];
       for(let k=0;k<4;k++)addQuad(low[k],low[(k+1)%4],
         high[(k+1)%4],high[k],glass,5);
       addQuad(high[0],high[1],high[2],high[3],body,4);
       for(const side of [-1,1]){
         box(side*.665,1.30,-.24,.052,.53,.055,body);
         box(side*.665,1.04,-.18,.045,.044,1.61,body);
+      }
+      if(suv){
+        for(const side of [-1,1]){
+          box(side*.53,roof+.06,-.18,.072,.10,1.49,[.30,.34,.37]);
+          box(side*.53,roof+.10,.45,.20,.08,.12,[.46,.50,.52]);
+        }
+        box(0,roof+.075,-1.16,.70,.15,.22,[.40,.43,.44]);
+      }
+      if(van){
+        for(const side of [-1,1]){
+          box(side*.67,1.46,-.74,.051,.59,.73,body.map(v=>v*.94));
+          box(side*.68,.94,-.46,.05,.075,1.10,[.34,.37,.40]);
+          box(side*.68,1.22,.77,.05,.36,.38,glass);
+        }
+        box(0,roof+.045,-.67,.95,.08,1.28,body);
       }
       if(police){
         const ink=[0.13,0.21,0.34];
@@ -4007,7 +4042,7 @@
           box(side*0.847,0.70,0,0.028,0.22,3.56,ink);
           addVegasLettering(addQuad,'POLICE',(u,v)=>[side*0.864,0.91+v,-side*u],1.38,0.205,ink);
         }
-      }else{
+      }else if(kind==='taxi'){
         box(0,1.76,-0.22,0.62,0.18,0.29,[0.97,0.84,0.36]);
       }
       const ink=[.13,.23,.36],chrome=[.51,.55,.56];
@@ -4077,8 +4112,11 @@
           box(side*.855,.74,.03,.031,.20,2.55,[.12,.31,.63]);
           box(side*.857,.88,.34,.033,.05,1.50,satin);
           box(side*.851,.95,-1.38,.034,.12,.39,[.13,.30,.60]);
-        }else{
+        }else if(kind==='taxi'){
           box(side*.853,.76,.04,.028,.10,2.16,[.99,.80,.18]);
+          box(side*.853,.87,-1.35,.033,.24,.18,blackPlastic);
+        }else{
+          box(side*.853,.76,.04,.028,.075,2.16,[.43,.46,.48]);
           box(side*.853,.87,-1.35,.033,.24,.18,blackPlastic);
         }
       }
@@ -4087,7 +4125,7 @@
         box(0,.62,2.045,1.25,.11,.065,blackPlastic);
         for(const side of [-1,1])
           box(side*.55,.64,2.040,.085,.41,.105,blackPlastic);
-      }else{
+      }else if(kind==='taxi'){
         // Roof medallion support and taxi identification lamp.
         box(0,1.658,-.22,.48,.055,.20,blackPlastic);
         box(0,1.82,-.22,.44,.13,.19,[1.0,.90,.43]);
@@ -4115,7 +4153,9 @@
     return upload();
   }
 
-  const streetMeshes=Object.fromEntries(['taxi','police','train','walker'].map(kind=>[kind,buildStreetVehicle(kind)]));
+  const streetMeshes=Object.fromEntries(
+    ['taxi','police','sedan','suv','van','train','walker']
+      .map(kind=>[kind,buildStreetVehicle(kind)]));
   // Procedural, logo-free civilian airliners based on the proportions of the
   // open CC-BY airliner reference set. This fits PATROL's raw WebGL2 pipeline.
   function buildCivilAirlinerMesh(livery=0) {
@@ -5287,7 +5327,7 @@
   }
 
   let mapScenery=null;
-  let nycHeroScenery=null,nycHeroEpoch=0;
+  let nycHeroScenery=null,nycStreetMesh=null,nycHeroEpoch=0;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -5360,7 +5400,8 @@
 
   function createMapScenery() {
     disposeSceneMesh(nycHeroScenery);
-    nycHeroScenery=null;
+    disposeSceneMesh(nycStreetMesh);
+    nycHeroScenery=nycStreetMesh=null;
     const heroEpoch=++nycHeroEpoch;
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
@@ -5377,6 +5418,30 @@
     sceneryObjects=[];
     sceneryMovers=[];
     const solid=createTriangleMesh(), lights=createTriangleMesh();
+    // PATROL_NYC_STREETS_V10: city-only streets and street-level props.
+    // Static geometry in its own draw batch, no WebGPU or second renderer.
+    if(selectedMap.city && !graphicsCompat && smoothScenery()){
+      import('./assets/nyc/nyc-street-network.js').then(({buildNycStreetNetwork})=>{
+        if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+        const detail=createTriangleMesh();
+        const stats=buildNycStreetNetwork({
+          addQuad:detail.addQuad,
+          box:(...args)=>addModelBox(detail.addQuad,...args),
+          beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
+          ribbon:(a,b,w,col)=>pushRoadStrip(detail.addQuad,a,b,w,col),
+          terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+          detailBand:nycDetailBand,grid:MANHATTAN_GRID,
+          streetY:STREET_Y,waterY:WATER_H,
+          timesBounds:TIMES_SQUARE.bounds,
+          existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],
+          lettering:(label,p,w,h,color)=>addVegasLettering(detail.addQuad,label,
+            (u,v)=>[p[0]+u,p[1]+v,p[2]],w,h,color)
+        });
+        const uploaded=detail.upload();
+        if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
+        else{nycStreetMesh=uploaded;console.info('[PATROL] NYC streets',stats);}
+      }).catch(error=>console.warn('[PATROL] NYC road fallback:',error));
+    }
     // Separate single-batch harbor geometry; no extra renderer/scene graph.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
       import('./assets/nyc/nyc-hero.js').then(({buildNycHeroScenery,buildManhattanWaterfront})=>{
@@ -7979,6 +8044,7 @@
   function drawMapScenery(drawMesh) {
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if(mapScenery)drawMesh(mapScenery,identity);
+    if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
