@@ -59,6 +59,11 @@ function normalized(v,c,enabled) {
   return v;
 }
 function imageSize(bytes,mime) {
+  // KTX2 header stores uncompressed pixel dimensions despite BasisU payload.
+  // Only inspection here: the PATROL runtime does NOT have a KTX2 transcoder.
+  if(mime==='image/ktx2'&&bytes.length>=28&&
+    bytes.subarray(0,12).equals(Buffer.from('ab4b5458203230bb0d0a1a0a','hex')))
+    return {width:bytes.readUInt32LE(20),height:bytes.readUInt32LE(24)};
   if(mime==='image/png'&&bytes.length>24&&bytes.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')))
     return {width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};
   if(mime==='image/webp'&&bytes.subarray(0,4).toString()==='RIFF'){
