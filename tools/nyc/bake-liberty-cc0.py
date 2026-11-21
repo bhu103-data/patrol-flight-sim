@@ -2,10 +2,12 @@
 """Offline CPU-only staged conversion. Requires Blender 4.x; never activates PATROL."""
 import bpy
 import json
-import math
-import os
 import sys
+import tempfile
+import subprocess
 from pathlib import Path
+
+import numpy as np
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(argv) != 2:
@@ -65,36 +67,38 @@ bpy.ops.object.mode_set(mode='OBJECT')
 obj.data.uv_layers.active = atlas_uv
 atlas_uv.active_render = True
 
-image = bpy.data.images.new("PATROL_CC0_LIBERTY_COLOR", width=1024, height=1024, alpha=False)
-image.generated_color = (0.52, 0.54, 0.49, 1)
-for mat in obj.data.materials:
-    if not mat:
-        continue
-    nodes = mat.node_tree.nodes
-    bake_image = nodes.new("ShaderNodeTexImage")
-    bake_image.name = "PATROL_BAKE_TARGET"
-    bake_image.image = image
-    nodes.active = bake_image
-    bake_image.select = True
-
-scene = bpy.context.scene
-scene.render.engine = 'CYCLES'
-scene.cycles.device = 'CPU'
-scene.cycles.samples = 1
-scene.render.bake.use_pass_direct = False
-scene.render.bake.use_pass_indirect = False
-scene.render.bake.use_pass_color = True
-scene.render.bake.margin = 4
-bpy.ops.object.select_all(action='DESELECT')
-obj.select_set(True)
-bpy.context.view_layer.objects.active = obj
-bpy.ops.object.bake(type='DIFFUSE')
+# Sample the original tiled UVs and the newly packed UVs on the actual
+# decimated triangles. Cycles DIFFUSE baking returned a black 1024px image in
+# earlier CI runs, so software-rasterize the *source* PNGs instead.
+source_layer = obj.data.uv_layers.get(original_uv.name)
+atlas_layer = obj.data.uv_layers.get("PATROL_BASECOLOR_ATLAS")
+if not source_layer or not atlas_layer:
+    raise RuntimeError("Source or target UV layer disappeared after decimation")
+obj.data.calc_loop_triangles()
+face_tris = obj.data.loop_triangles
+source_coords = np.array([
+    [tuple(source_layer.data[loop].uv) for loop in tri.loops]
+    for tri in face_tris], dtype=np.float32)
+atlas_coords = np.array([
+    [tuple(atlas_layer.data[loop].uv) for loop in tri.loops]
+    for tri in face_tris], dtype=np.float32)
+material_indices = np.array([
+    obj.data.polygons[tri.polygon_index].material_index
+    for tri in face_tris], dtype=np.int32)
+material_names = np.array([m.name for m in obj.data.materials])
 atlas_file = dst.with_suffix(".atlas.png")
-image.filepath_raw = str(atlas_file)
-image.file_format = 'PNG'
-image.save()
+with tempfile.TemporaryDirectory(prefix="patrol-liberty-uv-") as temp:
+    mapping = Path(temp) / "liberty-uv-mapping.npz"
+    np.savez_compressed(mapping, sourceUV=source_coords, atlasUV=atlas_coords,
+        materialIds=material_indices, materialNames=material_names)
+    subprocess.run([
+        "/usr/bin/python3",
+        str(Path(__file__).with_name("rasterize-liberty-colors.py")),
+        str(src), str(mapping), str(atlas_file)
+    ], check=True)
+image = bpy.data.images.load(str(atlas_file), check_existing=False)
 if atlas_file.stat().st_size > 4194304:
-    raise RuntimeError("Embedded atlas would exceed PATROL's 4 MiB texture limit")
+    raise RuntimeError("Embedded atlas exceeds PATROL's 4 MiB texture limit")
 
 # One supported Base Color atlas only: no per-material bitmap multiplexing.
 material = bpy.data.materials.new("Innerscene_CC0_Patrol_Baked_Color")
