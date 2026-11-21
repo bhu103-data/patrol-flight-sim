@@ -88,3 +88,53 @@ test('Manhattan hooks only: shared lake masks, cleanups and map overlays',()=>{
 test('Central Park module JavaScript parses without a bundler',()=>{
   assert.doesNotThrow(()=>new Script(scene.replace(/^export /gm,'')));
 });
+
+test('all park walking/driving ribbons avoid lake centers and shore overlap',()=>{
+  const everyWater=(u,z)=>
+    Math.min(...park.PARK_WATERS.map(f=>
+      park.normalizedWaterDistance(u,z,f)));
+  for(const quality of ['low','high']){
+    let sampled=0,invalid=0,closestCenter=Infinity,closestEdge=Infinity;
+    const stats=park.buildCentralPark({
+      grid:cityGrid,quality,waterY:12.2,streetY:14.86,
+      terrainAt:(x,z)=>15.5+.12*Math.cos(x/30)+.13*Math.sin(z/24),
+      addTri:()=>{},addQuad:()=>{},box:()=>{},beam:()=>{},
+      ribbon:(a,b,width)=>{
+        const u0=a[0]-cityGrid.tilt*a[2]-cityGrid.offset;
+        const u1=b[0]-cityGrid.tilt*b[2]-cityGrid.offset;
+        const dz=b[2]-a[2],du=u1-u0;
+        const len=Math.hypot(du,dz)||1;
+        for(let k=0;k<=5;k++){
+          const t=k/5,u=u0*(1-t)+u1*t,z=a[2]*(1-t)+b[2]*t;
+          const centerDist=everyWater(u,z);
+          closestCenter=Math.min(closestCenter,centerDist);
+          if(centerDist<1.04)invalid++;
+          for(const side of [-1,1]){
+            const edgeU=u+side*(dz/len)*width*.5;
+            const edgeZ=z-side*(du/len)*width*.5;
+            const dist=everyWater(edgeU,edgeZ);
+            closestEdge=Math.min(closestEdge,dist);
+            if(dist<1.01)invalid++;
+          }
+          sampled++;
+        }
+      }
+    });
+    assert.ok(stats.reroutedPathPoints>=100,'paths must detour around the lakes');
+    assert.equal(invalid,0,'no park path or road edge may enter lake water');
+    assert.ok(closestCenter>1.04 && closestEdge>1.01);
+    assert.ok(sampled>6000,'inspect the full park road and trail system');
+    assert.ok(stats.paths<2500,'do not explode the triangle budget');
+    assert.equal(stats.skippedWetPaths,0,'lake detours should remain continuous');
+  }
+});
+
+test('79th and 86th game-scale transverse ribbons clear pond and Reservoir',()=>{
+  assert.match(scene,/\[79,170\]/);
+  assert.match(scene,/\[86,209\]/);
+  for(const z of [170,209])for(let u=-41;u<=41;u+=.5){
+    const d=Math.min(...park.PARK_WATERS.map(f=>
+      park.normalizedWaterDistance(u,z,f)));
+    assert.ok(d>1.1,'transverse z='+z+' u='+u+' overlaps water');
+  }
+});
