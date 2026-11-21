@@ -76,19 +76,46 @@ try{
     medianFrameMs:intervals.length?intervals[Math.floor(intervals.length/2)]:null,
     p95FrameMs:intervals.length?intervals[Math.floor((intervals.length-1)*.95)]:null};
   });
-  await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
-  let bytes;
-  try{
-   // Locator screenshots wait for element-stability and can time out when
-   // SwiftShader continuously resizes/paints the live canvas. The HUD is
-   // hidden above, so viewport screenshot preserves live WebGL pixels
-   // without Playwright's element scroll/stability wait. 1280x720 fixed.
-   bytes=await page.screenshot({
-    path:dest+'/'+name,animations:'allow',timeout:75000});
-  }finally{
-   await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
-  }
-  const png=PNG.sync.read(bytes),colorBins=new Set;
+  // Both element and viewport Chromium screenshot calls timed out on the
+  // continuously repainting software-WebGL canyon. Read the NATIVE WebGL2
+  // framebuffer from a real requestAnimationFrame callback instead. This
+  // preserves actual rendered pixels and does not require compositing/HUD.
+  // It is not a generated render or a reconstructed facade texture.
+  const frame=await page.evaluate(async()=>new Promise(resolve=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   if(!gl||gl.isContextLost())return resolve({error:'WebGL2 context lost'});
+   let tries=0,completed=false;
+   const cap=()=>{
+    if(completed)return;
+    try{
+     const width=gl.drawingBufferWidth,height=gl.drawingBufferHeight;
+     if(width<640||height<360)return resolve({error:'Invalid WebGL draw buffer'});
+     const pixels=new Uint8Array(width*height*4);
+     gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+     const err=gl.getError(),bins=new Set;
+     for(let y=0;y<height;y+=12)for(let x=0;x<width;x+=12){
+      const p=(y*width+x)*4;
+      bins.add(((pixels[p]>>4)<<8)|((pixels[p+1]>>4)<<4)|(pixels[p+2]>>4));
+     }
+     if(bins.size<8&&++tries<4)return requestAnimationFrame(cap);
+     let binary='';
+     for(let i=0;i<pixels.length;i+=8192)
+      binary+=String.fromCharCode(...pixels.subarray(i,i+8192));
+     completed=true;
+     resolve({width,height,base64:btoa(binary),drawError:err,bins:bins.size});
+    }catch(e){completed=true;resolve({error:String(e)})}
+   };
+   requestAnimationFrame(cap);
+  }));
+  check(!frame.error&&frame.drawError===0,'Native WebGL pixel capture failed: '+
+   JSON.stringify({error:frame.error,drawError:frame.drawError,bins:frame.bins}));
+  const png=new PNG({width:frame.width,height:frame.height});
+  const data=Buffer.from(frame.base64,'base64'),stride=frame.width*4;
+  for(let y=0;y<frame.height;y++)
+   data.copy(png.data,(frame.height-y-1)*stride,y*stride,(y+1)*stride);
+  const bytes=PNG.sync.write(png);
+  await writeFile(dest+'/'+name,bytes);
+  const colorBins=new Set;
   let nearBlack=0,samples=0;
   for(let y=0;y<png.height;y+=10)for(let x=0;x<png.width;x+=10){
    const pos=(y*png.width+x)*4,data=png.data;
@@ -97,8 +124,10 @@ try{
    samples++;
   }
   const health={width:png.width,height:png.height,colorBins:colorBins.size,
-   nearBlackFraction:nearBlack/samples,passed:png.width===1280&&
-   png.height===720&&colorBins.size>32&&nearBlack/samples<.97};
+   nearBlackFraction:nearBlack/samples,
+   capture:'native WebGL2 gl.readPixels at actual drawingBuffer resolution',
+   passed:png.width>=640&&png.height>=360&&colorBins.size>32&&
+    nearBlack/samples<.97};
   report.screenshots.push(name);
   report.measurements[name]={state,framePacing:cadence,health};
   if(!health.passed)anyFailed=true;
