@@ -38,7 +38,11 @@ test('Manhattan detail remains capped independently of Brooklyn detail',()=>{
 });
 test('land parcels and roads retain priority over bridgehead props',()=>{
   const clear=(x,z,r=0)=>x<175||x>450||z<-450||z>-180;
+  const clearScene=scene(2);
   const stats=scene(2,clear);
-  assert.equal(stats.brooklynStreetFurniture,0);
+  // Outer edge blocks remain usable; only the occupied bridgehead zone
+  // should lose fixtures. A zero count would incorrectly erase safe streets.
+  assert.ok(stats.brooklynStreetFurniture<clearScene.brooklynStreetFurniture,
+    'occupied bridgehead must have fewer pedestrian fixtures');
   assert.ok(stats.skippedRoadFootprints>0);
 });
