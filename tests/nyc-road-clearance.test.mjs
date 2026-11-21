@@ -81,6 +81,25 @@ test('thin walls between grid samples cannot cut through avenue asphalt',()=>{
     'small building wall must remove the entire obstructed asphalt ribbon');
   assert.ok(occupied.stats.avenues>500,'retain Manhattan road density');
 });
+test('tiny corner wall between old grid probes suppresses zebra paint',()=>{
+  const i=2,j=0;
+  const x=i*24+30,z=j*33;
+  const painted=scene=>scene.quads.filter(q=>q.length>=5 &&
+    Array.isArray(q[4])&&q[4][0]>.80&&q[4][1]>.80 &&
+    q.slice(0,4).every(p=>Array.isArray(p) &&
+      Math.abs(p[0]-x)<8&&Math.abs(p[2]-z)<8)).length;
+  const clear=city(()=>true);
+  assert.ok(painted(clear)>0,'crossing exists when corner is empty');
+  const obstacle={x:x+6.30,z:z-6.30,w:.14,d:.14};
+  const collision=(sx,sz,r=0)=>
+    Math.abs(sx-obstacle.x)>=obstacle.w*.5+r ||
+    Math.abs(sz-obstacle.z)>=obstacle.d*.5+r;
+  const occupied=city(collision);
+  assert.equal(painted(occupied),0,
+    'sub-meter corner wall must prevent painted stripes in its junction');
+  assert.ok(occupied.stats.avenues>500,'preserve most city streets');
+});
+
 test('main NYC lot filter protects street routes in visual and collision data',async()=>{
   const html=await fromFile('../index.html');
   const start=html.indexOf('function nycParcelCrossesRoad(');
