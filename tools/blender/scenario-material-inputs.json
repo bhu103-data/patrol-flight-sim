@@ -1,0 +1,38 @@
+{
+  "limestone": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  },
+  "glass": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  },
+  "brick": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  },
+  "terracotta": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  },
+  "metal": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  },
+  "concrete": {
+    "basecolor": "",
+    "normal": "",
+    "roughness": "",
+    "metallic": ""
+  }
+}
