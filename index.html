@@ -4531,8 +4531,75 @@
     }
   }
 
+  // PATROL_NYC_FINANCIAL_FACADE_V8: a bounded, single-batch physical
+  // facade relief pass. Visual approximations, not surveyed buildings.
+  function addDowntownFacadeRelief(addQuad,box,{x,y,z,w,d,h,archType,facadeTier}){
+    const style=archType%4,split=archType%5;
+    const low=split===0?.57:split===1?.68:split===2?.77:split===3?.63:.73;
+    const mid=split===0?.87:split===1?.91:split===2?.94:split===3?.83:.89;
+    const colors=[
+      [[.76,.70,.59],[.37,.40,.39],[.32,.38,.39]],
+      [[.61,.54,.44],[.44,.51,.55],[.22,.43,.52]],
+      [[.70,.66,.57],[.32,.34,.35],[.25,.32,.36]],
+      [[.57,.55,.50],[.50,.58,.60],[.29,.49,.56]]
+    ][style],stone=colors[0],metal=colors[1],glass=colors[2];
+    let panels=0;
+    function strip(axis,side,a,b,bot,top,tier,tint){
+      const point=(u,v)=>axis===0
+        ?[tier.x+u,v,z+side*(tier.d*.5+.11)]
+        :[tier.x+side*(tier.w*.5+.11),v,z+u];
+      const p=point(a,bot),q=point(b,bot),r=point(b,top),s=point(a,top);
+      if(axis===0?side>0:side<0)addQuad(p,q,r,s,tint);
+      else addQuad(s,r,q,p,tint);
+      panels++;
+    }
+    // Do not draw uninterrupted rails through the stepped upper floors.
+    for(const [bottom,top] of [[3.2,h*low-.20],[h*low+.22,h*mid-.20],
+      [h*mid+.22,h-.29]]){
+      if(top-bottom<1.16)continue;
+      const tier=facadeTier((bottom+top)*.5);
+      for(let axis=0;axis<2;axis++){
+        const span=axis===0?tier.w:tier.d;
+        if(span<1.9)continue;
+        const count=Math.min(7,Math.max(3,Math.floor(span/1.65)));
+        const pitch=span/count;
+        for(const side of [-1,1]){
+          for(let i=1;i<count;i++){
+            const offset=-span*.5+i*pitch;
+            strip(axis,side,offset-.065,offset+.065,
+              y+bottom,y+top,tier,style%2===0?stone:metal);
+          }
+          if(style%2===1){
+            for(let i=0;i<count;i+=2){
+              const offset=-span*.5+(i+.5)*pitch;
+              strip(axis,side,offset-pitch*.14,offset+pitch*.14,
+                y+bottom+.31,y+top-.28,tier,glass);
+            }
+          }else{
+            const floors=Math.min(6,Math.max(2,Math.floor((top-bottom)/3.1)));
+            for(let j=1;j<floors;j++){
+              const alt=y+bottom+(top-bottom)*j/floors;
+              strip(axis,side,-span*.46,span*.46,alt,alt+.07,tier,metal);
+            }
+          }
+          strip(axis,side,-span*.49,span*.49,y+top-.12,y+top+.05,tier,stone);
+        }
+      }
+    }
+    // Stone/steel parapet is below the building's existing hitbox top.
+    const roof=facadeTier(h-.16),capY=y+h-.14;
+    if(roof.w>2&&roof.d>2){
+      box(roof.x,capY,z-roof.d*.46,roof.w*.91,.13,.20,metal);
+      box(roof.x,capY,z+roof.d*.46,roof.w*.91,.13,.20,metal);
+      box(roof.x-roof.w*.45,capY,z,.19,.13,roof.d*.9,metal);
+      box(roof.x+roof.w*.45,capY,z,.19,.13,roof.d*.9,metal);
+    }
+    return panels;
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addQuad,upload}=createTriangleMesh();
+    let detailedDowntown=0;
     for(const [east,north,w,d,h,tone,destroyed] of parcels){
       // Local collapsing rubble must bypass regional LOD; it is positioned
       // later by a model transform and does not live at world origin.
@@ -4796,6 +4863,17 @@
           addModelBox(addQuad,x-w*0.26,roofY+0.55,z+d*0.20,0.34,1.10,0.34,stone);
           addModelBox(addQuad,x-w*0.26,roofY+1.10,z+d*0.20,0.58,0.10,0.54,steel);
         }
+      }
+      // This geometry follows the same rebuild/demolition lifecycle as the lots.
+      // The skyline is intentionally limited to 48 southern Manhattan parcels.
+      if(!local&&!destroyed&&heroDowntown&&detailBand>=2&&
+         north>-515&&north<-245&&east>-160&&east<80&&
+         h>17&&w>3&&d>3&&detailedDowntown<48&&
+         (((gridX*17+gridZ*13)%5+5)%5!==0)){
+        addDowntownFacadeRelief(addQuad,
+          (...args)=>addModelBox(addQuad,...args),
+          {x,y,z,w,d,h,archType,facadeTier});
+        detailedDowntown++;
       }
     }
     return upload();
