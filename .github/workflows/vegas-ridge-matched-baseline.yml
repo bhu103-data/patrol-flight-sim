@@ -39,9 +39,10 @@ jobs:
       - name: Capture original integrated baseline with identical script
         env:
           PATROL_BASE_URL: http://127.0.0.1:8766
+          PATROL_QA_TAG: baseline-6d50bfd
         run: |
           node scripts/vegas-core-browser-smoke.mjs
-          mv artifacts/vegas artifacts/vegas-baseline
+          mv artifacts/vegas/baseline-6d50bfd artifacts/vegas-baseline
       - name: Start proposed map server
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-vegas-current-http.log 2>&1 &
@@ -50,14 +51,16 @@ jobs:
       - name: Capture proposed map with identical script and settings
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
+          PATROL_QA_TAG: candidate
         run: |
           node scripts/vegas-core-browser-smoke.mjs
-          mv artifacts/vegas artifacts/vegas-current
+          mv artifacts/vegas/candidate artifacts/vegas-current
       - name: Produce inspectable difference diagnostics (not a photorealism grade)
         run: |
           mkdir -p artifacts/vegas-compare
           node --input-type=module <<'NODE'
           import {readFileSync,writeFileSync} from 'node:fs';
+          import {execFileSync} from 'node:child_process';
           import {PNG} from 'pngjs';
           const root='artifacts';
           const baseline=JSON.parse(readFileSync(root+'/vegas-baseline/vegas-core-report.json','utf8'));
@@ -82,10 +85,10 @@ jobs:
             }
             comparisons.push({name,width:a.width,height:a.height,
               meanAbsoluteRgbDifference0to255:+(sum/(pixels*3)).toFixed(3),
-              pixelsWithAnyChannelChange25pct:+(100*significant/pixels).toFixed(3)});
+              percentPixelsWithChannelDifferenceAtLeast25of255:+(100*significant/pixels).toFixed(3)});
           }
           const out={referenceCommit:'6d50bfda4b2d3837e550751ede49b200b140bc72',
-            targetCommit:process.env.GITHUB_SHA,
+            targetCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
             note:'Matched captured cameras; dynamic objects and time can contribute pixel changes. Statistics do not prove geography or visual quality.',
             screenshotCount:names.length,comparisons,
             baselineLoadMs:baseline.loadMs,currentLoadMs:current.loadMs,
