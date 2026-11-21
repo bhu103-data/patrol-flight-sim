@@ -1,6 +1,8 @@
 // PATROL_CHONGQING_HERO_ARCH_V2 — authored WebGL2/Three.js building geometry.
 // Landmark corridors retain existing authored models. No Google photogrammetry.
 // Styles represent distinct Chongqing slab residential, office and mixed-use massing.
+import {roadReserveAtSite} from './road-clearance.js';
+
 export const CHONGQING_BUILDING_STYLES=[
   {name:'residential-terrace',bevel:.018,material:'residentialFacade',
     layers:[[-.5,1,1],[.25,1,1],[.25,.94,.93],[.46,.94,.93],[.46,.86,.84],[.5,.86,.84]]},
@@ -56,7 +58,7 @@ export function makeChongqingTowerProfile(style){
    throw Error('Bad tower profile geometry');
  return {positions,uvs,indices};
 }
-export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr}){
+export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr,plannedRoads=[]}){
  const styleMeshes=CHONGQING_BUILDING_STYLES.map((style)=>{
    const geo=makeChongqingTowerProfile(style),geometry=new THREE.BufferGeometry();
    geometry.setAttribute('position',new THREE.Float32BufferAttribute(geo.positions,3));
@@ -79,7 +81,7 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    new THREE.MeshBasicMaterial({color:0xffe6b5,side:THREE.DoubleSide,
      transparent:true,opacity:.68,depthWrite:false}),4800);
  const stats={towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
-   residential:0,office:0,mixedUse:0};
+   residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,skippedAdjacentBuilding:0};
  const glassGlow=new THREE.Color(), color=new THREE.Color();
  const set=(mesh,index,x,y,z,w,h,depth,rot=0)=>{
    d.position.set(x,y,z);d.scale.set(w,h,depth);d.rotation.set(0,rot,0);
@@ -147,6 +149,20 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      const business=x>-525&&x<590&&tier<4;
      const heightBand=business?76:38;
      const h=(heightBand+rand()*(business?165:76))*(rand()<.20?.52:1);
+     // Reject the entire footprint, not just the center. A building cannot
+     // extend into an asphalt ribbon, the bridge deck, or the next tower.
+     const site={x,z,w,d};
+     if(roadReserveAtSite(site,plannedRoads,0,2.2)){
+       stats.skippedRoadOverlap++;continue;
+     }
+     if([40,470].some(bx=>Math.abs(x-bx)<(w+17)*.5+2.5&&
+       Math.abs(z)<(d+335)*.5+2.5)){
+       stats.skippedBridgeOverlap++;continue;
+     }
+     if(obstacles.some(o=>Math.abs(x-o.x)<(w+o.w)*.5+2.0&&
+       Math.abs(z-o.z)<(d+o.d)*.5+2.0)){
+       stats.skippedAdjacentBuilding++;continue;
+     }
      const styleIndex=(Math.abs(col*11+tier*7+side*13)%5);
      tower(x,z,w,d,h,styleIndex,col+tier*3);
    }
