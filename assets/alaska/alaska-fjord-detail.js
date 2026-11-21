@@ -84,5 +84,50 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     addQuad(a,b,cb,ca,i%3?[.36,.41,.43]:[.50,.53,.53]);
     stats.rockBands++;
   }
+  // Alaska coastal spruce/hemlock silhouettes: one batched draw call, no
+  // cloned cuboids or unique textures. Geographically sampled ground altitude
+  // and slope determine placement, rather than repeating six tree clusters.
+  // Tree geometry is deliberately bounded for GitHub Pages/mobile GPUs.
+  stats.conifers=0;
+  for(let i=0;i<1380 && stats.conifers<460;i++){
+    const x=-735+hash(i*71+53)*1470;
+    const z=-735+hash(i*107+19)*1470;
+    if(Math.hypot(x,z)>750 || Math.hypot(x-151,z+525)<75 ||
+       Math.hypot(x+155,z+610)<28 || z>390&&Math.abs(x+34)<113)continue;
+    const y=terrainAt(x,z);
+    if(y<waterY+1.5||y>waterY+26)continue;
+    const slope=Math.hypot(terrainAt(x+4,z)-terrainAt(x-4,z),
+                           terrainAt(x,z+4)-terrainAt(x,z-4))/8;
+    if(slope>.29)continue;
+    const seed=hash(i*149+9),treeH=2.6+5.5*seed;
+    const winter=Math.max(0,Math.min(1,(y-waterY-15)/11));
+    const trunk=[.25+.07*seed,.22+.05*seed,.18+.035*seed];
+    const dark=[.065+.045*seed,.14+.065*seed,.11+.034*seed];
+    const bright=[.11+.065*seed,.23+.085*seed,.16+.040*seed];
+    const trunkBase=[x,y+.1,z],trunkTop=[x,y+treeH*.55,z],stem=.075+.028*seed;
+    addQuad([x-stem,y,z],[x+stem,y,z],
+      [x+stem,y+treeH*.57,z],[x-stem,y+treeH*.57,z],trunk);
+    addQuad([x,y,z-stem],[x,y,z+stem],
+      [x,y+treeH*.57,z+stem],[x,y+treeH*.57,z-stem],trunk);
+    for(let layer=0;layer<4;layer++){
+      const start=y+treeH*(.11+.175*layer),tip=start+treeH*(.45-.038*layer);
+      const radius=treeH*(.20-.033*layer),phase=seed*6.28+layer*.36;
+      const tone=layer%2===0?dark:bright;
+      for(let j=0;j<6;j++){
+        const a=phase+j*Math.PI/3,b=a+Math.PI/3;
+        const r1=radius*(.84+.26*hash(i*11+j*7+layer*9));
+        const r2=radius*(.83+.27*hash(i*19+j*13+layer*17));
+        const faceTint=1-(j%3)*.055;
+        const iceDust=winter*(j%5===0?.42:.16);
+        const color=tone.map((value,k)=>
+          Math.min(1,value*faceTint*(1-iceDust)+[.76,.86,.87][k]*iceDust));
+        addTri([x+Math.cos(a)*r1,start,z+Math.sin(a)*r1],
+               [x+Math.cos(b)*r2,start,z+Math.sin(b)*r2],
+               [x+Math.sin(phase)*radius*.10,tip,z+Math.cos(phase)*radius*.10],
+               color);
+      }
+    }
+    stats.conifers++;
+  }
   return stats;
 }
