@@ -4970,14 +4970,13 @@ const CENTRAL_PARK_SITES=[
     // 12.1-unit street corridor. Test its entire swept vehicle footprint,
     // not merely the center point, before enabling the connector.
     const radius=1.07,vehicleEnvelope=2.45;
-    for(let k=0;k<24;k++){
-      const angle=k*Math.PI/12;
-      const x=turnCenter[0]+(radius+vehicleEnvelope)*Math.cos(angle);
-      const z=turnCenter[1]+(radius+vehicleEnvelope)*Math.sin(angle);
-      if(terrainAt(x,z)<=waterY+.68||lotAt(x,z))return null;
-    }
-    if(terrainAt(...turnCenter)<=waterY+.68||lotAt(...turnCenter))
-      return null;
+    for(const sampleRadius of [0,radius,radius+vehicleEnvelope])
+      for(let k=0;k<24;k++){
+        const angle=k*Math.PI/12;
+        const x=turnCenter[0]+sampleRadius*Math.cos(angle);
+        const z=turnCenter[1]+sampleRadius*Math.sin(angle);
+        if(terrainAt(x,z)<=waterY+.68||lotAt(x,z))return null;
+      }
     return makeTrafficRoute(points);
   }
 
