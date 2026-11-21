@@ -55,7 +55,8 @@ class Mesh:
     def quad(self,p,q,r,s,color=(255,255,255,255),tile=(0,0)):
         offset=len(self.positions)
         self.positions.extend((p,q,r,s))
-        self.faces.extend(((offset,offset+1,offset+2),(offset,offset+2,offset+3)))
+        self.faces.extend(((offset,offset+2,offset+1),(offset,offset+3,offset+2))
+            if self.textured else ((offset,offset+1,offset+2),(offset,offset+2,offset+3)))
         self.colors.extend([color]*4)
         if self.textured:
             x,y=tile;e=.006
@@ -218,7 +219,8 @@ parts=(glass,podium,metal,dark,beacon)
 for part in parts:
     scene.add_geometry(part.build(material if part.textured else None),
                        node_name=part.name,geom_name=part.name)
-data=scene.export(file_type="glb")
+# Export explicit normals so glass facet lighting follows outward geometry.
+data=trimesh.exchange.gltf.export_glb(scene,include_normals=True)
 GLB.write_bytes(data)
 triangles=sum(part.triangles for part in parts)
 if not 600<triangles<=25000:raise ValueError("Invalid triangle budget "+str(triangles))
