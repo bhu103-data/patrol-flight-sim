@@ -232,6 +232,8 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       const t=step/19,z=206+t*94;
       const bridgeY=127+(ground(x,300)-127)*t;
       put('paving',x,bridgeY,z,7,.5,5.25);
+      // Real landing surface for each elevated pedestrian deck, not just visible geometry.
+      obstacles.push({x,z,w:7,d:5.25,base:bridgeY-.25,top:bridgeY+.25});
       for(const side of [-1,1]){
         put('rail',x+side*3.75,bridgeY+1.3,z,.18,2.6,.21);
         if(step>0&&step<19)put('carved',x+side*3.75,bridgeY+2.2,z,.2,.2,5);
