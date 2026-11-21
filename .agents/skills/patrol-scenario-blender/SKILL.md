@@ -1,6 +1,6 @@
 ---
 name: patrol-scenario-blender
-description: Create and review Blender/Scenario high-detail Manhattan landmark GLBs for PATROL's WebGL2 flight sim. Use when updating NYC visual realism with Scenario for Blender MCP.
+description: Create and review Blender/Scenario high-detail NYC and Chongqing landmark GLBs for PATROL's WebGL game. Use when updating landmark visual realism with local Scenario for Blender MCP.
 license: MIT
 ---
 
@@ -41,6 +41,31 @@ This project skill is a PATROL-specific adapter, not a bundled copy of the exten
 5. Inspect the GLB and provenance. Only after approval run the same command with `--activate` to enable the manifest entry. Keep `assets/nyc/scenario/` files <=8 MiB and <=25,000 triangles per landmark.
 6. Commit the GLB and the updated manifest. Confirm the same-origin asset loads under GitHub Pages, test Free Flight and Scenic Views, and check silhouette, z-fighting, collision, shader state and FPS. If any issue, set `enabled:false` to fall back immediately.
 7. Never write Scenario API credentials or local MCP bearer tokens into `.env`, README, manifests or source. Do not auto-spend cloud credits.
+
+## Chongqing Scenario authoring adapter (separate map renderer)
+
+- Chongqing is currently the independent `chongqing.html` Three.js WebGL2
+  scene; its cinematic lighting now follows the PATROL launcher. This is
+  **visual parity, not the same custom NYC rendering pipeline**.
+- Prioritize `hongyadong`, `qiansimen`, `raffles`, `liziba` in
+  `assets/chongqing/scenario-manifest.json`. Read the precise art briefs
+  and placement anchors before creating models.
+- In locally authorized Blender, first use `scene_summary` and
+  `estimate_cost` on the intended Scenario model and parameters. Get
+  exact user cost approval before any `generate` call.
+- Export your final licensed asset through
+  `tools/blender/chongqing_scenario_export.py` using the
+  `PATROL_CQ_EXPORT` collection. Validate outward normals, realistic
+  facade silhouettes, one embedded texture atlas, 8 MiB and 25k triangles.
+- `--activate` enables only `?scenarioPreview=1` after reviewed/license
+  arguments. It never deletes or hides the existing procedural landmark.
+  To make production replacements, separately group and disable the
+  old geometry/colliders with verified transforms and fallback.
+- Read `docs/CHONGQING_SCENARIO_ASSETS.md` and don't call anything
+  already generated if the current repository has disabled manifest slots.
+- The ChatGPT cloud has no access to the local 127.0.0.1 Scenario MCP.
+  Don't claim the Blender extension actually ran unless you can show
+  a real result from a connected session.
 
 ## Output contract
 
