@@ -255,7 +255,7 @@ try{
  await sampleFramePacing('11-oti-downtown-close');
  await capture('11-oti-downtown-close.png');
  // Unlike a rooftop scenic view, inspect the physical entrance at
- // OTI DOITT_ID 119028 edge 12 from a near-pedestrian viewpoint.
+ // OTI DOITT_ID 65190 edge 11 from a west-facing harbor-side viewpoint.
  await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Street Entrance'});
  await page.waitForTimeout(1700);
  const doorway=await page.evaluate(()=>{
