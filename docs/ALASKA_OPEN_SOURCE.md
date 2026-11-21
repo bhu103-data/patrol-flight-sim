@@ -1,5 +1,27 @@
 # Alaska Fjords — open-source research and implementation record
 
+## 2026-11-20/21 — Near-field glacier relief and forest silhouette pass
+
+The existing Alaska-only `alaska-fjord-detail.js` GPU batch now creates a
+**42-segment irregular glacial calving front**, each with three-dimensional
+facing geometry and three stratified ice/sediment color bands (126 bounded
+bands). The blue-black fracture gaps and ice overhangs are original authored
+visual geometry. The measured USGS DEM remains the only terrain collision
+source. The exact glacier face is not photogrammetrically scanned or mapped.
+
+Small terrain-sampled rock talus fragments are generated only on upland
+slopes with clear local elevation changes. A bounded number of short
+asymmetric spruce branchlets add close-up silhouettes without billboard
+cards, extra draw calls, external models or a new rendering engine.
+
+The entire set stays inside the same Alaska-only single GPU mesh and
+participates in the existing map-switch disposal and low-graphics fallback.
+
+Validation includes static vertex bounds, counts of the new features and
+the existing WebGL2 Alaska browser smoke capture. These checks do not
+measure native hardware FPS or certify survey-grade glacier geometry.
+
+
 ## 2026-11-20/21 — CC0 photographic PBR and animated calving
 
 Photo material asset build: `tools/alaska/build_photo_atlas.py`; GitHub Actions
