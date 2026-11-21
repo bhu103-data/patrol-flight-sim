@@ -49,7 +49,8 @@ export function makeChongqingTowerProfile(style){
    const i=positions.length/3;
    positions.push(0,top[0],0,a[0],top[0],a[1],b[0],top[0],b[1]);
    uvs.push(.5,.5,a[0]+.5,a[1]+.5,b[0]+.5,b[1]+.5);
-   indices.push(i,i+2,i+1);
+   // XZ ring has outward-facing walls; fan center->edge->next points +Y.
+   indices.push(i,i+1,i+2);
  }
  if(positions.some(x=>!Number.isFinite(x))||indices.some(x=>x<0||x>=positions.length/3))
    throw Error('Bad tower profile geometry');
