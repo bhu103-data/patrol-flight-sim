@@ -18,7 +18,8 @@ function nodeMatrix(node){
     ...t,1
   ];
 }
-async function decodeGLB(gl,buffer,targetHeight){
+// Named export permits real-browser GLB smoke tests without loading paid assets.
+export async function decodeGLB(gl,buffer,targetHeight){
   const dv=new DataView(buffer);
   if(buffer.byteLength<28||dv.getUint32(0,true)!==0x46546c67||
     dv.getUint32(4,true)!==2||dv.getUint32(8,true)!==buffer.byteLength)
