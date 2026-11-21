@@ -1,6 +1,7 @@
 // PATROL NYC realism asset adapter v5 — source-backed architectural materials (native WebGL2, not Three.js)
 // Sources and licensing: assets/nyc/THIRD_PARTY_NOTICES.md
 // Restricted GLB 2.0 loader; seven CC0 512x512 diffuse/normal/ARM textures.
+import { finishNycStreetAtlases } from './road-surface-pbr.js';
 function product(a,b){
   const v=new Float32Array(16);
   for(let c=0;c<4;c++)for(let r=0;r<4;r++)
@@ -217,10 +218,16 @@ async function photos(gl){
   const flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
   try{
-    for(const image of images){
+    const canvases=images.map(image=>{
       const c=document.createElement('canvas');
       c.width=c.height=512;
       c.getContext('2d').drawImage(image,0,0,512,512);
+      return c;
+    });
+    // Reuse the existing Poly Haven photos, without new downloads or samplers.
+    // DUMBO is the close-view QA example; NYC retains the same atlas bindings.
+    finishNycStreetAtlases(canvases[0],canvases[1],canvases[6]);
+    for(const c of canvases){
       const texture=gl.createTexture();textures.push(texture);
       gl.bindTexture(gl.TEXTURE_2D,texture);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
