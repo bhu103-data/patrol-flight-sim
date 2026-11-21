@@ -167,7 +167,9 @@ test('real Chongqing building parcels still leave safe usable signal crossings',
 test('landmark and background geometry still fit instance buffers',()=>{
   const {sceneObjects,urban,details}=generate();
   assert.ok(urban.stats.towers>100);
-  assert.equal(details.stats.curvedRoofs,33);
+  // PR #93 adds exactly one real curved eave on the adjacent storefront.
+  // The instanced geometry and capacity bounds below remain enforced.
+  assert.equal(details.stats.curvedRoofs,34);
   for(const mesh of sceneObjects.filter(m=>m instanceof Instanced)){
     assert.ok(mesh.count<=mesh.capacity);
     assert.ok(mesh.writes<=mesh.capacity);
