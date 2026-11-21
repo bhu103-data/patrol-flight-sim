@@ -1,6 +1,6 @@
 // Chongqing Pilot — a self-contained PATROL map built with Three.js.
 // Flight feel is informed by Petalwake (Jacob Miller, MIT), but this implementation is original.
-// https://github.com/jjcm/petalwake — original license retained in docs/chongqing-credits.md.
+// https://github.com/jjcm/petalwake — credits in docs/CHONGQING_HOTPOT_PILOT.md.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildChongqingDetails } from './details.js';
 
