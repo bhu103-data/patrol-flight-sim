@@ -854,6 +854,8 @@ const CENTRAL_PARK_SITES=[
     }
   };
   let selectedMap = FLIGHT_MAPS.manhattan;
+  // A dedicated opt-in screenshot camera can inspect cabins unobstructed.
+  const harborArtInspection=new URLSearchParams(location.search).get('alaskaView')==='harbor';
   const AIRCRAFT = {
     fighter: { name: 'Viper Jet', cruise: 23.5, boost: 42, turn: 1.45, pitchResponse: 3.4, maxPitch: 0.78 },
     // Cessna 185 Skywagon: 35ft10in wingspan, 25ft7.5in airframe length.
@@ -13392,7 +13394,8 @@ const CENTRAL_PARK_SITES=[
     drawCityTraffic(drawMeshWithOutline);
     drawWreckFragments(drawMeshWithOutline);
 
-    if (!scenicViewActive && !crash && viewIdx !== 1) {
+    if (!scenicViewActive && !crash && viewIdx !== 1 &&
+        !(harborArtInspection&&selectedMap.alaska)) {
       const planeScale = viewIdx === 2 ? 1.45 : 1.0;
       const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
