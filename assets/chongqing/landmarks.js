@@ -186,10 +186,40 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
   const railY=stationBase+28;
   const height=19*3.6;
   const frameDepth=40,frameLength=83;
+  // PATROL_CQ_LIZIBA_PBR_V7: the real station traverses an apartment block.
+  // Share the city's original concrete/paint/glazing PBR facade atlas rather
+  // than exposing an untextured gray rectangular shell in battery mode.
+  // Rebuild only two box UV shells: no new texture downloads or draw calls.
+  const stationFacade=pbr?.residentialFacade??concrete;
+  function stationFacadeShell(centerY,shellHeight){
+    const geo=new THREE.BoxGeometry(1,1,1);
+    const uv=geo.getAttribute?.('uv')??geo.attributes?.uv;
+    if(uv&&typeof uv.getX==='function'&&typeof uv.setXY==='function'){
+      const storeys=Math.max(1,Math.round(shellHeight/3.6));
+      const vRepeat=storeys/16;
+      for(let i=0;i<uv.count;i++){
+        const face=Math.floor(i/4);
+        if(face===2||face===3){
+          // The station floor and roof are concrete, not vertical windows.
+          uv.setXY(i,.02,.002);
+          continue;
+        }
+        const surfaceWidth=face<2?frameDepth:frameLength;
+        const uRepeat=surfaceWidth/(10*4.4);
+        uv.setXY(i,uv.getX(i)*uRepeat,uv.getY(i)*vRepeat);
+      }
+      uv.needsUpdate=true;
+    }
+    const shell=new THREE.Mesh(geo,stationFacade);
+    shell.position.set(station.x,centerY,station.z);
+    shell.scale.set(frameLength,shellHeight,frameDepth);
+    shell.receiveShadow=true;
+    scene.add(shell);return shell;
+  }
   const stationLower=(railY-stationBase)-5.1;
-  solid(station.x,stationBase+stationLower/2,station.z,frameLength,stationLower,frameDepth,concrete);
+  stationFacadeShell(stationBase+stationLower/2,stationLower);
   const upperStart=railY+11.2,upperHeight=stationBase+height-upperStart;
-  solid(station.x,upperStart+upperHeight/2,station.z,frameLength,upperHeight,frameDepth,concrete);
+  stationFacadeShell(upperStart+upperHeight/2,upperHeight);
   for(const side of [-1,1]){
     solid(station.x,railY+2.9,station.z+side*18,frameLength,16.3,4,concrete);
     solid(station.x,railY+2.9,station.z+side*20.2,frameLength,13.2,.42,glass);
