@@ -4822,11 +4822,43 @@ const CENTRAL_PARK_SITES=[
     return inside;
   }
 
+
+  // ROAD-PARCEL_CLEARANCE_V1: preserve actual Manhattan road centerlines.
+  // Filter both geometry and the collision index, so no invisible wall remains.
+  function nycParcelCrossesRoad(lot,roadMargin=5.85){
+    if(!lot||![lot[0],lot[1],lot[2],lot[3]].every(Number.isFinite))return true;
+    const [x,z,w,d]=lot;
+    const minX=x-w*.5-roadMargin,maxX=x+w*.5+roadMargin;
+    const minZ=z-d*.5-roadMargin,maxZ=z+d*.5+roadMargin;
+    for(const path of CITY_STREETS)for(let j=1;j<path.length;j++){
+      const a=path[j-1],b=path[j];
+      if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
+         Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
+      const dx=b[0]-a[0],dz=b[1]-a[1];
+      let entry=0,exit=1;
+      for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
+        if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
+        const t0=(lo-p)/v,t1=(hi-p)/v;
+        entry=Math.max(entry,Math.min(t0,t1));
+        exit=Math.min(exit,Math.max(t0,t1));
+        if(entry>exit)break;
+      }
+      if(entry<=exit)return true;
+    }
+    return false;
+  }
+
   function setupCityLots(parcels,ground) {
     cityGroundField=ground;
-    cityLots=parcels;
+    // This applies to NYC only; all other maps keep their original parcels.
+    const safeParcels=selectedMap.city
+      ?parcels.filter(lot=>!nycParcelCrossesRoad(lot))
+      :parcels;
+    if(selectedMap.city)console.info('[PATROL] NYC protected roadway parcels',
+      parcels.length-safeParcels.length,'removed from',parcels.length);
+    cityLots=safeParcels;
     lotIndex.clear();
-    for (const lot of parcels){
+    for (const lot of safeParcels){
       const key=lotKey(lot[0],lot[1]),bucket=lotIndex.get(key);
       if(bucket)bucket.push(lot);
       else lotIndex.set(key,[lot]);
