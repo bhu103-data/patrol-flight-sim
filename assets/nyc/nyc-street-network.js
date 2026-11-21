@@ -339,6 +339,19 @@ export function buildNycStreetNetwork({
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
+  // PATROL_BROOKLYN_BRIDGE_STREET_INFILL: compact bridgehead neighborhood.
+  // Streets use the SAME road/sidewalk clearances and game-space 24x33 lot
+  // grid as adjacent buildings. This is not a surveyed Brooklyn street plan.
+  // Keep the extra draw work within a small Brooklyn/DUMBO viewport.
+  for(let i=9;i<=20;i++)for(let j=-13;j<=-7;j++){
+    const a=[avenueX(i,j*grid.blockLength),j*grid.blockLength],
+      b=[avenueX(i,(j+1)*grid.blockLength),(j+1)*grid.blockLength];
+    streetSegment(a,b,'avenue',i,j);
+  }
+  for(let j=-12;j<=-7;j++)for(let i=9;i<=19;i++){
+    const z=j*grid.blockLength;
+    streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
+  }
   function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;
     // NYC yellow traffic signal heads and dark pedestrian walk/countdown box.
