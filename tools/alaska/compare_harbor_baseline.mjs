@@ -15,7 +15,19 @@ const baselineSha='6d50bfda4b2d3837e550751ede49b200b140bc72';
    const hook=`  window.PatrolHarborNearQA = () => {
      if(!selectedMap.alaska)throw Error('Near QA requires Alaska');
      window.__patrolQaHold=true;
-     plane.pos=[106,28,-557]; plane.yaw=.91; plane.pitch=-.18;
+     // Derive a cabin-facing camera from the ACTUAL terrain-grounded
+     // obstacle positions so shore-pad placement cannot shift it away.
+     const cabins=alaskaObstacles.filter(o=>o.name==='harbor building');
+     if(cabins.length!==6)throw Error('Missing cabins in near QA');
+     const [first,second]=cabins;
+     const targetX=(first.x+second.x)*.5;
+     const targetZ=(first.z+second.z)*.5;
+     const targetY=(first.top+second.top)*.5-1.1;
+     plane.pos=[first.x-5,Math.max(first.top,second.top)+4,
+       Math.min(first.z,second.z)-14];
+     const dx=targetX-plane.pos[0],dz=targetZ-plane.pos[2];
+     plane.yaw=Math.atan2(dx,dz);
+     plane.pitch=Math.atan2(targetY-plane.pos[1],Math.hypot(dx,dz));
      plane.bank=0; plane.speed=0; plane.throttle=0; plane.vsi=0;
      camInitialized=false;
    };
