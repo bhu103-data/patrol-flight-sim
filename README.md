@@ -14,6 +14,13 @@ The Viper now has a clear framed canopy with a visible helmeted pilot, harness, 
 
 [Play PATROL on GitHub Pages](https://bhu103-data.github.io/patrol-flight-sim/)
 
+## Chongqing Hotpot Pilot (new)
+
+Choose **Chongqing · Hotpot Pilot** on the map selection screen, or open [the Chongqing level](https://bhu103-data.github.io/patrol-flight-sim/chongqing.html) directly. This is an additional Three.js 3D character-exploration level; existing aircraft maps and controls are unchanged. Explore a stylized Hongyadong, river crossings, hillside towers, elevated rail, cable cars, and a Chongqing hotpot shop. Walk with WASD, sprint with Shift, super-jump with Space, toggle flight with F, ascend with Space, descend with Ctrl, and press E near the restaurant for temporary spicy fire propulsion. Drag the view to turn the chase camera. This is an artistic compressed city, **not** a georeferenced 1:1 replica. The level loads Three.js r180 from a CDN and needs an internet connection.
+
+[Chongqing technical notes and Petalwake credits](docs/CHONGQING_HOTPOT_PILOT.md)
+
+
 ## Controls
 
 - **Mouse**, **WASD**, or the **arrow keys** steer.
