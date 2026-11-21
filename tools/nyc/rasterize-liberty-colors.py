@@ -106,20 +106,31 @@ for index, (src, dst, material_index) in enumerate(zip(uv_src, uv_atlas, ids)):
 coverage = float(np.mean(painted))
 if coverage < 0.08 or triangles_with_coverage < 1000:
     raise RuntimeError(f"Insufficient UV atlas coverage: {coverage:.3%}; triangles {triangles_with_coverage}")
-# Dilate non-island pixels for stable linear filtering at UV seams.
-# Nearest-neighbor source-color expansion. Without this, raster pixels miss
-# sub-pixel islands and the native renderer samples black texture values.
-# Expand from near pixels first; jumping larger distances only fills remaining
-# unoccupied padding and keeps local original material colors dominant.
-for radius in (1, 1, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
-    for dy, dx in ((0, -radius), (0, radius), (-radius, 0), (radius, 0)):
-        sy0, sy1 = max(0, -dy), min(H, H - dy)
-        sx0, sx1 = max(0, -dx), min(W, W - dx)
-        dy0, dy1 = sy0 + dy, sy1 + dy
-        dx0, dx1 = sx0 + dx, sx1 + dx
-        update = ~painted[dy0:dy1, dx0:dx1] & painted[sy0:sy1, sx0:sx1]
-        canvas[dy0:dy1, dx0:dx1][update] = canvas[sy0:sy1, sx0:sx1][update]
-        painted[dy0:dy1, dx0:dx1][update] = True
+# Enforce MATERIAL-AWARE fill: each source material has its own half-size
+# quadrant. Never let stone, copper and flame colors bleed across quadrants.
+# Near-to-far nearest-neighbor expansion gives subpixel UV islands coverage.
+quadrant_rgb = {}
+for slot in range(len(blender_names)):
+    if slot >= 4:
+        raise RuntimeError("Unexpected extra Innerscene material")
+    x0, y0 = (slot % 2) * (W // 2), (slot // 2) * (H // 2)
+    patch = canvas[y0:y0 + H // 2, x0:x0 + W // 2]
+    occupied = painted[y0:y0 + H // 2, x0:x0 + W // 2]
+    if not np.any(occupied):
+        raise RuntimeError(f"Source material {slot} got no UV samples")
+    pw, ph = W // 2, H // 2
+    for radius in (1, 1, 1, 2, 4, 8, 16, 32, 64, 128, 256):
+        for dy, dx in ((0, -radius), (0, radius), (-radius, 0), (radius, 0)):
+            sy0, sy1 = max(0, -dy), min(ph, ph - dy)
+            sx0, sx1 = max(0, -dx), min(pw, pw - dx)
+            dy0, dy1 = sy0 + dy, sy1 + dy
+            dx0, dx1 = sx0 + dx, sx1 + dx
+            update = ~occupied[dy0:dy1, dx0:dx1] & occupied[sy0:sy1, sx0:sx1]
+            patch[dy0:dy1, dx0:dx1][update] = patch[sy0:sy1, sx0:sx1][update]
+            occupied[dy0:dy1, dx0:dx1][update] = True
+    if not np.all(occupied):
+        raise RuntimeError(f"Material {slot} atlas padding remains black")
+    quadrant_rgb[str(blender_names[slot])] = patch.mean(axis=(0, 1)).tolist()
 
 if float(np.mean(painted)) < 0.999:
     raise RuntimeError("CPU color extension left uncovered texels")
@@ -130,7 +141,7 @@ mean = canvas[painted].mean(axis=0).tolist()
 report = {"uvTriangles":len(uv_src),"coloredTriangles":triangles_with_coverage,
           "atlasCoverageBeforePadding":coverage,
           "atlasCoverageAfterPadding":float(np.mean(painted)),
-          "meanPaintedRGB":mean,
+          "meanPaintedRGB":mean, "materialQuadrantMeanRGB":quadrant_rgb,
           "atlasBytes":destination.stat().st_size}
 print("PATROL_LIBERTY_CPU_ATLAS " + json.dumps(report))
 if destination.stat().st_size > 4194304 or max(mean) < 20:
