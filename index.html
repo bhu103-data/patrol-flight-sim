@@ -2146,6 +2146,32 @@ const CENTRAL_PARK_SITES=[
                       *(1.0-smoothstep(590.0,647.0,p.z));
             float iceVein=vnoise(p.xz*.49+vec2(grain*2.0,-macro*1.8));
             vec3 ice=mix(vec3(.24,.53,.62),vec3(.72,.86,.89),.31+.63*iceVein);
+            // Alaska-only close-range glacier cryosphere. Ice flow is
+            // longitudinal (+Z); sparse dark fracture seams and compressed
+            // blue basal layers fade before the distant DEM horizon.
+            float iceNear=glacier*(1.0-smoothstep(82.0,245.0,hitDist));
+            if(iceNear>.014){
+              vec2 flow=vec2(p.x-iceAxis,p.z-449.0);
+              float warp=vnoise(flow*.068+vec2(macro*.5,grain*.3));
+              float ridge=vnoise(flow*.24+vec2(iceVein,.31));
+              float lamina=.5+.5*sin((p.y-WATER_H)*1.65
+                                      +flow.y*.092+warp*5.2);
+              float laminaEdge=pow(1.0-abs(2.0*lamina-1.0),3.3);
+              // Contorted longitudinal compression fractures, not an
+              // artificial repeated cross-hatched chessboard.
+              float splitPhase=flow.x*.31+warp*3.3+flow.y*.018;
+              float split=1.0-smoothstep(.065,.18,abs(sin(splitPhase)));
+              split*=smoothstep(.32,.72,ridge);
+              float glacialDust=.05+.15*laminaEdge+.08*(1.0-ridge);
+              ice=mix(ice,vec3(.085,.26,.35),glacialDust*.56*iceNear);
+              ice=mix(ice,vec3(.045,.19,.26),split*.54*iceNear);
+              // Approximate blue light scattering in compacted clear ice.
+              // No claim of true subsurface scattering or measured albedo.
+              float clearGlance=pow(1.0-max(dot(n,-rd),0.0),3.0);
+              ice+=vec3(.018,.085,.105)*clearGlance*iceNear;
+              float glint=pow(max(dot(reflect(rd,n),uSun),0.0),64.0);
+              ice+=vec3(.10,.14,.18)*glint*iceNear*(1.0-split*.6);
+            }
             albedo=mix(albedo,ice,glacier*.82);
             // Near-field CC0 photography: normal and roughness channels are
             // sampled only for Alaska and within a short flight detail radius.
@@ -2158,12 +2184,15 @@ const CENTRAL_PARK_SITES=[
               // bands seen during actual WebGL flight screenshot review.
               float forestWeight=smoothstep(.14,.72,forestFloor)*
                 (1.0-smoothstep(.28,.63,exposed))*
-                (1.0-smoothstep(.30,.65,frost));
+                (1.0-smoothstep(.30,.65,frost))*
+                (1.0-smoothstep(.15,.54,glacier));
               float photoAmount=closeDetail*
-                max(max(exposed*.74,frost*.87),forestWeight*.47)*
-                (1.0-glacier*.88);
+                max(max(max(exposed*.74,frost*.87),forestWeight*.47),
+                    glacier*.31)*(1.0-glacier*.42);
               if(photoAmount>.018){
-                float snowTile=step(.51,frost);
+                // Reuse bundled real CC0 snow surface photography for the
+                // wind-packed glacier crust, without a new external fetch.
+                float snowTile=max(step(.51,frost),step(.30,glacier));
                 float forestVariant=step(.54,vnoise(p.xz*.028));
                 vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
                 vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
@@ -2177,6 +2206,8 @@ const CENTRAL_PARK_SITES=[
                 vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
                 vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.75,.91,.76),
                                forestWeight);
+                photo=mix(photo,photo*vec3(.72,.88,.96),
+                          smoothstep(.24,.75,glacier)*.68);
                 vec2 normalUV=mix(groundUV,forestUV,step(.5,forestWeight));
                 vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,normalUV,lod);
                 float roughness=normalRough.a;
