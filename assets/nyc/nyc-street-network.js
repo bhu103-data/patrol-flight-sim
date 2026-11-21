@@ -224,10 +224,13 @@ export function buildNycStreetNetwork({
     for(let step=0;step<=steps;step++){
       const t=step/steps,x=a[0]+dx*t,z=a[1]+dz*t;
       for(const across of [-1,-.73,-.39,0,.39,.73,1]){
+        const sx=x+nx*margin*across,sz=z+nz*margin*across;
+        // Both the road center and sidewalk edge must remain on land.
+        // Endpoint/midpoint-only water tests miss narrow shoreline inlets.
+        if(terrainAt(sx,sz)<waterY+1.58)return false;
         // A footprint lookup is cheap via the game's spatial lot index.
         // A conservative .95-unit square probe closes gaps between samples.
-        if(!isClear(x+nx*margin*across,z+nz*margin*across,.95))
-          return false;
+        if(!isClear(sx,sz,.95))return false;
       }
     }
     return true;
