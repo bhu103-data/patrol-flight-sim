@@ -256,6 +256,15 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
   const armGeo=new THREE.CylinderGeometry(.09,.09,1,12);
   armGeo.rotateX(Math.PI/2); // arm is cantilevered horizontally along Z
   const lensGeo=new THREE.SphereGeometry(.5,14,10);
+  // Open-ended metal hoods keep glare off each signal lens. Their cylinder
+  // axes run along the oncoming traffic direction (+/-X), with a round
+  // aperture rather than a flat square face. 24 hoods share ONE draw group.
+  const hoodGeo=new THREE.CylinderGeometry(.30,.30,.27,12,1,true);
+  hoodGeo.rotateZ(Math.PI/2);
+  const signalHoods=pool(hoodGeo,dark,signalMax*3);
+  const signalSideTrim=pool(unit,new THREE.MeshStandardMaterial({
+    color:0x64737a,metalness:.55,roughness:.53
+  }),signalMax*2);
   const signalPosts=pool(mastGeo,frame,signalMax);
   const signalArms=pool(armGeo,frame,signalMax);
   const signalHeads=pool(unit,dark,signalMax);
@@ -284,9 +293,16 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     // Each signal head has three physical lens surfaces. Only the active
     // emissive/bright overlay switches off; dark glass remains in its frame.
     const bulbZ=-side*4.08;
-    for(const [n,height] of [7.13,6.52,5.91].entries())
+    for(const [n,height] of [7.13,6.52,5.91].entries()){
       pose(inactiveLenses,idx*3+n,at,0,
         [face*.445,height,bulbZ],[.235,.46,.46],0);
+      pose(signalHoods,idx*3+n,at,0,
+        [face*.565,height,bulbZ],[1,1,1],0);
+    }
+    for(let edge=0;edge<2;edge++)
+      pose(signalSideTrim,idx*2+edge,at,0,
+        [face*.455,6.52,bulbZ+(edge?-.345:.345)],
+        [.055,2.12,.055],0);
     pose(signalRed,idx,at,0,[face*.51,7.13,bulbZ],[.24,.43,.43],0);
     pose(signalAmber,idx,at,0,[face*.51,6.52,bulbZ],[.24,.43,.43],0);
     pose(signalGreen,idx,at,0,[face*.51,5.91,bulbZ],[.24,.43,.43],0);
@@ -301,10 +317,13 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     item.count=signalCount;item.instanceMatrix.needsUpdate=true;
     if(item.count)item.computeBoundingSphere();item.frustumCulled=true;
   }
-  inactiveLenses.count=signalCount*3;
-  inactiveLenses.instanceMatrix.needsUpdate=true;
-  if(inactiveLenses.count)inactiveLenses.computeBoundingSphere();
-  inactiveLenses.frustumCulled=true;
+  inactiveLenses.count=signalHoods.count=signalCount*3;
+  signalSideTrim.count=signalCount*2;
+  for(const part of [inactiveLenses,signalHoods,signalSideTrim]){
+    part.instanceMatrix.needsUpdate=true;
+    if(part.count)part.computeBoundingSphere();
+    part.frustumCulled=true;
+  }
   let signalTime=0,vehicleGreen=true,signalAspect='green';
   // Five localized light sources brighten road asphalt and nearby car roofs.
   const streetLights=[];
@@ -479,6 +498,7 @@ export function buildChongqingStreetlife({THREE,scene,ground,riverCenter,isRoadC
     stats:{vehicles:vehicles.length,taxis:vehicles.filter(v=>v.taxi).length,
       streetLamps:lanternCount,roadMarkings:markCount,curbSections:curbCount,movingHeadlights:headlightCones.length,
       zebraStripes:zebra.count,stopLines:stopBars.count,
+      signalHoods:signalHoods.count,signalSideTrim:signalSideTrim.count,
       trafficSignals:signalHeads.count,
       pedestrianSignals:signalPedHeads.count,signalizedCrossings:crossingSites.length,
       drawGroups:Object.keys(buffer).length+17},
