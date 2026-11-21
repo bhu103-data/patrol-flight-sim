@@ -48,3 +48,9 @@ test('flush Strip surface repairs have no physical colliders or textures',()=>{
    'real Vegas map builder must pass triangulation callback');
  assert.doesNotMatch(sampleSource,/solidAt\(|fetch\(|import\(/);
 });
+
+test('fixed QA camera names a real Vegas scenic view',async()=>{
+ const script=await readFile(new URL('../scripts/vegas-core-browser-smoke.mjs',import.meta.url),'utf8');
+ assert.match(html,/site:\{name:'Strip Street View'\}/);
+ assert.match(script,/selectOption\(\{label:'Strip Street View'\}\)/);
+});
