@@ -1103,6 +1103,58 @@ const CENTRAL_PARK_SITES=[
         if(x+width/2>west&&x-width/2<east&&z+length/2>south&&z-length/2<north)continue;
         cityParcels.set(iz*256+ix,[x,z,width,length,top-base,tone]);
       }
+      // PATROL_NYC_BROOKLYN_GAPFILL_V1
+      // Fill a bounded set of vacant DUMBO/bridgehead blocks with smaller,
+      // non-overlapping buildings. Never create a new map or extend the world.
+      // Existing road, railway, runway, shoreline and source polygons win.
+      let brooklynGapFills=0;
+      for(let iz=-13;iz<=-6 && brooklynGapFills<18;iz++)
+        for(let ix=6;ix<=25 && brooklynGapFills<18;ix++){
+          const key=iz*256+ix;
+          if(cityParcels.has(key))continue;
+          const z0=(iz+.5)*city.blockLength;
+          const x0=(ix+.5)*city.blockWidth+city.tilt*z0+city.offset;
+          const localX=x0-city.tilt*z0-city.offset;
+          if(z0<=-415||z0>=-195||x0<=210||x0>=435||
+             localX<=187+26*Math.sin(z0/93))continue;
+          if(city.focusZones&&!city.focusZones.some(zone=>{
+            const dx=x0-zone[0],dz=z0-zone[1];
+            return dx*dx+dz*dz<zone[3]*zone[3];
+          }))continue;
+          const width=8.5+hash(ix,iz,144)*2;
+          const length=14+hash(ix,iz,449)*3;
+          const options=[[0,0],[-4.5,0],[4.5,0],[0,-5],[0,5],[-4,-4],[4,4]];
+          for(const [du,dz] of options){
+            // Maintain the grid cell used by the terrain heightfield lookup.
+            const x=x0+du+city.tilt*dz,z=z0+dz;
+            const base=cityHeight(x,z)*scale;
+            if(base<=water+1.2)continue;
+            if(![[-1,-1],[-1,1],[1,-1],[1,1]].every(([a,b])=>
+              Math.abs(cityHeight(x+a*width/2,z+b*length/2)*scale-base)<.4))
+              continue;
+            if(generatedCityRoadOverlap([x,z,width,length],5.85))continue;
+            const track=city.railway;
+            const dist=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
+            if(Math.abs(dist-track.radius)<4+Math.hypot(width,length)*.43)
+              continue;
+            const runway=city.runway;
+            if(Math.abs(x-runway.x)<runway.halfLength+width/2+5 &&
+               Math.abs(z-runway.z)<runway.halfWidth+length/2+5)continue;
+            const overlaps=(lot)=>Math.abs(x-lot[0])<(width+lot[2])*.5+1.25 &&
+              Math.abs(z-lot[1])<(length+lot[3])*.5+1.25;
+            if(officialLots.some(overlaps))continue;
+            let occupied=false;
+            for(const existing of cityParcels.values()){
+              if(overlaps(existing)){occupied=true;break;}
+            }
+            if(occupied)continue;
+            const height=9.6+hash(ix,iz,772)*5.9;
+            const tone=hash(ix,iz,312);
+            cityParcels.set(key,[x,z,width,length,height,tone]);
+            brooklynGapFills++;
+            break;
+          }
+        }
       for(let i=0;i<officialLots.length;i++)
         cityParcels.set(-10000000-i,officialLots[i]);
     }
