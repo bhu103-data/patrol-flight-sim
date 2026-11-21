@@ -56,3 +56,28 @@ test('real building bodies replace boxes without removing LED ads or colliders',
  assert.match(html,/float waterReflectance/);
  assert.match(html,/function advanceFlight\(dt\)/);
 });
+
+test('One Times Square official wedge preserves municipal roof and NYE lighting',()=>{
+ const marker='const NYC_ONE_TIMES_OFFICIAL_POLYGON = ';
+ const at=html.indexOf(marker);
+ assert.ok(at>=0,'One Times official outline must be in scene source');
+ const after=html.slice(at+marker.length);
+ const end=after.indexOf(';');
+ const polygon=JSON.parse(after.slice(0,end));
+ assert.equal(polygon.length,4,'same four corners as municipal FID 57216');
+ const world=polygon.map(([x,z])=>[x*10.7,z*13.75]);
+ let roofs=0,roofArea=0,windows=0;
+ build((a,b,c,col,type)=>{
+   assert.equal(type,11);roofs++;
+   roofArea+=Math.abs((b[0]-a[0])*(c[2]-a[2])-(b[2]-a[2])*(c[0]-a[0]))*.5;
+ },(a,b,c,d,col,type)=>{
+   assert.ok(type===9||type===10);
+   if(type===10)windows++;
+ },[0,0,10.7,13.75,30.9,.24,false,world,57216],0,4);
+ assert.equal(roofs,2,'no extra cuboid roof');
+ assert.ok(Math.abs(roofArea-area(world))<.02);
+ assert.ok(windows>40,'replaced tower has real glass panes');
+ assert.match(html,/PATROL_NYC_ONE_TIMES_SURVEY_V15/);
+ assert.match(html,/const face=side\*7\.12/,'side screens remain outside tapered body');
+ assert.match(html,/const ball=\[\[34\.18/,'New Year ball remains');
+});
