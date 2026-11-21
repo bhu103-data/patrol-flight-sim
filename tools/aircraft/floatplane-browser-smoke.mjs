@@ -48,10 +48,12 @@ async function testMap(map,exercise){
       isCrashOpen:!document.querySelector('#crashOverlay')?.hidden,
       glLost:document.querySelector('#glCanvas')?.getContext('webgl2')?.isContextLost()
     }));
+    const launchPose=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+    console.log('C185 actual water launch '+map+': '+JSON.stringify(launchPose));
     if(state.menuError||state.glLost||state.isCrashOpen||
-       state.aircraft!=='Cessna 185 Floatplane'||
+       !launchPose?.playing||state.aircraft!=='Cessna 185 Floatplane'||
        !/FLOATS · WATER TAXI 0/.test(state.floats))
-      throw Error('Water start not stable: '+JSON.stringify(state));
+      throw Error('Water start not stable: '+JSON.stringify({state,launchPose}));
     await page.waitForFunction(()=>{
       return document.querySelector('#gearStatus')?.textContent?.includes('WATER TAXI');
     },null,{timeout:15000});
@@ -111,9 +113,11 @@ async function testMap(map,exercise){
       const after=(await page.locator('#gearStatus').textContent())||'';
       const flight=await getFlight();
       await page.screenshot({path:'artifacts/floatplane-'+map+'-airborne.png'});
+      const terrainAlarm=await page.locator('#groundWarning').evaluate(el=>!el.hidden);
       if(!flight?.playing || flight.aircraft!=='seaplane' ||
-         flight.altitude<17.5 || !after.includes('WATER LANDING'))
-        throw Error('C185 did not sustain airborne flight: '+JSON.stringify({after,flight}));
+         flight.altitude<17.5 || !after.includes('WATER LANDING') || terrainAlarm)
+        throw Error('C185 did not sustain clear-of-terrain flight: '+
+          JSON.stringify({after,flight,terrainAlarm}));
     }
     if(errors.length)throw Error(errors.join('\n'));
     results.push({map,aircraft:state.aircraft,waterStart:state.floats,
