@@ -8,9 +8,11 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       typeof terrainAt !== 'function' || !Number.isFinite(waterY)) {
     throw new TypeError('Alaska detail requires mesh writers and terrain sampling');
   }
-  const stats={crevasses:0,iceFloes:0,iceFloesRejectedShore:0,rockBands:0};
+  const stats={crevasses:0,iceFloes:0,rockBands:0};
   // All geometry is cosmetic, measured heights still come from terrainAt.
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
+  // Append instrumentation after the five canonical glacier log fields.
+  stats.iceFloesRejectedShore=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
   // Surface 12 requests Alaska's PBR ice photo/normal/roughness shader.
