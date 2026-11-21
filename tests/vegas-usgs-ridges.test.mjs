@@ -46,4 +46,19 @@ test('committed Vegas ridge elevations match the verified USGS source',async()=>
  assert.ok(Math.min(...decoded.elevationMeters.center)>600);
  assert.ok(Math.max(...decoded.elevationMeters.east)>1100);
  assert.equal(payload.rasterExtentWgs84.length,4);
+ assert.equal(decoded.ridgeSurface.gridRows,49);
+ assert.equal(decoded.ridgeSurface.gridColumns,9);
+ assert.equal(decoded.ridgeSurface.west.elevationDecimeters.length,441);
+ assert.equal(decoded.ridgeSurface.east.elevationDecimeters.length,441);
+ assert.ok(Math.max(...decoded.ridgeSurface.west.elevationDecimeters)>16000);
+ assert.ok(Math.max(...decoded.ridgeSurface.east.elevationDecimeters)>11000);
+});
+test('invalid USGS 2D raster rejects rather than silently painting fake elevations',async()=>{
+ const original=JSON.parse(await readFile(new URL('../assets/vegas/strip-ridges-3dep.json',import.meta.url),'utf8'));
+ const broken=structuredClone(original);
+ broken.ridgeSurface.westElevationDecimetersBase64=broken.ridgeSurface.westElevationDecimetersBase64.slice(2);
+ assert.throws(()=>decodeVegasRidgeDEM(broken),/byte length/);
+ const wrong=structuredClone(original);
+ wrong.ridgeSurface.eastLongitudeWgs84[4]=0;
+ assert.throws(()=>decodeVegasRidgeDEM(wrong),/longitude/);
 });
