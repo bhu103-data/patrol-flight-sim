@@ -575,6 +575,19 @@ for(const plan of plannedRoads){
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
 // The old collision boxes and all other scenic geometry remain intact.
 const previewScenario=new URLSearchParams(location.search).get('scenario')==='hongyadong';
+const blenderToggle=document.getElementById('cqBlenderToggle');
+if(blenderToggle){
+  blenderToggle.textContent=previewScenario?'还原原始建筑':'Blender 写实预览';
+  blenderToggle.setAttribute('aria-pressed',String(previewScenario));
+  blenderToggle.addEventListener('click',()=>{
+    // Preserve day/time, pilot and quality query parameters during a reload.
+    // This is a preview toggle, not a paid Scenario cloud generation call.
+    const next=new URL(location.href);
+    if(previewScenario)next.searchParams.delete('scenario');
+    else next.searchParams.set('scenario','hongyadong');
+    location.assign(next.href);
+  });
+}
 void loadOptionalHongyadong({THREE,scene,detailBuild,search:location.search})
   .then(replacement=>{
     document.documentElement.dataset.scenarioHongyadong=replacement.active?'ready':'off';
