@@ -355,7 +355,8 @@ try{
   await capture('10-times-square-no-gis.png',{control:true});
  }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,framePacing,warnings};
+ result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings};
+ result.framePacing=framePacing;
 }catch(e){
  result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
    captureTimings,framePacing,errors,warnings};
