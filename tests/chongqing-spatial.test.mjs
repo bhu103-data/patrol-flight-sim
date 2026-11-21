@@ -52,3 +52,31 @@ test('empty city has no false-positive collision and preserves ground height',()
   assert.equal(c.collides(0,0,0),false);
   assert.ok(Math.abs(c.landingSurface(5,5,30,25,-2)-.35)<1e-9);
 });
+
+
+test('halts upward flight under the Crystal and station upper floors',()=>{
+  const c=new SpatialObstacleIndex([
+    {x:0,z:0,w:120,d:22,base:248,top:273},
+    {x:140,z:0,w:82,d:40,base:102,top:170}
+  ]);
+  assert.equal(c.ceilingSurface(0,0,245.0,248),246.9);
+  assert.equal(c.ceilingSurface(140,0,99.5,102),100.9);
+  assert.equal(c.ceilingSurface(0,50,245,250),Infinity);
+  assert.equal(c.ceilingSurface(0,0,275,277),Infinity);
+  assert.equal(c.ceilingSurface(0,0,249,248),Infinity);
+});
+
+test('head clearance respects side edges and crossing direction',()=>{
+  const c=new SpatialObstacleIndex([{x:0,z:0,w:12,d:15,base:55,top:72}]);
+  assert.equal(c.ceilingSurface(6.5,0,52,55),53.9);
+  assert.equal(c.ceilingSurface(9,0,52,55),Infinity);
+  assert.equal(c.ceilingSurface(0,0,51,52),Infinity);
+});
+
+test('the main game keeps a usable altitude transition above tall towers',async()=>{
+  const main=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  assert.ok(main.includes('state.pos.y=clamp(py+state.vel.y*dt,-.25,725)'));
+  assert.ok(main.includes('state.pos.y>=650'));
+  assert.equal(main.includes('if(py>300&&state.vel.y>0)'),false);
+  assert.ok(main.includes('obstacleIndex.ceilingSurface('));
+});
