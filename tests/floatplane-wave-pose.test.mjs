@@ -58,3 +58,22 @@ test('NYC waterborne physics uses the same four-pontoon spectrum and RAF clock a
   assert.match(html,/selectedMap\.city\?floatOceanPose\(x,z,plane\.yaw,/);
   assert.match(html,/selectedMap\.city\?floatOceanPose\(prevPos\[0\],prevPos\[2\],prevYaw,/);
 });
+
+test('NYC float ocean floor retains actual depth below water collision plane',()=>{
+  const start=html.indexOf('  function sampleRawOceanFloorHeight(');
+  const stop=html.indexOf('  function sampleTerrainHeight(x,z)',start);
+  assert.ok(start>0&&stop>start,'raw bathymetry sampler exists');
+  const field=new Float32Array(1024*1024).fill(.12);
+  const selectedMap={city:true};
+  const f=new Function('cityGroundField','heightField','MAP_SIZE','MAP_SPAN',
+    'clamp','lerp','terrainScaleFor','selectedMap','WATER_H','sampleTerrainHeight',
+    html.slice(start,stop)+'return {sampleRawOceanFloorHeight,sampleFloatOceanFloor};')(
+      field,null,1024,1920,(v,a,b)=>Math.min(Math.max(v,a),b),
+      (a,b,t)=>a+(b-a)*t,()=>54,selectedMap,water,()=>water);
+  assert.ok(Math.abs(f.sampleRawOceanFloorHeight(0,0)-6.48)<.001);
+  assert.ok(Math.abs(f.sampleFloatOceanFloor(0,0)-6.48)<.001,
+    'waterborne wave depth cannot be clamped to the collision waterline');
+  selectedMap.city=false;
+  assert.equal(f.sampleFloatOceanFloor(0,0),water,'other map fallback untouched');
+  assert.match(html,/selectedMap,WATER_H,sampleFloatOceanFloor\)/);
+});

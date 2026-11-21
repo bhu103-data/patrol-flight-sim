@@ -11,7 +11,7 @@ function state({afloat=false,valid=()=>true,prev=[0,17,0],nyc=false}={}){
   const c={floatplane:true,crash:false,waterborne:afloat,brakes:false,
     x:1,y:13,z:2,dt:.1,floor:12.2,sceneryTime:0,floatRotate:false,
     prevPos:prev,prevYaw:.2,WATER_H:12.2,FLOAT_CLEARANCE:1.5,
-    selectedMap:{city:nyc},lastTime:1000,sampleTerrainHeight:()=>10,
+    selectedMap:{city:nyc},lastTime:1000,sampleTerrainHeight:()=>10,sampleFloatOceanFloor:()=>10,
     floatOceanPose:()=>({height:.4}),
     plane:{pos:[1,13,2],pitch:-.35,yaw:.4,bank:.25,rollAnim:.4,speed:25,afterburner:true},
     usableFloatWater:valid,explosions:[],impacts:[]};

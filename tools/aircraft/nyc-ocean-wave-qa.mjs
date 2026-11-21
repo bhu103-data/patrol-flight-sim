@@ -33,7 +33,7 @@ const html=source.replace(camera,`
     read(){
       const t=Math.fround((lastTime??0)*.001);
       const [x,y,z]=plane.pos;
-      const p=floatOceanPose(x,z,plane.yaw,t,selectedMap,WATER_H,sampleTerrainHeight);
+      const p=floatOceanPose(x,z,plane.yaw,t,selectedMap,WATER_H,sampleFloatOceanFloor);
       return {x,y,z,time:t,height:p.height,pitch:p.pitch,bank:p.bank,
         expectedY:WATER_H+FLOAT_CLEARANCE+p.height,waterborne,
         crashed:Boolean(crash),speed:plane.speed,
@@ -116,6 +116,8 @@ try{
   const sorted=[...ticks].sort((a,b)=>a-b),p=v=>sorted[Math.floor((sorted.length-1)*v)];
   report.rafFrameMs={p50:p(.5),p95:p(.95),p99:p(.99),samples:ticks.length};
   await shot('nyc-c185-same-camera-b.png');
+  if(report.shots.every(s=>Math.abs(s.height)<.003))
+    throw Error('No visible swell: both confirmed waterborne shots had zero height');
   if(!glb.includes(200)||errors.length)throw Error('C185 model or JS errors: '+JSON.stringify({glb,errors}));
   report.passed=true;
 }catch(error){report.passed=false;report.failure=String(error.stack||error);process.exitCode=1;}

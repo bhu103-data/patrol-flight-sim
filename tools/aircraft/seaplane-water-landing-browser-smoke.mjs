@@ -28,7 +28,7 @@ const fixture=[
   '      speed:plane.speed,altitude:plane.pos[1],',
   '      oceanHeave:waterborne&&selectedMap.city?',
   '        floatOceanPose(plane.pos[0],plane.pos[2],plane.yaw,',
-  '          Math.fround((lastTime??0)*.001),selectedMap,WATER_H,sampleTerrainHeight).height:null})',
+  '          Math.fround((lastTime??0)*.001),selectedMap,WATER_H,sampleFloatOceanFloor).height:null})',
   '  };'
 ].join('\n');
 const injected=html.replace(anchor,fixture+'\n'+anchor);
