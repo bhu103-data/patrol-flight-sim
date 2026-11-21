@@ -556,13 +556,16 @@ export function buildNycStreetNetwork({
     // The zebra ladder and signal supports extend beyond the old 5-unit
     // center grid. Inspect the entire corner envelope for shallow water
     // and collision geometry before creating crossing paint.
-    for(const dx of [-7.5,-5,-2.5,0,2.5,5,7.5]){
-      for(const dz of [-7.5,-5,-2.5,0,2.5,5,7.5]){
-        const sx=x+dx,sz=z+dz;
+    // 1.5-unit probes plus 0.78-unit square bounds cover the *entire*
+    // crossing envelope without the 1.6-unit blind gaps of the former
+    // 2.5-unit probe grid. Tiny corner walls must not be painted through.
+    for(let ix=-5;ix<=5;ix++){
+      for(let iz=-5;iz<=5;iz++){
+        const sx=x+ix*1.5,sz=z+iz*1.5;
         if(terrainAt(sx,sz)<waterY+1.58){
           freeIntersection=false;wetIntersection=true;break;
         }
-        if(!isClear(sx,sz,.45)){freeIntersection=false;break;}
+        if(!isClear(sx,sz,.78)){freeIntersection=false;break;}
       }
       if(!freeIntersection)break;
     }
