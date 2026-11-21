@@ -120,6 +120,21 @@ fs.mkdirSync(outDir,{recursive:true});
   await photo('nyc-central-park-loeb-rowboats.png');
   report.stages.push({stage:'loeb-rowboats',...boathouse});
 
+  // A closer camera at the same Loeb target is retained as an honest
+  // art-review image; the regular view above remains directly comparable
+  // to previous baseline captures. This is not a georeferenced view.
+  await page.locator('#hotelZoom').evaluate(el=>{
+    el.value='68';
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(850);
+  const benchClose=await current();
+  assert.equal(benchClose.selectedView,'Central Park · Loeb Boathouse');
+  assert(benchClose.webgl2&&!benchClose.contextLost);
+  assert.equal(await page.locator('#hotelZoom').inputValue(),'68');
+  await photo('nyc-central-park-loeb-bench-close.png');
+  report.stages.push({stage:'loeb-bench-close',zoom:'68',...benchClose});
+
   await page.locator('#resumeFlight').click();
   await page.waitForFunction(()=>document.getElementById('hotelViews')?.hidden,
    null,{timeout:10000});
