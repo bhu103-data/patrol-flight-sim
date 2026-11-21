@@ -15,9 +15,12 @@ on:
       - "scripts/nyc-road-browser-smoke.mjs"
       - ".github/workflows/chongqing-visual.yml"
 
+# PATROL_CQ_VISUAL_STABILITY_V5: NYC is updated frequently. Never cancel
+# a running Chromium screenshot just because a new commit arrived; without
+# this guard, the expensive browser install repeatedly stops mid-flight.
 concurrency:
   group: chongqing-visual-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
