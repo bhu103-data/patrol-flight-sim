@@ -1,0 +1,75 @@
+{
+  "schema": "patrol-nyc-ic16019-reference-v1",
+  "baseline": {
+    "ref": "codex/patrol-integration-20261121",
+    "commit": "6d50bfda4b2d3837e550751ede49b200b140bc72"
+  },
+  "ship": {
+    "design": "Incat Crowther IC16019 / Incat Crowther 26",
+    "designer": "Incat Crowther",
+    "officialSource": "https://www.incatcrowther.com/ships/ferries/commuter/ic16019/",
+    "platform": "catamaran",
+    "sourceRights": "Only independently authored procedural geometry + public factual specifications; official photographs, drawings, branding and CAD were NOT copied or redistributed.",
+    "overallLengthM": 26,
+    "waterlineLengthM": 23.9,
+    "beamM": 8,
+    "maxDraftM": 1.9,
+    "depthM": 2.8,
+    "operationalDraftM": null,
+    "draftNote": "Draft Max is a maximum design draft, NOT the normal operating waterline. Waterline displacement/loading are unknown; existing game WATER_H and bob remain untouched.",
+    "hullModel": {
+      "type": "self-authored low-poly twin-hull visual proxy, NOT licensed factory model",
+      "shader": "existing native PATROL WebGL2 flat-RGB mesh; no external textures",
+      "runtimeBuilder": "index.html::buildShipMesh('nycFerry')",
+      "gameBoundingHalfLength": 13,
+      "gameBoundingHalfWidth": 4,
+      "gameClearanceTop": 7.5,
+      "gameVisualHullBottomLocal": -0.6,
+      "gameVisualHullBottomNote": "Legacy local render coordinate retained from previous ferry, not measured hull draft",
+      "knownLimitation": "Rendered superstructure reaches above the original generic 7.5 game clearance top. Existing clearance calculations are unchanged except wider hull; final browser/physics clearance requires central QA.",
+      "performanceGoal": {
+        "trianglesUnder": 3600,
+        "extraTrianglesVersusGenericFerryUnder": 90,
+        "onlyNYC": true
+      }
+    }
+  },
+  "officialRoute": {
+    "name": "East River A/B",
+    "agency": "NYC Ferry",
+    "officialSource": "https://www.ferry.nyc/routes-and-schedules/east-river/",
+    "supportedStopSequence": [
+      "Wall Street/Pier 11",
+      "DUMBO/Fulton Ferry"
+    ],
+    "stopCodes": [
+      "2319811",
+      "2319810"
+    ],
+    "publicFactsOnly": true,
+    "sourceRights": "Facts about stop names and stop codes quoted with attribution; no GTFS files, route cartography, copyrighted image overlays or website assets copied.",
+    "validatedPATROLGameCoordinates": null,
+    "worldToLatLonTransform": null,
+    "routeGeometryVerifiedAgainstShoreAndBridges": false,
+    "status": "INFORMATIONAL ONLY; live elliptical clearance-checked route is NOT replaced with an unverified Pier 11–DUMBO line"
+  },
+  "gameInterfaces": {
+    "ferryTypeRegistry": "index.html::SHIP_TYPES",
+    "ferryMeshRegistry": "index.html::shipMeshes and splitShipMeshes",
+    "boatCreation": "index.html::prepareCoastalTraffic (NYC maps only)",
+    "routePose": "index.html::routePose and setBoatPace",
+    "renderer": "index.html::drawCoastalTraffic via existing mat4FromBasis and drawMesh",
+    "waterShader": "unchanged",
+    "floatplaneCollision": "index.html::usableFloatWater, collision reads each boat's halfWidth and halfLength; body unchanged",
+    "renderScale": "1 PATROL game-world unit per metre for this visual sample, not an independently georeferenced survey"
+  },
+  "nonGoals": [
+    "No real Pier 11–DUMBO ferry service simulation",
+    "No assumed operating draft from 1.9m max draft",
+    "No official trademarks/ship names",
+    "No third-party GLB/CAD",
+    "No new flight physics or water shader",
+    "No main or integration branch modification",
+    "No Google Gemini unrun draft imported"
+  ]
+}
