@@ -10,9 +10,11 @@ test('Chongqing GLB browser rollback has bounded response navigation independent
  assert.match(source,/timeout-minutes: 12/);
  for(const path of [
   "http://127.0.0.1:8127/chongqing.html?scenario=original",
-  "http://127.0.0.1:8127/chongqing.html'"
+  "http://127.0.0.1:8127/chongqing.html"
  ]) {
-  const at=source.indexOf("await page.goto('"+path.replace(/'$/,''));
+  // Require the closing quote/comma. A bare /chongqing.html prefix would
+  // accidentally match the earlier ?scenario=hongyadong navigation.
+  const at=source.indexOf("await page.goto('"+path+"',");
   assert.ok(at>0,'Missing production/rollback URL '+path);
   assert.match(source.slice(at,at+180),/waitUntil:'commit',timeout:75000/);
  }
