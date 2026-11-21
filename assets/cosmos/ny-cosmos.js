@@ -70,7 +70,7 @@ export function exit(){
   layer?.classList.remove('active');
   layer?.setAttribute('aria-hidden','true');
   window.PatrolCosmosViewer?.clearInput?.();
-  window.PatrolSpaceBridge?.resumeFromOrbit?.();
+  if(latestFlight?.playing)window.PatrolSpaceBridge?.resumeFromOrbit?.();
   window.dispatchEvent(new Event('patrol:orbitReturn'));
 }
 export async function enter(flight){
@@ -81,6 +81,8 @@ export async function enter(flight){
   active=true;
   layer.setAttribute('aria-hidden','false');
   layer.classList.add('active');
+  layer.querySelector('#back')?.setAttribute('aria-label',
+    latestFlight.playing?'Return to the same Manhattan aircraft':'Return to flight menu');
   try{
     if(!viewerPromise)viewerPromise=import('./cosmos.js');
     await viewerPromise;

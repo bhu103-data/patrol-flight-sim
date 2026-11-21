@@ -7,14 +7,14 @@ on:
       - 'assets/chongqing/chongqing.js'
       - 'index.html'
       - 'space.html'
-      - 'tests/cosmos.test.mjs'
+      - 'tests/**'
   pull_request:
     paths:
       - 'assets/cosmos/**'
       - 'assets/chongqing/chongqing.js'
       - 'index.html'
       - 'space.html'
-      - 'tests/cosmos.test.mjs'
+      - 'tests/**'
 
 permissions:
   contents: read
@@ -30,4 +30,4 @@ jobs:
         with:
           node-version: '22'
       - name: Check scene and flight-interface syntax
-        run: node --test tests/cosmos.test.mjs
+        run: node --test tests/*.test.mjs

@@ -40,7 +40,8 @@ test('New York is in-page while other map gateways remain unchanged',()=>{
  const portal=get('assets/cosmos/portal.js'),ny=get('assets/cosmos/ny-cosmos.js');
  const scene=get('assets/cosmos/cosmos.js'),city=get('index.html');
  assert.match(portal,/flight\.map==='manhattan'/);
- assert.match(portal,/import\('\.\/ny-cosmos\.js'\)/);
+ assert.match(portal,/import\(nyModuleUrl\)/);
+ assert.match(portal,/document\.currentScript\?\.src/);
  assert.match(ny,/window\.PatrolNYCosmos=\{enter,exit,isActive/);
  assert.doesNotMatch(ny,/location\.assign|location\.reload/);
  assert.match(scene,/embeddedNY.*nyCosmosLayer/);
