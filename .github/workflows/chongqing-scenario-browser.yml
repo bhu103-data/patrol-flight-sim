@@ -60,8 +60,11 @@ jobs:
                 };
               });
               await page.screenshot({path:'artifacts/chongqing-scenario-preview.png'});
+              await page.keyboard.press('h'); // built-in cinematic UI toggle
+              await page.waitForTimeout(700);
+              await page.screenshot({path:'artifacts/chongqing-scenario-clean.png'});
               console.log(JSON.stringify({report,logs:logs.slice(-25)},null,2));
-              if(report.scenario!=='ready'||!report.webgl2) {
+              if(report.scenario!=='ready'||!report.webgl2 || !logs.some(t=>/images:\s*4/.test(t))) {
                 throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
               }
             }finally{await browser.close()}
@@ -71,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: chongqing-scenario-browser-screenshot
-          path: artifacts/chongqing-scenario-preview.png
+          name: chongqing-scenario-pbr-browser-screenshots
+          path: artifacts/chongqing-scenario-*.png
           retention-days: 15
           if-no-files-found: warn
