@@ -58,7 +58,7 @@ test('both municipal sources share PBR classes, not generic box shader',()=>{
   assert.match(html,/nyOfficialGisPbr\(material,n,surfaceRoughness\)/);
   assert.match(html,/vHarborSurface>14\.5\)return/);
   assert.match(html,/vHarborSurface==10\.0/);
-  assert.match(html,/!realGlass &&\s*!\(vHarborSurface>8\.5 && vHarborSurface<11\.5\)/);
+  assert.match(html,/!realGlass &&\s*!\(vHarborSurface>8\.5 && vHarborSurface<14\.5\)/);
 });
 test('actual municipal footprint replacement keeps original airport, jet and sea',()=>{
   assert.match(html,/buildOfficialFootprintMesh\(addTri,addQuad,lot,y,detailBand\)/);
