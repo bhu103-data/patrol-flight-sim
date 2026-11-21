@@ -30,8 +30,8 @@ test('Alaska detail draws one bounded, finite scene batch',()=>{
   assert.ok(stats.crevasses>=15,'multiple glacier fissures');
   assert.ok(stats.iceFloes>=25,'irregular floes along the fjord');
   assert.ok(stats.rockBands>=1,'terrain-clamped geological exposure');
-  assert.equal(stats.seracs,42,'glacier front requires unique uneven ice towers');
-  assert.equal(stats.iceStrata,126,'each serac gets three sediment/ice bands');
+  assert.equal(stats.seracs,28,'broad glacier front avoids repetitive ice-pillar fence');
+  assert.equal(stats.iceStrata,62,'sparse uneven glacier strata without repeated stripes');
   assert.ok(stats.branchlets>=80&&stats.branchlets<=850,
     'irregular bounded conifer branchlets make near-field trees less conical');
   assert.ok(stats.talus>=0&&stats.talus<=110,'terrain-filtered rock scree stays bounded');
