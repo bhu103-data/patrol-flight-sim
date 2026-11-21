@@ -30,6 +30,7 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
   const raffles={x:-355,z:176};
   const base=ground(raffles.x,raffles.z);
   const podiumY=base+11;
+  obstacles.push({x:raffles.x,z:raffles.z,w:324,d:115,base,top:base+15.6});
   // A stepped waterfront shopping podium and plaza of layered stone and glazed levels.
   solid(raffles.x,base+2.5,raffles.z,335,5,130,concrete);
   solid(raffles.x,base+7.5,raffles.z,324,9,115,glass);
@@ -143,6 +144,8 @@ export function buildChongqingLandmarks({THREE,scene,ground,pbr,box,sign,obstacl
   tube.rotation.z=Math.PI/2;
   tube.scale.set(13.25,1,16.25);
   tube.position.set(crystalCenter,crystalY,146);scene.add(tube);
+  // The Crystal is a real physical obstacle, with a landable roof and clear open air underneath.
+  obstacles.push({x:crystalCenter,z:146,w:300,d:32.5,base:crystalY-13.25,top:crystalY+13.25});
   const ribs=new THREE.InstancedMesh(new THREE.TorusGeometry(1,.016,6,28),steel,45);
   for(let n=0;n<41;n++){
     const x=crystalCenter-148+n*7.4;
