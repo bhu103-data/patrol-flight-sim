@@ -74,12 +74,13 @@ test('three neighbor shops are NOT PR #93 own first corner building',()=>{
 
 test('real gallery deck, posts, roof, glass and bracing use six bounded batches',()=>{
   const {objects,obstacles,result}=generated();
-  assert.deepEqual(objects.map(m=>m.count),[36,6,9,9,27,3]);
+  assert.deepEqual(objects.map(m=>m.count),[39,8,15,9,31,3]);
   assert.equal(result.stats.sites,3);
   assert.equal(result.stats.roofTriangles,2304);
-  assert.equal(result.stats.instances,90);
+  assert.equal(result.stats.instances,105);
+  assert.equal(result.stats.stairTreads,6);
   assert.equal(result.stats.meshes,6);
-  assert.equal(obstacles.length,9);
+  assert.equal(obstacles.length,15);
   assert.ok(objects.every(m=>m.count<=m.capacity&&m.writes<=m.capacity),
     'no GPU instance overflow');
   assert.ok(objects.every(m=>m.instanceMatrix.needsUpdate&&m.boundsUpdated));
@@ -134,6 +135,22 @@ test('ACTUAL published Chongqing cliff terraces ground every pillar above dry te
     const carriage=real.riverCenter(post.x)+355+14*Math.sin(post.x/115+2);
     assert.ok(Math.abs(post.z-carriage)>14,'no column in main hillside traffic lane');
   }
+});
+
+test('six stone stair treads match the true sloped pavement and have a real collision top',()=>{
+  const {result,obstacles}=generated();
+  const stairs=obstacles.filter(o=>o.marketStep);
+  assert.equal(result.stats.stairTreads,6);
+  assert.equal(stairs.length,6);
+  assert.ok(stairs.every(o=>o.x===284+5.8),'only the distinctive middle shop has steps');
+  for(let i=0;i<stairs.length;i++){
+    const step=stairs[i];
+    assert.ok(step.top>step.base&&step.top-step.base<1.6,
+      'real-size stone tread, not a giant unrealistic staircase cube');
+    assert.ok(Math.abs(step.base-(ground(step.x,step.z)-.02))<.001);
+    if(i)assert.ok(step.z<stairs[i-1].z);
+  }
+  assert.ok(result.stats.sites===3,'vary shop appearance without adding or replacing blocks');
 });
 
 test('invalid flooded or unbuildable pads must render no gallery or collider',()=>{
