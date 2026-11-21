@@ -61,11 +61,26 @@ async function testMap(map,exercise){
       throw Error('Real Blender C185 GLB did not load: '+JSON.stringify({requests,log:log.slice(-10)}));
     await page.screenshot({path:'artifacts/floatplane-'+map+'-afloat.png'});
     if(exercise){
+      // Keep the flight canvas focused; wait for simulated velocity, not
+      // a fixed wall-clock duration on CPU/software WebGL renderers.
+      await page.locator('#glCanvas').focus();
       await page.keyboard.down('Shift');
-      await page.waitForTimeout(1300);
+      try{
+        await page.waitForFunction(()=>{
+          const label=document.querySelector('#gearStatus')?.textContent||'';
+          const taxi=label.match(/WATER TAXI (\\d+)/);
+          return (taxi && Number(taxi[1])>=2)||label.includes('ON STEP')||
+            !document.querySelector('#crashOverlay')?.hidden;
+        },null,{timeout:35000});
+      }catch(error){
+        const label=await page.locator('#gearStatus').textContent();
+        await page.screenshot({path:'artifacts/floatplane-'+map+'-taxi-timeout.png'});
+        throw Error('C185 taxi never accelerated (last HUD '+label+'): '+error.message);
+      }
       const taxi=(await page.locator('#gearStatus').textContent())||'';
-      if(!taxi.includes('WATER TAXI')||taxi.endsWith(' 0'))
-        throw Error('Floatplane has no positive water taxi speed: '+taxi);
+      if(!(/WATER TAXI [2-9]/.test(taxi)||/WATER TAXI [1-9]\\d+/.test(taxi)||
+            taxi.includes('ON STEP')))
+        throw Error('Floatplane water taxi not confirmed: '+taxi);
       await page.screenshot({path:'artifacts/floatplane-'+map+'-taxi.png'});
       await page.keyboard.down('w');
       // Software SwiftShader can render at only a few frames per second.
