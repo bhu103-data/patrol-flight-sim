@@ -1154,7 +1154,7 @@ const CENTRAL_PARK_SITES=[
           for(const [du,dz] of options){
             // Shorten lots near a cross-street, maintaining full sidewalks.
             const length=Math.abs(dz)>1?
-              11.4+hash(ix,iz,449)*1.2:14+hash(ix,iz,449)*3;
+              9.0+hash(ix,iz,449)*1.2:11.0+hash(ix,iz,449)*3;
             // Maintain the grid cell used by the terrain heightfield lookup.
             const x=x0+du+city.tilt*dz,z=z0+dz;
             // Local NYC grid roads are generated separately from CITY_STREETS.
@@ -3221,7 +3221,7 @@ const CENTRAL_PARK_SITES=[
   function createTriangleMesh() {
     const pos = [], norm = [], col = [];
     let surfaces = null;
-    function addTri(a, b, c, rgb, surface=0) {
+    function addTri(a, b, c, rgb, surface=0, vertexNormals=null) {
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
       let nx = uy * vz - uz * vy;
@@ -3232,7 +3232,11 @@ const CENTRAL_PARK_SITES=[
       if(surface && !surfaces) surfaces=new Array(pos.length/3).fill(0);
       if(surfaces) surfaces.push(surface,surface,surface);
       pos.push(...a, ...b, ...c);
-      norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+      // Asset-specific normals from Blender produce smooth airfoils and floats.
+      // All original scenery/vehicles remain on geometric flat normals.
+      if(vertexNormals && vertexNormals.length===3) {
+        for(const n of vertexNormals) norm.push(...n);
+      } else norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
       if(Array.isArray(rgb[0]))col.push(...rgb[0],...rgb[1],...rgb[2]);
       else col.push(...rgb,...rgb,...rgb);
     }
@@ -4472,22 +4476,76 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
+  // Existing authored NYC roads predate the newer procedural road network.
+  // Clip their complete sidewalk envelope against the same live city land
+  // and occupied parcels, rather than drawing old roads through the harbor.
+  // Return separate dry portions; bridge decks use their own water-safe path.
+  function clipAuthoredNycStreet(a,b,terrainAt,lotAt,waterY) {
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    if(!Number.isFinite(length)||length<4)return [];
+    const nx=-dz/length,nz=dx/length,halfEnvelope=6.05;
+    const offsets=[-1,-.8,-.6,-.4,-.2,0,.2,.4,.6,.8,1];
+    const clearAt=t=>{
+      const x=a[0]+dx*t,z=a[1]+dz*t;
+      for(const across of offsets){
+        const sx=x+nx*halfEnvelope*across;
+        const sz=z+nz*halfEnvelope*across;
+        if(terrainAt(sx,sz)<=waterY+.68 || lotAt(sx,sz))return false;
+      }
+      return true;
+    };
+    // At most 0.75 world units between cells; each cell is probed at its
+    // midpoint as well as both ends, catching the narrow shore inlets that
+    // slipped between the old endpoint-only checks.
+    const steps=Math.max(1,Math.ceil(length/.75));
+    const runs=[];
+    let start=-1;
+    const point=t=>[a[0]+dx*t,a[1]+dz*t];
+    const flush=end=>{
+      if(start<0)return;
+      // Trim a partial cell at the shoreline to avoid a hanging curb tip.
+      const first=start+(start>0?1:0);
+      const last=end-(end<steps?1:0);
+      if(last>first){
+        const p=point(first/steps),q=point(last/steps);
+        if(Math.hypot(q[0]-p[0],q[1]-p[1])>=4)runs.push([p,q]);
+      }
+      start=-1;
+    };
+    let previous=clearAt(0);
+    for(let cell=0;cell<steps;cell++){
+      const next=clearAt((cell+1)/steps);
+      const safe=previous&&next&&clearAt((cell+.5)/steps);
+      if(safe&&start<0)start=cell;
+      if(!safe)flush(cell);
+      previous=next;
+    }
+    flush(steps);
+    return runs;
+  }
+
   function buildStreetScene(addQuad, box) {
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
     for (const street of CITY_STREETS.slice(1)) {
       for (let i=1;i<street.length;i++) {
-        const a=street[i-1], b=street[i];
+        const originalA=street[i-1], originalB=street[i];
+        const a0=originalA,b0=originalB;
         // Stop authoring roads outside the landmark neighborhoods.
         // A nearest-point segment check retains roads crossing a focus area.
         const nearZone=NYC_FOCUS_ZONES.some(zone=>{
-          const vx=b[0]-a[0],vz=b[1]-a[1];
+          const vx=b0[0]-a0[0],vz=b0[1]-a0[1];
           const t=Math.max(0,Math.min(1,
-            ((zone[0]-a[0])*vx+(zone[1]-a[1])*vz)/(vx*vx+vz*vz||1)));
-          const dx=a[0]+vx*t-zone[0],dz=a[1]+vz*t-zone[1];
+            ((zone[0]-a0[0])*vx+(zone[1]-a0[1])*vz)/(vx*vx+vz*vz||1)));
+          const dx=a0[0]+vx*t-zone[0],dz=a0[1]+vz*t-zone[1];
           const r=zone[3]+16;
           return dx*dx+dz*dz<r*r;
         });
         if(!nearZone)continue;
+        // The entire 11.6-unit sidewalk and lamp envelope must be dry and
+        // unoccupied, not just the centerline on a long historic road.
+        const fragments=clipAuthoredNycStreet(originalA,originalB,
+          sampleTerrainHeight,cityLotAt,WATER_H);
+        for(const [a,b] of fragments){
         const start=[a[0],STREET_Y,a[1]], end=[b[0],STREET_Y,b[1]];
         pushRoadStrip(addQuad,start,end,11.6,sidewalk);
         pushRoadStrip(addQuad,start,end,8.0,pavement,0.035);
@@ -4542,7 +4600,9 @@ const CENTRAL_PARK_SITES=[
             }
           }
           // Diagonal-road crosswalks; stripes follow the actual road heading.
-          if(i>1 && distance>34 && nycDetailBand(b[0],b[1])>=2){
+          if(i>1 && distance>34 &&
+             Math.hypot(b[0]-originalB[0],b[1]-originalB[1])<.5 &&
+             nycDetailBand(b[0],b[1])>=2){
             const cx=b[0]-fx*3.25,cz=b[1]-fz*3.25;
             for(let lateral=-3.25;lateral<=3.25;lateral+=.83){
               const x0=cx+nx*lateral,z0=cz+nz*lateral;
@@ -4556,6 +4616,7 @@ const CENTRAL_PARK_SITES=[
         for (let j=4;j+2<distance-2;j+=8) {
           const point=t=>[lerp(a[0],b[0],t),STREET_Y,lerp(a[1],b[1],t)];
           pushRoadStrip(addQuad,point(j/distance),point((j+2)/distance),0.15,paint,0.055);
+        }
         }
       }
     }
@@ -5209,26 +5270,62 @@ const CENTRAL_PARK_SITES=[
   function nycParcelCrossesRoad(lot,roadMargin=5.85){
     if(!lot||![lot[0],lot[1],lot[2],lot[3]].every(Number.isFinite))return true;
     const [x,z,w,d]=lot;
-    const minX=x-w*.5-roadMargin,maxX=x+w*.5+roadMargin;
-    const minZ=z-d*.5-roadMargin,maxZ=z+d*.5+roadMargin;
-    // Reserve both ordinary streets and waterfront expressway/ramp corridors.
-    // A conservative footprint clear keeps elevated decks from crossing roofs.
+    // The surveyed NYC polygon is more accurate than its bounding box.
+    // Keep the old conservative box clearance for procedural buildings.
+    const poly=Array.isArray(lot[7])&&lot[7].length>=3&&lot[7].length<=64&&
+      lot[7].every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))
+      ?lot[7]:null;
+    const extents=poly||[[x-w*.5,z-d*.5],[x+w*.5,z+d*.5]];
+    const minX=Math.min(...extents.map(p=>p[0]))-roadMargin,
+          maxX=Math.max(...extents.map(p=>p[0]))+roadMargin;
+    const minZ=Math.min(...extents.map(p=>p[1]))-roadMargin,
+          maxZ=Math.max(...extents.map(p=>p[1]))+roadMargin;
+    const distanceSq=(p,a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+      const t=den>0?Math.max(0,Math.min(1,
+        ((p[0]-a[0])*dx+(p[1]-a[1])*dz)/den)):0;
+      return (p[0]-a[0]-dx*t)**2+(p[1]-a[1]-dz*t)**2;
+    };
+    const orient=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    const marginSq=roadMargin*roadMargin;
+    // Measure the road centerline to each real polygon edge, including
+    // intersections where neither road endpoint lies inside the building.
+    const polygonTouches=(a,b)=>{
+      if(insideCityFootprint(a[0],a[1],poly)||
+         insideCityFootprint(b[0],b[1],poly))return true;
+      for(let i=0;i<poly.length;i++){
+        const c=poly[i],d=poly[(i+1)%poly.length],
+              o1=orient(a,b,c),o2=orient(a,b,d),
+              o3=orient(c,d,a),o4=orient(c,d,b);
+        if(((o1>0&&o2<0)||(o1<0&&o2>0))&&
+           ((o3>0&&o4<0)||(o3<0&&o4>0)))return true;
+        if(Math.min(distanceSq(a,c,d),distanceSq(b,c,d),
+          distanceSq(c,a,b),distanceSq(d,a,b))<=marginSq)return true;
+      }
+      return false;
+    };
     for(const path of [...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp])
       for(let j=1;j<path.length;j++){
-      const a=path[j-1],b=path[j];
-      if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
-         Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
-      const dx=b[0]-a[0],dz=b[1]-a[1];
-      let entry=0,exit=1;
-      for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
-        if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
-        const t0=(lo-p)/v,t1=(hi-p)/v;
-        entry=Math.max(entry,Math.min(t0,t1));
-        exit=Math.min(exit,Math.max(t0,t1));
-        if(entry>exit)break;
+        const a=path[j-1],b=path[j];
+        if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
+           Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
+        if(poly){
+          if(polygonTouches(a,b))return true;
+          continue;
+        }
+        // Original swept AABB filter for non-GIS parcels.
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        let entry=0,exit=1;
+        for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
+          if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
+          const t0=(lo-p)/v,t1=(hi-p)/v;
+          entry=Math.max(entry,Math.min(t0,t1));
+          exit=Math.min(exit,Math.max(t0,t1));
+          if(entry>exit)break;
+        }
+        if(entry<=exit)return true;
       }
-      if(entry<=exit)return true;
-    }
     return false;
   }
 
@@ -12837,20 +12934,18 @@ const CENTRAL_PARK_SITES=[
     // water runway to accelerate, rotate and climb away from shore.
     // The original Alaska spawn faces dry USGS land just ~40 units ahead;
     // try perpendicular headings before relocating the aircraft.
-    // In Alaska the southern channel remains water but heads directly into
-    // the world-edge autopilot turn. Require enough clear air/water ahead for
-    // the post-rotation climb as well as the first 94 m of water taxi.
+    // Alaska's southern water lane points into the automatic world-edge
+    // turn: require a complete initial climb corridor before accepting it.
     const runwayLength=selectedMap.alaska?132:94;
     const approachLimit=selectedMap.alaska
       ?FLIGHT_RADIUS-WARNING_DISTANCE-8:limit;
     const runwayClear=(x,z,yaw)=>{
       const fx=Math.sin(yaw),fz=Math.cos(yaw);
       const endX=x+fx*runwayLength,endZ=z+fz*runwayLength;
-      // A straight segment is inside a disk when both endpoints are inside.
-      // Avoid boundary-assist taking control while climbing over the fjord.
+      // Both endpoints of a straight lane must remain inside the safe disk.
       if(Math.hypot(x,z)>approachLimit ||
          Math.hypot(endX,endZ)>approachLimit)return false;
-      // Six-metre samples catch inlets/ships between 18-metre checkpoints.
+      // Continuous 6m shoreline/pontoon/boat checks instead of sparse points.
       for(let advance=0;advance<=runwayLength;advance+=6){
         const px=x+fx*advance,pz=z+fz*advance;
         if(!safe(px,pz,yaw))return false;

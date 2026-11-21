@@ -128,7 +128,38 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
  });
  const windows=new THREE.InstancedMesh(
    new THREE.PlaneGeometry(1,1),interiorLightMaterial,4800);
- const stats={towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
+ // Real-depth riverfront facade details reuse five GPU batches across the
+ // 44 closest buildings. Building shells/PBR atlases remain the primary mass;
+ // these windows have separate dark reveals, reflective glass, mullions and
+ // stone sill projections rather than billboard-like painted squares.
+ const facadeCap=3200;
+ const facadeFrameMat=new THREE.MeshStandardMaterial({
+   color:0x26343a,metalness:.23,roughness:.53
+ });
+ const facadeGlassMat=new THREE.MeshStandardMaterial({
+   color:0x527181,metalness:.27,roughness:.25,side:THREE.DoubleSide
+ });
+ const sillMat=new THREE.MeshStandardMaterial({
+   color:0xb2b1aa,metalness:.05,roughness:.83
+ });
+ const awningMat=new THREE.MeshStandardMaterial({
+   color:0x48565a,metalness:.15,roughness:.7
+ });
+ const facadeFrames=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
+ const facadeGlazing=new THREE.InstancedMesh(
+   new THREE.PlaneGeometry(1,1),facadeGlassMat,facadeCap);
+ const facadeMullions=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
+ const facadeSills=new THREE.InstancedMesh(unit,sillMat,facadeCap);
+ const shopGlazing=new THREE.InstancedMesh(
+   new THREE.PlaneGeometry(1,1),facadeGlassMat,32);
+ const shopAwnings=new THREE.InstancedMesh(unit,awningMat,32);
+ for(const mesh of [facadeFrames,facadeGlazing,facadeMullions,
+   facadeSills,shopGlazing,shopAwnings]){
+   mesh.count=0;mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+   mesh.castShadow=false;mesh.receiveShadow=true;
+ }
+ const stats={facadeBuildings:0,facadePanels:0,storefronts:0,
+   towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
    residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,
    skippedAdjacentBuilding:0,skippedUnbuildableTerrain:0,retainingWallTriangles:0,
    maxAcceptedGrade:0};
@@ -201,6 +232,49 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
        set(acs,stats.airConditioners++,
          x+w*.50*envelope.width+.24,yy-.44,
          z+dz*envelope.depth*(i%3-1)*.22,.54,.47,.70);
+     }
+   }
+   // Geometry-backed close-range windows face the river on BOTH banks.
+   // Respect setbacks at every storey; do not float frames off a narrower
+   // upper tier or spill their projections into the reserved street corridor.
+   const scenic=Math.hypot(x-285,z-225)<580;
+   const face=z>=riverCenter(x)?-1:1;
+   if(scenic&&h>=44&&stats.facadeBuildings<44){
+     stats.facadeBuildings++;
+     const rows=Math.min(16,Math.max(7,Math.floor(h/7.2)));
+     const cols=styleIndex===1||styleIndex===4?4:3;
+     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+       if(stats.facadePanels>=facadeCap)break;
+       const fraction=.066+(row+.46)*.82/rows;
+       const envelope=chongqingTowerEnvelopeAt(profile,fraction-.5);
+       const frontage=w*envelope.width*.78;
+       const xx=x-frontage*.5+(col+.5)*frontage/cols;
+       const yy=base+h*fraction;
+       const span=frontage/cols;
+       const paneWidth=Math.min(2.95,span*.71);
+       const paneHeight=Math.min(2.45,Math.max(1.35,h/rows*.31));
+       const front=z+face*dz*envelope.depth*.5;
+       const id=stats.facadePanels++;
+       set(facadeFrames,id,xx,yy,front+face*.125,
+         paneWidth+.27,paneHeight+.32,.12);
+       set(facadeGlazing,id,xx,yy,front+face*.198,
+         paneWidth,paneHeight,1,face>0?0:Math.PI);
+       set(facadeMullions,id,xx,yy,front+face*.245,
+         .065,paneHeight+.05,.085);
+       set(facadeSills,id,xx,yy-paneHeight*.5-.19,front+face*.30,
+         paneWidth+.47,.11,.46);
+     }
+     // Ground-floor cafe/shop windows and restrained metal canopies only on
+     // gently graded pads. Avoid the visibly floating storefront illusion on
+     // steep retaining walls where actual footpaths are several floors below.
+     if((styleIndex===2||styleIndex===3)&&pad.grade<2.8&&
+         stats.storefronts<32){
+       const id=stats.storefronts++,low=chongqingTowerEnvelopeAt(profile,-.47),
+         front=z+face*(dz*low.depth*.5+.18);
+       set(shopGlazing,id,x,base+2.25,front,
+         w*low.width*.53,3.15,1,face>0?0:Math.PI);
+       set(shopAwnings,id,x,base+4.14,front+face*.78,
+         w*low.width*.58,.23,1.45);
      }
    }
    // Irregular interior lighting, not a complete repeated matrix on every tower.
@@ -276,7 +350,10 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    if(mesh.count>0)mesh.computeBoundingSphere();
  }
  for(const [mesh,n] of [[roof,stats.rooftops],[balconies,stats.balconies],
-   [acs,stats.airConditioners],[windows,stats.litWindows]]){
+   [acs,stats.airConditioners],[windows,stats.litWindows],
+   [facadeFrames,stats.facadePanels],[facadeGlazing,stats.facadePanels],
+   [facadeMullions,stats.facadePanels],[facadeSills,stats.facadePanels],
+   [shopGlazing,stats.storefronts],[shopAwnings,stats.storefronts]]){
    mesh.count=n;mesh.instanceMatrix.needsUpdate=true;
    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
    if(n>0)mesh.computeBoundingSphere();
@@ -297,6 +374,12 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      lowDetail=mode==='low';
      balconies.visible=!lowDetail;
      acs.visible=!lowDetail;
+     // Preserve full solid building envelopes in low mode; omit only the
+     // small close-up trim batches that are not needed from a distant aircraft.
+     facadeFrames.visible=!lowDetail;
+     facadeMullions.visible=!lowDetail;
+     facadeSills.visible=!lowDetail;
+     shopAwnings.visible=!lowDetail;
      updateInteriorLight();
    }
  };

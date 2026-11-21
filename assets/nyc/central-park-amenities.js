@@ -69,14 +69,63 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
       [x,hy+2.40,hz-4.05],.070,bronze);
   }
   const lakeWater=waterY+2.83;
+  // Four actually volumetric, independently oriented lake rowboats.
+  // The previous assets were flat colored rectangles laid on the water.
+  // Keep the same bounded water-safe centers and one existing draw batch.
   for(let i=0;i<4;i++){
     const u=-14+24*.53*Math.cos(i*1.35+.5),
       z=150+16.2*.55*Math.sin(i*1.35+.5);
-    const x=ex(u,z),h=lakeWater+.13;
-    addQuad([x-1.12,h,z-.39],[x-1.12,h,z+.39],
-      [x+1.12,h,z+.39],[x+1.12,h,z-.39],i%2?wood:bronze);
-    for(const side of [-1,1])
-      beam([x-1.14,h,z+side*.4],[x+1.14,h,z+side*.4],.085,wood);
+    const cx=ex(u,z),heading=.34+i*.69,
+      forward=[Math.cos(heading),Math.sin(heading)],
+      sideAxis=[-forward[1],forward[0]];
+    const at=(fore,side,lift)=>[
+      cx+forward[0]*fore+sideAxis[0]*side,
+      lakeWater+lift,
+      z+forward[1]*fore+sideAxis[1]*side
+    ];
+    const hull=i%2===0?[.42,.28,.20]:[.29,.34,.36];
+    const inside=[.25,.23,.21],rim=[.57,.43,.28];
+    // Width tapers toward both pointed ends, with rising sheer and a
+    // submerged keel. Every plank is a 3D face, not a billboard.
+    const sections=[[-1.48,.035],[-.96,.35],[-.18,.46],
+      [.86,.36],[1.48,.035]];
+    const sheer=t=>.22+.12*Math.pow(Math.abs(t)/1.48,3);
+    const keel=t=>-.12+.14*Math.pow(Math.abs(t)/1.48,2);
+    for(let k=1;k<sections.length;k++){
+      const [a,wa]=sections[k-1],[b,wb]=sections[k];
+      for(const side of [-1,1]){
+        const topA=at(a,side*wa,sheer(a)),topB=at(b,side*wb,sheer(b));
+        const chineA=at(a,side*wa*.58,keel(a)),
+          chineB=at(b,side*wb*.58,keel(b));
+        if(side<0)addQuad(topA,topB,chineB,chineA,hull);
+        else addQuad(topB,topA,chineA,chineB,hull);
+        const innerA=at(a,side*wa*.74,.068),
+          innerB=at(b,side*wb*.74,.068);
+        if(side<0)addQuad(topB,topA,innerA,innerB,inside);
+        else addQuad(topA,topB,innerB,innerA,inside);
+        beam(topA,topB,.034,rim);
+      }
+      const floorA=wa*.68,floorB=wb*.68;
+      addQuad(at(a,-floorA,.056),at(a,floorA,.056),
+        at(b,floorB,.056),at(b,-floorB,.056),inside);
+    }
+    // Solid pointed stems close the small gap between the gunwale and keel.
+    for(const tip of [-1.48,1.48]){
+      addTri(at(tip,-.036,sheer(tip)),at(tip,.036,sheer(tip)),
+        at(tip,0,keel(tip)),hull);
+    }
+    // Independent wood thwarts and foot braces are visible from above.
+    for(const fore of [-.43,.42]){
+      addQuad(at(fore-.10,-.32,.16),at(fore-.10,.32,.16),
+        at(fore+.10,.32,.16),at(fore+.10,-.32,.16),wood);
+      beam(at(fore,-.31,.11),at(fore,.31,.11),.032,bronze);
+    }
+    // Port and starboard oars with narrow wooden blades touching water.
+    for(const side of [-1,1]){
+      beam(at(.04,side*.34,.25),at(-.14,side*1.55,.12),.034,wood);
+      addQuad(at(-.40,side*1.48,.105),at(-.40,side*1.82,.105),
+        at(-.08,side*1.82,.105),at(-.08,side*1.48,.105),rim);
+    }
     stats.boats++;
   }
   stats.attractions++;
