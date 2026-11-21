@@ -141,12 +141,15 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     time+=Math.min(Math.max(dt,0),.05);
     for(const state of boatStates){
       state.progress=(state.progress??0)+Math.max(0,dt)*state.speed*state.dir;
+      const previousX=state.x,previousZ=state.z;
       const x=((state.start+state.progress+half)%loop+loop)%loop-half;
       const z=riverCenter(x)+state.lane;
       const dz=(riverCenter(x+1)-riverCenter(x-1))*.5;
       const yaw=-Math.atan2(dz,1)+(state.dir<0?Math.PI:0);
       state.x=x;state.z=z;state.y=waveHeight+.8+Math.sin(time*1.4+state.start)*.085;
       state.heading=yaw;
+      state.deltaX=Math.abs(previousX-x)<15?x-previousX:0;
+      state.deltaZ=Math.abs(previousZ-z)<15?z-previousZ:0;
       state.boat.position.set(x,state.y,z);
       state.boat.rotation.y=yaw;
       state.boat.rotation.z=Math.sin(time*.91+state.start)*.005;
@@ -154,6 +157,53 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     }
   }
   update(0);
+  // Boat decks are landable and carry the player between frames.
+  // No static obstacles are put into the spatial grid because the ferries move.
+  const drift={dx:0,dz:0};
+  function eachDeck(x,z,visit){
+    for(const state of boatStates){
+      const yaw=state.heading,cs=Math.cos(yaw),sn=Math.sin(yaw);
+      const dx=x-state.x,dz=z-state.z;
+      const localX=dx*cs-dz*sn,localZ=dx*sn+dz*cs;
+      const len=state.length,w=state.width;
+      // Top sightseeing deck and the exposed perimeter of the lower deck.
+      const decks=[
+        {height:5.7,x:-2.2,width:len*.53,depth:w*.7},
+        {height:1.755,x:-.8,width:len*.79,depth:w*.82}
+      ];
+      for(const deck of decks){
+        if(Math.abs(localX-deck.x)<deck.width*.5-.35&&
+           Math.abs(localZ)<deck.depth*.5-.35){
+          const centerY=state.y+deck.height+2.35;
+          if(visit(state,centerY))return true;
+        }
+      }
+    }
+    return false;
+  }
+  function deckSurface(x,z,previousY,nextY){
+    if(nextY>previousY+.025)return -Infinity;
+    let height=-Infinity;
+    eachDeck(x,z,(_boat,centerY)=>{
+      if(previousY>=centerY-.18&&nextY<=centerY+.15){
+        height=Math.max(height,centerY);
+      }
+      return false;
+    });
+    return height;
+  }
+  function deckDrift(x,z,y){
+    drift.dx=0;drift.dz=0;
+    eachDeck(x,z,(state,centerY)=>{
+      if(Math.abs(y-centerY)<.55){
+        drift.dx=state.deltaX??0;
+        drift.dz=state.deltaZ??0;
+        return true;
+      }
+      return false;
+    });
+    return drift;
+  }
   function setQuality(mode){
     const low=mode==='low';
     for(const state of boatStates){
@@ -162,7 +212,7 @@ export function buildChongqingRiverlife({THREE,scene,riverCenter}) {
     }
   }
   return {
-    update,setQuality,
+    update,setQuality,deckSurface,deckDrift,
     stats:{boats:boatStates.length,deckLevels:2,visibleDeckRailSections:boatStates.length*4},
     snapshot(){return boatStates.map(s=>({x:s.x,y:s.y,z:s.z,heading:s.heading}))}
   };
