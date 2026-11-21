@@ -9111,7 +9111,13 @@ const CENTRAL_PARK_SITES=[
   const startupScale = 0.35;
   // More detailed 3D maps start sharp; adaptive scaling still handles slower GPUs.
   const cityScaleFloor=()=>Math.min(innerWidth,innerHeight)<620?.43:.55;
-  const cityScaleStart=()=>Math.min(innerWidth,innerHeight)<620?.59:.73;
+  const cityScaleStart=()=>{
+    const mobile=Math.min(innerWidth,innerHeight)<620;
+    // Keep the original 3D-map quality/performance profile everywhere
+    // except NYC. Manhattan's distant facades and Central Park tree canopies
+    // gain a sharper initial raster before adaptive frame pacing takes over.
+    return selectedMap.city?(mobile?.67:.84):(mobile?.59:.73);
+  };
   const sceneScaleFloor=()=>smoothScenery()?cityScaleFloor():startupScale;
   let resScale = startupScale, scaleCeiling = 1, fastFrames = 0;
   let fboW, fboH, hudW, hudH;
