@@ -48,7 +48,7 @@ try {
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
   null,{timeout:15000});
- await page.locator('#hotelTarget').selectOption({label:'Las Vegas Strip'});
+ await page.locator('#hotelTarget').selectOption({label:'Strip Street View'});
  await page.locator('#hotelAngle').evaluate(el=>{
   el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
  });
@@ -77,7 +77,7 @@ try {
       zoom:document.getElementById('hotelZoom')?.value};
    });
    assert(telemetry.webgl2&&telemetry.error===0,'Vegas WebGL2/context error');
-   assert(telemetry.selected==='vegas'&&telemetry.target==='Las Vegas Strip',
+   assert(telemetry.selected==='vegas'&&telemetry.target==='Strip Street View',
     'Vegas scenic camera not selected');
    const shotName='vegas-core-'+view+'-'+preset+'.png';
    await page.evaluate(()=>document.body.classList.add('vegas-qa-canvas'));
