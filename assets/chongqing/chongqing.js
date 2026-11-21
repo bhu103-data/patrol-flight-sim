@@ -527,6 +527,25 @@ const state={
   vel:new THREE.Vector3(),heading:0,flying:false,onGround:true,
   spicy:0,boosting:false,jumpCount:0,seenHong:false,seenBridge:false,seenHotpot:false
 };
+// Restore the pilot where the space launch happened, including walking/flight mode.
+try {
+  const saved=JSON.parse(sessionStorage.getItem('patrol.cosmos.lastLaunch')||'null');
+  if(saved && saved.map==='chongqing'){
+    sessionStorage.removeItem('patrol.cosmos.lastLaunch');
+    if(saved.playing && Array.isArray(saved.position) && saved.position.length===3 &&
+        saved.position.every(Number.isFinite)){
+      const [x,y,z]=saved.position;
+      if(Math.abs(x)<1000 && Math.abs(z)<1000){
+        const floor=ground(x,z)+2.7;
+        state.pos.set(x,Math.max(floor,Math.min(y,630)),z);
+        state.vel.set(0,0,0);
+        state.heading=Number.isFinite(saved.heading)?saved.heading:0;
+        state.flying=Boolean(saved.avatarFlying);
+        state.onGround=!state.flying&&state.pos.y<=floor+0.5;
+      }
+    }
+  }
+}catch(error){console.warn('Chongqing return state skipped:',error);}
 const keys=new Set();
 let jumpQueued=false;
 let touchForward=0,touchSideways=0;
@@ -871,7 +890,11 @@ function frame(){
     }
   }
 }
-window.PatrolSpaceBridge={getState:()=>({map:'chongqing',aircraft:'jetpack',playing:!graphicsLost,altitude:state.pos.y,climb:state.vel.y})};
+window.PatrolSpaceBridge={getState:()=>({
+  map:'chongqing',aircraft:'jetpack',playing:!graphicsLost,
+  altitude:state.pos.y,climb:state.vel.y,
+  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
+})};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);

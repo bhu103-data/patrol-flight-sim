@@ -12,11 +12,13 @@ The use of modified software is permitted under MIT, including keeping the origi
 
 ## Planet / sky image assets
 
-The optional textures are loaded at runtime from the upstream repository's assets/planets/ directory (not copied into PATROL's Git history). Upstream credits list the planetary images as **Solar System Scope**, licensed **CC BY 4.0**. Source: https://www.solarsystemscope.com/textures/ — license https://creativecommons.org/licenses/by/4.0/.
+The optional textures and star-field resources are loaded at runtime from the upstream repository's assets/planets/ and assets/sky/ directories (not copied into PATROL's Git history). Upstream credits list the planetary images as **Solar System Scope**, licensed **CC BY 4.0**. Source: https://www.solarsystemscope.com/textures/ — license https://creativecommons.org/licenses/by/4.0/.
 
-Images used as available: Sun, Mercury, Venus, Earth day, Earth clouds, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, and Pluto. Render geometry, stars, markers, nebula-like colors, orbit rings, and ship proxies in PATROL are newly authored. If remote texture loading fails, colored bodies remain visible; **the universe view requires the Three.js CDN and an internet connection**.
+Images used as available: Sun, Mercury, Venus, Earth day, Earth clouds, Moon, Mars, Jupiter, Saturn, Uranus, Neptune, and Pluto. The Earth's optional city-light layer uses the NASA-derived upstream earth/earth_lights_2048.png and is shaded only on its night hemisphere. Render geometry, stars, markers, nebula-like colors, orbit rings, and ship proxies in PATROL are newly authored. If remote texture loading fails, colored bodies remain visible; **the universe view requires the Three.js CDN and an internet connection**.
 
-The artistic solar system intentionally uses nonphysical planet sizes/distances to keep a browser-scale overview readable. The Milky Way stars are procedurally sampled, not the real 42,000-star catalog present in the upstream project. The fictional Copper Coast and Alder River Valley have no assigned real Earth latitude/longitude.
+The artistic solar system intentionally uses nonphysical planet sizes/distances to keep a browser-scale overview readable. Its sky panorama is oriented using the same equatorial-to-ecliptic transform as the MIT-licensed reference project. The near-sky stellar point cloud now loads the upstream 42,000-star catalog from assets/sky/stars.bin and falls back to procedural stars if it cannot be fetched. The zoomed-out 3D Milky Way arms remain artistic and procedurally sampled, not a physical galactic stellar survey.
+
+Sky attribution: NASA Goddard Space Flight Center Scientific Visualization Studio, Deep Star Maps 2020, derived from Gaia DR2 / Hipparcos-2 / Tycho-2, public domain, as credited by the upstream project. We do not claim that these star points carry precise catalog parallax distances, because the browser sky projects their catalog directions to a shell for stability. The fictional Copper Coast and Alder River Valley have no assigned real Earth latitude/longitude.
 
 ## How it works
 

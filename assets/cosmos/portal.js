@@ -14,7 +14,13 @@
       craft: bridge?.playing ? bridge.aircraft : chosen?.get('aircraft') || (isChongqing?'jetpack':'fighter'),
       playing: Boolean(bridge?.playing),
       altitude: Number(bridge?.altitude) || 0,
-      climb: Number(bridge?.climb) || 0
+      climb: Number(bridge?.climb) || 0,
+      position: bridge?.playing && Array.isArray(bridge?.position) ? bridge.position : null,
+      yaw: Number(bridge?.yaw)||0,
+      pitch: Number(bridge?.pitch)||0,
+      speed: Number(bridge?.speed)||0,
+      heading: Number(bridge?.heading)||0,
+      avatarFlying: Boolean(bridge?.avatarFlying)
     };
   };
   let jumping = false;
@@ -81,7 +87,12 @@
         if (craftInput) craftInput.checked = true;
         // Remove one-shot flags so refresh never launches without an explicit action.
         history.replaceState(null, '', location.pathname);
-        window.setTimeout(() => form.requestSubmit(), 0);
+        // If orbit was opened from the title menu, return to the title menu;
+        // automatically resume only a flight that actually existed.
+        let previous=null;
+        try{previous=JSON.parse(sessionStorage.getItem('patrol.cosmos.lastLaunch')||'null');}catch(_){}
+        if(previous?.playing && previous.map===map)
+          window.setTimeout(() => form.requestSubmit(), 0);
       }
     }
   }

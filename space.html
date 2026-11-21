@@ -29,6 +29,9 @@ button:hover,a#back:hover{background:#22557c}
 #tutorial{color:#a8cce6;font-size:11px}
 #loading{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle,#193454,#020812 72%);z-index:5;text-align:center;pointer-events:none;transition:opacity .7s}
 #loading.hidden{opacity:0}
+#warpCurtain{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;
+  transition:opacity .26s ease;background:radial-gradient(ellipse at 50% 55%,#112a4977,#020712fa 70%)}
+#warpCurtain.active{opacity:1}
 #loading strong{font-size:21px;color:#f2ddb9}
 #notice{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);padding:14px 17px;background:#0b1c31df;border:1px solid #9fcaf4;border-radius:10px;color:#fff;opacity:0;transition:opacity .2s}
 #notice.show{opacity:1}
@@ -50,6 +53,7 @@ button:hover,a#back:hover{background:#22557c}
 </head>
 <body>
 <canvas id="universe" aria-label="交互式三维宇宙、地球和太阳系"></canvas>
+<div id="warpCurtain" aria-hidden="true"></div>
 <div id="ui">
   <header id="header" class="panel">
     <h1>✦ PATROL / COSMOS</h1>
@@ -81,7 +85,7 @@ button:hover,a#back:hover{background:#22557c}
       <option value="galaxy">银河系全景 · Milky Way</option>
     </select>
     <label for="timeScale">轨道时间流速 <output id="timeLabel">1×</output></label>
-    <input type="range" id="timeScale" min="0" max="4" step="1" value="1">
+    <input type="range" id="timeScale" min="0" max="4" step="1" value="2">
   </aside>
   <div id="footer">
     <div id="flightInfo" class="panel" aria-live="off">Initializing navigation…</div>

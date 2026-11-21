@@ -109,16 +109,118 @@ function starSphere(scene,count,radius,seed=37) {
     transparent:true,opacity:0.9,depthWrite:false
   }));
   scene.add(points);
+  return points;
 }
-starSphere(solar,low?2000:4500,620);
+const proceduralSolarStars=starSphere(solar,low?2000:4500,620);
 starSphere(galaxy,low?1800:3400,910,92);
-// NASA-derived upstream night-sky panorama; planets and 3D star points remain independent.
-const nightMat=new THREE.MeshBasicMaterial({color:0x656b86,side:THREE.BackSide,depthWrite:false});
-const nightSky=new THREE.Mesh(new THREE.SphereGeometry(590,low?32:64,low?18:32),nightMat);
+// NASA SVS Deep Star Maps 2020 / Hipparcos-Tycho derived star field.
+// Reuse the equatorial-to-ecliptic rotation and image sampling model of
+// earth-migration (MIT); simple SphereGeometry.map UVs would mirror the atlas.
+function equatorialDirection(ra,dec){
+  const lon=(((0.5-ra/360)%1)+1)%1*Math.PI*2;
+  const lat=THREE.MathUtils.degToRad(dec);
+  return new THREE.Vector3(Math.cos(lat)*Math.cos(lon),Math.sin(lat),Math.cos(lat)*Math.sin(lon));
+}
+const equinox=equatorialDirection(0,0);
+const pole=equatorialDirection(270,66.5607);
+pole.addScaledVector(equinox,-pole.dot(equinox)).normalize();
+const basis=new THREE.Matrix4().makeBasis(
+  equinox,pole,new THREE.Vector3().crossVectors(equinox,pole));
+const EQ2W=basis.clone().transpose();
+const W2EQ=new THREE.Matrix3().setFromMatrix4(EQ2W).transpose();
+const nightMat=new THREE.ShaderMaterial({
+  uniforms:{uMap:{value:null},uInv:{value:W2EQ},uGain:{value:0.23}},
+  side:THREE.BackSide,depthWrite:false,depthTest:false,
+  vertexShader:`varying vec3 vDir;
+    void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform sampler2D uMap;uniform mat3 uInv;uniform float uGain;
+    varying vec3 vDir;
+    void main(){
+      vec3 d=normalize(uInv*normalize(vDir));
+      vec2 uv=vec2(fract(atan(d.z,d.x)/6.283185307),
+        asin(clamp(d.y,-1.0,1.0))/3.141592654+0.5);
+      vec3 imageColor=texture2D(uMap,uv).rgb;
+      gl_FragColor=vec4(max(imageColor-vec3(0.012),vec3(0.0))*uGain,1.0);
+    }`
+});
+const nightSky=new THREE.Mesh(
+  new THREE.SphereGeometry(590,low?32:64,low?18:32),nightMat);
 nightSky.frustumCulled=false;
 nightSky.renderOrder=-1000;
+nightSky.visible=false;
 solar.add(nightSky);
-texture('sky/milkyway_4k.jpg',nightMat);
+loader.load(remote+'sky/milkyway_4k.jpg',t=>{
+  t.colorSpace=THREE.SRGBColorSpace;
+  t.generateMipmaps=false;
+  t.minFilter=THREE.LinearFilter;
+  nightMat.uniforms.uMap.value=t;
+  nightSky.visible=true;
+},undefined,()=>{/* Keep the generated star field if panorama is unavailable. */});
+
+// The upstream binary contains 6 Float32 values per star: equatorial
+// unit direction XYZ and linear RGB flux; approximately 42,000 stars.
+// Decode as a compact GPU point cloud instead of thousands of Mesh objects.
+let catalogStarCount=0;
+fetch(remote+'sky/stars.bin',{mode:'cors',cache:'force-cache'})
+  .then(response=>{
+    if(!response.ok)throw new Error('Star catalog HTTP '+response.status);
+    return response.arrayBuffer();
+  })
+  .then(buffer=>{
+    if(buffer.byteLength<24 || buffer.byteLength%24!==0)throw new Error('Unexpected star catalog format');
+    const stars=new Float32Array(buffer);
+    const n=Math.min(stars.length/6,60000);
+    let brightest=1e-10;
+    for(let i=0;i<n;i++){
+      const j=i*6;
+      brightest=Math.max(brightest,stars[j+3]+stars[j+4]+stars[j+5]);
+    }
+    const positions=new Float32Array(n*3),photometry=new Float32Array(n*4);
+    const direction=new THREE.Vector3();
+    for(let i=0;i<n;i++){
+      const j=i*6,r=Math.max(0,stars[j+3]),g=Math.max(0,stars[j+4]),b=Math.max(0,stars[j+5]);
+      const flux=Math.max(r+g+b,1e-10);
+      direction.set(stars[j],stars[j+1],-stars[j+2]).applyMatrix4(EQ2W).normalize();
+      positions.set([direction.x*560,direction.y*560,direction.z*560],i*3);
+      const channel=Math.max(r,g,b,1e-8);
+      photometry.set([
+        r/channel,g/channel,b/channel,
+        clamp(Math.pow(flux/brightest,0.22),0.03,1)
+      ],i*4);
+    }
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+    geometry.setAttribute('aColorFlux',new THREE.BufferAttribute(photometry,4));
+    const material=new THREE.ShaderMaterial({
+      uniforms:{uPxR:{value:renderer.getPixelRatio()}},
+      transparent:true,depthWrite:false,depthTest:true,
+      blending:THREE.AdditiveBlending,
+      vertexShader:`attribute vec4 aColorFlux;uniform float uPxR;
+        varying vec3 vColor;
+        void main(){
+          vec4 point=modelViewMatrix*vec4(position,1.0);
+          gl_Position=projectionMatrix*point;
+          float brightness=aColorFlux.w;
+          gl_PointSize=(1.0+4.4*pow(brightness,1.05))*uPxR;
+          vColor=aColorFlux.rgb*(0.12+1.12*brightness);
+        }`,
+      fragmentShader:`varying vec3 vColor;
+        void main(){
+          vec2 uv=gl_PointCoord*2.0-1.0;
+          float d2=dot(uv,uv);
+          if(d2>1.0)discard;
+          float sparkle=exp(-d2*9.0)+0.12*exp(-d2*2.0);
+          gl_FragColor=vec4(vColor*sparkle,1.0);
+        }`
+    });
+    const points=new THREE.Points(geometry,material);
+    points.frustumCulled=false;
+    points.renderOrder=-900;
+    solar.add(points);
+    proceduralSolarStars.visible=false;
+    catalogStarCount=n;
+  })
+  .catch(error=>{console.warn('Star catalog fallback:',error.message);});
 
 
 const sourceSphere = new THREE.Group();
@@ -201,6 +303,27 @@ const atm = new THREE.Mesh(
   })
 );
 earth.add(atm);
+// NASA-derived nighttime illumination, visible only away from the solar light.
+const earthLightsMat=new THREE.ShaderMaterial({
+  uniforms:{uNight:{value:null},uSun:{value:new THREE.Vector3(1,0,0)}},
+  transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,
+  vertexShader:`varying vec2 vUv;varying vec3 vNormal;
+    void main(){vUv=uv;vNormal=normalize(mat3(modelMatrix)*normal);
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform sampler2D uNight;uniform vec3 uSun;varying vec2 vUv;varying vec3 vNormal;
+    void main(){
+      float dark=1.0-smoothstep(-0.13,0.15,dot(normalize(vNormal),normalize(uSun)));
+      gl_FragColor=vec4(texture2D(uNight,vUv).rgb*dark*1.7,dark);
+    }`
+});
+const earthLights=new THREE.Mesh(new THREE.SphereGeometry(1.006,48,32),earthLightsMat);
+earthLights.visible=false;
+earth.add(earthLights);
+loader.load(remote+'earth/earth_lights_2048.png',t=>{
+  t.colorSpace=THREE.SRGBColorSpace;
+  earthLightsMat.uniforms.uNight.value=t;
+  earthLights.visible=true;
+},undefined,()=>{/* The daytime Earth works offline. */});
 const moonMat=new THREE.MeshStandardMaterial({color:0xa5a9b2,roughness:1});
 const moon=new THREE.Mesh(new THREE.SphereGeometry(.275,32,22),moonMat);
 solar.add(moon);
@@ -342,6 +465,12 @@ let curTarget=new THREE.Vector3(0,0,0);
 let offset=new THREE.Vector3();
 let elapsed=0,simDays=0,frameN=0,noticeTimer=0;
 const held=new Set();
+const warpCurtain=document.getElementById('warpCurtain');
+function minZoom(){
+  if(mode==='galaxy')return 30;
+  if(focus==='sun')return 4.3;
+  return Math.max(1.25,1.35*(bodies.get(focus)?.radius||0.4));
+}
 const speeds=[0,0.3,1,10,40];
 function currentBodyTarget(){
   if(focus==='solar')return new THREE.Vector3(0,0,0);
@@ -350,6 +479,10 @@ function currentBodyTarget(){
   return bodies.get(focus)?.mesh.position.clone() || earth.position.clone();
 }
 function destination(key){
+  if((key==='galaxy')!==(mode==='galaxy') && warpCurtain){
+    warpCurtain.classList.add('active');
+    window.setTimeout(()=>warpCurtain.classList.remove('active'),430);
+  }
   if(bodies.has(key))loadPlanetTexture(bodies.get(key));
   if(key==='galaxy'){
     mode='galaxy';focus='galaxy';desiredDistance=240;distance=240;
@@ -405,7 +538,7 @@ canvas.addEventListener('pointermove',e=>{
     const [a,b]=[...pointers.values()];
     const gap=Math.hypot(a.x-b.x,a.y-b.y);
     if(pinchLength>0)desiredDistance=clamp(desiredDistance*pinchLength/Math.max(1,gap),
-      mode==='galaxy'?30:1.5,mode==='galaxy'?900:220);
+      minZoom(),mode==='galaxy'?900:220);
     pinchLength=gap;
   }
 });
@@ -415,7 +548,7 @@ canvas.addEventListener('pointercancel',endPointer);
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   desiredDistance=clamp(desiredDistance*Math.exp(Math.sign(e.deltaY)*.11),
-    mode==='galaxy'?30:1.5,mode==='galaxy'?900:220);
+    minZoom(),mode==='galaxy'?900:220);
 },{passive:false});
 window.addEventListener('keydown',e=>{
   if(e.code==='KeyU' || e.code==='Escape'){
@@ -442,6 +575,7 @@ function frame(){
   requestAnimationFrame(frame);
   if(renderer.getContext().isContextLost())return;
   const dt=Math.min(clock.getDelta(),.06);
+  if(document.hidden)return;
   elapsed+=dt;
   simDays+=dt*speeds[+timeScale.value]*9;
   // Planetary orbits, artistic scale following r^0.75 compression.
@@ -456,6 +590,7 @@ function frame(){
     Math.sin(simDays/27.32*2*Math.PI)*1.78
   ));
   clouds.rotation.y+=dt*.018;
+  earthLightsMat.uniforms.uSun.value.copy(earth.position).multiplyScalar(-1).normalize();
   sun.rotation.y+=dt*.005;
   sunHalo.material.rotation=elapsed*.015;
   ship.position.copy(earth.position).add(new THREE.Vector3(
@@ -477,7 +612,7 @@ function frame(){
   if(held.has('KeyE'))offset.y+=moveRate;
   if(mode==='solar' && (held.has('KeyW')||held.has('KeyS'))) {
     // Do not fight a zoom command while the user flies around a planet.
-    desiredDistance=clamp(desiredDistance,1.5,220);
+    desiredDistance=clamp(desiredDistance,minZoom(),220);
   }
   const desired=mode==='galaxy'?offset.clone():currentBodyTarget().add(offset);
   const follow=1-Math.exp(-dt*3);
@@ -499,7 +634,8 @@ function frame(){
     telemetry.textContent=text+'\nDESTINATION: '+bodyLabel.toUpperCase()+
       '\nVISUAL RANGE: '+distance.toFixed(1)+(mode==='galaxy'?' kly (artistic)':' render units')+
       '\nCRAFT: '+craftName.toUpperCase()+' · '+source.name.toUpperCase()+
-      '\nTIME RATE: '+speeds[+timeScale.value]+'× · PERFORMANCE: '+(low?'MOBILE':'DESKTOP');
+      '\nTIME RATE: '+speeds[+timeScale.value]+'× · PERFORMANCE: '+(low?'MOBILE':'DESKTOP')+
+      '\nSKY: '+(catalogStarCount?catalogStarCount.toLocaleString()+' REAL CATALOG STARS':'PROCEDURAL BACKUP');
     hudTicker=0;
   }
   if(loading.classList.contains('hidden')===false){
