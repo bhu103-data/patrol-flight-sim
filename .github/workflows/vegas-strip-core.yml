@@ -6,6 +6,8 @@ on:
     paths:
       - "index.html"
       - "tests/vegas-strip-core-ridge.test.mjs"
+      - "tests/vegas-usgs-ridges.test.mjs"
+      - "assets/vegas/**"
       - "scripts/vegas-core-browser-smoke.mjs"
       - "docs/VEGAS_STRIP_CORE_PILOT.md"
       - ".github/workflows/vegas-strip-core.yml"
@@ -23,7 +25,7 @@ jobs:
         with:
           node-version: "22"
       - name: Validate Vegas core geometry budget and clear road footprint
-        run: node --test tests/vegas-strip-core-ridge.test.mjs
+        run: node --test tests/vegas-strip-core-ridge.test.mjs tests/vegas-usgs-ridges.test.mjs
       - name: Install headless Chromium for fixed camera screenshots
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
