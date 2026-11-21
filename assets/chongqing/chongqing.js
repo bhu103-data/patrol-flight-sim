@@ -438,6 +438,7 @@ let measuredFPS=0,sampleTime=0,sampleFrames=0,autoCycles=0;
 function applyQuality(){
   renderer.setPixelRatio(renderRatio);
   detailBuild.setQuality(qualityMode==='low'?'low':'normal');
+  landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
 }
