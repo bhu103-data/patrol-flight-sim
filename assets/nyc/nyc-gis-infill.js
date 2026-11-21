@@ -1,4 +1,6 @@
-// PATROL_NYC_GIS_INFILL_V11 — original code using NYC public Building Footprints.
+// PATROL_NYC_GIS_INFILL_V12_PBR — true polygon materials using NYC public Building Footprints.
+// Surface IDs: 6=masonry, 7=window glass, 8=roof. IDs are consumed by
+// PATROL's existing WebGL2 shader and are not real-world material measurements.
 // Exact source FIDs + lon/lat are in times-square-footprints.json.
 // The calibrated X/Z scale is *not* 1:1 and cannot be presented as survey geometry.
 // Meshes are deliberately restricted to the old procedural Times Square hole.
@@ -141,7 +143,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
         addQuad([a[0],ground,a[1]],[b[0],ground,b[1]],
-          [b[0],top,b[1]],[a[0],top,a[1]],wall);
+          [b[0],top,b[1]],[a[0],top,a[1]],wall,6);
         // Narrow, recessed dark windows. Never exceed mobile detail budget.
         const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
         if(len<3.2||h<9||windows>=2200)continue;
@@ -157,11 +159,29 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           if(upper>top-.5)continue;
           const shade=((rec.fid+row*17+bay*31)%11);
           const tint=shade<2?[.43,.51,.54]:shade<4?[.17,.26,.30]:[.12,.20,.25];
-          addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint);
+          addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint,7);
           windows++;
         }
       }
-      const tris=roof(ring,top,roofCol,addTri);
+      // Finish transition: one slim horizontal cornice near the crown and
+      // alternating corner piers, attached to real extruded polygon edges.
+      // Keep decorations within existing FID polygon and face budgets.
+      if(h>12 && pieces<90){
+        const corniceY=top-.52;
+        for(let side=0;side<ring.length;side++){
+          const a=ring[side],b=ring[(side+1)%ring.length];
+          const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+          if(length<2.5)continue;
+          const dx=-(b[1]-a[1])/length*.034,
+                dz=(b[0]-a[0])/length*.034;
+          addQuad([a[0]+dx,corniceY,a[1]+dz],
+            [b[0]+dx,corniceY,b[1]+dz],
+            [b[0]+dx,corniceY+.09,b[1]+dz],
+            [a[0]+dx,corniceY+.09,a[1]+dz],
+            roofCol,6);
+        }
+      }
+      const tris=roof(ring,top,roofCol,(a,b,c,color)=>addTri(a,b,c,color,8));
       if(tris===0)continue;
       roofTriangles+=tris;
       pieces++;used=true;
@@ -175,5 +195,5 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   }
   return {inputRecords:asset.features.length,sourceBuildings:buildings,
     infillPieces:pieces,roofTriangles,windowQuads:windows,
-    maximumPieces:MAX_PIECES,visualOnly:true};
+    maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
 }
