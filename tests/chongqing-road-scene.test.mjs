@@ -167,7 +167,12 @@ test('real Chongqing building parcels still leave safe usable signal crossings',
 test('landmark and background geometry still fit instance buffers',()=>{
   const {sceneObjects,urban,details}=generate();
   assert.ok(urban.stats.towers>100);
-  assert.equal(details.stats.curvedRoofs,33);
+  // The optional Hongyadong GLB still replaces only its 33 original roofs.
+  // The neighboring street-front shop adds one independent curved tile eave.
+  assert.equal(details.stats.curvedRoofs,34,
+    '33 Hongyadong roofs plus one surviving adjacent shop eave');
+  assert.equal(details.hongyadongReplacementCounts.curvedRoofs,33,
+    'landmark GLB replacement must not hide the neighboring shop roof');
   for(const mesh of sceneObjects.filter(m=>m instanceof Instanced)){
     assert.ok(mesh.count<=mesh.capacity);
     assert.ok(mesh.writes<=mesh.capacity);
