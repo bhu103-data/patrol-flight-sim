@@ -1,0 +1,97 @@
+name: C185 dual-float third-party source and geometry audit
+on:
+  push:
+    branches: [review/c185-thirdparty-float-source-audit-20261121]
+    paths:
+      - 'tools/aircraft/audit-third-party-c185.mjs'
+      - '.github/workflows/c185-thirdparty-asset-audit.yml'
+      - 'docs/C185_THIRDPARTY_FLOATPLANES.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: patrol-c185-thirdparty-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-c185-source-rights-and-binary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check pinned publisher CC0 metadata and download original floatplane GLBs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/c185-asset-review
+          curl --fail --location --retry 2 --connect-timeout 10 --max-time 60 --proto '=https' \
+            https://3dassets.dev/api/v1/assets/aircraft-fleet-and-airfield-high-wing-single-floatplan-0000d31a \
+            -o /tmp/3dassets-highwing.json
+          curl --fail --location --retry 2 --connect-timeout 10 --max-time 60 --proto '=https' \
+            https://cdn.3dassets.dev/assets/32603/v1/model.glb \
+            -o /tmp/3dassets-highwing.glb
+          curl --fail --location --retry 2 --connect-timeout 10 --max-time 60 --proto '=https' \
+            https://3dassets.dev/api/v1/assets/transport-collection-hd-floatplane-9c7c2a36 \
+            -o /tmp/3dassets-lite.json
+          curl --fail --location --retry 2 --connect-timeout 10 --max-time 60 --proto '=https' \
+            https://cdn.3dassets.dev/assets/18714/v1/model.glb \
+            -o /tmp/3dassets-lite.glb
+          cp /tmp/3dassets-*.json artifacts/c185-asset-review/
+      - name: Download creator's Innerscene CC0 original packages only if public access works
+        shell: bash
+        run: |
+          set -u
+          for pair in \
+            'innerscene-twin high-wing-4-seat-floatplane-twin-floats-8fde8873' \
+            'innerscene-amphibious high-wing-4-seat-on-amphibious-floats-4be93185'; do
+            set -- $pair
+            id="$1"; slug="$2"
+            curl -fLsS --max-time 45 \
+              "https://www.innerscene.com/tools/library/3d-parts/${slug}" \
+              -o "/tmp/${id}.html" || true
+            status=$(curl -L -sS --max-time 55 -w '%{http_code}' \
+              "https://www.innerscene.com/api/library/${slug}/download" \
+              -o "/tmp/${id}.glb") || status=network-error
+            echo "${id}: HTTP ${status}" | tee -a artifacts/c185-asset-review/innerscene-download-access.txt
+            if [[ "$status" != "200" ]]; then rm -f "/tmp/${id}.glb"; fi
+          done
+      - name: Check public Sketchfab metadata and official unauthenticated download API only
+        shell: bash
+        run: |
+          set -u
+          uid='6453c2d8d08d4be6b08412794e28b152'
+          base="https://api.sketchfab.com/v3/models/${uid}"
+          metadata_status=$(curl -L -sS --max-time 45 -w '%{http_code}' \
+            "$base" -o /tmp/c185-sketchfab-metadata.json) || metadata_status=network-error
+          download_status=$(curl -L -sS --max-time 45 -w '%{http_code}' \
+            "$base/download" -o /tmp/c185-sketchfab-download-reply.json) || download_status=network-error
+          SKETCHFAB_META_HTTP="$metadata_status" SKETCHFAB_DOWNLOAD_HTTP="$download_status" \
+            node --input-type=module -e "
+              import {readFileSync,writeFileSync} from 'node:fs';
+              let metadata={};try{metadata=JSON.parse(readFileSync('/tmp/c185-sketchfab-metadata.json'))}catch{}
+              let reply={};try{reply=JSON.parse(readFileSync('/tmp/c185-sketchfab-download-reply.json'))}catch{}
+              const fields=['uid','name','isDownloadable','faceCount','vertexCount','license','user','description','files'];
+              const safe={};for(const k of fields)if(metadata[k]!==undefined)safe[k]=metadata[k];
+              writeFileSync('artifacts/c185-asset-review/sketchfab-access.json',JSON.stringify({
+                officialModel:'https://sketchfab.com/3d-models/cessna185-'+ '$uid',
+                metadataHttp:process.env.SKETCHFAB_META_HTTP,
+                downloadApiHttp:process.env.SKETCHFAB_DOWNLOAD_HTTP,
+                metadata:safe,
+                officialDownloadApiReply:reply?.error||reply?.detail||reply?.message||null,
+                rightsStatus:'No authenticated source package provided to this CI. No preview-data extraction attempted.'
+              },null,2));
+            "
+      - name: Parse actual GLB chunks, topology, named float hulls, materials, LOD and footprint
+        run: node tools/aircraft/audit-third-party-c185.mjs
+      - name: Keep audit, publisher metadata and exact access blockers, never import third-party binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c185-thirdparty-original-source-audit
+          path: artifacts/c185-asset-review/
+          if-no-files-found: ignore
+          retention-days: 14
