@@ -989,12 +989,36 @@ const CENTRAL_PARK_SITES=[
     const cityParcels = new Map();
     // OTI roof heights are pre-scaled to PATROL's fictional world.
     // Snapshot loads once per NYC flight; all other maps keep the old path.
-    const officialLots=city&&Array.isArray(city.officialFootprints)
+    let officialLots=city&&Array.isArray(city.officialFootprints)
       ?city.officialFootprints.map(row=>[
         row[1],row[2],row[3],row[4],row[5],
         ((row[0]%101)+101)%101/101,false,row[6],row[0]])
         .filter(lot=>lot[7]?.length>=3 &&
           cityHeight(lot[0],lot[1])*scale>water+.65):[];
+    // Same road/lot exclusion as setupCityLots, applied BEFORE terrain baking.
+    // Otherwise an invisible removed building leaves a solid heightfield bump.
+    function generatedCityRoadOverlap(lot,margin=5.85){
+      const [x,z,w,d]=lot;
+      const minX=x-w*.5-margin,maxX=x+w*.5+margin;
+      const minZ=z-d*.5-margin,maxZ=z+d*.5+margin;
+      for(const path of city.streets)for(let j=1;j<path.length;j++){
+        const a=path[j-1],b=path[j];
+        if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
+           Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        let entry=0,exit=1;
+        for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
+          if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
+          const t0=(lo-p)/v,t1=(hi-p)/v;
+          entry=Math.max(entry,Math.min(t0,t1));
+          exit=Math.min(exit,Math.max(t0,t1));
+          if(entry>exit)break;
+        }
+        if(entry<=exit)return true;
+      }
+      return false;
+    }
+    if(city)officialLots=officialLots.filter(lot=>!generatedCityRoadOverlap(lot));
     const officialBounds=officialLots.reduce((b,lot)=>{
       b[0]=Math.min(b[0],lot[0]-lot[2]/2);
       b[1]=Math.min(b[1],lot[1]-lot[3]/2);
