@@ -2539,6 +2539,7 @@
 
     uniform sampler2D uScene;
     uniform bool uSmooth;
+    uniform bool uFastPostFx;
     uniform bool uNeonGlow;
     uniform vec3 uWeatherVisual;
     uniform vec3 uPalette[36];
@@ -2631,17 +2632,19 @@
       vec3 col = texture(uScene, vUv).rgb;
       if (uSmooth) {
         vec2 texel = 1.0 / uRes;
-        vec3 smoothColor = smoothGeometryEdges(vUv,texel,col);
+        vec3 smoothColor = uFastPostFx ? col : smoothGeometryEdges(vUv,texel,col);
         if(uNeonGlow){
           // Lift dark street detail while preserving headroom on signs and the Sphere.
           smoothColor+=0.078*sqrt(max(smoothColor,vec3(0.0)))*(1.0-clamp(smoothColor,0.0,1.0));
-          vec2 stride=2.6*texel;
+          if(!uFastPostFx){
+            vec2 stride=2.6*texel;
           vec3 glow=emissiveAt(vUv+vec2(stride.x,0.0))+emissiveAt(vUv-vec2(stride.x,0.0))+
             emissiveAt(vUv+vec2(0.0,stride.y))+emissiveAt(vUv-vec2(0.0,stride.y));
           vec2 diagonal=5.1*texel;
           vec3 outer=emissiveAt(vUv+diagonal)+emissiveAt(vUv-diagonal)+
             emissiveAt(vUv+vec2(diagonal.x,-diagonal.y))+emissiveAt(vUv+vec2(-diagonal.x,diagonal.y));
           smoothColor+=glow*0.062+outer*0.035;
+          }
         }
         if(uNyCinema>0.5)smoothColor=mix(smoothColor,
           nyGrade(smoothColor,vUv),min(uNyCinema/3.0,1.0));
@@ -8040,10 +8043,14 @@
     fboH = Math.max(1, Math.round(targetHeight * scale));
     fboW = Math.max(1, Math.round(targetHeight * scale * aspect));
 
-    glCanvas.width = fboW;
-    glCanvas.height = fboH;
-    hudCanvas.width = Math.round(viewWidth * density);
-    hudCanvas.height = Math.round(viewHeight * density);
+    // Avoid backing-store reallocations when only the 3D scale changes.
+    // In particular, preserve the independent full-resolution 2D cockpit HUD.
+    if(glCanvas.width !== fboW) glCanvas.width = fboW;
+    if(glCanvas.height !== fboH) glCanvas.height = fboH;
+    const desiredHudW = Math.round(viewWidth * density);
+    const desiredHudH = Math.round(viewHeight * density);
+    if(hudCanvas.width !== desiredHudW) hudCanvas.width = desiredHudW;
+    if(hudCanvas.height !== desiredHudH) hudCanvas.height = desiredHudH;
     hudH = smoothScenery() ? Math.min(viewHeight, 720) : 340;
     hudW = Math.max(1, hudH * aspect);
     hudCtx.setTransform(hudCanvas.width/hudW,0,0,hudCanvas.height/hudH,0,0);
@@ -9958,6 +9965,7 @@
     weather:gl.getUniformLocation(ditherProg,'uWeatherVisual'),
     scene: gl.getUniformLocation(ditherProg, 'uScene'),
     smooth: gl.getUniformLocation(ditherProg, 'uSmooth'),
+    fastPostFx: gl.getUniformLocation(ditherProg, 'uFastPostFx'),
     neonGlow: gl.getUniformLocation(ditherProg,'uNeonGlow'),
     nyCinema:gl.getUniformLocation(ditherProg,'uNyCinema'),
     palette: gl.getUniformLocation(ditherProg, 'uPalette'),
@@ -9974,6 +9982,7 @@
   // Main Simulation & Render Loop
   let lastTime = null;
   let slowFrames = 0;
+  let lastScaleAdjustment = -Infinity;
   let trailAccum = 0;
 
   // Boats follow closed loops checked against the actual height field.
@@ -10676,13 +10685,15 @@
       const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
       fastFrames = rawDt < 0.023 ? fastFrames + 1 : 0;
       slowFrames = rawDt > 0.040 ? slowFrames + 1 : 0;
-      if (slowFrames >= 6 && resScale > startupScale) {
+      if (now - lastScaleAdjustment >= 1100 && slowFrames >= 6 && resScale > startupScale) {
         scaleCeiling = resScale = Math.max(startupScale, resScale - 0.10);
         fastFrames = slowFrames = 0;
+        lastScaleAdjustment = now;
         resizeTargets();
-      } else if (fastFrames >= 40 && resScale < limit) {
+      } else if (now - lastScaleAdjustment >= 1100 && fastFrames >= 40 && resScale < limit) {
         resScale = Math.min(limit, resScale + 0.10);
         fastFrames = slowFrames = 0;
+        lastScaleAdjustment = now;
         resizeTargets();
       }
     }
@@ -11111,6 +11122,8 @@
       gl.uniform3f(uDither.weather,...environment.precipitation,skyElapsed);
       gl.uniform1i(uDither.scene, 0);
       gl.uniform1i(uDither.smooth, smoothScenery());
+      // Retain weather and color grading at low resolution while skipping extra texture fetches.
+      gl.uniform1i(uDither.fastPostFx, resScale < 0.58);
       gl.uniform1i(uDither.neonGlow,Boolean(selectedMap.vegas||selectedMap.city));
       gl.uniform1f(uDither.nyCinema,selectedMap.city && !graphicsCompat ?
         Number(nyStreetQuality.value) : 0);
