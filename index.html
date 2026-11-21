@@ -221,6 +221,7 @@
         </fieldset>
       </div>
       <label class="runway-choice" id="runwayChoice" hidden><input id="runwayStart" type="checkbox" name="runwayStart">Start on the runway</label>
+      <label class="runway-choice" id="waterStartChoice" hidden><input id="waterStart" type="checkbox" name="waterStart">Start afloat · taxi, then take off</label>
       <p id="menuError" role="alert" hidden></p>
       <button id="startFlight" type="submit">Start Flight</button>
     </form>
@@ -348,6 +349,8 @@
   const resumeFlight = document.getElementById('resumeFlight');
   const runwayChoice = document.getElementById('runwayChoice');
   const runwayStart = document.getElementById('runwayStart');
+  const waterStartChoice = document.getElementById('waterStartChoice');
+  const waterStart = document.getElementById('waterStart');
   const flightSetup = document.getElementById('flightSetup');
   const startFlight = document.getElementById('startFlight');
   const flightMenuBtn = document.getElementById('flightMenuBtn');
@@ -11314,6 +11317,12 @@ const CENTRAL_PARK_SITES=[
     const available=settings.get('aircraft')==='fighter' && Boolean(map?.runwayStart);
     runwayChoice.hidden=!available;
     runwayStart.disabled=!available;
+    // The aircraft is universal; water-launch is a site capability, not a map-only plane.
+    // Desert and Chongqing's independently launched world have their own starts.
+    const waterAvailable=settings.get('aircraft')==='seaplane' &&
+      Boolean(map) && !map.vegas && !map.chongqing;
+    waterStartChoice.hidden=!waterAvailable;
+    waterStart.disabled=!waterAvailable;
     scenicTourChoice.hidden=!map?.tour;
     scenicTour.disabled=!map?.tour;
     if(scenicTour.disabled && scenicTour.checked){
@@ -11379,6 +11388,7 @@ const CENTRAL_PARK_SITES=[
     const mode=settings.get('flightMode');
     selectedAircraft = settings.get('aircraft');
     if(selectedAircraft==='seaplane')prepareFloatplaneAsset();
+    const waterStartRequested=selectedAircraft==='seaplane' && settings.has('waterStart');
     const runway = selectedAircraft==='fighter' && settings.has('runwayStart') ? selectedMap.runwayStart : null;
     loading = true;
     startFlight.disabled = true;
@@ -11483,6 +11493,8 @@ const CENTRAL_PARK_SITES=[
         yaw: runway ? runway.yaw : 0, pitch: 0, bank: 0, rollAnim: 0,
         speed: grounded ? 0 : AIRCRAFT[selectedAircraft].cruise, afterburner: false
       });
+      // A returning astronaut takes precedence over a new water-start preference.
+      let resumedFromCosmos=false;
       // Resume the actual flight location after visiting the orbital/galactic scene.
       // Store only session-scoped state, never use an untrusted URL as coordinates.
       try {
@@ -11506,11 +11518,29 @@ const CENTRAL_PARK_SITES=[
               plane.vsi=0;
               grounded=false;
               gearDown=false;
+              resumedFromCosmos=true;
             }
           }
         }
       } catch(error) {
         console.warn('Cosmos flight restoration skipped:',error);
+      }
+      if(waterStartRequested && !resumedFromCosmos && !alaskaGlacierView){
+        const waterSite=findFloatWaterStart();
+        if(waterSite){
+          plane.pos=[waterSite[0],WATER_H+FLOAT_CLEARANCE,waterSite[1]];
+          plane.yaw=waterSite[2];
+          plane.pitch=plane.bank=plane.rollAnim=0;
+          plane.speed=0;
+          plane.afterburner=false;
+          plane.vsi=0;
+          grounded=false;
+          gearDown=false;
+          waterborne=true;
+          console.info('[PATROL] Water launch validated',selectedMap.name,waterSite);
+        }else{
+          console.warn('[PATROL] No safe floatplane launch water; starting in flight',selectedMap.name);
+        }
       }
 
       renderGearStatus();
@@ -12185,6 +12215,33 @@ const CENTRAL_PARK_SITES=[
         Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
     }
     return true;
+  }
+  function findFloatWaterStart(){
+    // Deterministic, bounded search over measured shorelines / actual city lots.
+    // The nine-point pontoon footprint gate is shared with landing checks.
+    // Keep clear of moving ships at the moment the plane is placed.
+    const start=selectedMap.spawn||[0,40,0];
+    const limit=(selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)-18;
+    const safe=(x,z,yaw)=>{
+      if(Math.hypot(x,z)>limit || !usableFloatWater(x,z,yaw))return false;
+      for(const ship of boats){
+        const [bx,bz]=sceneryPose(ship,sceneryTime);
+        if(Math.hypot(x-bx,z-bz)<ship.halfLength+9)return false;
+      }
+      return true;
+    };
+    // Test the actual published spawn first; outward rings avoid random respawn.
+    if(safe(start[0],start[2],0))return [start[0],start[2],0];
+    for(const radius of [24,48,80,120,180,250,350,470,600]){
+      for(let i=0;i<24;i++){
+        const angle=i*Math.PI/12+radius*.001;
+        const x=start[0]+radius*Math.cos(angle);
+        const z=start[2]+radius*Math.sin(angle);
+        const yaw=Math.atan2(-x,-z);
+        if(safe(x,z,yaw))return [x,z,yaw];
+      }
+    }
+    return null;
   }
   let gearDown = false;
   let armorLandingMode = false;
