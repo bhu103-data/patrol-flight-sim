@@ -153,6 +153,19 @@ test('front grille and license plate detail remains instanced and low-quality aw
   for(const mesh of [grille,plates,rearTrims])assert.equal(mesh.visible,true);
 });
 
+test('daytime disables electric lamps and night re-enables them independently of quality',()=>{
+  const {traffic,objects}=setup();
+  const lamps=objects.filter(o=>o instanceof THREE.PointLight);
+  assert.ok(lamps.length>=3);
+  traffic.setTimeOfDay('day');
+  assert.ok(lamps.every(l=>!l.visible));
+  traffic.setQuality('low');
+  traffic.setQuality('normal');
+  assert.ok(lamps.every(l=>!l.visible),'quality toggling must not turn on midday streetlights');
+  traffic.setTimeOfDay('night');
+  assert.ok(lamps.every(l=>l.visible));
+});
+
 test('main scene integrates real shadows and street traffic without disabling existing maps',async()=>{
   const src=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   assert.ok(src.includes("from './streetlife.js'"));
