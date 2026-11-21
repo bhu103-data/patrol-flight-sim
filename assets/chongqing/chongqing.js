@@ -864,6 +864,10 @@ function move(dt){
   const nz=clamp(pz+state.vel.z*dt,-635,635);
   // Permit flight above the 350m Raffles towers and the existing 650m space transition.
   state.pos.y=clamp(py+state.vel.y*dt,-.25,725);
+  if(state.vel.y>0){
+    const ceiling=obstacleIndex.ceilingSurface(state.pos.x,state.pos.z,py,state.pos.y);
+    if(state.pos.y>ceiling){state.pos.y=ceiling;state.vel.y=0;}
+  }
   // Resolve axes separately so the pilot can slide along facades instead of sticking.
   if(!intersectsBuilding(nx,state.pos.y,pz)&&!streetBuild.nearby(nx,pz,state.pos.y,.7))state.pos.x=nx;
   else state.vel.x=0;
@@ -876,7 +880,9 @@ function move(dt){
     state.pos.y=floor;state.vel.y=0;state.onGround=true;
     if(state.flying){state.flying=false;message('安全降落');}
   }else if(state.pos.y>floor+.15)state.onGround=false;
-  if(py>300&&state.vel.y>0)state.vel.y=0;
+  // Preserve climb speed above the 350m landmark towers: the real upper limit
+  // is the explicit 725-unit world clamp, not the removed legacy 300-unit cap.
+  if(state.pos.y>=725&&state.vel.y>0)state.vel.y=0;
   avatar.position.copy(state.pos);
   avatar.rotation.y=state.heading;
   const bank=clamp(-state.vel.x*Math.cos(viewYaw)*.005+state.vel.z*Math.sin(viewYaw)*.005,-.24,.24);
