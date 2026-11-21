@@ -12272,7 +12272,28 @@ const CENTRAL_PARK_SITES=[
   // the aircraft origin (no wheels on this configuration).
   const FLOAT_CLEARANCE=1.50,FLOAT_ROTATE_SPEED=17.5;
   let waterborne=false;
+  // Keep wing tips and pontoons out of authored Liberty Island ferry docks.
+  // These piers are actual geometry over water, so sampling ground height
+  // alone misses them. Use the same exclusion for taxi, start and touchdown.
+  function clearOfNycHeroDocks(x,z){
+    if(!selectedMap.city)return true;
+    const [lx,lz]=NYC_HERO_ROUTE.liberty;
+    const [sx,sz]=NYC_HERO_ROUTE.spawn;
+    // Fort Wood star fort + visitor paths occupy a radius near 25 world units.
+    if(Math.hypot(x-lx,z-lz)<32)return false;
+    const dx=sx-lx,dz=sz-lz,len=Math.hypot(dx,dz)||1;
+    const along=((x-lx)*dx+(z-lz)*dz)/len;
+    const across=((x-lx)*-dz+(z-lz)*dx)/len;
+    // Spawn-facing dock follows the island-spawn line along u=18..38.
+    // Expand for the 10.922 m high wing plus mooring railing clearance.
+    if(along>9.5 && along<45 && Math.abs(across)<9.5)return false;
+    // West dock extends x0-19.6 to x0-50.92, centered at z0+4.6.
+    if(x<lx-12 && x>lx-58 &&
+       Math.abs(z-(lz+4.6))<10.5)return false;
+    return true;
+  }
   function usableFloatWater(x,z,yaw=plane.yaw){
+    if(selectedMap.city && !clearOfNycHeroDocks(x,z))return false;
     // Nine samples cover the LENGTH and both FLOATS, not just center.
     // A water touchdown on an island, shallow coast or pier is not valid.
     const fx=Math.sin(yaw),fz=Math.cos(yaw),sx=fz,sz=-fx;
