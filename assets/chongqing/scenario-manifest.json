@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "description": "Hongyadong Blender study: OFF by default. Enable only after approved legal, scale and visual review; original collision shapes are preserved.",
+  "description": "Default verified Blender 5.2.1 Chongqing Hongyadong PBR architecture (original geometry and CC0 photos), with safe procedural fallback; ?scenario=original explicitly restores original geometry. Artistic compressed game-space, not surveyed 1:1 geodata.",
   "hongyadong": {
-    "enabled": false,
+    "enabled": true,
     "file": "generated/hongyadong-study.glb",
     "position": [
       155,
@@ -15,6 +15,6 @@
       1
     ],
     "rotation_y": 0,
-    "license": ""
+    "license": "Original PATROL project-authored Blender geometry; photo roof and wood textures from Poly Haven CC0 (polyhaven.com/license); concrete wall texture from existing CC0 assets/nyc source inventory. No extracted Google tiles or proprietary game meshes."
   }
 }
