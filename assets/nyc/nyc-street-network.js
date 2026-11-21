@@ -257,6 +257,9 @@ export function buildNycStreetNetwork({
   // An intersection exists only if painted asphalt actually reaches the node.
   // Clipped remote portions must not count as connected streets.
   const connectedStreetNodes=new Set();
+  // Track only road pieces that were really emitted (including clipped spans),
+  // so sidewalk vendors cannot overlap asphalt in the final scene.
+  const activeRoadSegments=[];
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
@@ -301,6 +304,7 @@ export function buildNycStreetNetwork({
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
+    activeRoadSegments.push({a,b,width});
     // Only selected game corridors receive red bus and green bike lanes;
     // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
     const greenBike=kind==='avenue' && (i===1||i===-3) &&
@@ -624,17 +628,57 @@ export function buildNycStreetNetwork({
     }
     stats.hotDogCarts++;
   }
-  // Two tourist-vendor stands within the dedicated, wide Times Square
-  // pedestrian plaza; no guesswork on actual permit/vendor coordinates.
-  // Times Square vendors only stand on exposed, dry pedestrian paving.
-  for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]]){
-    if(siteClear(x,z,2.35))hotDogCart(x,z,v);
+  // Vendor canopies extend beyond their carts. A clear center point is
+  // insufficient: compare the whole 2.35-unit display radius with ACTUALLY
+  // emitted asphalt (not a theoretical grid where an avenue was clipped).
+  const placedVendors=[];
+  function vendorClearOfRoads(x,z){
+    for(const segment of activeRoadSegments){
+      const dx=segment.b[0]-segment.a[0],dz=segment.b[1]-segment.a[1];
+      const len2=dx*dx+dz*dz||1;
+      const t=Math.max(0,Math.min(1,
+        ((x-segment.a[0])*dx+(z-segment.a[1])*dz)/len2));
+      const roadX=segment.a[0]+dx*t,roadZ=segment.a[1]+dz*t;
+      if(Math.hypot(x-roadX,z-roadZ)<segment.width*.5+2.35)
+        return false;
+    }
+    return true;
   }
-  // Downtown commercial corridor: two hand-placed pedestrian corners,
-  // skipping any place that is flooded or inside the building heightfield.
-  for(const [x,z,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
-    if(detailBand(x,z)>=2 && siteClear(x,z,2.35) && !nearOld(x,z,3.1))
-      hotDogCart(x,z,k);
+  function vendorSiteClear(x,z,avoidOldRoads=false){
+    if(!siteClear(x,z,2.35)||!vendorClearOfRoads(x,z)||
+       (avoidOldRoads&&nearOld(x,z,5.8))||
+       placedVendors.some(([px,pz])=>Math.hypot(px-x,pz-z)<5))
+      return false;
+    // Validate the platform corners and round parasol perimeter against
+    // coastlines, parcels and piers; reject wet or occupied edge footprints.
+    for(const [dx,dz] of [[-2,0],[2,0],[0,-2],[0,2],
+                          [-1.4,-1.4],[-1.4,1.4],[1.4,-1.4],[1.4,1.4]]){
+      if(!siteClear(x+dx,z+dz,.22))return false;
+    }
+    return true;
+  }
+  function placeVendor(x,z,variant,avoidOldRoads=false){
+    if(!vendorSiteClear(x,z,avoidOldRoads))return false;
+    hotDogCart(x,z,variant);
+    placedVendors.push([x,z]);
+    return true;
+  }
+  // Times Square plazas retain their authored positions; never move these
+  // onto Broadway or 7th Avenue just to satisfy a numerical quota.
+  for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]])
+    placeVendor(x,z,v);
+  // Downtown searches a tiny, deterministic sidewalk neighborhood for a
+  // genuinely clear position. A blocked stand disappears instead of clipping
+  // through a car lane, wall, water or another vendor.
+  const vendorOffsets=[[0,0],[0,7],[0,-7],[7,0],[-7,0],
+    [7,7],[-7,7],[7,-7],[-7,-7],[0,12],[0,-12],
+    [12,0],[-12,0],[12,7],[-12,7],[12,-7],[-12,-7]];
+  for(const [anchorX,anchorZ,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
+    if(detailBand(anchorX,anchorZ)<2)continue;
+    for(const [du,dv] of vendorOffsets){
+      const x=anchorX+du+grid.tilt*dv,z=anchorZ+dv;
+      if(detailBand(x,z)>=2&&placeVendor(x,z,k,true))break;
+    }
   }
   return stats;
 }
