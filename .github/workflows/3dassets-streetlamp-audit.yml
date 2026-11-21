@@ -56,6 +56,11 @@ jobs:
         env:
           CHONGQING_BASE_URL: http://127.0.0.1:8765
         run: node scripts/3dassets-lamp-browser-review.mjs
+      - name: Real Chromium night streetlamp emissive A/B and HUD-free images
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+          PATROL_REVIEW_TIME: night
+        run: node scripts/3dassets-lamp-browser-review.mjs
       - name: Preserve audit evidence, do not install the asset into PATROL
         if: always()
         uses: actions/upload-artifact@v4
