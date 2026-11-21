@@ -13,6 +13,7 @@ import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
 import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
+import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -566,6 +567,7 @@ const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // Each generated road is clipped against the FULL building footprint (plus a
 // sidewalk margin), instead of visually running underneath a tower.
 const roadClearanceStats={paths:0,clipped:0,removedLength:0};
+const shorelineRoadEnds=[];
 for(const plan of plannedRoads){
   // Follow the same analytical bends as street traffic, sampling terrain at
   // <=5.5-unit intervals before clipping against building volumes.
@@ -573,6 +575,21 @@ for(const plan of plannedRoads){
   // Tributary cuts come FIRST; only dry road sections may reach the
   // building-volume clipper, never the river surface or unsupported banks.
   const dryRoads=clipChongqingDryRoadSegments(points,plan.width,ground,riverDist);
+  // Existing roads must NOT keep going across the unbridged tributary.
+  // Install compact reflective guardrails at both dry ends of every cut.
+  for(let k=0;k<dryRoads.length-1;k++){
+    const left=dryRoads[k],right=dryRoads[k+1];
+    if(left.length>1){
+      const p=left.at(-1),q=left.at(-2);
+      shorelineRoadEnds.push({point:p,tangent:[p.x-q.x,p.z-q.z],
+        width:plan.width,intoRoad:-1});
+    }
+    if(right.length>1){
+      const p=right[0],q=right[1];
+      shorelineRoadEnds.push({point:p,tangent:[q.x-p.x,q.z-p.z],
+        width:plan.width,intoRoad:1});
+    }
+  }
   for(const dry of dryRoads){
     const clear=clipRoadToFreeSegments(dry,plan.width,obstacles,.8,2.5);
     for(const path of clear.paths){
@@ -582,6 +599,9 @@ for(const plan of plannedRoads){
     roadClearanceStats.removedLength+=clear.stats.removedLength;
   }
 }
+const shorelineSafety=buildChongqingShorelineBarriers({
+  THREE,scene,ends:shorelineRoadEnds
+});
 // The shared obstacle index was built after all static structures above.
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
 // The old collision boxes and all other scenic geometry remain intact.
