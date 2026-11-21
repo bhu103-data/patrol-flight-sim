@@ -6308,6 +6308,41 @@ const CENTRAL_PARK_SITES=[
             }
           }
         }
+        // PATROL_NYC_TIMES_SHORT_SIDE_STOREFRONTS_V1: real side-facing
+        // commercial bays for corner shops. The preceding ground-floor
+        // geometry covers only Z fronts, leaving the X flanks as blank walls
+        // at street-view height. Limit relief to short anonymous Times Square
+        // lots; FID polygon buildings are handled earlier and never enter
+        // this branch. All boxes share the EXISTING city mesh batch.
+        if(timesShortStorefront && w>3.5 && d>4.3){
+          const flankBays=Math.min(3,Math.max(1,Math.floor(d/2.7)));
+          const flankPitch=(d-.72)/flankBays;
+          const glassLength=Math.min(1.46,flankPitch*.62);
+          const darkDoor=[.085,.15,.18],handle=[.73,.69,.55];
+          for(const side of [-1,1]){
+            const wallX=x+side*(w*.5+.08);
+            const trimX=wallX+side*.043;
+            for(let bay=0;bay<flankBays;bay++){
+              const zz=z+(bay-(flankBays-1)*.5)*flankPitch;
+              const door=bay===Math.floor(flankBays*.5) && archType%3===0;
+              const shade=door?darkDoor:glass;
+              addModelBox(addQuad,wallX,y+1.42,zz,
+                .060,1.58,glassLength,shade,windowSurface);
+              // Physical lintel/sill bars and window-edge mullions.
+              addModelBox(addQuad,trimX,y+2.25,zz,
+                .12,.075,glassLength+.11,mullion);
+              addModelBox(addQuad,trimX,y+.59,zz,
+                .12,.075,glassLength+.11,mullion);
+              for(const edge of [-1,1])
+                addModelBox(addQuad,trimX,y+1.42,
+                  zz+edge*(glassLength*.5+.033),
+                  .12,1.61,.065,mullion);
+              if(door)
+                addModelBox(addQuad,trimX+side*.066,y+1.08,
+                  zz+glassLength*.24,.075,.10,.045,handle);
+            }
+          }
+        }
         // Side glazing follows the real setback silhouette above the fifth floor.
         for(const side of [-1,1]){
           for(let floor=0;floor<levels;floor++){
