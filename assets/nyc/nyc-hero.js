@@ -332,13 +332,22 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
     // three longitudinal strips, including the actual lateral deck corners.
     const transverse=[-width*.5,0,width*.5];
     if(transverse.some(dz=>terrain(root,z+dz)<=waterY+1.15))continue;
+    // Check the whole offshore span, not just three positions. A small
+    // island between the old 45/72/100% samples could intersect the actual
+    // pier deck even though both end and landing appeared safe. Keep the
+    // start of the ramp exempt: it intentionally rests on the shore.
     let openWater=true;
-    for(const advance of [.45,.72,1]){
-      const deckX=edge+side*length*advance;
-      for(const dz of transverse){
-        if(terrain(deckX,z+dz)>waterY+.55){openWater=false;break;}
+    const clearStart=Math.min(3.4,length*.18);
+    const spans=Math.ceil((length-clearStart)/1.55);
+    const offsets=[-width*.5,-width*.25,0,width*.25,width*.5];
+    for(let step=0;step<=spans&&openWater;step++){
+      const deckX=edge+side*(clearStart+(length-clearStart)*step/spans);
+      for(const dz of offsets){
+        const sampled=terrain(deckX,z+dz);
+        if(!Number.isFinite(sampled)||sampled>waterY+.55){
+          openWater=false;break;
+        }
       }
-      if(!openWater)break;
     }
     if(!openWater)continue;
     const landY=Math.min(waterY+2.75,terrain(root,z)+.07);
