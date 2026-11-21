@@ -73,7 +73,19 @@ function readGlb(data){
       if(count%3)throw Error('Nontriangular index buffer');
       triangles+=count/3;primCount++;
       posTypes.add(pa.componentType);
-      if(pa.min&&pa.max){absorb(mb,pa.min);absorb(mb,pa.max);}
+      // glTF accessor min/max store *quantized integer values* even when
+      // accessor.normalized is true (Khronos glTF 2.0 and KHR_mesh_quantization).
+      // Correctly normalize before applying a node's dequantization transform.
+      const normalize=n=>{
+        if(!pa.normalized)return n;
+        if(pa.componentType===5120)return Math.max(-1,n/127);
+        if(pa.componentType===5121)return n/255;
+        if(pa.componentType===5122)return Math.max(-1,n/32767);
+        if(pa.componentType===5123)return n/65535;
+        if(pa.componentType===5125)return n/4294967295;
+        throw Error('Normalized POSITION has invalid component type');
+      };
+      if(pa.min&&pa.max){absorb(mb,pa.min.map(normalize));absorb(mb,pa.max.map(normalize));}
       else if(pa.componentType===5126){
         const b=bs[pa.bufferView],stride=b.byteStride||12,start=binStart+(b.byteOffset||0)+(pa.byteOffset||0);
         const view=new DataView(data.buffer,data.byteOffset,data.byteLength);
@@ -92,7 +104,7 @@ function readGlb(data){
       const b=ownMeshBounds[n.mesh],world=bounds(),name=n.name||meshNames[n.mesh]||'unnamed';
       if(Number.isFinite(b.min[0])){
         corners(b.min,b.max,m,sceneBounds);corners(b.min,b.max,m,world);
-        if(/float|pontoon|hull|spreader|water.?rudder|sponson/i.test(name+' '+meshNames[n.mesh])){
+        if(/(?:^|[^a-z])floats?(?:[^a-z]|$)|pontoon|hull|spreader|water.?rudder|sponson/i.test(name+' '+meshNames[n.mesh])){
           corners(b.min,b.max,m,floatsBounds);
           floatNodes.push({name,meshName:meshNames[n.mesh],bounds:world});
         }
@@ -119,6 +131,14 @@ function readGlb(data){
     calculatedBounds:sceneBounds,
     calculatedSize:sceneBounds.max.map((v,i)=>Number((v-sceneBounds.min[i]).toFixed(4))),
     floatGeometryBounds:Number.isFinite(floatsBounds.min[0])?floatsBounds:null,
+    sampledPositionAccessors:(doc.meshes||[]).flatMap(m=>(m.primitives||[]).map(p=>{
+      const a=accessors[p.attributes?.POSITION];return a?{
+        componentType:a.componentType,normalized:!!a.normalized,min:a.min,max:a.max
+      }:null;
+    })).filter(Boolean).slice(0,4),
+    sampleNodeTransforms:nodes.filter(n=>n.matrix||n.scale).slice(0,5).map(n=>({
+      name:n.name,translation:n.translation,scale:n.scale,matrix:n.matrix?.slice(0,16)
+    })),
     lodDeclares:doc.extensionsUsed?.includes('MSFT_lod')||
       [...meshNames,...nodes.map(n=>n.name||'')].some(n=>/\bLOD\d?\b/i.test(n))||false,
     currentPATROLDecoderCompatible:
