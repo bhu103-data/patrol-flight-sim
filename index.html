@@ -6029,7 +6029,7 @@ const CENTRAL_PARK_SITES=[
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
         const stats=buildNycStreetNetwork({
-          addQuad:detail.addQuad,
+          addQuad:detail.addQuad,addTri:detail.addTri,
           box:(...args)=>addModelBox(detail.addQuad,...args),
           beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
           ribbon:(a,b,w,col)=>pushRoadStrip(detail.addQuad,a,b,w,col),
