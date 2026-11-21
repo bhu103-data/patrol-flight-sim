@@ -1,0 +1,5 @@
+# NYC road realism: Brooklyn Bridge first
+
+- The authored bridge deck and both feeders remain on the existing terrain and collision layout. The road markings now follow bridge elevation, with separate lane markings on both sides, stop bars, and crossing details at the two landings. Lamp poles only go on dry, unobstructed sites.
+- The adjacent city grid uses asymmetric three-lane avenue paint, existing bike/bus lanes, and alternating one-way side streets with a curb parking strip. Junction markings require an actual rendered approach. Signal heads face the road, with opposing colors across the two road axes; this is a static visual state, not traffic AI.
+- The layout is adapted to game-scale geometry, not surveyed. Next: prioritize the DUMBO landfall/first blocks, align game-space approach geometry with NYC Street Centerline/LION and verify actual controls, then add timed signals and lane-following traffic. For the gritty harbor look, use the existing rain/wet-road shader as a baseline and compare matched wet/dry deck and low-altitude views. Do not copy Saltline assets.

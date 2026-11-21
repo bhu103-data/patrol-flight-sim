@@ -11,16 +11,16 @@ const grid={blockWidth:24,blockLength:33,tilt:.24,offset:30,
   parkHalfWidth:43,parkHalfLength:150,parkCenter:10000};
 
 function render(){
-  const quads=[];
+  const quads=[],cars=[];
   const stats=buildNycStreetNetwork({
     addQuad:(...q)=>quads.push(q),addTri(){},box(){},beam(){},ribbon(){},
     terrainAt:()=>100,detailBand:()=>3,grid,streetY:20,waterY:0,
     timesBounds:[900,1000,900,1000],existingStreets:[],isClear:()=>true,
-    lettering(){},pavementText(){}
+    lettering(){},pavementText(){},addParkedCar:actor=>cars.push(actor)
   });
-  return {quads,stats};
+  return {quads,stats,cars};
 }
-const {quads,stats}=render();
+const {quads,stats,cars}=render();
 const yellowShells=quads.filter(q=>Array.isArray(q[4])&&
   q[4].length===3&&Math.abs(q[4][0]-.86)<1e-8&&
   Math.abs(q[4][1]-.69)<1e-8&&Math.abs(q[4][2]-.24)<1e-8);
@@ -40,8 +40,8 @@ test('yellow signal housings include angled 3D faces that look up the avenue',()
     'traffic heads have side, rear and top shell geometry');
   const faces=yellowShells.map(facing).filter(Boolean);
   const aligned=faces.filter(f=>f.dot>.98&&f.xSpan>.10&&f.zSpan>.02);
-  assert.ok(aligned.length>=stats.signals,
-    'every signal has at least one substantial street-aligned housing face');
+  assert.ok(aligned.length>=stats.signalizedIntersections,
+    'each signalized junction has at least one avenue-aligned housing face');
   assert.ok(faces.every(f=>Number.isFinite(f.dot)),'finite rotated normals');
 });
 
@@ -54,4 +54,19 @@ test('each traffic light keeps three colored circular lenses and no new renderer
     'round red/green lens segments remain true geometry');
   assert.ok(quads.length<120000,'street geometry unexpectedly large: '+quads.length);
   assert.equal(stats.signals>0,true);
+});
+
+test('junctions have two road-axis heads and bounded curb parking',()=>{
+  assert.equal(stats.signals,stats.signalizedIntersections*2);
+  assert.ok(stats.signalizedIntersections<=stats.intersections);
+  const crossStreetFaces=yellowShells.map(facing).filter(f=>f&&f.xSpan<.001&&f.zSpan>.10);
+  assert.ok(crossStreetFaces.length>=stats.signalizedIntersections);
+  assert.ok(stats.multiLaneSegments>0 && stats.oneWaySideStreets>0);
+  assert.equal(cars.length,stats.civilianCars);
+  assert.ok(cars.length>0 && cars.length<=34);
+  for(const {parked} of cars){
+    const gap=Math.abs(parked.z-Math.round(parked.z/grid.blockLength)*grid.blockLength);
+    assert.ok(gap>1.8&&gap<2.2,'vehicle is in the signed curb strip');
+    assert.ok(Math.abs(Math.cos(parked.yaw))<.001,'car aligned to the cross street');
+  }
 });

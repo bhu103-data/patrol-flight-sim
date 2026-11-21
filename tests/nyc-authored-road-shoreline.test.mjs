@@ -70,19 +70,19 @@ test('actual authored NYC street scene emits only dry sidewalk geometry',()=>{
     'cityLotAt','WATER_H','STREET_Y','pushRoadStrip','lerp','nycDetailBand',
     'addRideBeam','EAST_RIVER_BRIDGE','buildBridgeDeck',
     'buildBridgeRiverfront','BROOKLYN_RAIL','makeTrafficRoute',
-    'railwayPoints','railPose'];
-  const roads=[],lamps=[];
+    'railwayPoints','railPose','bridgeRoadHeight'];
+  const roads=[],lamps=[],crossings=[];
   let fictionalRailRequests=0;
   const deps={
     CITY_STREETS:[[[0,0],[1,1]],[[-60,0],[60,0]]],
     NYC_FOCUS_ZONES:[[0,0,200,200]],
     sampleTerrainHeight:(x)=>x<0?7.8:14.6,
     cityLotAt:()=>null,WATER_H:12.2,STREET_Y:14.86,
-    pushRoadStrip(_quad,a,b,w){if(w===11.6)roads.push([a,b]);},
+    pushRoadStrip(_quad,a,b,w){if(w===11.6)roads.push([a,b]);if(w===.42)crossings.push([a,b]);},
     lerp:(a,b,t)=>a+(b-a)*t,nycDetailBand:()=>3,
     addRideBeam(){},
-    EAST_RIVER_BRIDGE:{x:88,halfLength:30,ramp:15,z:-340},
-    buildBridgeDeck(){},buildBridgeRiverfront(){},
+    EAST_RIVER_BRIDGE:{x:88,halfLength:30,ramp:15,z:-340,halfWidth:4.2},
+    buildBridgeDeck(){},buildBridgeRiverfront(){},bridgeRoadHeight:x=>x/100+14.86,
     BROOKLYN_RAIL:{height:20,z:-280},
     makeTrafficRoute:points=>({points,total:0}),
     railwayPoints:()=>{fictionalRailRequests++;return [[0,0],[1,0]];},
@@ -96,6 +96,9 @@ test('actual authored NYC street scene emits only dry sidewalk geometry',()=>{
   assert.ok(roads[0][0][0]>0,'no legacy sidewalk should cover water');
   assert.ok(roads[0][1][0]===60);
   assert.ok(lamps.length>0,'bridge fixtures and decor still render');
+  assert.equal(crossings.length,18,'each approach gets nine zebra bars');
+  assert.ok(crossings.flat().every(([x,y])=>x>43&&x<133&&y===deps.bridgeRoadHeight(x)),
+    'crosswalks stay on the existing bridge footprint and follow its slope');
   assert.equal(fictionalRailRequests,0,
     'disabled modern DUMBO railway must not allocate track geometry');
   assert.ok(!lamps.some(box=>box[3]===33&&box[4]===.72),
