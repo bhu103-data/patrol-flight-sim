@@ -2812,6 +2812,29 @@ const CENTRAL_PARK_SITES=[
         float lights=step(.76,nyStreetHash(cell+vec2(37.2,19.5)))*
           (1.0-uAtmosphere.x*.94);
         pane+=vec3(.58,.39,.18)*lights*.24;
+        // PATROL_DUMBO_WINDOW_DEPTH_V2: break identical blue squares into
+        // reflective, partly occupied window bays. Only on Brooklyn's
+        // explicitly tagged window panes (13); no generated extra windows,
+        // geometry displacement or changes to GIS/OTI/Alaska materials.
+        if(vHarborSurface>12.5 && vHarborSurface<13.5){
+          vec2 bay=vec2(vWorld.x*.79+vWorld.z*.51,vWorld.y*.36);
+          vec2 bayId=floor(bay);
+          float interior=nyStreetHash(bayId+vec2(21.7,73.9));
+          float tint=nyStreetHash(bayId+vec2(84.3,9.1));
+          float facadeShadow=.69+.26*tint;
+          float sash=sin((vWorld.x+vWorld.z*.30)*6.7+
+            (vWorld.y-14.58)*.18);
+          // Dark sill reflections, occasional pale curtains and variable
+          // indoor depth instead of a repeated single RGB window swatch.
+          float blind=step(.78,interior)*
+            (.5+.5*cos(vWorld.y*16.0));
+          vec3 room=mix(vec3(.11,.20,.25),vec3(.26,.35,.39),tint);
+          pane=mix(pane,room,nearDetail*(.18+.22*(1.0-interior)));
+          pane*=mix(1.0,facadeShadow,nearDetail*.34);
+          pane+=vec3(.055,.082,.095)*sash*nearDetail*.20;
+          pane=mix(pane,vec3(.43,.45,.42),blind*nearDetail*.29);
+          roughness=mix(roughness,.16+.15*tint,nearDetail*.44);
+        }
         albedo=mix(albedo,pane,nearDetail*.89);
         roughness=mix(roughness,.19+fresnel*.05,nearDetail*.92);
       }else{
@@ -2820,6 +2843,24 @@ const CENTRAL_PARK_SITES=[
         vec2 uv=vWorld.xz*.58;
         float aggregate=nyStreetNoise(uv*3.4);
         albedo*=1.0+nearDetail*(aggregate-.50)*.19;
+        // PATROL_DUMBO_ROOF_SURFACE_V2: alternating tar repair joints,
+        // coarse aggregate and water-darkened low spots, restricted to the
+        // actual Brooklyn gravel roof faces (surface 14). Do not invent
+        // cuboid rooftops or expand the building's collision footprint.
+        if(vHarborSurface>13.5 && vHarborSurface<14.5){
+          vec2 tarUv=vWorld.xz*.28;
+          vec2 seams=abs(fract(tarUv)-.5);
+          vec2 aa=max(fwidth(tarUv)*1.3,vec2(.004));
+          float seamX=1.0-smoothstep(.46,.495+aa.x,seams.x);
+          float seamZ=1.0-smoothstep(.46,.495+aa.y,seams.y);
+          float line=max(seamX,seamZ);
+          float grit=nyStreetNoise(vWorld.xz*4.4+vec2(5.7,19.4));
+          float patches=smoothstep(.70,.96,
+            nyStreetNoise(vWorld.xz*.19+vec2(43.7,12.9)));
+          albedo*=mix(1.0,.88+.20*grit,nearDetail*.58);
+          albedo=mix(albedo,albedo*.69,
+            nearDetail*(line*.17+patches*.21));
+        }
         float wet=clamp(uNyStreetWetness*.39,0.0,.37);
         roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
       }
