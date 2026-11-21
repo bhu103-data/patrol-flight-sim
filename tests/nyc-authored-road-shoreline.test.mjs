@@ -72,6 +72,7 @@ test('actual authored NYC street scene emits only dry sidewalk geometry',()=>{
     'buildBridgeRiverfront','BROOKLYN_RAIL','makeTrafficRoute',
     'railwayPoints','railPose'];
   const roads=[],lamps=[];
+  let fictionalRailRequests=0;
   const deps={
     CITY_STREETS:[[[0,0],[1,1]],[[-60,0],[60,0]]],
     NYC_FOCUS_ZONES:[[0,0,200,200]],
@@ -84,7 +85,8 @@ test('actual authored NYC street scene emits only dry sidewalk geometry',()=>{
     buildBridgeDeck(){},buildBridgeRiverfront(){},
     BROOKLYN_RAIL:{height:20,z:-280},
     makeTrafficRoute:points=>({points,total:0}),
-    railwayPoints:()=>[[0,0],[1,0]],railPose:()=>({x:0,z:0,yaw:0})
+    railwayPoints:()=>{fictionalRailRequests++;return [[0,0],[1,0]];},
+    railPose:()=>({x:0,z:0,yaw:0})
   };
   const builder=new Function(...names,extract('clipAuthoredNycStreet')+
     extract('buildStreetScene')+';return buildStreetScene')(
@@ -94,6 +96,10 @@ test('actual authored NYC street scene emits only dry sidewalk geometry',()=>{
   assert.ok(roads[0][0][0]>0,'no legacy sidewalk should cover water');
   assert.ok(roads[0][1][0]===60);
   assert.ok(lamps.length>0,'bridge fixtures and decor still render');
+  assert.equal(fictionalRailRequests,0,
+    'disabled modern DUMBO railway must not allocate track geometry');
+  assert.ok(!lamps.some(box=>box[3]===33&&box[4]===.72),
+    'obsolete elevated boarding platform must not appear in the scene');
 });
 test('real city terrain has wet legacy streets but all exported dry fragments clear shore',()=>{
   const cityHeight=new Function('city','water','scale','hash','clamp',
