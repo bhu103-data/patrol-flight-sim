@@ -970,7 +970,14 @@ const CENTRAL_PARK_SITES=[
       if (Math.abs(gx - ix - 0.5) > 0.35 || Math.abs(gz - iz - 0.5) > 0.37) return elevation / scale;
       if (island && Math.abs(localX) >= waterfront - 11) return elevation / scale;
       const signature = hash(ix, iz, 946);
-      if (signature < 0.14) return elevation / scale;
+      // Brooklyn Bridge / DUMBO: retain more of the small legal inland
+      // building lots. Road, railway, runway, shoreline and official-footprint
+      // clearance are still enforced by the common parcel filter below.
+      // Only this compact bridgehead receives denser procedural infill.
+      const brooklynBridgeInfill=outerBoroughs &&
+        north>-415 && north<-195 && east>210 && east<435;
+      if (signature < (brooklynBridgeInfill?0.035:0.14))
+        return elevation / scale;
 
       const midtown = Math.exp(-(((north + 80) / 125) ** 2));
       const downtown = Math.exp(-(((north + 399) / 91) ** 2));
