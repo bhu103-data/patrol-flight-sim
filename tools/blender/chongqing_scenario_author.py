@@ -116,12 +116,41 @@ class Architecture:
                   for a,b in span])
 
     def roof(self, x, y, z, width, depth, rise, material_id):
-        # Two physically sloping ceramic planes (not a flat colored cube).
-        v = [(x-width/2,y-depth/2,z),(x+width/2,y-depth/2,z),
-             (x-width/2,y+depth/2,z),(x+width/2,y+depth/2,z),
-             (x-width/2,y,z+rise),(x+width/2,y,z+rise)]
-        self.add(v,[(0,1,5,4),(4,5,3,2)],material_id,
-                 [[(0,0),(width/3,0),(width/3,depth/6),(0,depth/6)]]*2)
+        """Curved, upward-cornered ceramic roof with realistic photo UV repeats.
+
+        The ridge runs along X; six cross-slope subdivisions break the
+        rigid two-plane appearance while staying under the GLB triangle budget.
+        """
+        cols, rows = 4, 6
+        vertices, faces, uv_faces = [], [], []
+        for row in range(rows + 1):
+            v = row / rows
+            cross = abs(2 * v - 1)
+            # Gentle ceramic curvature, raised corners at the eaves.
+            roofline = rise * (1 - cross**1.42)
+            for col in range(cols + 1):
+                u = col / cols
+                corner = (abs(2*u-1)**6) * (cross**7) * rise * .23
+                sag = (1 - (abs(2*u-1)**2)) * (1-cross**2) * rise * .05
+                vertices.append((
+                    x + (u-.5) * width,
+                    y + (v-.5) * depth,
+                    z + roofline + corner + sag
+                ))
+        for row in range(rows):
+            for col in range(cols):
+                a = row*(cols+1)+col
+                b = a+1
+                c = a+cols+1
+                d = c+1
+                faces.append((a,b,d,c))
+                uv_faces.append([
+                    (col/cols*width/3,row/rows*depth/3),
+                    ((col+1)/cols*width/3,row/rows*depth/3),
+                    ((col+1)/cols*width/3,(row+1)/rows*depth/3),
+                    (col/cols*width/3,(row+1)/rows*depth/3)
+                ])
+        self.add(vertices, faces, material_id, uv_faces)
 
     def add(self, vertices, faces, material_id, uv):
         offset = len(self.verts)
@@ -175,6 +204,10 @@ def construct(floors):
             color = "window_warm" if (n*7+floor*11)%9 < 4 else "window_dark"
             a.block(bx,front+.04,height+3.3,bay-.7,.17,3.55,mid[color],3)
             a.block(bx,front+.15,height+8.12,bay-.36,.24,.22,mid["timber"])
+            # Three fine real-depth timber mullions per bay; avoid painted-on lattice.
+            a.block(bx,front+.23,height+3.3,.13,.19,3.45,mid["timber"])
+            a.block(bx,front+.23,height+2.38,bay-.95,.19,.105,mid["timber"])
+            a.block(bx,front+.23,height+4.23,bay-.95,.19,.105,mid["timber"])
             if n % 3 == 0:
                 a.block(bx-bay/2,front+2.4,height+5.1,.31,4.3,9.2,mid["timber"])
                 a.block(bx,front+4.48,height+1.19,bay*2.5,.14,.23,mid["metal"])
@@ -191,6 +224,15 @@ def construct(floors):
                    2.0+(floor%3)*.3,mid["terracotta"])
             a.block(xx,center_depth+depth/2+1.5,height+level_height-.15,
                     width/3+.6,.45,.46,mid["timber"])
+            # Timber cantilever braces under the river-facing eaves, physically modeled.
+            for brace in (-.34,.34):
+                a.block(xx+brace*width/3,center_depth+depth/2+1.8,
+                        height+level_height-1.0,.55,2.5,1.7,mid["timber"])
+        # Discrete load-bearing stilt posts tie several terraces to the facade.
+        for post in range(5):
+            px = -width/2 + (post+.5)*width/5
+            a.block(px,center_depth+depth/2+2.8,
+                    height+3.0,.65,.65,5.8,mid["timber"])
     # Rooftop stepped silhouette rather than an isolated low-poly block.
     top = floors*level_height
     upper_center = -(floors-1)*8.3
