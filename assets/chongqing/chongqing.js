@@ -319,7 +319,9 @@ sign('洪崖洞',155,133,177,48,13);
 // Bridge and civic monument are identified in the HUD/map, not by floating billboards.
 
 const hotpot={x:285,z:225};
-const shopY=ground(hotpot.x,hotpot.z);
+const shopY=ground(hotpot.x,hotpot.z+28);
+// The entrance follows the graded upper street; rear foundation piers retain the lower slope.
+const hotpotDoor={x:hotpot.x,z:hotpot.z+34,y:shopY+2.7};
 box(hotpot.x,shopY+10,hotpot.z,72,20,50,M.beam);
 box(hotpot.x,shopY+21.8,hotpot.z,80,3,57,M.roof);
 box(hotpot.x,shopY+10,hotpot.z+25.4,68,13,1.4,M.gold);
@@ -605,7 +607,8 @@ function message(value,seconds=2.6){
   toastEl.textContent=value;toastEl.style.opacity='1';toastUntil=clock.getElapsedTime()+seconds;
 }
 function eatHotpot(){
-  if(Math.hypot(state.pos.x-hotpot.x,state.pos.z-hotpot.z)>48){
+  if(Math.hypot(state.pos.x-hotpotDoor.x,state.pos.z-hotpotDoor.z)>27 ||
+     Math.abs(state.pos.y-hotpotDoor.y)>14){
     message('走到重庆老火锅门口再按 E');return;
   }
   state.spicy=100;state.seenHotpot=true;
@@ -806,7 +809,8 @@ function updateQuest(){
     if(el){el.textContent='✓ 李子坝轻轨穿楼';el.classList.add('done');}
     message('发现地标：李子坝轻轨穿楼！');
   }
-  hint.textContent=Math.hypot(state.pos.x-hotpot.x,state.pos.z-hotpot.z)<48
+  hint.textContent=Math.hypot(state.pos.x-hotpotDoor.x,state.pos.z-hotpotDoor.z)<27&&
+    Math.abs(state.pos.y-hotpotDoor.y)<14
     ?'🍲 按 E 吃重庆火锅，激活麻辣喷火推进'
     :state.spicy>0?'🌶️ 麻辣推进中！按 F 飞行，Shift 加速'
     :state.flying?'按 Space 爬升 · Ctrl 下降 · Shift 冲刺 · F 降落'
