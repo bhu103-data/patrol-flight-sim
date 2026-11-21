@@ -29,7 +29,9 @@ export function campaignDetails(serial,nonce) {
   // Pairwise different art genres for the first 16 adjacent billboards.
   // The session number is also exposed as a distinctive graphic, not only
   // as invisible bookkeeping or small-print copyright.
-  const artGenre=(Math.imul(serial,11)+(nonce>>>8))%16;
+  // Math.imul is signed 32-bit: normalize before modulo so long-lived
+  // browser histories never yield a negative index into AD_COPY.
+  const artGenre=((Math.imul(serial,11)+(nonce>>>8))>>>0)%16;
   // Each category has its own editorial voice. The small edition number
   // supplies cross-rebuild uniqueness without a visible debug "CREATIVE" stamp.
   const AD_COPY=[
