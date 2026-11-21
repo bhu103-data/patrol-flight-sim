@@ -1,5 +1,7 @@
 name: Audit freely redistributable streetlight candidate
 on:
+  push:
+    branches: ["review/chongqing-free-streetlamp-audit-*"]
   pull_request:
     paths:
       - "assets/chongqing/street-lamp-review.js"
