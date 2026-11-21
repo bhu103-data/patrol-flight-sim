@@ -13,12 +13,21 @@ const cameraSpecs=[
  {name:'DUMBO B · Street QA',zoom:72,variant:1},
  {name:'DUMBO B · Low Flight QA',zoom:54,variant:1}
 ];
+// These two parcel centers came from the PREVIOUS REAL generator report,
+// not the initial (285,-330)/(372,-285) search anchors. Scenic view objects
+// are snapshotted at game init, before the generator can publish the live
+// parcel telemetry. Getters therefore evaluated too early and sent B's
+// purported pedestrian eye onto a roof. Static measured centers + a strict
+// runtime site/camera correspondence gate avoid this false positive.
+const measuredCenters=[
+ {x:286.90980607123663,z:-280.1414617966317},
+ {x:382.39764350606913,z:-280.2507802271903}
+];
 const viewInsertion=[
- // Camera centers are GETTERS: the real accepted parcel, not a guessed lot.
- "{name:'DUMBO A · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.x??285},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.z??-330},height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only street-facing original and brick arch'}",
- "{name:'DUMBO A · Low Flight QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.x??285},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[0]?.z??-330},height:18,bearing:152,radius:28,rise:8,detail:'QA-only overhead roofline and voids'}",
- "{name:'DUMBO B · Street QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.x??372},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.z??-285},height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only second warehouse street-facing'}",
- "{name:'DUMBO B · Low Flight QA',get x(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.x??372},get z(){return globalThis.__PATROL_DUMBO_QA__?.sites?.[1]?.z??-285},height:18,bearing:65,radius:28,rise:8,detail:'QA-only second roofline and corners'}"
+ "{name:'DUMBO A · Street QA',x:286.90980607123663,z:-280.1414617966317,height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only road-facing original and brick arch'}",
+ "{name:'DUMBO A · Low Flight QA',x:286.90980607123663,z:-280.1414617966317,height:18,bearing:152,radius:28,rise:8,detail:'QA-only roofline and voids'}",
+ "{name:'DUMBO B · Street QA',x:382.39764350606913,z:-280.2507802271903,height:1.7,bearing:90,radius:15,rise:1.5,detail:'QA-only second road-facing warehouse'}",
+ "{name:'DUMBO B · Low Flight QA',x:382.39764350606913,z:-280.2507802271903,height:18,bearing:65,radius:28,rise:8,detail:'QA-only second roofline and corners'}"
 ].join(',\n')+',\n';
 const results={version:'DUMBO_WAREHOUSE_REAL_PARCEL_QA_V1',
  noProductionModification:true,lighting:'clear summer noon',viewport:[1280,720],
@@ -118,6 +127,13 @@ async function captureVariant(variant){
   if(parcels.sites.length!==2||parcels.sites.some(s=>s.destroyed||s.official||
       s.x<205||s.x>435||s.z< -415||s.z> -195))
    throw Error('Real parcels unsuitable: '+JSON.stringify(parcels));
+  for(let i=0;i<2;i++){
+   const site=parcels.sites[i],center=measuredCenters[i];
+   if(site.variant!==i||
+      Math.hypot(site.x-center.x,site.z-center.z)>.15)
+    throw Error('Real generator parcel no longer matches QA fixed camera: '+
+     JSON.stringify({site,center}));
+  }
   await page.evaluate(()=>{
    for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
     const el=document.getElementById(id);
@@ -154,6 +170,11 @@ async function captureVariant(variant){
       !actualCamera.eye.every(Number.isFinite)||
       !Number.isFinite(actualCamera.groundAtEye))
     throw Error('Missing actual 3D QA eye '+JSON.stringify(actualCamera));
+   const targetSite=parcels.sites[cam.variant];
+   if(Math.hypot(actualCamera.target[0]-targetSite.x,
+       actualCamera.target[2]-targetSite.z)>.15)
+    throw Error('Street/flight camera does not actually look at chosen warehouse: '+
+      JSON.stringify({actualCamera,targetSite}));
    // An actual pedestrian cannot be twenty units above the ground after
    // the scenic eye snaps on top of a neighboring roof.
    if(cam.name.includes('Street') &&
