@@ -59,7 +59,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     blue:new THREE.MeshBasicMaterial({color:0x61b9e5})
   };
   const definitions=[
-    ['timber',3600],['carved',1100],['terra',950],['rail',1300],['stone',2700],
+    ['timber',3600],['carved',1600],['terra',950],['rail',3300],['stone',2700],
     ['paving',1250],['steps',1250],['window',3500],['neon',1700],['red',700],
     ['bridge',850],['amber',950],['blue',800]
   ];
