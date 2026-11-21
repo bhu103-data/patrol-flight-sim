@@ -13654,9 +13654,15 @@ const CENTRAL_PARK_SITES=[
     if(floatplane && !crash){
       if(waterborne){
         if(usableFloatWater(x,z,plane.yaw)){
-          // Small load-dependent heave; the hull remains buoyant.
-          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+
-            .024*Math.sin(sceneryTime*2.3+plane.speed*.28);
+          // NYC pontoon buoyancy samples the same deterministic 18-mode
+          // spectrum as WORLD_FS oceanHeight and the visible float pose.
+          // lastTime is the RAF timestamp passed to the water shader (uTime).
+          // Other maps keep their previous height/landing behavior unchanged.
+          const floatHeave=selectedMap.city
+            ?floatOceanPose(x,z,plane.yaw,Math.fround(lastTime*.001),
+                selectedMap,WATER_H,sampleTerrainHeight).height
+            :.024*Math.sin(sceneryTime*2.3+plane.speed*.28);
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+floatHeave;
         }else if(usableFloatWater(prevPos[0],prevPos[2],prevYaw)){
           // Last clear footprint is still safe: stop before the obstruction.
           plane.pos=[prevPos[0],WATER_H+FLOAT_CLEARANCE,prevPos[2]];
