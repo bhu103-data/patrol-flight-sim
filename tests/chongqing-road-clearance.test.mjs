@@ -69,6 +69,7 @@ class Instanced{
  computeBoundingSphere(){}
 }
 const THREE={BufferGeometry:Geo,Float32BufferAttribute:Geo,InstancedMesh:Instanced,
+ Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material}},
  BoxGeometry:Geo,PlaneGeometry:Geo,MeshStandardMaterial:Mat,MeshBasicMaterial:Mat,
  Object3D:Obj,Color,StaticDrawUsage:1,DoubleSide:2};
 test('procedural Chongqing towers leave roads, bridges and each other clear',()=>{
