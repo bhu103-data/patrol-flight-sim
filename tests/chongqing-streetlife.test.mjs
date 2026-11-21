@@ -18,6 +18,7 @@ class Object3D {
 class Geometry {
   constructor(){this.attributes={}}
   rotateX(){return this}
+  rotateZ(){return this}
   setAttribute(k,v){this.attributes[k]=v}
   setIndex(idx){this.index=idx}
   computeVertexNormals(){}
