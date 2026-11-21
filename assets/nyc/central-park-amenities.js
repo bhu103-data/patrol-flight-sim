@@ -86,8 +86,8 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
   if(quality==='high'){
     // Longitudinal raised seams are geometrically separate roof details,
     // rather than one large featureless triangular face.
-    for(let i=0;i<9;i++){
-      const z=hz-2.77+i*.69;
+    for(let i=0;i<7;i++){
+      const z=hz-2.64+i*.88;
       for(const side of [-1,1])
         beam([hx,hy+4.095,z],
           [hx+side*4.95,hy+2.51,z],.023,roofSeam);
@@ -115,7 +115,6 @@ export function buildCentralParkAmenities({addQuad,addTri,box,beam,ribbon,terrai
         const x=ex(colU,z),foot=y(colU,z);
         beam([x,foot+.15,z],[x,hy+2.43,z],.123,whiteTrim);
         box(x,foot+.18,z,.31,.13,.33,whiteTrim);
-        box(x,hy+2.36,z,.35,.15,.37,whiteTrim);
       }
       const corniceX=ex(colU,hz);
       beam([corniceX,hy+2.49,hz-2.70],
