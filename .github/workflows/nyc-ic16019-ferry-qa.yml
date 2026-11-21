@@ -1,0 +1,64 @@
+name: NYC IC16019 native WebGL2 ferry targeted QA
+on:
+  push:
+    branches:
+      - review/nyc-ic16019-native-twinhull-20261121
+    paths:
+      - 'index.html'
+      - 'assets/nyc/ic16019-ferry-reference.json'
+      - 'tests/nyc-ic16019-twinhull.test.mjs'
+      - 'tools/nyc/ic16019-ferry-runtime-webgl.mjs'
+      - '.github/workflows/nyc-ic16019-ferry-qa.yml'
+      - 'docs/NYC_IC16019_FERRY_QA.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nyc-ic16019-ferry-qa
+  cancel-in-progress: true
+jobs:
+  native-ferry-geometry-and-water-interfaces:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test original ferry + new NYC twin hull and water/camera interfaces
+        run: |
+          node --check tests/nyc-ic16019-twinhull.test.mjs
+          node --test tests/nyc-ic16019-twinhull.test.mjs tests/floatplane-ship-clearance.test.mjs tests/nyc-boat-optimization.test.mjs tests/nyc-waterfront-piers.test.mjs tests/nyc-floatplane-dock.test.mjs
+  nyc-real-game-webgl2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install free pinned Chromium only, no new production dependency
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Run existing native WebGL2 game locally on CI
+        shell: bash
+        run: |
+          python3 -m http.server 8899 --bind 127.0.0.1 >/tmp/patrol-ic16019-http.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8899/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture one Manhattan harbor frame and native ship mesh upload telemetry
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8899
+        run: node tools/nyc/ic16019-ferry-runtime-webgl.mjs
+      - name: Save actual-game screenshot and error report for central QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-ic16019-native-ferry-live-webgl2
+          path: artifacts/nyc-ic16019-ferry/
+          retention-days: 14
+          if-no-files-found: ignore
