@@ -12756,9 +12756,23 @@ const CENTRAL_PARK_SITES=[
     updateSphereStatus();
     refreshVehicleTargets();
     advanceWreckFragments(dt);
-    const { basis, boundaryAssist } = crash || scenicViewActive
-      ? { basis: getPlaneBasis(), boundaryAssist: false }
-      : advanceFlight(dt);
+    // Low-FPS software / integrated GPUs must not make water taxi and
+    // takeoff physics run many times slower than the clock. Keep each C185
+    // collision step short, but catch up with bounded fixed substeps.
+    // Other aircraft retain their original timing and handling unchanged.
+    let flightStep;
+    if(crash || scenicViewActive){
+      flightStep={basis:getPlaneBasis(),boundaryAssist:false};
+    }else if(selectedAircraft==='seaplane'){
+      const physicalTime=Math.min(rawDt,.35);
+      const steps=Math.max(1,Math.ceil(physicalTime/.045));
+      for(let step=0;step<steps && !crash;step++)
+        flightStep=advanceFlight(physicalTime/steps);
+      flightStep ||= {basis:getPlaneBasis(),boundaryAssist:false};
+    }else{
+      flightStep=advanceFlight(dt);
+    }
+    const {basis,boundaryAssist}=flightStep;
     const orbitalCap=selectedMap===FLIGHT_MAPS.manhattan?NYC_ORBIT_CEILING:CEILING;
     if (!crash && !scenicViewActive && plane.pos[1]>=orbitalCap-0.15 && plane.vsi>0.5) {
       window.dispatchEvent(new Event('patrol:orbitLaunch'));
