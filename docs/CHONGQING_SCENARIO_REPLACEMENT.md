@@ -1,6 +1,6 @@
 # Scenario for Blender → Chongqing Hongyadong
 
-**Status:** Original authoring scripts, an optional runtime GLB loader and safety tests are committed. No real Blender GLB, Scenario generation, Blender-rendered screenshot, or measured GPU FPS has been produced by these code changes. **The production Chongqing map still uses its original geometry.**
+**Status:** An actual review-only GLB was generated using **Blender 5.2.1** in [GitHub Actions run 44853187676](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853187676) and committed to `assets/chongqing/generated/hongyadong-study.glb`. The 972,500-byte model contains **13,808 triangles**, 7 glTF materials and **no photo texture images**; SHA-256: `2998ef1a88ce3065ad94528152911af286b507f796e69756f4da3b6f6fed41c9`. [Publishing run](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44853333799) passed. No paid Scenario cloud generation, photoreal texture review, or measured GPU FPS has been performed. **The production Chongqing map still uses its original geometry; the model is opt-in preview only.**
 
 ## Files
 
@@ -50,7 +50,7 @@ After committing the model, the same preview is available through:
 
 https://bhu103-data.github.io/patrol-flight-sim/chongqing.html?scenario=hongyadong
 
-The query string only requests a review; **it does not create or download a missing GLB**. Until that file exists, the procedural model remains active.
+The query string requests the existing Blender model only; it does not generate new models or spend Scenario credits. The review GLB now exists in GitHub, so the browser may load it. If loading fails, the original procedural geometry remains visible. Actual rendering quality and browser GPU FPS still require review.
 
 After real-game visual testing, FPS checks, geospatial placement and license review, set the manifest's `enabled` to `true` and enter a verified `license` statement. To revert production, set `enabled` to `false` and remove the preview query. The original geometry remains recoverable.
 
