@@ -7,7 +7,7 @@ const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,
 const qaTag=process.env.PATROL_QA_TAG||'candidate';
 const output='artifacts/vegas/'+qaTag;await mkdir(output,{recursive:true});
 const errors=[],screenshots=[],shots=[],startupSnapshots=[];
-const ridgeLoadMessages=[];
+const ridgeLoadMessages=[],tigerLoadMessages=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -19,6 +19,8 @@ page.on('console',msg=>{
  const line=msg.text();
  if(line.includes('[PATROL] Vegas USGS measured ridge profile loaded'))
    ridgeLoadMessages.push(line);
+ if(line.includes('[PATROL] Vegas Census TIGER measured Strip loaded'))
+   tigerLoadMessages.push(line);
 });
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
@@ -59,6 +61,9 @@ try {
    assert(ridgeLoadMessages.some(line=>
      line.includes('856259460e4e687285eb40949ab8764e7543ccf09e9f81177a8d2152bdb8046d')),
      'Vegas scene fell back to procedural ridges instead of verified USGS 3DEP');
+   assert(tigerLoadMessages.some(line=>
+     line.includes('dba759001381d6c502160dc6f8b1987bef4e89544ac475943820cd870f07fbf9')),
+     'Vegas scene did not load verified Census TIGER 2026 Strip centerline');
  }
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
@@ -117,12 +122,12 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
+ result={status:'passed',qaTag,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,tigerLoadMessages,
    frameSampling,incrementalGeometry:{triangles:qaTag==='candidate'?1554:0,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
- result={...result,status:'failed',errors,startupSnapshots,ridgeLoadMessages};
+ result={...result,status:'failed',errors,startupSnapshots,ridgeLoadMessages,tigerLoadMessages};
  process.exitCode=1;
 }finally{
  await writeFile(output+'/vegas-core-report.json',JSON.stringify(result,null,2));
