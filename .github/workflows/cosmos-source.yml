@@ -1,0 +1,33 @@
+name: PATROL Cosmos source checks
+
+on:
+  push:
+    paths:
+      - 'assets/cosmos/**'
+      - 'assets/chongqing/chongqing.js'
+      - 'index.html'
+      - 'space.html'
+      - 'tests/cosmos.test.mjs'
+  pull_request:
+    paths:
+      - 'assets/cosmos/**'
+      - 'assets/chongqing/chongqing.js'
+      - 'index.html'
+      - 'space.html'
+      - 'tests/cosmos.test.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  static-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check scene and flight-interface syntax
+        run: node --test tests/cosmos.test.mjs
