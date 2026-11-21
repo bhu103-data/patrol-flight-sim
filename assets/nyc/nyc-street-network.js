@@ -12,7 +12,7 @@ export function buildNycStreetNetwork({
     leaf=[.22,.42,.31],hydrant=[.72,.18,.13],signalYellow=[.86,.69,.24];
   const roadY=streetY+.086,markY=streetY+.117,paveY=streetY+.154;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
-    crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
+    crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
@@ -67,7 +67,15 @@ export function buildNycStreetNetwork({
   function streetFurniture(a,b,kind,i,j,width){
     // NYC DOT furniture strip: grouped by block, not repeated at every lamp.
     // Keep a clear inner walking zone and never populate a building footprint.
-    if(stats.streetFurniture>=82 || detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<3)
+    // Bridgehead roads are LOD2 at their featured camera, whereas Manhattan
+    // tourist streets normally reach LOD3. Reserve a small independent 22-piece
+    // budget so the Manhattan draw order cannot starve Brooklyn of fixtures.
+    const bridgehead=i>=9&&i<=20&&j>=-13&&j<=-7;
+    const usedHere=bridgehead?stats.brooklynStreetFurniture:
+      stats.streetFurniture-stats.brooklynStreetFurniture;
+    const capHere=bridgehead?22:82;
+    if(usedHere>=capHere ||
+       detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<(bridgehead?2:3))
       return;
     const chance=hash(i,j,49);
     if(chance<.76)return;
@@ -89,7 +97,7 @@ export function buildNycStreetNetwork({
       x+normal[0]*sideways+along[0]*forward,y,
       z+normal[1]*sideways+along[1]*forward];
     const bar=(u,v,r,color)=>beam(u,v,r,color);
-    if(variant===0 && stats.busShelters<12){
+    if(variant===0 && stats.busShelters<12+(bridgehead?6:0)){
       // Narrow JCDecaux-style transparent shelter on a local sidewalk bulb-out,
       // not an actual mapped MTA stop or franchised ad placement.
       if(!siteClear(x+along[0]*.78,z+along[1]*.78,1.04))return;
@@ -118,7 +126,7 @@ export function buildNycStreetNetwork({
       if(lettering)lettering('BUS',at(-.70,.74,base+2.08),
         .64,.19,[.93,.94,.91]);
       stats.busShelters++;
-    }else if(variant===1 && stats.bikeRacks<26){
+    }else if(variant===1 && stats.bikeRacks<26+(bridgehead?6:0)){
       // Three steel NYC CityRack-like hoops, spaced along the sidewalk.
       for(let k=-1;k<=1;k++){
         const forward=k*.63;
@@ -132,7 +140,7 @@ export function buildNycStreetNetwork({
         box(anchor[0],anchor[1],anchor[2],.44,.065,.085,frame);
       }
       stats.bikeRacks++;
-    }else if(variant===2 && stats.wayfinding<17){
+    }else if(variant===2 && stats.wayfinding<17+(bridgehead?6:0)){
       // Slim WalkNYC-style walking map kiosk. Original simulated diagram.
       box(x,base+1.26,z,.19,2.49,.78,frame);
       for(const way of [-1,1]){
@@ -145,7 +153,7 @@ export function buildNycStreetNetwork({
       const cap=at(0,0,base+2.55);
       box(cap[0],cap[1],cap[2],.33,.13,.91,navy);
       stats.wayfinding++;
-    }else if(variant===3 && stats.treePits<26){
+    }else if(variant===3 && stats.treePits<26+(bridgehead?6:0)){
       // Granite tree bed with non-cartoon separated branches and leaf clusters.
       box(x,base-.05,z,1.42,.08,1.28,[.55,.55,.51]);
       for(const turn of [-1,1]){
@@ -171,7 +179,7 @@ export function buildNycStreetNetwork({
         }
       }
       stats.treePits++;
-    }else if(variant===4 && stats.streetlamps<25){
+    }else if(variant===4 && stats.streetlamps<25+(bridgehead?6:0)){
       // Tapered NYC-style streetlight with cantilever and compact luminaire.
       bar(at(0,0,base),at(0,0,base+5.5),.088,frame);
       bar(at(0,0,base+5.32),at(-.62,.64,base+5.49),.074,frame);
@@ -181,6 +189,7 @@ export function buildNycStreetNetwork({
       stats.streetlamps++;
     }else return;
     stats.streetFurniture++;
+    if(bridgehead)stats.brooklynStreetFurniture++;
   }
   // PATROL_NYC_ROAD_MARKINGS_V12 — orient road paint to the slanted avenue
   // tangent instead of placing axis-aligned white rectangles.
