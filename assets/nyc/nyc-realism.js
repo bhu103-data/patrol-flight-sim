@@ -165,7 +165,9 @@ export async function decodeGLB(gl,buffer,targetHeight){
   }finally{
     gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
   }
-  return {vao,buffers,count:pos.length/3,texture};
+  return {vao,buffers,count:pos.length/3,texture,
+    dimensions:{width:(maxX-minX)*scale,height:targetHeight,depth:(maxZ-minZ)*scale},
+    triangleCount:pos.length/9};
 }
 function imageFile(filename){
   return new Promise((resolve,reject)=>{
