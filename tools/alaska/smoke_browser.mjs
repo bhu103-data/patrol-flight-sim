@@ -6,7 +6,7 @@
 import {chromium} from 'playwright';
 import {mkdirSync} from 'node:fs';
 const url=process.env.PATROL_TEST_URL || 'http://127.0.0.1:8765/';
-const errors=[],requests=[];
+const errors=[],requests=[],glacierDetailLogs=[];
 const browser=await chromium.launch({
   headless:true,
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -18,6 +18,7 @@ try{
   page.on('console',message=>{
     const m=message.text();
     if(message.type()==='error')errors.push('Console: '+m);
+    if(m.includes('[PATROL] Alaska fjord detail'))glacierDetailLogs.push(m);
     if(/Alaska|WebGL|photo|GPU/i.test(m))console.log('[BROWSER]',m.slice(0,300));
   });
   page.on('response',response=>{
@@ -63,6 +64,27 @@ try{
   }
   mkdirSync('artifacts',{recursive:true});
   await page.screenshot({path:'artifacts/alaska-live-webgl.png'});
+  if(!glacierDetailLogs.some(m=>/seracs:\s*42/.test(m) && /iceStrata:\s*126/.test(m))){
+    throw new Error('Glacier serac and strata geometry not confirmed in live WebGL pass: '+
+      glacierDetailLogs.join(' | '));
+  }
+  // A second reproducible screenshot faces the actual glacier mouth.
+  // This is opt-in inspection mode only; default Alaska spawn is unchanged.
+  const focusUrl=new URL(url);
+  focusUrl.searchParams.set('alaskaView','glacier');
+  await page.goto(focusUrl.toString(),{waitUntil:'domcontentloaded',timeout:30000});
+  await page.locator('input[name="flightMap"][value="alaska"]').check({force:true});
+  await page.locator('#startFlight').click({timeout:15000});
+  await page.waitForFunction(()=>{
+    const err=document.getElementById('menuError');
+    const overlay=document.getElementById('loadOverlay');
+    const title=document.getElementById('titleOverlay');
+    return (err&&!err.hidden)||(overlay?.classList.contains('done')&&title?.hidden);
+  },null,{timeout:110000});
+  if(!(await page.locator('#loadOverlay').evaluate(el=>el.classList.contains('done'))))
+    throw new Error('Alaska glacier focus did not load');
+  await page.waitForTimeout(2300);
+  await page.screenshot({path:'artifacts/alaska-glacier-closeup.png'});
   if(errors.length)throw new Error(errors.join('\n'));
   console.log('PASS: Alaska measured DEM, real CC0 photo atlases, live WebGL2 and frame accepted.');
 }finally{
