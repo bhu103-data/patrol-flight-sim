@@ -1730,7 +1730,9 @@ const CENTRAL_PARK_SITES=[
           float localDetail = 1.0 - smoothstep(0.18, 1.1, pixel);
           // Lower New York Harbor has more swell than the sheltered rivers.
           float harborExposure = uManhattan ? 1.0 - smoothstep(-560.0, -300.0, p.z) : 1.0;
-          float openWater = (uVegas || uAlderValley) ? 0.28 : mix(0.46, 1.0, harborExposure);
+          // Tracy Arm is a sheltered fjord, not an exposed deep-ocean swell.
+          float openWater = uAlaska ? 0.38 :
+            (uVegas || uAlderValley) ? 0.28 : mix(0.46, 1.0, harborExposure);
           float wind = mix(0.65, 1.25, uAtmosphere.z) * openWater;
           vec2 xz = p.xz;
           vec3 swell = oceanSpectrum(xz,pixel,openWater);
@@ -1751,6 +1753,14 @@ const CENTRAL_PARK_SITES=[
             chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
             ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
             slope=oceanExposure(xz)*gust*(swell.yz+chop.yz+ripple.yz*0.75);
+          }
+          if(uAlaska){
+            // Suppress artificial parallel bright-ocean wave bands in the
+            // narrow fjord while retaining small capillary ripples and Fresnel.
+            swell*=.57;
+            chop*=.51;
+            ripple*=.71;
+            slope*=.53;
           }
           vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
           vec3 shallow = uAlaska ? vec3(0.13,0.36,0.38) : vec3(0.10,0.45,0.42);
@@ -2016,29 +2026,36 @@ const CENTRAL_PARK_SITES=[
               float forestFloor=smoothstep(.85,3.2,alt)*
                 (1.0-smoothstep(11.0,23.0,alt))*
                 (1.0-smoothstep(.15,.39,slope));
+              // Soft soil-to-rock transitions avoid the hard circular terrain
+              // bands seen during actual WebGL flight screenshot review.
+              float forestWeight=smoothstep(.14,.72,forestFloor)*
+                (1.0-smoothstep(.28,.63,exposed))*
+                (1.0-smoothstep(.30,.65,frost));
               float photoAmount=closeDetail*
-                max(max(exposed*.78,frost*.90),forestFloor*.90)*
+                max(max(exposed*.74,frost*.87),forestWeight*.47)*
                 (1.0-glacier*.88);
               if(photoAmount>.018){
                 float snowTile=step(.51,frost);
-                float forestChoice=step(.23,forestFloor)*
-                  (1.0-step(.52,exposed))*(1.0-step(.48,frost));
                 float forestVariant=step(.54,vnoise(p.xz*.028));
-                float photoColumn=mix(snowTile,2.0+forestVariant,forestChoice);
                 vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
                 vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
                 vec2 tiled=fract(projected*.107);
-                vec2 packedUV=vec2((photoColumn+.022+.956*tiled.x)*.25,
+                vec2 groundUV=vec2((snowTile+.022+.956*tiled.x)*.25,
+                                   .022+.956*tiled.y);
+                vec2 forestUV=vec2((2.0+forestVariant+.022+.956*tiled.x)*.25,
                                    .022+.956*tiled.y);
                 float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
-                vec3 photo=textureLod(uAlaskaPhotoAlbedo,packedUV,lod).rgb;
-                vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,packedUV,lod);
+                vec3 alpinePhoto=textureLod(uAlaskaPhotoAlbedo,groundUV,lod).rgb;
+                vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
+                vec3 photo=mix(alpinePhoto,forestPhoto*vec3(.75,.91,.76),
+                               forestWeight);
+                vec2 normalUV=mix(groundUV,forestUV,step(.5,forestWeight));
+                vec4 normalRough=textureLod(uAlaskaPhotoNormalRough,normalUV,lod);
                 float roughness=normalRough.a;
                 vec2 texSlope=normalRough.rg*2.0-1.0;
                 float microLight=clamp(.87+dot(texSlope,uSun.xz)*.18,.69,1.08);
                 photo*=microLight;
-                photo*=mix(vec3(1.0),vec3(.80,.91,.82),forestChoice*.65);
-                albedo=mix(albedo,photo,clamp(photoAmount*.88,0.0,.92));
+                albedo=mix(albedo,photo,clamp(photoAmount*.78,0.0,.84));
                 float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
                                   mix(30.0,95.0,roughness));
                 albedo+=vec3(.15,.22,.25)*sparkle*(1.0-roughness)*photoAmount*.065;
