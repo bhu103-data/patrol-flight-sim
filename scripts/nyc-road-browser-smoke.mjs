@@ -260,6 +260,14 @@ try{
  if(process.env.PATROL_NYC_ROAD_QA==='1'){
   const setSite=async label=>{
    await page.locator('#hotelTarget').selectOption({label});
+   // Verified 45° fixed-bearings faced a close brick wall / rooftops in
+   // actual PR #102 PNGs. For Near/Mid rotate the game's EXISTING angle
+   // knob by +45° to look along accepted dry j=-11 DUMBO street.
+   // Far keeps its original northeast-wide street-grid overview.
+   await page.locator('#hotelAngle').evaluate((el,rotate)=>{
+    el.value=rotate?'45':'0';
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+   },label!=='DUMBO Road QA · Far');
    await page.locator('#hotelZoom').evaluate(el=>{
     el.value='42';el.dispatchEvent(new Event('input',{bubbles:true}));
    });
