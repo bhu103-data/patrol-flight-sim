@@ -9009,8 +9009,12 @@ const CENTRAL_PARK_SITES=[
             const x=side*(686+(847-686)*j/(cols-1));
             const meters=source.elevationDecimeters[i*cols+j]/10;
             const relief=meters-vegasMeasuredRidges.elevationMeters.center[i];
+            // Blend the first three source columns into the existing
+            // desert grade. This is a *display seam* adaptation, not an
+            // alteration to the measured USGS elevations in the asset.
+            const foothillBlend=Math.min(1,j/3);
             const y=sampleTerrainHeight(x,z)+
-              Math.max(0,Math.min(160,relief*.23));
+              Math.max(0,Math.min(160,relief*.23))*foothillBlend;
             return [x,y,z];
           });
         });
@@ -9019,7 +9023,10 @@ const CENTRAL_PARK_SITES=[
             c=vertices[i][j+1],d=vertices[i+1][j+1];
           // Broad patches rather than repeated high-contrast bands.
           const color=stone[(Math.floor(i/9)+j+(side>0?1:0))%stone.length];
-          face(a,b,c,color);face(b,d,c,color);
+          // Side-dependent winding keeps BOTH west and east normals
+          // facing up and prevents one mountain wing being back-face culled.
+          if(side<0){face(a,c,b,color);face(b,c,d,color);}
+          else{face(a,b,c,color);face(b,d,c,color);}
         }
       }
     }else{
