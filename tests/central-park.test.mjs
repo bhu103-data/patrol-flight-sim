@@ -138,3 +138,12 @@ test('79th and 86th game-scale transverse ribbons clear pond and Reservoir',()=>
     assert.ok(d>1.1,'transverse z='+z+' u='+u+' overlaps water');
   }
 });
+
+test('Manhattan starts sharper, with frame-time adaptation still enabled',()=>{
+ const html=get('index.html');
+ assert.match(html,/return selectedMap\.city\?\(mobile\?\.67:\.84\):\(mobile\?\.59:\.73\)/);
+ assert.match(html,/const sceneScaleFloor=\(\)=>smoothScenery\(\)\?cityScaleFloor\(\):startupScale/);
+ assert.match(html,/resScale = Math\.max\(sceneScaleFloor\(\), resScale - 0\.10\)/);
+ assert.match(html,/resScale = Math\.min\(limit, resScale \+ 0\.10\)/);
+ assert.match(html,/#wrap\.smooth-city canvas\{image-rendering:auto/);
+});
