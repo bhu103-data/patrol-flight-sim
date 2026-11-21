@@ -54,15 +54,39 @@ try{
   }
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
-  const before=await page.evaluate(()=>window.PatrolSpaceBridge.getState().altitude);
-  await page.keyboard.down('Space');await page.waitForTimeout(2100);await page.keyboard.up('Space');
+  const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(starting.avatarFlying,'Scenic shortcut 2 must enable flying');
+  const before=starting.altitude;
+  // Software SwiftShader may render at only a few FPS; the game's fixed
+  // maximum physics step deliberately slows simulated time at that rate.
+  // Poll the actual altitude, not a 2-second wall-clock assumption.
+  await page.keyboard.down('Space');
+  try{
+    await page.waitForFunction(target=>{
+      const state=window.PatrolSpaceBridge?.getState?.();
+      return Boolean(state?.avatarFlying&&state.altitude>target);
+    },before+18,{timeout:45000,polling:250});
+  }finally{
+    await page.keyboard.up('Space');
+  }
   const after=await page.evaluate(()=>window.PatrolSpaceBridge.getState().altitude);
-  check(after>before+18,'Flight was blocked above 300 units: '+before+' -> '+after);
+  check(after>before+18,'Flight failed to clear high-rise: '+before+' -> '+after);
   await capture('04-high-rise-climb');
+  // Photograph both sunlight and night glow using the actual game controls.
+  await page.locator('#cqTime').selectOption('day');
+  await page.waitForTimeout(1200);
+  await page.keyboard.press('H');
+  await capture('05-day-cinematic');
+  await page.keyboard.press('H');
+  await page.locator('#cqTime').selectOption('night');
+  await page.waitForTimeout(1200);
+  await page.keyboard.press('H');
+  await capture('06-night-cinematic');
+  await page.keyboard.press('H');
   for(const id of ['questHotpot','questFerry','questRaffles','questLiziba','qualityBtn'])
     check(await page.locator('#'+id).count()===1,'Missing game HUD #'+id);
   check(!errors.length,'Uncaught runtime error: '+errors.join('; '));
-  report={passed:true,climb:{before,after},screenshots,warnings};
+  report={passed:true,climb:{before,after,above300:after>300},environments:['day','night'],screenshots,warnings};
 }catch(e){
   report={passed:false,error:e.stack||String(e),errors,warnings};
   try{await page.screenshot({path:dir+'/FAILED.png',fullPage:true});}catch{}
