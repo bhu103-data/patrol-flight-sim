@@ -102,8 +102,9 @@ test('Hongyadong neighboring shop steps back without changing obstacles or GLB f
   assert.match(code,/put\('timber',x,y\+12\.75,z-7\.4,16\.4,5\.8,13\.2\)/);
   assert.match(code,/beam\('carved',\[px,y\+7\.1,z-\.35\]/);
   assert.match(code,/roof\(x,y\+15\.85,z-7\.4,19\.6,1\.15,16\.4\)/);
-  assert.doesNotMatch(code,/PATROL_CQ_HONGYADONG_NEIGHBOR_STEP_V1[\s\S]*?\}else\{[\s\S]*?obstacles\.push/,
-    'no additional collision proxy within the new detail-only branch');
+  const detailBranch=code.slice(code.indexOf('if(i===0){'),code.indexOf('}else{',code.indexOf('if(i===0){')));
+  assert.doesNotMatch(detailBranch,/obstacles\.push/,
+    'no additional collision proxy inside the new detail-only branch');
 });
 
 test('window latticework is batched and can be hidden in low quality',()=>{
