@@ -67,11 +67,16 @@ try {
    }
  });
  const durations=[];let last=null;
- for(let i=0;i<20;i++){
-   await new Promise(resolve=>requestAnimationFrame(now=>{
-     if(last!==null)durations.push(now-last);
-     last=now;renderer.render(scene,camera);resolve();
-   }));
+ for(let i=0;i<8;i++){
+   await Promise.race([
+     new Promise((resolve,reject)=>requestAnimationFrame(now=>{
+       try{
+         if(last!==null)durations.push(now-last);
+         last=now;renderer.render(scene,camera);resolve();
+       }catch(e){reject(e)}
+     })),
+     new Promise((_,reject)=>setTimeout(()=>reject(Error('Timed out waiting for real WebGL render frame')),12000))
+   ]);
  }
  renderer.render(scene,camera);
  durations.sort((a,b)=>a-b);
@@ -111,7 +116,7 @@ try{
          new URLSearchParams({model:candidate.id,angle});
        const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
        if(!response?.ok())throw Error('Standalone QA viewer not served');
-       await page.waitForFunction(()=>document.documentElement.dataset.qa==='done',null,{timeout:90000});
+       await page.waitForFunction(()=>document.documentElement.dataset.qa==='done',null,{timeout:75000});
        const data=await page.evaluate(()=>window.__c185QA);
        if(!data||data.error||!data.webgl2||data.triangles<500)
          throw Error('GLTFLoader source render failed: '+JSON.stringify(data));
