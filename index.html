@@ -3276,24 +3276,76 @@
       mast(54,68,0.56,steel);
       light(0,67.78,0,0.19,0.22,0.19,[0.91,0.85,0.70]);
     } else {
-      // Square podium transitioning through eight faces to a narrower crown.
-      box(0,0,0,17,7,17,[0.48,0.55,0.60]);
-      stack([[7,7.5,7.5],[32,8.2,8.2],[60,5.4,5.4]],glass,8);
-      stack([[60,5.4,5.4],[61.4,5.4,5.4]],steel,8);
-      for(let row=0;row<25;row++){
-        const alt=7.4+row*2.03;
-        const r=alt<32?lerp(7.5,8.2,(alt-7)/25):lerp(8.2,5.4,(alt-32)/28);
+      // ONE WTC: a square-footprint glass prism. Chamfered lower square,
+      // octagonal middle and rotated-square crown form its defining
+      // tapering triangular faces; never a stack of generic cylinders.
+      const podium=[.39,.48,.54],spandrel=[.21,.31,.37],
+        glazing=[[.24,.38,.47],[.29,.43,.53],[.35,.48,.56],
+                 [.20,.34,.44],[.32,.46,.55],[.27,.42,.50],
+                 [.23,.37,.48],[.34,.47,.54]];
+      box(0,0,0,17,4.1,17,podium);
+      box(0,4.1,0,16.5,2.9,16.5,spandrel);
+      for(const side of [-1,1]){
+        for(let bay=-3;bay<=3;bay++){
+          const x=bay*2.16;
+          box(x,0.35,side*8.30,1.84,3.3,.12,[.17,.28,.35]);
+          box(side*8.30,.35,x,.12,3.3,1.84,[.17,.28,.35]);
+        }
+        box(0,3.68,side*8.34,16.7,.28,.24,[.58,.62,.62]);
+      }
+      // Clockwise eight-vertex rings reproduce the evolving corner cuts.
+      const ringProfiles=[
+        {y:7,p:[[6.85,7.18],[7.18,6.85],[7.18,-6.85],[6.85,-7.18],
+                 [-6.85,-7.18],[-7.18,-6.85],[-7.18,6.85],[-6.85,7.18]]},
+        {y:32,p:[[3.90,7.02],[7.02,3.90],[7.02,-3.90],[3.90,-7.02],
+                 [-3.90,-7.02],[-7.02,-3.90],[-7.02,3.90],[-3.90,7.02]]},
+        {y:60,p:[[.72,5.92],[5.92,.72],[5.92,-.72],[.72,-5.92],
+                 [-.72,-5.92],[-5.92,-.72],[-5.92,.72],[-.72,5.92]]}
+      ];
+      function towerRing(y){
+        const lower=y<=32,lo=ringProfiles[lower?0:1],hi=ringProfiles[lower?1:2];
+        const t=clamp((y-lo.y)/(hi.y-lo.y),0,1);
+        return lo.p.map(([x,z],j)=>[
+          lerp(x,hi.p[j][0],t),y,lerp(z,hi.p[j][1],t)
+        ]);
+      }
+      for(let tier=0;tier<2;tier++){
+        const lo=ringProfiles[tier],hi=ringProfiles[tier+1];
+        // Every wide facet has a different subdued glass reflectance.
         for(let face=0;face<8;face++){
-          const angle=(face+1)*Math.PI/4,span=r*Math.cos(Math.PI/8)+0.028;
-          for(let col=-2;col<=2;col++){
-            const u=col*r*0.127;
-            const x=Math.sin(angle)*span+Math.cos(angle)*u,z=Math.cos(angle)*span-Math.sin(angle)*u;
-            if((row*5+face*7+col+19)%11<3)light(x,alt,z,0.35,0.17,0.35,[0.70,0.78,0.82]);
-          }
+          const j=(face+1)%8;
+          addQuad([lo.p[face][0],lo.y,lo.p[face][1]],
+            [lo.p[j][0],lo.y,lo.p[j][1]],
+            [hi.p[j][0],hi.y,hi.p[j][1]],
+            [hi.p[face][0],hi.y,hi.p[face][1]],
+            glazing[(face+tier*3)%8],5);
         }
       }
-      mast(61,77,0.65,steel);
-      light(0,76.8,0,0.22,0.35,0.22,[1.0,0.30,0.20]);
+      // Explicit mullions track the same sloped polygon geometry as glass.
+      // No dark floating window columns and no repeated opaque blocks.
+      for(let alt=9.5;alt<60;alt+=2.65){
+        const pts=towerRing(alt);
+        for(let i=0;i<8;i++){
+          const next=(i+1)%8;
+          addRideBeam(addQuad,pts[i],pts[next],
+            .027,[.42,.51,.56]);
+        }
+      }
+      for(let face=0;face<8;face++){
+        const column=towerRing(7)[face],middle=towerRing(32)[face],
+          crown=towerRing(60)[face];
+        addRideBeam(addQuad,column,middle,.066,[.56,.64,.68]);
+        addRideBeam(addQuad,middle,crown,.061,[.52,.61,.65]);
+      }
+      // Rooftop communications enclosure, stepped mast and thin antennas.
+      stack([[60,5.36,5.36],[60.5,5.12,5.12]],steel,8);
+      stack([[60.5,1.65,1.65],[62.3,1.36,1.36]],spandrel,8);
+      box(0,62.4,0,3.1,.35,3.1,[.63,.66,.65]);
+      mast(62.75,77,.49,[.57,.62,.65]);
+      for(const dx of [-1.12,1.12]){
+        addRideBeam(addQuad,[dx,62.7,0],[dx*.50,69.2,0],.043,steel);
+      }
+      light(0,76.83,0,.20,.24,.20,[.97,.29,.22]);
     }
     return {body:upload(),lights:lights.upload()};
   }
@@ -4771,6 +4823,37 @@
           }
           addQuad([center-2.48,ay,z+az],[center+2.48,ay,z+az],
             [center+2.48,by,z+bz],[center-2.48,by,z+bz],[0.53,0.50,0.45]);
+        }
+      }
+
+      // Pointed Gothic openings on both front faces of each masonry tower.
+      // These are fixed to existing tower positions and stay outside traffic
+      // clearance. Limiting to four arches avoids thousands of small boxes.
+      const voussoir=[.68,.65,.58],archShadow=[.34,.35,.34];
+      for(const center of [x+west,x+east]){
+        for(const front of [-1,1]){
+          const fx=center+front*2.64;
+          for(let k=0;k<16;k++){
+            const u0=k/16,u1=(k+1)/16;
+            const arch=(u,depth=0)=>{
+              const across=2*u-1;
+              const height=34.0+8.10*Math.pow(1-Math.abs(across),.74);
+              return [fx+front*depth,height,z+across*2.34];
+            };
+            const p=arch(u0),q=arch(u1);
+            addRideBeam(addQuad,p,q,.245,voussoir);
+            if(k%2===0){
+              addRideBeam(addQuad,
+                arch(u0,.10),arch(u0,-.12),.072,archShadow);
+            }
+          }
+          // Carved springing blocks beside the opening, plus coping
+          // projecting forward to catch sunlight at close camera distance.
+          for(const side of [-1,1]){
+            box(fx+front*.05,34.12,z+side*2.52,.29,.68,.43,voussoir);
+            box(fx+front*.06,32.6,z+side*2.50,.26,.15,.72,archShadow);
+          }
+          box(fx+front*.09,44.74,z,.21,.27,8.75,voussoir);
         }
       }
 
