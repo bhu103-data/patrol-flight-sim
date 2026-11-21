@@ -41,6 +41,32 @@ offline fallback materials. Texture keys:
 `basecolor`, `normal`, `roughness`, and `metallic`.
 **Do not copy imagery from Google Street View or existing real ad campaigns.**
 
+
+## Local Scenario MCP (optional)
+
+The **official** Scenario for Blender extension exposes a local MCP JSON-RPC
+endpoint (default: `http://127.0.0.1:9876/mcp`) while Blender is running and
+**Allow Online Access** is enabled. Copy the actual URL from
+**Scenario > Agents (MCP)** in Blender, because the port is configurable.
+Documentation: https://github.com/scenario-labs/blender-plugin/blob/main/docs/MCP.md
+
+An agent such as Codex can use an **HTTP MCP connection** to that loopback
+endpoint after you explicitly configure the connection on your own computer.
+This ChatGPT conversation is **not** connected to that localhost server.
+
+Safety and reproducibility:
+- Keep access local to `127.0.0.1`; never expose it through a public tunnel.
+- The plugin is experimental; do not execute unreviewed model instructions.
+- Inspect the scene and source data before asking Scenario to generate models.
+- A generated model/PBR material may consume Creative Units. Require a
+  **user-reviewed exact quote and separate approval** before each paid action.
+  Tool descriptions alone are not a server-enforced spending guarantee.
+- Save outputs to a dedicated local folder, and update only the texture
+  paths in `scenario-material-inputs.json`. Review files and permissions
+  before importing or committing them.
+- The independent Blender export script uses `bpy`, not the addon API:
+  it can author geometry offline even when Scenario MCP is disconnected.
+
 ## Offline generation
 
 Open the repository in a terminal with Blender 5.0+ installed:
