@@ -74,7 +74,7 @@ test('pier, city lot and Alaska moorings block float landing',()=>{
 test('floatplane uses its own touchdown, takeoff and crash recovery states',()=>{
   assert.match(game,/FLOAT_CLEARANCE=1\.50,FLOAT_ROTATE_SPEED=17\.5/);
   assert.match(game,/const floatRotate=waterborne && plane\.afterburner/);
-  assert.match(game,/waterborne=true;[\s\S]{0,110}plane\.pos\[1\]=WATER_H\+FLOAT_CLEARANCE;/);
+  assert.match(game,/waterborne=true;[\s\S]{0,390}plane\.pos\[1\]=WATER_H\+FLOAT_CLEARANCE\+[\s\S]{0,90}selectedMap\.city\?floatOceanPose\(/);
   assert.match(game,/if\(usableFloatWater\(x,z,plane\.yaw\)\)\{\s+const smooth=sink/);
   assert.match(game,/usableFloatWater\(prevPos\[0\],prevPos\[2\],prevYaw\)/);
   assert.match(game,/if\(selectedAircraft==='seaplane'&&waterborne&&plane\.speed>1\.5\)/);
