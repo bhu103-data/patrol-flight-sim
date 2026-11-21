@@ -48,14 +48,15 @@ jobs:
                 ['ready','off','fallback'].includes(
                   document.documentElement.dataset.scenarioHongyadong),
                 null,{timeout:65000});
-              await page.waitForTimeout(1500);
+              await page.keyboard.press('1'); // Existing Hongyadong scenic camera shortcut
+              await page.waitForTimeout(1700);
               const report=await page.evaluate(()=>{
                 const canvas=document.getElementById('world');
                 return {
                   scenario:document.documentElement.dataset.scenarioHongyadong,
                   webgl2:!!canvas.getContext('webgl2'),
                   width:canvas.width,height:canvas.height,
-                  loading:!document.getElementById('loading').hidden
+                  loading:!!document.getElementById('loading') && !document.getElementById('loading').hidden
                 };
               });
               await page.screenshot({path:'artifacts/chongqing-scenario-preview.png'});
