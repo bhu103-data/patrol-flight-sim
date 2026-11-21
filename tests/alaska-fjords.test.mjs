@@ -35,8 +35,13 @@ test('Alaska detail draws one bounded, finite scene batch',()=>{
   assert.ok(stats.branchlets>=80&&stats.branchlets<=850,
     'irregular bounded conifer branchlets make near-field trees less conical');
   assert.ok(stats.talus>=0&&stats.talus<=110,'terrain-filtered rock scree stays bounded');
-  assert.ok(points.length<116000,'bounded terrain-aware forestry and calving GPU budget');
+  assert.ok(points.length<165000,'bounded terrain-aware forestry and calving GPU budget');
   assert.ok(stats.conifers>=180&&stats.conifers<=940,'dense but bounded Alaska forest');
+  assert.ok(stats.foliageWhorls>=5*stats.conifers &&
+            stats.foliageWhorls<=6*stats.conifers,
+    'each spruce has five or six asymmetric layered bough whorls');
+  assert.ok(stats.snowBoughs>=0 && stats.snowBoughs<3200,
+    'snow-laden branches are altitude-dependent and bounded');
 });
 
 test('detail is gated behind the Alaska map and map-switch lifetime',()=>{
@@ -46,4 +51,9 @@ test('detail is gated behind the Alaska map and map-switch lifetime',()=>{
   assert.match(script,/if\(selectedMap\.alaska && alaskaDetailMesh\?\.count\)/);
   assert.match(script,/vec3 alaskaAurora\(vec3 rd\)/);
   assert.match(script,/float glacier=1\.0-smoothstep/);
+  assert.match(script,/float iceNear=glacier\*\(1\.0-smoothstep\(82\.0,245\.0,hitDist\)\)/);
+  assert.match(script,/float clearGlance=pow/);
+  assert.match(script,/float splitPhase=flow\.x\*\.31/);
+  assert.match(script,/glacier\*\.31/);
+  assert.match(script,/float snowTile=max\(step\(\.51,frost\),step\(\.30,glacier\)\)/);
 });
