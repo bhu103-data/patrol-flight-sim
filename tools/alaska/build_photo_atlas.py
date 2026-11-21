@@ -2,8 +2,8 @@
 """Bake tiny CC0 Poly Haven snow/rock photo-PBR atlases for PATROL Alaska.
 
 Source: https://polyhaven.com/license (CC0). 1K source Diffuse, nor_gl,
-Rough from Poly Haven API. Output two 512x256 WebP atlases (~hundreds KB).
-Image column 0 = rock_01, column 1 = snow_02. A second RGBA image stores
+Rough from Poly Haven API. Output two 1024x256 WebP atlases (4 photographed land materials).
+Columns: rock_01, snow_02, forest_ground_04, forrest_ground_03. A second RGBA image stores
 OpenGL tangent-space normal RGB and linear roughness A.
 
 No network requests occur in the game: the resulting atlases are checked in.
@@ -18,7 +18,8 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from PIL import Image
 
-ASSETS = (("rock_01", "rock"), ("snow_02", "snow"))
+ASSETS = (("rock_01", "rock"), ("snow_02", "snow"),
+          ("forest_ground_04", "forest"), ("forrest_ground_03", "pine_needles"))
 OUT = Path("assets/alaska")
 SIZE = 256
 MAX_BLOB = 6_000_000
@@ -63,8 +64,8 @@ def fetch_tile(asset):
 
 def atlas():
     OUT.mkdir(parents=True, exist_ok=True)
-    albedo=Image.new("RGB", (SIZE*2,SIZE))
-    normal_rough=Image.new("RGBA", (SIZE*2,SIZE))
+    albedo=Image.new("RGB", (SIZE*len(ASSETS),SIZE))
+    normal_rough=Image.new("RGBA", (SIZE*len(ASSETS),SIZE))
     for idx,(slug, _) in enumerate(ASSETS):
         data=fetch_tile(slug)
         albedo.paste(data["Diffuse"],(SIZE*idx,0))
@@ -77,34 +78,34 @@ def atlas():
         path=OUT/name
         with Image.open(path) as im:
             im.verify()
-        if path.stat().st_size>950_000:
+        if path.stat().st_size>1_300_000:
             raise ValueError("Photographic atlas budget exceeded: "+name)
         print(f"{name}: {path.stat().st_size:,} bytes")
     manifest={
         "format":"patrol-alaska-pbr-atlas-v1",
-        "width":SIZE*2,"height":SIZE,
-        "columns": ["rock_01","snow_02"],
+        "width":SIZE*len(ASSETS),"height":SIZE,
+        "columns": [slug for slug, _ in ASSETS],
         "maps": {"albedo":"alaska-photo-albedo.webp",
                  "normalRough":"alaska-photo-nrm-rough.webp"},
         "normalConvention":"OpenGL",
         "roughnessChannel":"A",
         "license":"CC0",
         "source":"https://polyhaven.com/license",
-        "assetUrls":["https://polyhaven.com/a/rock_01","https://polyhaven.com/a/snow_02"],
+        "assetUrls":["https://polyhaven.com/a/"+slug for slug, _ in ASSETS],
     }
     (OUT/"alaska-photo-manifest.json").write_text(
         json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 
 def check():
     m=json.loads((OUT/"alaska-photo-manifest.json").read_text(encoding="utf-8"))
-    assert m["columns"]==["rock_01","snow_02"] and m["license"]=="CC0"
+    assert m["columns"]==[slug for slug, _ in ASSETS] and m["license"]=="CC0"
     for file in m["maps"].values():
         p=OUT/file
-        assert p.exists() and 5_000<p.stat().st_size<950_000
+        assert p.exists() and 5_000<p.stat().st_size<1_300_000
         with Image.open(p) as im:
             im.load()
-            assert im.size==(SIZE*2,SIZE)
-    print("Photo atlas valid: two CC0 materials, normal/roughness packed")
+            assert im.size==(SIZE*len(ASSETS),SIZE)
+    print("Photo atlas valid: four CC0 materials, normal/roughness packed")
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
