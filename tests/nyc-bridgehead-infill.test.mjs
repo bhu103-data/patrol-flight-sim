@@ -27,14 +27,14 @@ const city={
   parkWaters:[],landmarks:[]
 };
 const height=vm.runInNewContext('('+functionSource+')',{
-  city,hash,water:12,scale:1,
+  city,hash,water:12.2,scale:54,
   clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))
 });
 test('an eligible DUMBO lot with a previously suppressed hash now gets buildings',()=>{
   const x=389.6,z=-346.4;
   const ground=height(x,z);
   const roof=height(x,z,true);
-  assert.ok(roof-ground>2.9,
+  assert.ok((roof-ground)*54>2.9,
     'Bridgehead lot should gain height without changing ground level');
 });
 test('infill only changes the Brooklyn Bridge district and retains density threshold elsewhere',()=>{
