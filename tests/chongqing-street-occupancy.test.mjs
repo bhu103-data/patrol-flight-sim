@@ -32,7 +32,7 @@ class Instanced{
 }
 class Mesh {constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true}}
 const THREE={
- BoxGeometry:Geo,CylinderGeometry:Geo,BufferGeometry:Geo,
+ BoxGeometry:Geo,CylinderGeometry:Geo,SphereGeometry:Geo,BufferGeometry:Geo,
  Float32BufferAttribute:class{constructor(array,size){this.array=array;this.itemSize=size}},
  Object3D:Obj,InstancedMesh:Instanced,Mesh,Color,
  MeshBasicMaterial:Mat,MeshStandardMaterial:Mat,MeshPhysicalMaterial:Mat,
@@ -85,6 +85,21 @@ test('batched lane paint, curbs and street lamps do not occupy building sites',(
      'street decoration inside building footprint');
  }
 });
+test('mounted traffic signal poles and support arms stay outside buildings',()=>{
+ const {traffic,objects}=streetFixture();
+ const signalMasts=objects.filter(m=>m instanceof Instanced&&
+   m.capacity===8&&m.material.metalness===.62);
+ assert.equal(signalMasts.length,2,'shared steel posts and cantilevers');
+ const [posts,arms]=signalMasts;
+ assert.ok(posts.count>=2,'blocked hotpot frontage leaves other valid crossings');
+ assert.equal(posts.count,arms.count,'each cantilever has a supporting pole');
+ assert.equal(traffic.stats.trafficSignals,posts.count);
+ for(const p of posts.matrices.values()){
+   assert.equal(isRoadClear(p.x,p.z,p.y,1),true,
+     'a traffic mast cannot be rooted inside an occupied shop or tower');
+ }
+});
+
 test('wet road decals are omitted from building interiors',()=>{
  const old=globalThis.document;
  globalThis.document={createElement(){return {getContext(){return {
@@ -102,5 +117,33 @@ test('wet road decals are omitted from building interiors',()=>{
        assert.equal(isRoadClear(p[i],p[i+2],p[i+1],.001),true,
          'wet asphalt vertex rendered inside building');
    }
+ }finally{globalThis.document=old}
+});
+
+test('night reflection ribbons conform to steep road elevations at every corner',()=>{
+ const old=globalThis.document;
+ globalThis.document={createElement(){return {getContext(){return {
+  createRadialGradient(){return {addColorStop(){}}},fillRect(){}
+ }}}}};
+ try{
+   // A deliberately steep grade exposes the old flat-quad visual glitch.
+   const slopedGround=(x,z)=>50+x*.035;
+   const meshes=[],scene={add(m){meshes.push(m)}};
+   buildChongqingWetStreets({THREE,scene,ground:slopedGround,riverCenter,
+     isRoadClear:()=>true});
+   assert.equal(meshes.length,2);
+   const pos=meshes[1].geometry.attributes.position.array;
+   assert.ok(pos.length>100,'night street reflections must be present');
+   let rising=0;
+   for(let i=0;i<pos.length;i+=12){
+     const x0=pos[i],y0=pos[i+1],x1=pos[i+3],y1=pos[i+4];
+     if(Math.abs(x0-x1)>2)rising++;
+     assert.ok(Math.abs((y1-y0)-.035*(x1-x0))<1e-6,
+       'light streak corners must follow the sloping road plane');
+   }
+   assert.ok(rising>5,'test must cover long rising/falling light strips');
+   for(let i=0;i<pos.length;i+=3)
+     assert.ok(Math.abs(pos[i+1]-(50+pos[i]*.035+1.755))<1e-6,
+       'each luminous quad vertex must hug the local road grade');
  }finally{globalThis.document=old}
 });

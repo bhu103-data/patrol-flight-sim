@@ -106,6 +106,20 @@ fs.mkdirSync(outDir,{recursive:true});
   await photo('nyc-central-park-bow-bridge.png');
   report.stages.push({stage:'bow-bridge',...bow});
 
+  // Inspect the near-water view where the formerly flat rowboat decals
+  // have been replaced by open 3D hulls, benches, thwarts and oar blades.
+  await page.locator('#hotelTarget').selectOption({label:'Central Park · Loeb Boathouse'});
+  await page.waitForFunction(()=>
+   document.getElementById('hotelDetail')?.textContent?.includes('Lakeside roof, veranda and rowboats'),
+  null,{timeout:15000});
+  await page.waitForTimeout(900);
+  const boathouse=await current();
+  assert.match(boathouse.selectedView,/Central Park · Loeb Boathouse/);
+  assert.match(boathouse.detail,/rowboats/);
+  assert(boathouse.webgl2&&!boathouse.contextLost);
+  await photo('nyc-central-park-loeb-rowboats.png');
+  report.stages.push({stage:'loeb-rowboats',...boathouse});
+
   await page.locator('#resumeFlight').click();
   await page.waitForFunction(()=>document.getElementById('hotelViews')?.hidden,
    null,{timeout:10000});

@@ -274,6 +274,9 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
     darkSteel=[.23,.28,.31], handrail=[.53,.57,.57], timber=[.44,.34,.24],
     deckPaint=[.65,.63,.56], blackRubber=[.12,.15,.17], glass=[.16,.28,.33];
   let pierCount=0;
+  // Use the EXACT rendered pier sites as flight collision bounds, rather than
+  // a second guessed list of waterfront obstacle coordinates.
+  const pierObstacles=[];
   // Recover the existing coastline rather than guessing a fixed X position.
   function bank(z,side){
     const center=.24*z+30.0;
@@ -323,6 +326,30 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
     // Inland connection is anchored before the coastline and extends over
     // water. The cap retains the same number of fixed-size deck segments.
     const root=edge-side*1.6,tip=edge+side*length,top=waterY+1.18;
+    // A one-dimensional bank query alone can bridge a shallow inlet or end
+    // on a dry promontory. The entire landing edge must be on solid ground,
+    // while the outer half of the deck must stand over open water. Check all
+    // three longitudinal strips, including the actual lateral deck corners.
+    const transverse=[-width*.5,0,width*.5];
+    if(transverse.some(dz=>terrain(root,z+dz)<=waterY+1.15))continue;
+    // Check the whole offshore span, not just three positions. A small
+    // island between the old 45/72/100% samples could intersect the actual
+    // pier deck even though both end and landing appeared safe. Keep the
+    // start of the ramp exempt: it intentionally rests on the shore.
+    let openWater=true;
+    const clearStart=Math.min(3.4,length*.18);
+    const spans=Math.ceil((length-clearStart)/1.55);
+    const offsets=[-width*.5,-width*.25,0,width*.25,width*.5];
+    for(let step=0;step<=spans&&openWater;step++){
+      const deckX=edge+side*(clearStart+(length-clearStart)*step/spans);
+      for(const dz of offsets){
+        const sampled=terrain(deckX,z+dz);
+        if(!Number.isFinite(sampled)||sampled>waterY+.55){
+          openWater=false;break;
+        }
+      }
+    }
+    if(!openWater)continue;
     const landY=Math.min(waterY+2.75,terrain(root,z)+.07);
     const panelCount=Math.max(3,Math.ceil(length/2.2));
     const lengthX=tip-root;
@@ -405,7 +432,17 @@ export function buildManhattanWaterfront({addQuad,box,beam,waterY,terrain}) {
       }
       box(tip-side*1.6,top+.36,z,.68,.56,1.12,[.79,.34,.15]);
     }
+    // The deck is above water, so terrain sampling alone cannot stop a
+    // floatplane from landing through it. Include the entire structure,
+    // including landside terminal and tall workboat boom, with a small
+    // pontoon/wing clearance margin in the same compressed game coordinates.
+    pierObstacles.push({
+      name:'Lower Manhattan pier',
+      x:(root+tip)*.5,z,y:waterY-1.0,top:waterY+6.15,
+      halfX:Math.abs(tip-root)*.5+2.0,halfZ:width*.5+.95,
+      roofSlope:0,roofSlopeZ:0
+    });
     pierCount++;
   }
-  return {pierCount,coastRange:[-491,-348]};
+  return {pierCount,coastRange:[-491,-348],pierObstacles};
 }

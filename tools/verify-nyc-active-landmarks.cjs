@@ -8,6 +8,8 @@ const {chromium}=require(process.env.PATROL_PLAYWRIGHT||
   '/tmp/patrol-browser/node_modules/playwright');
 const origin=process.env.PATROL_TEST_ORIGIN||'http://127.0.0.1:8127';
 const out=path.join(process.cwd(),'artifacts');
+const forceDirect=process.env.PATROL_FORCE_DIRECT_WEBGL==='1';
+const suffix=forceDirect?'-direct':'';
 fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const browser=await chromium.launch({headless:true,args:[
@@ -16,9 +18,36 @@ fs.mkdirSync(out,{recursive:true});
   '--disable-gpu-sandbox'
  ]});
  const responses={},messages=[],required=['trade','empire','chrysler'];
- const report={source:'actual Manhattan flight',required,network:responses};
+ const report={source:'actual Manhattan flight',mode:forceDirect?'direct':'offscreen',
+  required,network:responses};
  try{
   const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  await page.addInitScript(()=>{
+   // Count the actual GPU draw calls for the three audited GLBs.
+   // Successful HTTP requests alone cannot prove that imported meshes
+   // replaced the old simplified landmark geometry on screen.
+   window.__patrolLandmarkDraws=Object.create(null);
+   const realDraw=WebGL2RenderingContext.prototype.drawArrays;
+   const approved=new Set([22064*3,8988*3,7412*3]);
+   WebGL2RenderingContext.prototype.drawArrays=function(mode,first,count){
+    if(mode===this.TRIANGLES&&first===0&&approved.has(count))
+     window.__patrolLandmarkDraws[count]=
+      (window.__patrolLandmarkDraws[count]||0)+1;
+    return realDraw.call(this,mode,first,count);
+   };
+  });
+  if(forceDirect)await page.addInitScript(()=>{
+   // Simulate a missing offscreen compositor, not a lost WebGL2 context.
+   // The game must still fetch and render its reviewed, textured landmark GLBs.
+   const original=WebGL2RenderingContext.prototype.checkFramebufferStatus;
+   WebGL2RenderingContext.prototype.checkFramebufferStatus=function(target){
+    if(target===this.FRAMEBUFFER && this.getParameter(this.FRAMEBUFFER_BINDING)){
+     window.__patrolForcedDirect=true;
+     return this.FRAMEBUFFER_INCOMPLETE_ATTACHMENT;
+    }
+    return original.call(this,target);
+   };
+  });
   page.on('response',response=>{
    for(const name of required)if(response.url().includes('/assets/nyc/scenario/'+name+'.glb'))
     responses[name]={status:response.status(),url:response.url()};
@@ -61,7 +90,9 @@ fs.mkdirSync(out,{recursive:true});
    const info=window.PatrolSpaceBridge?.getState?.()||{};
    return {webgl2:!!gl,contextLost:gl?.isContextLost(),
     canvas:[canvas?.width,canvas?.height],
-    playing:info.playing,map:info.map};
+    playing:info.playing,map:info.map,
+    forceDirectApplied:Boolean(window.__patrolForcedDirect),
+    modelDrawCalls:window.__patrolLandmarkDraws||{}};
   });
   report.messages=messages.slice(-25);
   report.configured=configured;
@@ -71,7 +102,15 @@ fs.mkdirSync(out,{recursive:true});
   assert.equal(report.state.playing,true);
   assert.equal(report.state.webgl2,true);
   assert.equal(report.state.contextLost,false);
-  await page.screenshot({path:path.join(out,'manhattan-three-glbs.png'),
+  for(const [name,triangles] of Object.entries({
+   trade:22064,empire:8988,chrysler:7412
+  })){
+   assert.ok(report.state.modelDrawCalls[triangles*3]>0,
+    name+' was downloaded but did not draw its approved GLB geometry');
+  }
+  if(forceDirect)assert.equal(report.state.forceDirectApplied,true,
+   'the browser must actually run the compositor-fallback path');
+  await page.screenshot({path:path.join(out,'manhattan-three-glbs'+suffix+'.png'),
    animations:'disabled',timeout:30000});
   report.pass=true;
   console.log('PASS active Manhattan 3-GLB scene '+JSON.stringify(report,null,2));
@@ -80,7 +119,7 @@ fs.mkdirSync(out,{recursive:true});
   console.error('FAIL active Manhattan 3-GLB scene '+JSON.stringify(report,null,2));
   throw error;
  }finally{
-  fs.writeFileSync(path.join(out,'manhattan-three-glbs-report.json'),
+  fs.writeFileSync(path.join(out,'manhattan-three-glbs'+suffix+'-report.json'),
    JSON.stringify(report,null,2)+'\n');
   await browser.close();
  }

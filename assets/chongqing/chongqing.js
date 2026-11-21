@@ -11,8 +11,9 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
-import { chongqingTerraceRoads,clipRoadToFreeSegments } from './road-clearance.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
+import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -542,6 +543,10 @@ function streetSpaceClear(x,z,y,radius=0){
   if(![x,z,y,radius].every(Number.isFinite))return false;
   // Spatial hash avoids scanning hundreds of towers several times per
   // vehicle, streetlight and wet-road decal on every animation frame.
+  // A clear building lookup alone does not mean drivable asphalt: the
+  // north-side terrace roads cross a tributary without authored bridges.
+  // Keep cars, road paint and lamp bases on dry shoreline clearances.
+  if(ground(x,z)<=0||riverDist(x,z)<Math.max(3,radius+2.4))return false;
   return !obstacleIndex.eachNear(x,z,Math.max(0,radius),o=>
     Math.abs(x-o.x)<o.w*.5+radius &&
     Math.abs(z-o.z)<o.d*.5+radius &&
@@ -562,15 +567,41 @@ const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
 // Each generated road is clipped against the FULL building footprint (plus a
 // sidewalk margin), instead of visually running underneath a tower.
 const roadClearanceStats={paths:0,clipped:0,removedLength:0};
+const shorelineRoadEnds=[];
 for(const plan of plannedRoads){
-  const points=plan.points.map(p=>new THREE.Vector3(p.x,ground(p.x,p.z)+1.6,p.z));
-  const clear=clipRoadToFreeSegments(points,plan.width,obstacles,.8,2.5);
-  for(const path of clear.paths){
-    if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+  // Follow the same analytical bends as street traffic, sampling terrain at
+  // <=5.5-unit intervals before clipping against building volumes.
+  const points=sampleChongqingTerraceSurface(plan,ground,riverCenter);
+  // Tributary cuts come FIRST; only dry road sections may reach the
+  // building-volume clipper, never the river surface or unsupported banks.
+  const dryRoads=clipChongqingDryRoadSegments(points,plan.width,ground,riverDist);
+  // Existing roads must NOT keep going across the unbridged tributary.
+  // Install compact reflective guardrails at both dry ends of every cut.
+  for(let k=0;k<dryRoads.length-1;k++){
+    const left=dryRoads[k],right=dryRoads[k+1];
+    if(left.length>1){
+      const p=left.at(-1),q=left.at(-2);
+      shorelineRoadEnds.push({point:p,tangent:[p.x-q.x,p.z-q.z],
+        width:plan.width,intoRoad:-1});
+    }
+    if(right.length>1){
+      const p=right[0],q=right[1];
+      shorelineRoadEnds.push({point:p,tangent:[q.x-p.x,q.z-p.z],
+        width:plan.width,intoRoad:1});
+    }
   }
-  roadClearanceStats.clipped+=clear.stats.clippedSegments;
-  roadClearanceStats.removedLength+=clear.stats.removedLength;
+  for(const dry of dryRoads){
+    const clear=clipRoadToFreeSegments(dry,plan.width,obstacles,.8,2.5);
+    for(const path of clear.paths){
+      if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
+    }
+    roadClearanceStats.clipped+=clear.stats.clippedSegments;
+    roadClearanceStats.removedLength+=clear.stats.removedLength;
+  }
 }
+const shorelineSafety=buildChongqingShorelineBarriers({
+  THREE,scene,ground,ends:shorelineRoadEnds
+});
 // The shared obstacle index was built after all static structures above.
 // A vetted Blender GLB can replace only Hongyadong's facade instance ranges.
 // The old collision boxes and all other scenic geometry remain intact.
@@ -876,7 +907,11 @@ function scenicView(key){
     Digit1:{name:'洪崖洞临江夜景',pos:[155,132,-72],target:[155,112,168]},
     Digit2:{name:'朝天门来福士与水晶连廊',pos:[-355,302,-50],target:[-355,294,176]},
     Digit3:{name:'李子坝轻轨穿楼',pos:[-121,112,-345],target:[-121,100,-254]},
-    Digit4:{name:'重庆老火锅',pos:[285,ground(285,265)+2.7,265],target:[285,ground(285,225)+8,225]}
+    Digit4:{name:'重庆老火锅',pos:[285,ground(285,265)+2.7,265],target:[285,ground(285,225)+8,225]},
+    // One inspectable bank approach: look east across the unbridged tributary.
+    // The camera is still in the actual compressed city, never in water.
+    Digit5:{name:'支流护栏与山城道路',pos:[-472,ground(-472,-271)+8,-271],
+      target:[-420,ground(-420,-271)+12,-271]}
   };
   const next=destinations[key];
   if(!next)return false;

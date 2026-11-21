@@ -2,6 +2,7 @@
 // Start: python3 -m http.server 8765 --bind 127.0.0.1
 // Test: node scripts/nyc-road-browser-smoke.mjs
 import {chromium} from 'playwright';
+import {PNG} from 'pngjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const out='artifacts/nyc';await mkdir(out,{recursive:true});
@@ -19,6 +20,32 @@ page.on('requestfailed',req=>{
    errors.push('NYC street module failed: '+req.url());
 });
 const check=(v,s)=>{if(!v)throw Error(s);};
+
+ // Count actual PNG pixels to catch blank/black WebGL frames.
+ // These checks are not a photorealism score.
+function screenshotPixels(bytes){
+ const img=PNG.sync.read(bytes),colors=new Set();
+ let black=0,count=0;
+ for(let y=0;y<img.height;y+=10)for(let x=0;x<img.width;x+=10){
+  const i=(y*img.width+x)*4,r=img.data[i],g=img.data[i+1],b=img.data[i+2];
+  colors.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));
+  if(r+g+b<22)black++;
+  count++;
+ }
+ return {width:img.width,height:img.height,colorBins:colors.size,
+  nearBlackFraction:black/Math.max(count,1)};
+}
+const screenshots=[],pixels={};
+async function capture(name){
+ const stats=screenshotPixels(await page.screenshot({
+  path:out+'/'+name,fullPage:true,animations:'disabled'
+ }));
+ check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
+  stats.nearBlackFraction<.97,
+  'Blank or nearly uniform rendered NYC image: '+name+' '+JSON.stringify(stats));
+ screenshots.push(name);pixels[name]=stats;
+}
+
 let result;
 try{
  const res=await page.goto(base+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
@@ -45,9 +72,9 @@ try{
  check(state.webgl,'NYC WebGL2 context lost');
  check(state.canvasW>300&&state.canvasH>200,'NYC canvas is unexpectedly small');
  check(state.selected==='manhattan'&&state.menuHidden,'NYC map did not start');
- await page.screenshot({path:out+'/00-harbor.png',fullPage:true});
+ await capture('00-harbor.png');
  await page.waitForTimeout(3500);
- await page.screenshot({path:out+'/01-city-loaded.png',fullPage:true});
+ await capture('01-city-loaded.png');
  // The previous smoke test photographed only the spawn harbor. Explicitly
  // visit the Brooklyn Bridge camera so bridgehead, nearby parcels and road
  // clipping are visible in CI artifacts rather than being inferred from code.
@@ -70,10 +97,58 @@ try{
  });
  check(bridge.webgl&&bridge.graphicsError===0,
    'Brooklyn Bridge view lost WebGL: '+JSON.stringify(bridge));
- await page.screenshot({path:out+'/02-brooklyn-bridgehead.png',fullPage:true});
+ await capture('02-brooklyn-bridgehead.png');
+ // Also inspect the residential/warehouse blocks. The bridge deck camera
+ // fills most of the frame with cables and cannot assess street facades.
+ await page.locator('#hotelTarget').selectOption({label:'DUMBO · Warehouse Blocks'});
+ await page.waitForTimeout(1800);
+ const dumbo=await page.evaluate(()=>{
+   const target=document.getElementById('hotelTarget');
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   return {camera:target?.options[target.selectedIndex]?.textContent,
+     webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
+   dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
+ await capture('03-dumbo-warehouse.png');
+ // Review the procedural Liberty crown from the dedicated close-up camera,
+ // rather than inferring statue quality from distant harbor screenshots.
+ await page.locator('#hotelTarget').selectOption({label:'Statue of Liberty'});
+ await page.waitForTimeout(1600);
+ const liberty=await page.evaluate(()=>{
+   const target=document.getElementById('hotelTarget');
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   return {camera:target?.options[target.selectedIndex]?.textContent,
+     webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(liberty.camera==='Statue of Liberty'&&liberty.webgl&&
+   liberty.graphicsError===0,
+   'Liberty Island close-up lost WebGL: '+JSON.stringify(liberty));
+ await capture('04-liberty-crown.png');
+
+ // Times Square camera evidence shares the already verified NYC Chromium
+ // run, instead of relying on a separate workflow that skips normal edits.
+ const timesViews=[
+  ['Times Square Street Level','05-times-square-street.png'],
+  ['44th Street LED Canyon','06-times-square-led-canyon.png'],
+  ['One Times Square','07-one-times-square.png'],
+  ['Duffy Square Street View','08-duffy-square.png']
+ ];
+ for(const [camera,name] of timesViews){
+  await page.locator('#hotelTarget').selectOption({label:camera});
+  await page.waitForTimeout(1250);
+  const view=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null};
+  });
+  check(view.label===camera&&view.webgl&&view.error===0,
+   'Times Square camera failed: '+JSON.stringify(view));
+  await capture(name);
+ }
+
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
- result={passed:true,state,bridge,
-   screenshots:['00-harbor.png','01-city-loaded.png','02-brooklyn-bridgehead.png'],warnings};
+ result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,warnings};
 }catch(e){
  result={passed:false,error:e.stack||String(e),errors,warnings};
  try{await page.screenshot({path:out+'/FAILED.png',fullPage:true});}catch{}

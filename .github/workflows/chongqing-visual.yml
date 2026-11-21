@@ -6,13 +6,9 @@ on:
     branches: [main]
     paths:
       - "chongqing.html"
-      - "index.html"
-      - "assets/nyc/nyc-street-network.js"
-      - "tests/nyc-road-clearance.test.mjs"
       - "assets/chongqing/**"
       - "tests/chongqing-*.test.mjs"
       - "scripts/chongqing-browser-smoke.mjs"
-      - "scripts/nyc-road-browser-smoke.mjs"
       - ".github/workflows/chongqing-visual.yml"
 
 # PATROL_CQ_VISUAL_STABILITY_V5: NYC is updated frequently. Never cancel
@@ -34,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # PATROL_CQ_BROWSER_ISOLATION_V8: test Chongqing before installing GPU
+      # Run Chongqing unit tests before expensive headless Chromium.
       # dependencies; do not let a concurrent NYC geometry regression prevent
       # the Chongqing screenshots and flight evidence from being captured.
       - name: Validate Chongqing road/building occupancy
@@ -52,21 +48,14 @@ jobs:
         env:
           CHONGQING_BASE_URL: http://127.0.0.1:8765
         run: node scripts/chongqing-browser-smoke.mjs
-      # NYC still fails the overall job if its road rules regress, but
-      # Chongqing has already rendered and uploaded evidence by that point.
-      - name: Validate NYC road/building occupancy
-        run: node --test tests/nyc-road-clearance.test.mjs
-      - name: New York real-browser skyline and road check
-        env:
-          PATROL_BASE_URL: http://127.0.0.1:8765
-        run: node scripts/nyc-road-browser-smoke.mjs
-      - name: Upload screenshots, WebGL report and failure evidence
+      # NYC has its own WebGL browser workflow and global Node regression.
+      # Keeping Chongqing's screenshots independent avoids double Chromium
+      # runs and hundreds of canceled pending jobs on unrelated NYC edits.
+      - name: Upload Chongqing screenshots, WebGL report and failure evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: chongqing-webgl-screenshots
-          path: |
-            artifacts/chongqing/
-            artifacts/nyc/
+          path: artifacts/chongqing/
           retention-days: 7
           if-no-files-found: ignore

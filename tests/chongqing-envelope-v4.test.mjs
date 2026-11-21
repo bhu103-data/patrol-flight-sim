@@ -63,8 +63,9 @@ test('emissive window decals sit on their actual stepped facade, not in mid-air'
  }
  class Color{set(){return this}}
  class Material{}
+ class Mesh{constructor(geometry,material){this.geometry=geometry;this.material=material}}
  const THREE={BufferGeometry:Geometry,Float32BufferAttribute:Attribute,
-   Object3D,InstancedMesh:Instance,MeshStandardMaterial:Material,
+   Object3D,InstancedMesh:Instance,Mesh,MeshStandardMaterial:Material,
    MeshBasicMaterial:Material,BoxGeometry:Geometry,PlaneGeometry:Geometry,
    Color,DoubleSide:2,StaticDrawUsage:1};
  let seed=100384;

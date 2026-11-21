@@ -11,22 +11,46 @@ const SITES=[
   [65,-56],[101,-185],
   [113,443],[133,451],[147,430],
 ];
-function findWater(x,z,terrainAt,waterY) {
+// A rotating floe's largest perimeter point reaches 1.11x its design width.
+function chunkRadius(seed,calving){
+  return calving?1.7+hash(seed*4)*1.9:2.1+hash(seed*7)*3.4;
+}
+function waterFootprintClear(x,z,radius,terrainAt,waterY,allowance=.08){
+  if(![x,z,radius,waterY,allowance].every(Number.isFinite)||radius<=0)
+    return false;
+  // Center and rim alone miss isolated interior shoals and no-data DEM cells.
+  // Two staggered eight-point inner rings keep each moving floe to at most
+  // 33 CPU height samples per frame; no GPU or geometry budget changes.
+  const afloat=(px,pz)=>{
+    const y=terrainAt(px,pz);
+    return Number.isFinite(y)&&y<=waterY+allowance;
+  };
+  if(!afloat(x,z))return false;
+  for(let step=0;step<16;step++){
+    const angle=step*Math.PI/8,c=Math.cos(angle),s=Math.sin(angle);
+    if(!afloat(x+c*radius,z+s*radius))return false;
+    if(step%2===0){
+      if(!afloat(x+c*radius*.33,z+s*radius*.33) ||
+         !afloat(x+c*radius*.66,z+s*radius*.66))return false;
+    }
+  }
+  return true;
+}
+function findWater(x,z,terrainAt,waterY,radius){
   for(let ring=0;ring<5;ring++){
     const steps=ring===0?1:16;
     for(let k=0;k<steps;k++){
       const a=k*2*Math.PI/steps;
       const px=x+Math.cos(a)*ring*10,pz=z+Math.sin(a)*ring*10;
       if(Math.hypot(px,pz)>780)continue;
-      const pad=3.3;
-      if([[0,0],[-pad,0],[pad,0],[0,-pad],[0,pad]].every(([dx,dz])=>
-        terrainAt(px+dx,pz+dz)<=waterY+.08))return [px,pz];
+      if(waterFootprintClear(px,pz,radius*1.12,terrainAt,waterY))
+        return [px,pz];
     }
   }
   return null;
 }
 function makeChunk(addTri,addQuad,seed,calving) {
-  const count=7+(seed%3),width=calving?1.7+hash(seed*4)*1.9:2.1+hash(seed*7)*3.4;
+  const count=7+(seed%3),width=chunkRadius(seed,calving);
   const height=(calving?2.1:0.28)+hash(seed*13)*(calving?1.8:0.36);
   const ring=[];
   for(let k=0;k<count;k++){
@@ -56,11 +80,12 @@ export function createAlaskaIceActors({makeMesh,terrainAt,waterY}){
      !Number.isFinite(waterY))throw new TypeError('Invalid Alaska ice geometry configuration');
   const actors=[];
   for(let i=0;i<SITES.length;i++){
-    const [sx,sz]=SITES[i];
-    const water=findWater(sx,sz,terrainAt,waterY);
+    const [sx,sz]=SITES[i],calving=i>=8;
+    const radius=chunkRadius(i+19,calving);
+    const water=findWater(sx,sz,terrainAt,waterY,radius);
     if(!water)continue;
-    const [x,z]=water,mesh=makeMesh(),calving=i>=8;
-    const radius=makeChunk(mesh.addTri,mesh.addQuad,i+19,calving);
+    const [x,z]=water,mesh=makeMesh();
+    makeChunk(mesh.addTri,mesh.addQuad,i+19,calving);
     const uploaded=mesh.upload();
     if(!uploaded || !Number.isInteger(uploaded.count) || uploaded.count<=0)
       throw new Error('Invalid Alaska drift-ice mesh');
@@ -79,9 +104,8 @@ export function poseAlaskaIce(actor,time,terrainAt,waterY){
   const slow=time*.0065+actor.phase;
   const ox=Math.sin(slow*.9)*3.8,oz=Math.cos(slow*.7)*5.1;
   const nx=actor.anchor[0]+ox,nz=actor.anchor[1]+oz;
-  const pad=Math.max(1.5,actor.radius*.75);
-  const safe=[[0,0],[-pad,0],[pad,0],[0,-pad],[0,pad]].every(([dx,dz])=>
-    terrainAt(nx+dx,nz+dz)<=waterY+.12);
+  // Sample the full rotated hull rather than a center/cardinal cross.
+  const safe=waterFootprintClear(nx,nz,actor.radius*1.12,terrainAt,waterY,.12);
   const x=safe?nx:actor.anchor[0],z=safe?nz:actor.anchor[1];
   const yaw=actor.yaw+time*.0035;
   if(actor.kind==='calving'){

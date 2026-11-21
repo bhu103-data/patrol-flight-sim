@@ -248,7 +248,12 @@ async function photos(gl){
 }
 export async function loadNycRealism(gl){
   const models=Object.create(null),failures=[];
-  const modelsReady=Promise.all([
+  // QA rollback must skip ALL imported landmark meshes, including the older
+  // bundled Liberty GLB, not merely skip the manifest-approved Scenario GLBs.
+  // Keep PBR terrain/street photos independent of the landmark choice.
+  const useProceduralLandmarks=typeof location!=='undefined' &&
+    new URLSearchParams(location.search).get('nycModels')==='legacy';
+  const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
     // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
   ].map(async ([kind,filename,height])=>{
@@ -267,9 +272,9 @@ export async function loadNycRealism(gl){
     try{
       // Explicit visual rollback for QA without changing other maps, PBR
       // street textures or the deployed manifest.
-      // ?nycModels=legacy keeps the built-in procedural landmarks.
-      if(typeof location!=='undefined' &&
-         new URLSearchParams(location.search).get('nycModels')==='legacy'){
+      // ?nycModels=legacy keeps the built-in procedural landmarks and skips
+      // every optional imported landmark file, not the PBR street textures.
+      if(useProceduralLandmarks){
         console.info('[PATROL] Using original NYC landmark geometry (QA rollback)');
         return;
       }

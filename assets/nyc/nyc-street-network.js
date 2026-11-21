@@ -12,7 +12,7 @@ export function buildNycStreetNetwork({
     leaf=[.22,.42,.31],hydrant=[.72,.18,.13],signalYellow=[.86,.69,.24];
   const roadY=streetY+.086,markY=streetY+.117,paveY=streetY+.154;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
-    crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,
+    crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
     busShelters:0,bikeRacks:0,wayfinding:0,treePits:0,streetlamps:0,
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
@@ -37,7 +37,7 @@ export function buildNycStreetNetwork({
     const [l,r,s,n]=timesBounds;
     return x>l-9&&x<r+9&&z>s-8&&z<n+8;
   };
-  function permitted(x,z){
+  function permitted(x,z,allowWaterClip=false){
     // Never paint a city grid through the park. Transverse drives are built
     // by central-park.js instead, with paths aligned to the park itself.
     const u=x-grid.tilt*z-grid.offset;
@@ -46,7 +46,11 @@ export function buildNycStreetNetwork({
       stats.skippedPark++;return false;
     }
     if(inTimes(x,z)||detailBand(x,z)<2){stats.skippedLOD++;return false;}
-    if(terrainAt(x,z)<waterY+1.55){stats.skippedWater++;return false;}
+    // A shore-crossing segment may still have a long usable dry section.
+    // Its full swept footprint is clipped in roadCorridorClear below.
+    if(!allowWaterClip && terrainAt(x,z)<waterY+1.55){
+      stats.skippedWater++;return false;
+    }
     return true;
   }
   function nearOld(x,z,clearance=5.8){
@@ -59,15 +63,33 @@ export function buildNycStreetNetwork({
     return false;
   }
   function siteClear(x,z,radius=.5){
-    if(!Number.isFinite(x)||!Number.isFinite(z))return false;
-    if(terrainAt(x,z)<waterY+1.58)return false;
+    if(!Number.isFinite(x)||!Number.isFinite(z)||
+       !Number.isFinite(radius)||radius<0)return false;
+    // Sidewalk kiosks, shelters and food carts occupy an AREA, not a point.
+    // Sample their entire dry-ground bounding square so coastal fixtures
+    // cannot stand on a dry center with corners hanging into the harbor.
+    // Larger furniture gets half-step samples to catch narrow inlets.
+    const offsets=radius>1.5?[-1,-.5,0,.5,1]:[-1,0,1];
+    for(const u of offsets)for(const v of offsets){
+      if(terrainAt(x+u*radius,z+v*radius)<waterY+1.58){
+        stats.skippedWater++;return false;
+      }
+    }
     if(!isClear(x,z,radius)){stats.skippedBuildings++;return false;}
     return true;
   }
   function streetFurniture(a,b,kind,i,j,width){
     // NYC DOT furniture strip: grouped by block, not repeated at every lamp.
     // Keep a clear inner walking zone and never populate a building footprint.
-    if(stats.streetFurniture>=82 || detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<3)
+    // Bridgehead roads are LOD2 at their featured camera, whereas Manhattan
+    // tourist streets normally reach LOD3. Reserve a small independent 22-piece
+    // budget so the Manhattan draw order cannot starve Brooklyn of fixtures.
+    const bridgehead=i>=9&&i<=20&&j>=-13&&j<=-7;
+    const usedHere=bridgehead?stats.brooklynStreetFurniture:
+      stats.streetFurniture-stats.brooklynStreetFurniture;
+    const capHere=bridgehead?22:82;
+    if(usedHere>=capHere ||
+       detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<(bridgehead?2:3))
       return;
     const chance=hash(i,j,49);
     if(chance<.76)return;
@@ -89,7 +111,7 @@ export function buildNycStreetNetwork({
       x+normal[0]*sideways+along[0]*forward,y,
       z+normal[1]*sideways+along[1]*forward];
     const bar=(u,v,r,color)=>beam(u,v,r,color);
-    if(variant===0 && stats.busShelters<12){
+    if(variant===0 && stats.busShelters<12+(bridgehead?6:0)){
       // Narrow JCDecaux-style transparent shelter on a local sidewalk bulb-out,
       // not an actual mapped MTA stop or franchised ad placement.
       if(!siteClear(x+along[0]*.78,z+along[1]*.78,1.04))return;
@@ -118,7 +140,7 @@ export function buildNycStreetNetwork({
       if(lettering)lettering('BUS',at(-.70,.74,base+2.08),
         .64,.19,[.93,.94,.91]);
       stats.busShelters++;
-    }else if(variant===1 && stats.bikeRacks<26){
+    }else if(variant===1 && stats.bikeRacks<26+(bridgehead?6:0)){
       // Three steel NYC CityRack-like hoops, spaced along the sidewalk.
       for(let k=-1;k<=1;k++){
         const forward=k*.63;
@@ -132,7 +154,7 @@ export function buildNycStreetNetwork({
         box(anchor[0],anchor[1],anchor[2],.44,.065,.085,frame);
       }
       stats.bikeRacks++;
-    }else if(variant===2 && stats.wayfinding<17){
+    }else if(variant===2 && stats.wayfinding<17+(bridgehead?6:0)){
       // Slim WalkNYC-style walking map kiosk. Original simulated diagram.
       box(x,base+1.26,z,.19,2.49,.78,frame);
       for(const way of [-1,1]){
@@ -145,7 +167,7 @@ export function buildNycStreetNetwork({
       const cap=at(0,0,base+2.55);
       box(cap[0],cap[1],cap[2],.33,.13,.91,navy);
       stats.wayfinding++;
-    }else if(variant===3 && stats.treePits<26){
+    }else if(variant===3 && stats.treePits<26+(bridgehead?6:0)){
       // Granite tree bed with non-cartoon separated branches and leaf clusters.
       box(x,base-.05,z,1.42,.08,1.28,[.55,.55,.51]);
       for(const turn of [-1,1]){
@@ -171,7 +193,7 @@ export function buildNycStreetNetwork({
         }
       }
       stats.treePits++;
-    }else if(variant===4 && stats.streetlamps<25){
+    }else if(variant===4 && stats.streetlamps<25+(bridgehead?6:0)){
       // Tapered NYC-style streetlight with cantilever and compact luminaire.
       bar(at(0,0,base),at(0,0,base+5.5),.088,frame);
       bar(at(0,0,base+5.32),at(-.62,.64,base+5.49),.074,frame);
@@ -181,6 +203,7 @@ export function buildNycStreetNetwork({
       stats.streetlamps++;
     }else return;
     stats.streetFurniture++;
+    if(bridgehead)stats.brooklynStreetFurniture++;
   }
   // PATROL_NYC_ROAD_MARKINGS_V12 — orient road paint to the slanted avenue
   // tangent instead of placing axis-aligned white rectangles.
@@ -232,16 +255,38 @@ export function buildNycStreetNetwork({
         // A conservative .95-unit square probe closes gaps between samples.
         if(!isClear(sx,sz,.95))return false;
       }
+      // Heightmap texels are wider than some shore cuts. Re-check water at
+      // longitudinal half-steps across the entire sidewalk + asphalt width.
+      // The collision-lot tests above already cover the gap via .95 padding,
+      // so these extra probes only sample terrain to keep startup affordable.
+      if(step<steps){
+        const t=(step+.5)/steps,mx=a[0]+dx*t,mz=a[1]+dz*t;
+        for(const across of [-1,-.73,-.39,0,.39,.73,1]){
+          if(terrainAt(mx+nx*margin*across,mz+nz*margin*across)
+              <waterY+1.58)return false;
+        }
+      }
     }
     return true;
   }
   // An intersection exists only if painted asphalt actually reaches the node.
   // Clipped remote portions must not count as connected streets.
   const connectedStreetNodes=new Set();
+  // Track only road pieces that were really emitted (including clipped spans),
+  // so sidewalk vendors cannot overlap asphalt in the final scene.
+  const activeRoadSegments=[];
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
-    if(!permitted(...mid)||!permitted(...a)||!permitted(...b)||
-      nearOld(...mid,7.8))return false;
+    if(!permitted(mid[0],mid[1],true)||
+       !permitted(a[0],a[1],true)||!permitted(b[0],b[1],true)||
+       nearOld(...mid,7.8))return false;
+    // Avoid subdividing wholly submerged grid sections. For shoreline
+    // crossings, roadCorridorClear will preserve only dry, collision-free
+    // pieces (including their sidewalks), not paint across the water.
+    const dry=p=>terrainAt(p[0],p[1])>=waterY+1.55;
+    if(!dry(a)&&!dry(mid)&&!dry(b)){
+      stats.skippedWater++;return false;
+    }
     const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
     if(distance<4)return false;
     const width=kind==='avenue'?6.35:5.65,half=width/2;
@@ -282,6 +327,7 @@ export function buildNycStreetNetwork({
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
     slab(a,b,width,asphalt);
+    activeRoadSegments.push({a,b,width});
     // Only selected game corridors receive red bus and green bike lanes;
     // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
     const greenBike=kind==='avenue' && (i===1||i===-3) &&
@@ -302,8 +348,8 @@ export function buildNycStreetNetwork({
       const separator=shift(a,b,side*(half-2.00));
       slab(separator[0],separator[1],.076,paint,markY+.008);
       if(pavementText && j%4===0 && stats.busLaneSegments<14){
-        const p=[mid[0]+cross[0]*side*(half-.96),markY+.026,
-          mid[1]+cross[1]*side*(half-.96)];
+        const p=[mid[0]+normal[0]*side*(half-.96),markY+.026,
+          mid[1]+normal[1]*side*(half-.96)];
         pavementText('BUS',p,1.28,.54,paint);
       }
       stats.busLaneSegments++;
@@ -402,37 +448,67 @@ export function buildNycStreetNetwork({
   }
   function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;
-    // NYC yellow traffic signal heads and dark pedestrian walk/countdown box.
+    // Align the physical signal head and its circular lens normals to the
+    // slanted avenue bearing. Axis-aligned X/Z cubes looked sideways relative
+    // to Manhattan traffic and made the lights look like rectangular stickers.
+    const sideways=cross,forward=ave;
+    const hx=x-sideways[0]*.96,hz=z-sideways[1]*.96;
+    const at=(u,v,depth)=>[
+      hx+sideways[0]*u+forward[0]*depth,
+      base+3.59+v,
+      hz+sideways[1]*u+forward[1]*depth
+    ];
     box(x,base+2.52,z,.115,5.04,.115,iron);
     box(x,base+4.08,z,.20,.14,.20,iron);
-    beam([x,base+3.93,z],[x-.96,base+3.93,z],.075,steel);
-    box(x-.96,base+3.59,z,.36,.84,.35,signalYellow);
-    box(x-.96,base+3.59,z+.194,.265,.75,.045,iron);
-    const lights=[[.26,[.72,.12,.11]],[.0,[.67,.50,.12]],[-.26,[.15,.60,.28]]];
+    beam([x,base+3.93,z],[hx,base+3.93,hz],.075,steel);
+    // A real 3D yellow metal shell with dark recessed frontal glazing,
+    // rather than an unrotated rectangular housing. This is all baked into
+    // the existing street draw batch, with no additional draw calls.
+    const housingFront=.19,housingBack=-.18;
+    const q=(u0,v0,u1,v1,d0,d1,color)=>addQuad(
+      at(u0,v0,d0),at(u1,v0,d1),at(u1,v1,d1),at(u0,v1,d0),color);
+    q(-.18,-.42,.18,.42,housingBack,housingBack,signalYellow);
+    q(-.18,-.42,.18,.42,housingFront,housingFront,iron);
+    for(const side of [-1,1]){
+      const u=side*.18;
+      addQuad(at(u,-.42,housingBack),at(u,-.42,housingFront),
+        at(u,.42,housingFront),at(u,.42,housingBack),signalYellow);
+    }
+    for(const v of [-.42,.42])
+      addQuad(at(-.18,v,housingBack),at(.18,v,housingBack),
+        at(.18,v,housingFront),at(-.18,v,housingFront),signalYellow);
+    const lights=[[.26,[.72,.12,.11]],[0,[.67,.50,.12]],[-.26,[.15,.60,.28]]];
     for(let k=0;k<lights.length;k++){
-      const [delta,active]=lights[k];
-      const bright=k===(phase%3);
-      const rgb=bright?active:active.map(v=>v*.26);
-      const px=x-.96,py=base+3.59+delta,pz=z+.226;
-      // Octagonal glass/lens geometry reads round rather than a square box
-      // at close camera distances; inner light and metallic edge are separate.
+      const [delta,active]=lights[k],bright=k===(phase%3);
+      const rgb=bright?active:active.map(value=>value*.26);
+      // Each octagonal 3D lens has a metal bevel and colored inner glass.
+      // Rotating local UV basis also rotates its outward-facing surface.
+      const ring=(angle,r,depth)=>at(Math.cos(angle)*r,
+        delta+Math.sin(angle)*r,depth);
       for(let segment=0;segment<10;segment++){
         const a=segment*Math.PI/5,b=(segment+1)*Math.PI/5;
-        const ring=(ang,r,zLift)=>[px+Math.cos(ang)*r,
-          py+Math.sin(ang)*r,pz+zLift];
-        addQuad(ring(a,.108,-.019),ring(b,.108,-.019),
-          ring(b,.080,.001),ring(a,.080,.001),[.13,.15,.17]);
-        addQuad(ring(a,.078,.002),ring(b,.078,.002),
-          ring(b,.024,.004),ring(a,.024,.004),rgb);
+        addQuad(ring(a,.108,.199),ring(b,.108,.199),
+          ring(b,.080,.211),ring(a,.080,.211),[.13,.15,.17]);
+        addQuad(ring(a,.078,.214),ring(b,.078,.214),
+          ring(b,.024,.224),ring(a,.024,.224),rgb);
       }
-      box(x-.96,base+3.59+delta,z+.184,.25,.04,.12,iron);
+      // Shallow weather hoods throw real silhouette rather than flat decal.
+      addQuad(at(-.135,delta+.14,.193),at(.135,delta+.14,.193),
+        at(.135,delta+.14,.35),at(-.135,delta+.14,.35),iron);
     }
-    box(x,base+2.48,z+.13,.37,.58,.26,iron);
-    box(x,base+2.53,z+.278,.25,.40,.028,
+    // A matching pedestrian head on the same pole faces the same road axis.
+    const ped=(u,v,depth)=>[
+      x+sideways[0]*u+forward[0]*depth,
+      base+2.48+v,
+      z+sideways[1]*u+forward[1]*depth
+    ];
+    addQuad(ped(-.19,-.30,.13),ped(.19,-.30,.13),
+      ped(.19,.30,.13),ped(-.19,.30,.13),iron);
+    addQuad(ped(-.13,-.20,.138),ped(.13,-.20,.138),
+      ped(.13,.20,.138),ped(-.13,.20,.138),
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
-    // NYC DOT green street-name blades and ONE WAY wayfinding; labels are
-    // simulated in the compressed game grid, not official surveyed signs.
+    // Retain the budgeted street blades and original readable labels.
     if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
       const named=j===-1?'W 42 ST':j===0?'W 44 ST':
         j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
@@ -537,13 +613,16 @@ export function buildNycStreetNetwork({
     // The zebra ladder and signal supports extend beyond the old 5-unit
     // center grid. Inspect the entire corner envelope for shallow water
     // and collision geometry before creating crossing paint.
-    for(const dx of [-7.5,-5,-2.5,0,2.5,5,7.5]){
-      for(const dz of [-7.5,-5,-2.5,0,2.5,5,7.5]){
-        const sx=x+dx,sz=z+dz;
+    // 1.5-unit probes plus 0.78-unit square bounds cover the *entire*
+    // crossing envelope without the 1.6-unit blind gaps of the former
+    // 2.5-unit probe grid. Tiny corner walls must not be painted through.
+    for(let ix=-5;ix<=5;ix++){
+      for(let iz=-5;iz<=5;iz++){
+        const sx=x+ix*1.5,sz=z+iz*1.5;
         if(terrainAt(sx,sz)<waterY+1.58){
           freeIntersection=false;wetIntersection=true;break;
         }
-        if(!isClear(sx,sz,.45)){freeIntersection=false;break;}
+        if(!isClear(sx,sz,.78)){freeIntersection=false;break;}
       }
       if(!freeIntersection)break;
     }
@@ -602,17 +681,57 @@ export function buildNycStreetNetwork({
     }
     stats.hotDogCarts++;
   }
-  // Two tourist-vendor stands within the dedicated, wide Times Square
-  // pedestrian plaza; no guesswork on actual permit/vendor coordinates.
-  // Times Square vendors only stand on exposed, dry pedestrian paving.
-  for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]]){
-    if(siteClear(x,z,2.35))hotDogCart(x,z,v);
+  // Vendor canopies extend beyond their carts. A clear center point is
+  // insufficient: compare the whole 2.35-unit display radius with ACTUALLY
+  // emitted asphalt (not a theoretical grid where an avenue was clipped).
+  const placedVendors=[];
+  function vendorClearOfRoads(x,z){
+    for(const segment of activeRoadSegments){
+      const dx=segment.b[0]-segment.a[0],dz=segment.b[1]-segment.a[1];
+      const len2=dx*dx+dz*dz||1;
+      const t=Math.max(0,Math.min(1,
+        ((x-segment.a[0])*dx+(z-segment.a[1])*dz)/len2));
+      const roadX=segment.a[0]+dx*t,roadZ=segment.a[1]+dz*t;
+      if(Math.hypot(x-roadX,z-roadZ)<segment.width*.5+2.35)
+        return false;
+    }
+    return true;
   }
-  // Downtown commercial corridor: two hand-placed pedestrian corners,
-  // skipping any place that is flooded or inside the building heightfield.
-  for(const [x,z,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
-    if(detailBand(x,z)>=2 && siteClear(x,z,2.35) && !nearOld(x,z,3.1))
-      hotDogCart(x,z,k);
+  function vendorSiteClear(x,z,avoidOldRoads=false){
+    if(!siteClear(x,z,2.35)||!vendorClearOfRoads(x,z)||
+       (avoidOldRoads&&nearOld(x,z,5.8))||
+       placedVendors.some(([px,pz])=>Math.hypot(px-x,pz-z)<5))
+      return false;
+    // Validate the platform corners and round parasol perimeter against
+    // coastlines, parcels and piers; reject wet or occupied edge footprints.
+    for(const [dx,dz] of [[-2,0],[2,0],[0,-2],[0,2],
+                          [-1.4,-1.4],[-1.4,1.4],[1.4,-1.4],[1.4,1.4]]){
+      if(!siteClear(x+dx,z+dz,.22))return false;
+    }
+    return true;
+  }
+  function placeVendor(x,z,variant,avoidOldRoads=false){
+    if(!vendorSiteClear(x,z,avoidOldRoads))return false;
+    hotDogCart(x,z,variant);
+    placedVendors.push([x,z]);
+    return true;
+  }
+  // Times Square plazas retain their authored positions; never move these
+  // onto Broadway or 7th Avenue just to satisfy a numerical quota.
+  for(const [x,z,v] of [[-4.4,9.1,0],[-4.2,24.0,1]])
+    placeVendor(x,z,v);
+  // Downtown searches a tiny, deterministic sidewalk neighborhood for a
+  // genuinely clear position. A blocked stand disappears instead of clipping
+  // through a car lane, wall, water or another vendor.
+  const vendorOffsets=[[0,0],[0,7],[0,-7],[7,0],[-7,0],
+    [7,7],[-7,7],[7,-7],[-7,-7],[0,12],[0,-12],
+    [12,0],[-12,0],[12,7],[-12,7],[12,-7],[-12,-7]];
+  for(const [anchorX,anchorZ,k] of [[-58,-345,2],[-33,-390,3],[-14,-314,4]]){
+    if(detailBand(anchorX,anchorZ)<2)continue;
+    for(const [du,dv] of vendorOffsets){
+      const x=anchorX+du+grid.tilt*dv,z=anchorZ+dv;
+      if(detailBand(x,z)>=2&&placeVendor(x,z,k,true))break;
+    }
   }
   return stats;
 }

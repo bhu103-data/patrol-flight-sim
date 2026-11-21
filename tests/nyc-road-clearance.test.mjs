@@ -6,7 +6,7 @@ const fromFile=async name=>readFile(new URL(name,import.meta.url),'utf8');
 const source=await fromFile('../assets/nyc/nyc-street-network.js');
 const {buildNycStreetNetwork}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 
-function city(isClear){
+function city(isClear,terrainAt=()=>100){
   const slabs=[],signalObjects=[],quads=[];
   const grid={
     blockWidth:24,blockLength:33,tilt:.24,offset:30,
@@ -15,7 +15,7 @@ function city(isClear){
   const stats=buildNycStreetNetwork({
     addQuad(...params){quads.push(params)},addTri(){},box(...params){signalObjects.push(params)},
     beam(){},ribbon(a,b,width,color){slabs.push({a,b,width,color})},
-    terrainAt:()=>100,detailBand:()=>3,
+    terrainAt,detailBand:()=>3,
     grid,streetY:20,waterY:0,timesBounds:[900,1000,900,1000],
     existingStreets:[],isClear,
     lettering(){},pavementText(){}
@@ -29,6 +29,25 @@ test('Manhattan grid still has roads when lots are clear',()=>{
   assert.ok(slabs.length>200);
   assert.equal(stats.skippedRoadFootprints,0);
 });
+test('shoreline street retains dry inland approach instead of vanishing',()=>{
+  // The old endpoint-only water gate discarded the entire 33-unit avenue.
+  // The land begins at z=10, leaving most of this block usable.
+  const {stats,slabs}=city(()=>true,(x,z)=>z<10?0:100);
+  const asphalt=slabs.filter(r=>r.width===6.35 &&
+    r.a[2]>=0&&r.b[2]<=33 &&
+    Math.abs(r.a[0]-(30+.24*r.a[2]))<.03 &&
+    Math.abs(r.b[0]-(30+.24*r.b[2]))<.03);
+  assert.ok(asphalt.length>0,'a partly dry waterfront block should have road');
+  assert.ok(asphalt.some(r=>r.b[2]>27&&r.a[2]<22),
+    'safe inland approach must reach beyond the shoreline');
+  for(const r of asphalt){
+    assert.ok(r.a[2]>10&&r.b[2]>10,
+      'no shoreline asphalt may be emitted on wet terrain');
+  }
+  assert.ok(stats.preservedRoadSections>0,'use the collision-aware road clipping path');
+  assert.ok(stats.skippedWater>0,'wholly wet streets must still be omitted');
+});
+
 test('no road ribbon or intersection is painted through an occupied building',()=>{
   const obstacle={x:30,z:16,w:10,d:16};
   const isClear=(x,z,r=0)=>Math.abs(x-obstacle.x)>obstacle.w*.5+r||
@@ -81,6 +100,25 @@ test('thin walls between grid samples cannot cut through avenue asphalt',()=>{
     'small building wall must remove the entire obstructed asphalt ribbon');
   assert.ok(occupied.stats.avenues>500,'retain Manhattan road density');
 });
+test('tiny corner wall between old grid probes suppresses zebra paint',()=>{
+  const i=2,j=0;
+  const x=i*24+30,z=j*33;
+  const painted=scene=>scene.quads.filter(q=>q.length>=5 &&
+    Array.isArray(q[4])&&q[4][0]>.80&&q[4][1]>.80 &&
+    q.slice(0,4).every(p=>Array.isArray(p) &&
+      Math.abs(p[0]-x)<8&&Math.abs(p[2]-z)<8)).length;
+  const clear=city(()=>true);
+  assert.ok(painted(clear)>0,'crossing exists when corner is empty');
+  const obstacle={x:x+6.30,z:z-6.30,w:.14,d:.14};
+  const collision=(sx,sz,r=0)=>
+    Math.abs(sx-obstacle.x)>=obstacle.w*.5+r ||
+    Math.abs(sz-obstacle.z)>=obstacle.d*.5+r;
+  const occupied=city(collision);
+  assert.equal(painted(occupied),0,
+    'sub-meter corner wall must prevent painted stripes in its junction');
+  assert.ok(occupied.stats.avenues>500,'preserve most city streets');
+});
+
 test('main NYC lot filter protects street routes in visual and collision data',async()=>{
   const html=await fromFile('../index.html');
   const start=html.indexOf('function nycParcelCrossesRoad(');

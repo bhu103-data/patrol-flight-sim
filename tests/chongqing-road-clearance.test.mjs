@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const toURL=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const moduleText=await readFile(new URL('../assets/chongqing/road-clearance.js',import.meta.url),'utf8');
-const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads}=await import(toURL(moduleText));
+const {sweptSegmentInterval,crossesFootprint,clipRoadToFreeSegments,roadReserveAtSite,chongqingTerraceRoads,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments}=await import(toURL(moduleText));
 
 test('road collision checks entire asphalt width and exact segment interval',()=>{
  const b={x:0,z:0,w:8,d:8};
@@ -11,6 +11,27 @@ test('road collision checks entire asphalt width and exact segment interval',()=
  assert.equal(crossesFootprint({x:-20,z:8},{x:20,z:8},b,5),true);
  assert.deepEqual(sweptSegmentInterval({x:-20,z:0},{x:20,z:0},b,2,1),[.325,.675]);
 });
+test('Chongqing road mesh follows curved taxi centerline and every local hillside grade',()=>{
+ const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
+ const ground=(x,z)=>55+18*Math.sin(x/7)+z*.019;
+ for(const plan of chongqingTerraceRoads(riverCenter)){
+   const points=sampleChongqingTerraceSurface(plan,ground,riverCenter);
+   assert.ok(points.length>plan.points.length*4,'curves must be densified');
+   assert.equal(points[0].x,plan.points[0].x);
+   assert.equal(points.at(-1).x,plan.points.at(-1).x);
+   for(let i=0;i<points.length;i++){
+     const p=points[i];
+     const expectedZ=riverCenter(p.x)+plan.side*
+       (145+plan.tier*105+14*Math.sin(p.x/115+plan.tier));
+     assert.ok(Math.abs(p.z-expectedZ)<1e-9,'asphalt and taxis follow one route');
+     assert.ok(Math.abs(p.y-ground(p.x,p.z)-1.6)<1e-9,
+       'road surface samples the exact local elevation, not interpolated guide heights');
+     if(i)assert.ok(Math.hypot(p.x-points[i-1].x,p.z-points[i-1].z)<=5.6);
+   }
+ }
+ assert.deepEqual(sampleChongqingTerraceSurface(null,ground,riverCenter),[]);
+});
+
 test('building removes only the occupied portion of road',()=>{
  const b={x:0,z:0,w:12,d:15,base:0,top:70};
  const road=clipRoadToFreeSegments([{x:-40,z:0,y:1.6},{x:0,z:0,y:1.6},{x:40,z:0,y:1.6}],8,[b],1);
@@ -46,6 +67,36 @@ test('sloped road remains clear when the crossed building is entirely below it',
  assert.equal(result.paths.length,1);
  assert.equal(result.stats.clippedSegments,0);
 });
+test('terrace roads end at unbridged tributary rather than floating across water',()=>{
+ const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
+ const branchCenter=z=>-390+18*Math.sin(z/175);
+ const riverDist=(x,z)=>Math.min(Math.abs(z-riverCenter(x))-78,
+   z<18&&z>-620?Math.abs(x-branchCenter(z))-47:Infinity);
+ const ground=(x,z)=>riverDist(x,z)<0?-13:18+riverDist(x,z)*.172;
+ const plans=chongqingTerraceRoads(riverCenter);
+ const segments=plans.map(plan=>clipChongqingDryRoadSegments(
+   sampleChongqingTerraceSurface(plan,ground,riverCenter),
+   plan.width,ground,riverDist));
+ assert.deepEqual(segments.map(s=>s.length),[2,2,2,1,1,1],
+   'three tributary-crossing roads require a real bridge before they can connect');
+ let checked=0;
+ for(let k=0;k<plans.length;k++){
+   const {width}=plans[k];
+   for(const path of segments[k])for(let i=1;i<path.length;i++){
+     const a=path[i-1],b=path[i],dx=b.x-a.x,dz=b.z-a.z,
+       len=Math.hypot(dx,dz),nx=-dz/len,nz=dx/len;
+     for(const t of [0,.5,1])for(const side of [-1,-.5,0,.5,1]){
+       const x=a.x+dx*t+nx*(width/2+2.4)*side,
+         z=a.z+dz*t+nz*(width/2+2.4)*side;
+       assert.ok(riverDist(x,z)>=2.4&&ground(x,z)>0,
+         'full road shoulder must remain on dry land');
+       checked++;
+     }
+   }
+ }
+ assert.ok(checked>1000,'audit complete dry asphalt, not a handful of examples');
+});
+
 test('six canonical terrace paths and building reservations agree',()=>{
  const center=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
  const road=chongqingTerraceRoads(center);
@@ -69,6 +120,7 @@ class Instanced{
  computeBoundingSphere(){}
 }
 const THREE={BufferGeometry:Geo,Float32BufferAttribute:Geo,InstancedMesh:Instanced,
+ Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material}},
  BoxGeometry:Geo,PlaneGeometry:Geo,MeshStandardMaterial:Mat,MeshBasicMaterial:Mat,
  Object3D:Obj,Color,StaticDrawUsage:1,DoubleSide:2};
 test('procedural Chongqing towers leave roads, bridges and each other clear',()=>{
@@ -92,4 +144,36 @@ test('procedural Chongqing towers leave roads, bridges and each other clear',()=
  }
  assert.ok(result.stats.skippedRoadOverlap+result.stats.skippedBridgeOverlap+
    result.stats.skippedAdjacentBuilding>0);
+});
+
+
+test('quarter-span tributary water removes only the crossed asphalt slab',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0},{x:11,y:20,z:0}];
+ const ground=()=>20;
+ for(const forbiddenX of [1.375,4.125]){
+   const riverDistance=(x)=>Math.abs(x-forbiddenX)<.19?0:20;
+   const segments=clipChongqingDryRoadSegments(points,6,ground,riverDistance);
+   assert.equal(segments.length,1,'preserve the fully dry second slab');
+   assert.deepEqual(segments[0].map(p=>p.x),[5.5,11],
+     'do not paint a road over a narrow unbridged tributary inlet');
+ }
+});
+
+test('missing river distance does not become a dry road surface',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0},{x:11,y:20,z:0}];
+ const unknown=(x)=>Math.abs(x-1.375)<.19?NaN:20;
+ const sections=clipChongqingDryRoadSegments(points,6,()=>20,unknown);
+ assert.deepEqual(sections.map(path=>path.map(p=>p.x)),[[5.5,11]],
+   'unknown tributary samples must reject only the affected strip');
+});
+
+test('quarter-span clearance has a bounded scene-build sampling budget',()=>{
+ const points=[{x:0,y:20,z:0},{x:5.5,y:20,z:0}];
+ let heights=0,riverSamples=0;
+ const paths=clipChongqingDryRoadSegments(points,6,
+   ()=>{heights++;return 20;},
+   ()=>{riverSamples++;return 20;});
+ assert.equal(paths.length,1);
+ assert.equal(heights,25,'evaluate each road cross-section at most once');
+ assert.equal(riverSamples,25,'five longitudinal by five lateral probes');
 });

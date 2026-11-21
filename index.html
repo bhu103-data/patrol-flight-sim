@@ -434,6 +434,12 @@
       ((x-start[0])*dx+(z-start[1])*dz)/(dx*dx+dz*dz)));
     const lateral=Math.hypot(x-(start[0]+t*dx),z-(start[1]+t*dz));
     if(z>-558 && z<-215 && lateral<69+91*t)return 3;
+    // Brooklyn Bridge close view needs the same near-field streets and
+    // road markings as the Manhattan hero corridor. Limit the extra GPU
+    // load to two bounded bridgehead pockets, not all of Brooklyn.
+    if(x>205 && x<438 && z>-410 && z<-194 &&
+       Math.min(Math.hypot(x-285,z+330),
+         Math.hypot(x-372,z+285))<72)return 3;
     let band=distance<NYC_HERO_ROUTE.skylineRadius?1:0;
     // Connect skyline strips between landmark zones at low geometric cost.
     if(x>-158 && x<163 && z>-525 && z<275)band=Math.max(1,band);
@@ -1148,7 +1154,7 @@ const CENTRAL_PARK_SITES=[
           for(const [du,dz] of options){
             // Shorten lots near a cross-street, maintaining full sidewalks.
             const length=Math.abs(dz)>1?
-              11.4+hash(ix,iz,449)*1.2:14+hash(ix,iz,449)*3;
+              9.0+hash(ix,iz,449)*1.2:11.0+hash(ix,iz,449)*3;
             // Maintain the grid cell used by the terrain heightfield lookup.
             const x=x0+du+city.tilt*dz,z=z0+dz;
             // Local NYC grid roads are generated separately from CITY_STREETS.
@@ -2773,6 +2779,26 @@ const CENTRAL_PARK_SITES=[
                        clamp(uNyStreetWetness,0.0,1.0);
         albedo*=mix(1.0,modulation*(1.0-.18*damping),nearDetail*.80);
         roughness=mix(roughness,roughTarget,nearDetail*.70);
+        // PATROL_DUMBO_RUNNING_BOND_V1: the source-aware Brooklyn brick
+        // faces use staggered masonry courses instead of large flat color
+        // blocks. Derivative-width mortar lines fade before aliasing, and
+        // remain entirely on surface 12 (no OTI/Times Square or Alaska bleed).
+        if(vHarborSurface>11.5 && vHarborSurface<12.5){
+          vec2 brick=vec2(dot(vWorld,t)*1.36,vWorld.y*2.68);
+          float course=floor(brick.y);
+          brick.x+=mod(course,2.0)*.5;
+          vec2 cell=fract(brick);
+          vec2 edge=min(cell,1.0-cell);
+          vec2 aa=max(fwidth(brick)*1.25,vec2(.003));
+          float vertical=1.0-smoothstep(.022,.054+aa.x,edge.x);
+          float horizontal=1.0-smoothstep(.025,.054+aa.y,edge.y);
+          float mortar=max(vertical,horizontal);
+          float fired=nyStreetNoise(vec2(floor(brick.x),course)*.73+
+            vec2(13.2,5.7));
+          albedo*=1.0+nearDetail*(fired-.5)*.15;
+          albedo=mix(albedo,albedo*.61,mortar*nearDetail*.76);
+          roughness=mix(roughness,.85,mortar*nearDetail*.45);
+        }
       }else if(materialClass<1.5){
         // Embedded window quads receive Fresnel glazing and deterministic
         // varied indoor light, not a second procedural window grid.
@@ -3215,7 +3241,7 @@ const CENTRAL_PARK_SITES=[
   function createTriangleMesh() {
     const pos = [], norm = [], col = [];
     let surfaces = null;
-    function addTri(a, b, c, rgb, surface=0) {
+    function addTri(a, b, c, rgb, surface=0, vertexNormals=null) {
       const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
       let nx = uy * vz - uz * vy;
@@ -3226,7 +3252,11 @@ const CENTRAL_PARK_SITES=[
       if(surface && !surfaces) surfaces=new Array(pos.length/3).fill(0);
       if(surfaces) surfaces.push(surface,surface,surface);
       pos.push(...a, ...b, ...c);
-      norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+      // Asset-specific normals from Blender produce smooth airfoils and floats.
+      // All original scenery/vehicles remain on geometric flat normals.
+      if(vertexNormals && vertexNormals.length===3) {
+        for(const n of vertexNormals) norm.push(...n);
+      } else norm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
       if(Array.isArray(rgb[0]))col.push(...rgb[0],...rgb[1],...rgb[2]);
       else col.push(...rgb,...rgb,...rgb);
     }
@@ -3816,11 +3846,30 @@ const CENTRAL_PARK_SITES=[
       for(const eye of [-0.30,0.30])box(eye,24.93,-0.735,0.29,0.106,0.081,[0.18,0.38,0.34]);
       for(let j=-3;j<=3;j++)box(j*0.21,25.64,-0.94+Math.abs(j)*0.053,0.12,0.18,0.055,[0.19,0.37,0.33]);
       stack([[25.5,0.83,0.83],[25.9,1.05,1.05]],shade,14);
+      // Seven *solid*, evenly spaced copper crown rays. The former seven
+      // paper-thin triangles had neither sidewalls nor a stable silhouette
+      // when the pilot circled the island. Tapered triangular prisms form a
+      // closed exterior without adding separate draw calls or changing the
+      // landmark's navigation bounds.
       for (let i=0;i<7;i++) {
-        const angle = Math.PI * 0.95 * (i/6 - 0.5) * 2;
-        const x = Math.sin(angle), z = -Math.cos(angle);
-        addTri([x*0.82-z*0.15,25.85,z*0.82+x*0.15],
-          [x*1.62,27.04,z*1.62],[x*0.82+z*0.15,25.85,z*0.82-x*0.15],patina);
+        const angle=2*Math.PI*i/7-Math.PI/2;
+        const rx=Math.sin(angle),rz=-Math.cos(angle);
+        // Tangent-width runs around the crown; radial depth gives real
+        // facets that catch different light from opposite viewing angles.
+        const point=(radius,y,tangent,depth)=>[
+          rx*(radius+depth)-rz*tangent,y,
+          rz*(radius+depth)+rx*tangent];
+        const frontL=point(.86,25.85,-.145,.066),
+          frontR=point(.86,25.85,.145,.066),
+          rearL=point(.86,25.85,-.145,-.066),
+          rearR=point(.86,25.85,.145,-.066),
+          frontTip=point(1.72,27.12,0,.035),
+          rearTip=point(1.72,27.12,0,-.035);
+        addTri(frontL,frontTip,frontR,patina);
+        addTri(rearR,rearTip,rearL,shade);
+        addQuad(frontL,rearL,rearTip,frontTip,[.24,.51,.43]);
+        addQuad(frontTip,rearTip,rearR,frontR,[.27,.55,.45]);
+        addQuad(frontL,frontR,rearR,rearL,shade);
       }
       // Raised torch arm, sleeve and torch flame.
       stack([[21.55,0.83,0.77,-1.34],[23.45,0.69,0.66,-2.65,-0.15],
@@ -3938,9 +3987,44 @@ const CENTRAL_PARK_SITES=[
           // tapered municipal footprint, rather than being buried in walls.
           const face=side*7.12,mid=base+height/2;
           box(0,base,face,8.08,height+0.12,0.42,frame);
+          // PATROL_ONE_TIMES_CAMPAIGN_ART_V17: retain the same eight
+          // uniquely numbered campaign IDs, but put the edition on a small
+          // frame label instead of printing a debug-looking number across
+          // the main LED creative. Original static abstract artwork stays
+          // local to the landmark and requires no copyrighted photo assets.
+          const edition=caption.match(/\d+$/)?.[0]||'';
+          const headline=caption.slice(0,caption.length-edition.length).trim();
+          const serial=Number(edition)||0;
           light(0,mid,face+side*0.243,7.67,height-0.28,0.062,tint);
-          addVegasLettering(lights.addQuad,caption,(u,v)=>[-side*u,mid+v,face+side*0.310],
-            7.22,Math.min(height*0.36,1.36),[0.94,0.93,0.86]);
+          // Spatially varied color ramp with unique per-edition phase,
+          // rather than a single flat green/blue/magenta box.
+          for(let stripe=0;stripe<22;stripe++){
+            const u=(stripe+.5)/22;
+            const phase=serial*.6180339887+(side+2)*1.73;
+            const wave=.81+.18*Math.sin(u*6.3+phase)+
+              .10*Math.cos(u*13.7+phase*.37);
+            const gradient=tint.map((v,ch)=>Math.max(.08,Math.min(.94,
+              v*wave+(ch === (stripe % 3) ? .035 : 0.0))));
+            light((u-.5)*7.66,mid,face+side*.292,
+              7.66/22+.006,height-.31,.014,gradient);
+          }
+          // Thin architectural light ribbons break the billboard silhouette
+          // like an art-directed commercial; each board shifts its motif.
+          const accent=tint.map(v=>Math.min(.94,.49+v*.54));
+          const ribbonPhase=(serial%13)*.17;
+          for(let ray=0;ray<6;ray++){
+            const rx=1.70+ray*.23+.16*Math.sin(ribbonPhase+ray);
+            const ry=mid-height*.28+ray*height*.11;
+            light(rx,ry,face+side*.332,.12,height*.24,.018,accent);
+          }
+          addVegasLettering(lights.addQuad,headline,
+            (u,v)=>[-side*u,mid+v,face+side*.391],
+            7.22,Math.min(height*.36,1.36),[.96,.94,.85]);
+          // Serial remains available to audit nonrepetition, but at the
+          // size and position of a real production/edition identifier.
+          addVegasLettering(lights.addQuad,edition,
+            (u,v)=>[-side*(u+2.47),mid-height*.39+v,face+side*.397],
+            1.47,.19,[.66,.78,.81]);
           light(0,base+0.25,face+side*0.284,7.68,0.064,0.045,[0.91,0.84,0.69]);
           for(let i=0;i<6;i++){
             light((i-2.5)*1.19,base+0.63,face+side*0.286,0.93,0.035,0.045,[0.62,0.70,0.75]);
@@ -4066,7 +4150,10 @@ const CENTRAL_PARK_SITES=[
   // Dynamically imported only for Manhattan, never added to other maps.
   let nycRealismAssets=null,nycRealismLoading=false;
   function prepareNycRealismAssets(){
-    if(!selectedMap.city || graphicsCompat || directRendering ||
+    // Direct drawing is only a compositor fallback: native WebGL2 and
+    // textured GLB landmarks still work without the offscreen framebuffer.
+    // Keep the shader-compatibility and inactive-map guards unchanged.
+    if(!selectedMap.city || graphicsCompat ||
        nycRealismAssets || nycRealismLoading)return;
     nycRealismLoading=true;
     import('./assets/nyc/nyc-realism.js')
@@ -4466,22 +4553,76 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
+  // Existing authored NYC roads predate the newer procedural road network.
+  // Clip their complete sidewalk envelope against the same live city land
+  // and occupied parcels, rather than drawing old roads through the harbor.
+  // Return separate dry portions; bridge decks use their own water-safe path.
+  function clipAuthoredNycStreet(a,b,terrainAt,lotAt,waterY) {
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    if(!Number.isFinite(length)||length<4)return [];
+    const nx=-dz/length,nz=dx/length,halfEnvelope=6.05;
+    const offsets=[-1,-.8,-.6,-.4,-.2,0,.2,.4,.6,.8,1];
+    const clearAt=t=>{
+      const x=a[0]+dx*t,z=a[1]+dz*t;
+      for(const across of offsets){
+        const sx=x+nx*halfEnvelope*across;
+        const sz=z+nz*halfEnvelope*across;
+        if(terrainAt(sx,sz)<=waterY+.68 || lotAt(sx,sz))return false;
+      }
+      return true;
+    };
+    // At most 0.75 world units between cells; each cell is probed at its
+    // midpoint as well as both ends, catching the narrow shore inlets that
+    // slipped between the old endpoint-only checks.
+    const steps=Math.max(1,Math.ceil(length/.75));
+    const runs=[];
+    let start=-1;
+    const point=t=>[a[0]+dx*t,a[1]+dz*t];
+    const flush=end=>{
+      if(start<0)return;
+      // Trim a partial cell at the shoreline to avoid a hanging curb tip.
+      const first=start+(start>0?1:0);
+      const last=end-(end<steps?1:0);
+      if(last>first){
+        const p=point(first/steps),q=point(last/steps);
+        if(Math.hypot(q[0]-p[0],q[1]-p[1])>=4)runs.push([p,q]);
+      }
+      start=-1;
+    };
+    let previous=clearAt(0);
+    for(let cell=0;cell<steps;cell++){
+      const next=clearAt((cell+1)/steps);
+      const safe=previous&&next&&clearAt((cell+.5)/steps);
+      if(safe&&start<0)start=cell;
+      if(!safe)flush(cell);
+      previous=next;
+    }
+    flush(steps);
+    return runs;
+  }
+
   function buildStreetScene(addQuad, box) {
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
     for (const street of CITY_STREETS.slice(1)) {
       for (let i=1;i<street.length;i++) {
-        const a=street[i-1], b=street[i];
+        const originalA=street[i-1], originalB=street[i];
+        const a0=originalA,b0=originalB;
         // Stop authoring roads outside the landmark neighborhoods.
         // A nearest-point segment check retains roads crossing a focus area.
         const nearZone=NYC_FOCUS_ZONES.some(zone=>{
-          const vx=b[0]-a[0],vz=b[1]-a[1];
+          const vx=b0[0]-a0[0],vz=b0[1]-a0[1];
           const t=Math.max(0,Math.min(1,
-            ((zone[0]-a[0])*vx+(zone[1]-a[1])*vz)/(vx*vx+vz*vz||1)));
-          const dx=a[0]+vx*t-zone[0],dz=a[1]+vz*t-zone[1];
+            ((zone[0]-a0[0])*vx+(zone[1]-a0[1])*vz)/(vx*vx+vz*vz||1)));
+          const dx=a0[0]+vx*t-zone[0],dz=a0[1]+vz*t-zone[1];
           const r=zone[3]+16;
           return dx*dx+dz*dz<r*r;
         });
         if(!nearZone)continue;
+        // The entire 11.6-unit sidewalk and lamp envelope must be dry and
+        // unoccupied, not just the centerline on a long historic road.
+        const fragments=clipAuthoredNycStreet(originalA,originalB,
+          sampleTerrainHeight,cityLotAt,WATER_H);
+        for(const [a,b] of fragments){
         const start=[a[0],STREET_Y,a[1]], end=[b[0],STREET_Y,b[1]];
         pushRoadStrip(addQuad,start,end,11.6,sidewalk);
         pushRoadStrip(addQuad,start,end,8.0,pavement,0.035);
@@ -4536,7 +4677,9 @@ const CENTRAL_PARK_SITES=[
             }
           }
           // Diagonal-road crosswalks; stripes follow the actual road heading.
-          if(i>1 && distance>34 && nycDetailBand(b[0],b[1])>=2){
+          if(i>1 && distance>34 &&
+             Math.hypot(b[0]-originalB[0],b[1]-originalB[1])<.5 &&
+             nycDetailBand(b[0],b[1])>=2){
             const cx=b[0]-fx*3.25,cz=b[1]-fz*3.25;
             for(let lateral=-3.25;lateral<=3.25;lateral+=.83){
               const x0=cx+nx*lateral,z0=cz+nz*lateral;
@@ -4550,6 +4693,7 @@ const CENTRAL_PARK_SITES=[
         for (let j=4;j+2<distance-2;j+=8) {
           const point=t=>[lerp(a[0],b[0],t),STREET_Y,lerp(a[1],b[1],t)];
           pushRoadStrip(addQuad,point(j/distance),point((j+2)/distance),0.15,paint,0.055);
+        }
         }
       }
     }
@@ -4588,9 +4732,14 @@ const CENTRAL_PARK_SITES=[
       box(x,17.15,z,1.65,5,1.65,metal);
       box(x,19.31,z,2.32+Math.abs(Math.sin(yaw))*0.38,0.3,2.43,metal);
     }
-    box(336,19.7,-288,33,0.72,1.8,sidewalk);
-    for(const x of [324,336,348]) box(x,21.5,-288,0.27,3.3,0.34,metal);
-    box(336,23.1,-288,35,0.4,2.1,metal);
+    // Place the elevated platform next to the subway car instead of a
+    // detached deck 13 units from the rails. Keep a door-width boarding gap
+    // and align both platform/canopy with the actual rail geometry.
+    const platformZ=track.z-2.55;
+    box(336,track.height-.10,platformZ,33,.72,1.80,sidewalk);
+    for(const xx of [324,336,348])
+      box(xx,track.height+1.70,platformZ,.27,3.30,.34,metal);
+    box(336,track.height+3.30,platformZ,35,.40,2.10,metal);
   }
 
   function updateBridgeRails() {
@@ -4687,7 +4836,7 @@ const CENTRAL_PARK_SITES=[
         }
         for(let j=0;j<5;j++)
           cityTraffic.push({kind:['sedan','suv','sedan','van','suv'][j],
-            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55});
+            route,offset:23+j*route.total/5.9+i*15,pace:5.2+(j%3)*.55,bridge:i===0});
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
@@ -4892,13 +5041,95 @@ const CENTRAL_PARK_SITES=[
         box(0,1.895,-.105,.30,.045,.022,[.16,.17,.18]);
       }
     } else if(kind==='train') {
-      const z=0;
-      box(0,1.55,z,2.55,2.80,12.7,[0.67,0.72,0.74]);
-      box(0,0.35,z,2.0,0.61,11.8,rubber);
-      for(const side of [-1,1]) for(const w of [-4.4,-2.2,0,2.2,4.4]) {
-        box(1.28*side,1.84,z+w,0.065,0.66,1.04,glass);
+      // NYC-inspired stainless subway car; logo-free original geometry.
+      // Doors, glazing, trucks and roof vents replace a single white cuboid.
+      const steel=[.54,.59,.61],dark=[.18,.23,.27],
+        trim=[.68,.72,.73],blue=[.14,.30,.43];
+      box(0,1.50,0,2.48,2.66,12.62,steel);
+      box(0,.33,0,2.04,.55,11.96,dark);
+      box(0,2.91,0,2.35,.22,12.27,[.45,.50,.52]);
+      for(const side of [-1,1]){
+        const sx=side*1.275;
+        for(const wz of [-5.35,-2.22,2.22,5.35]){
+          box(sx,1.94,wz,.052,.78,.93,dark);
+          box(sx+side*.038,1.94,wz,.036,.64,.79,glass,5);
+          box(sx+side*.071,1.94,wz,.021,.055,.87,trim);
+        }
+        for(const dz of [-3.83,0,3.83]){
+          box(sx,1.48,dz,.058,1.94,1.40,trim);
+          for(const leaf of [-1,1]){
+            const zz=dz+leaf*.345;
+            box(sx+side*.037,1.47,zz,.045,1.77,.665,steel);
+            box(sx+side*.064,1.93,zz,.027,.66,.49,dark);
+            box(sx+side*.080,1.93,zz,.019,.57,.43,glass,5);
+          }
+          box(sx+side*.081,1.37,dz,.030,1.62,.029,dark);
+        }
+        box(sx+side*.055,.80,0,.029,.15,11.75,blue);
+        box(sx+side*.044,2.63,0,.032,.062,12.02,trim);
+        for(const vent of [-5,-3,-1,1,3,5])
+          box(sx+side*.049,.43,vent,.025,.13,.62,dark);
       }
-      box(0,2.12,z+6.38,1.9,0.65,0.065,glass);
+      for(const end of [-1,1]){
+        box(0,2.05,end*6.33,1.67,.77,.071,dark);
+        box(0,2.05,end*6.383,1.52,.61,.035,glass,5);
+        box(0,2.57,end*6.386,.62,.18,.034,blue);
+        for(const side of [-1,1]){
+          box(side*.89,.79,end*6.392,.18,.15,.052,[.85,.85,.75]);
+          box(side*.96,.43,end*6.392,.12,.11,.046,[.66,.16,.13]);
+        }
+      }
+      for(const bz of [-4.48,4.48]){
+        box(0,.22,bz,2.24,.33,1.52,dark);
+        for(const side of [-1,1])for(const dz of [-.44,.44]){
+          box(side*1.06,.31,bz+dz,.25,.56,.56,rubber);
+          box(side*1.20,.31,bz+dz,.055,.29,.28,trim);
+        }
+      }
+      for(const vent of [-4.6,-1.5,1.5,4.6])
+        box(0,3.075,vent,.72,.11,.96,[.33,.39,.42]);
+    } else if(kind==='walker') {
+      // PATROL_NYC_PEDESTRIAN_SILHOUETTE_V1: near-field body volumes follow
+      // shoulder, waist, arm, neck and skull contours. Meshes are created
+      // once, batched in the existing vehicle renderer (no extra draw calls).
+      // No oversized cube head or rectangular Minecraft-style torso.
+      const sides=12;
+      const point=(ring,i)=>{
+        const [y,cx,cz,rx,rz]=ring,a=i*Math.PI*2/sides;
+        return [cx+Math.cos(a)*rx,y,cz+Math.sin(a)*rz];
+      };
+      const loft=(rings,color)=>{
+        for(let j=0;j<rings.length-1;j++)
+          for(let i=0;i<sides;i++)
+            addQuad(point(rings[j],i),point(rings[j],i+1),
+              point(rings[j+1],i+1),point(rings[j+1],i),color);
+        for(let i=0;i<sides;i++){
+          addTri([rings[0][1],rings[0][0],rings[0][2]],
+            point(rings[0],i+1),point(rings[0],i),color);
+          const top=rings.at(-1);
+          addTri([top[1],top[0],top[2]],
+            point(top,i),point(top,i+1),color);
+        }
+      };
+      const shade=clothing.map(v=>Math.max(.07,v*.72));
+      loft([[.78,0,0,.18,.13],[.93,0,0,.20,.15],
+        [1.14,0,.015,.23,.165],[1.36,0,.01,.265,.155],
+        [1.46,0,.01,.15,.12]],clothing);
+      loft([[1.44,0,.018,.075,.077],[1.54,0,.02,.077,.077]],skin);
+      loft([[1.51,0,.035,.075,.075],[1.56,0,.035,.13,.115],
+        [1.70,0,.035,.143,.130],[1.77,0,.035,.119,.111],
+        [1.81,0,.035,.035,.035]],skin);
+      // Hair covers the cranium without cartoon facial decals.
+      loft([[1.72,0,.023,.130,.121],[1.77,0,.023,.126,.115],
+        [1.83,0,.023,.026,.026]],shade);
+      for(const side of [-1,1]){
+        loft([[1.39,side*.243,.015,.095,.095],
+          [1.22,side*.30,.030,.079,.082],
+          [1.01,side*.344,.053,.058,.065]],clothing);
+        loft([[1.01,side*.344,.053,.058,.064],
+          [.91,side*.351,.063,.052,.050],
+          [.885,side*.353,.065,.032,.033]],skin);
+      }
     } else {
       box(0,1.12,0,0.48,0.65,0.29,clothing);
       box(0,1.63,0.035,0.27,0.33,0.26,skin);
@@ -5053,8 +5284,19 @@ const CENTRAL_PARK_SITES=[
     return mesh.upload();
   })();
   const walkerLeg=(()=>{
-    const {addQuad,upload}=createTriangleMesh();
-    addModelBox(addQuad,0,-0.39,0,0.18,0.78,0.22,[0.24,0.26,0.31]);
+    const {addQuad,addTri,upload}=createTriangleMesh();
+    // Tapered trousers and a formed sole, instead of one upright leg cube.
+    const n=10,cloth=[.24,.26,.31],shoe=[.10,.13,.15];
+    const at=(y,rx,rz,k)=>[Math.cos(k*Math.PI*2/n)*rx,
+      y,Math.sin(k*Math.PI*2/n)*rz];
+    for(let k=0;k<n;k++){
+      addQuad(at(-.02,.115,.135,k),at(-.02,.115,.135,k+1),
+        at(-.69,.085,.105,k+1),at(-.69,.085,.105,k),cloth);
+      addQuad(at(-.69,.085,.105,k),at(-.69,.085,.105,k+1),
+        at(-.77,.104,.18,k+1),at(-.77,.104,.18,k),shoe);
+      addTri([0,-.77,0],at(-.77,.104,.18,k+1),
+        at(-.77,.104,.18,k),shoe);
+    }
     return upload();
   })();
 
@@ -5099,6 +5341,13 @@ const CENTRAL_PARK_SITES=[
       const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
       const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
       if (distanceSq>455*455) continue;
+      // PATROL_NYC_TRAFFIC_WATERLINE_V1: traffic on the authored bridge
+      // uses bridgeRoadHeight, but ordinary downtown streets are clipped at
+      // the coast. Do not render cars/pedestrians on an absent road in water.
+      // Expressway actors have their own elevated deck heights. Wrecks use
+      // separate impact physics rather than disappearing at the shoreline.
+      if(selectedMap.city && !actor.bridge && !actor.expressway &&
+         !actor.wreck && sampleTerrainHeight(x,z)<=WATER_H+.08)continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
       if(actor.kind==='walker'){
         drawStreetWalker(drawMesh,streetMeshes.walker,{x,y,z,yaw,stride:Math.sin(sceneryTime*7.2+actor.offset)*0.45},distanceSq<130*130);
@@ -5158,26 +5407,62 @@ const CENTRAL_PARK_SITES=[
   function nycParcelCrossesRoad(lot,roadMargin=5.85){
     if(!lot||![lot[0],lot[1],lot[2],lot[3]].every(Number.isFinite))return true;
     const [x,z,w,d]=lot;
-    const minX=x-w*.5-roadMargin,maxX=x+w*.5+roadMargin;
-    const minZ=z-d*.5-roadMargin,maxZ=z+d*.5+roadMargin;
-    // Reserve both ordinary streets and waterfront expressway/ramp corridors.
-    // A conservative footprint clear keeps elevated decks from crossing roofs.
+    // The surveyed NYC polygon is more accurate than its bounding box.
+    // Keep the old conservative box clearance for procedural buildings.
+    const poly=Array.isArray(lot[7])&&lot[7].length>=3&&lot[7].length<=64&&
+      lot[7].every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))
+      ?lot[7]:null;
+    const extents=poly||[[x-w*.5,z-d*.5],[x+w*.5,z+d*.5]];
+    const minX=Math.min(...extents.map(p=>p[0]))-roadMargin,
+          maxX=Math.max(...extents.map(p=>p[0]))+roadMargin;
+    const minZ=Math.min(...extents.map(p=>p[1]))-roadMargin,
+          maxZ=Math.max(...extents.map(p=>p[1]))+roadMargin;
+    const distanceSq=(p,a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+      const t=den>0?Math.max(0,Math.min(1,
+        ((p[0]-a[0])*dx+(p[1]-a[1])*dz)/den)):0;
+      return (p[0]-a[0]-dx*t)**2+(p[1]-a[1]-dz*t)**2;
+    };
+    const orient=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    const marginSq=roadMargin*roadMargin;
+    // Measure the road centerline to each real polygon edge, including
+    // intersections where neither road endpoint lies inside the building.
+    const polygonTouches=(a,b)=>{
+      if(insideCityFootprint(a[0],a[1],poly)||
+         insideCityFootprint(b[0],b[1],poly))return true;
+      for(let i=0;i<poly.length;i++){
+        const c=poly[i],d=poly[(i+1)%poly.length],
+              o1=orient(a,b,c),o2=orient(a,b,d),
+              o3=orient(c,d,a),o4=orient(c,d,b);
+        if(((o1>0&&o2<0)||(o1<0&&o2>0))&&
+           ((o3>0&&o4<0)||(o3<0&&o4>0)))return true;
+        if(Math.min(distanceSq(a,c,d),distanceSq(b,c,d),
+          distanceSq(c,a,b),distanceSq(d,a,b))<=marginSq)return true;
+      }
+      return false;
+    };
     for(const path of [...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp])
       for(let j=1;j<path.length;j++){
-      const a=path[j-1],b=path[j];
-      if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
-         Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
-      const dx=b[0]-a[0],dz=b[1]-a[1];
-      let entry=0,exit=1;
-      for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
-        if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
-        const t0=(lo-p)/v,t1=(hi-p)/v;
-        entry=Math.max(entry,Math.min(t0,t1));
-        exit=Math.min(exit,Math.max(t0,t1));
-        if(entry>exit)break;
+        const a=path[j-1],b=path[j];
+        if(Math.max(a[0],b[0])<minX||Math.min(a[0],b[0])>maxX||
+           Math.max(a[1],b[1])<minZ||Math.min(a[1],b[1])>maxZ)continue;
+        if(poly){
+          if(polygonTouches(a,b))return true;
+          continue;
+        }
+        // Original swept AABB filter for non-GIS parcels.
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        let entry=0,exit=1;
+        for(const [lo,hi,p,v] of [[minX,maxX,a[0],dx],[minZ,maxZ,a[1],dz]]){
+          if(Math.abs(v)<1e-9){if(p<lo||p>hi){entry=2;break;}continue;}
+          const t0=(lo-p)/v,t1=(hi-p)/v;
+          entry=Math.max(entry,Math.min(t0,t1));
+          exit=Math.min(exit,Math.max(t0,t1));
+          if(entry>exit)break;
+        }
+        if(entry<=exit)return true;
       }
-      if(entry<=exit)return true;
-    }
     return false;
   }
 
@@ -5636,6 +5921,28 @@ const CENTRAL_PARK_SITES=[
               frontage,.24,h*.86,.13,mortar);
           }
         }
+        // Historic segmental brick window arches above the first warehouse
+        // mezzanine. These follow the same upper-window bay centers used
+        // below, rather than adding pasted-on decals or cloned box windows.
+        // Only selected near-field LOD3 bricks pay for the curved silhouettes.
+        if(detailBand===3 && h>10 && archType%3===0){
+          const bays=Math.max(2,Math.min(4,Math.floor(w/2.9)));
+          const stride=(w-.72)/bays;
+          const archSpan=Math.min(1.52,(w-.85)/bays*.68)+.14;
+          const brickLip=material.map(v=>Math.min(.82,v*1.14));
+          for(const side of [-1,1])for(let bay=0;bay<bays;bay++){
+            const cx=x+(bay-(bays-1)/2)*stride;
+            const face=z+side*(d*.5+.14);
+            const archPoint=t=>{
+              const u=t*2-1;
+              return [cx+u*archSpan*.5,
+                y+4.87+.32*(1-u*u),face];
+            };
+            for(let k=0;k<8;k++)
+              addRideBeam(addQuad,archPoint(k/8),archPoint((k+1)/8),
+                .047,brickLip);
+          }
+        }
         // Exterior service/fire escape on one facade: narrow mesh platforms,
         // railings and angled stair braces, not solid balcony cubes.
         const fireSide=(archType&1)?1:-1;
@@ -5653,6 +5960,38 @@ const CENTRAL_PARK_SITES=[
             addRideBeam(addQuad,[x+w*.19,y+level,fireZ],
               [x-w*.19,y+level+3.25,fireZ],.065,stepSteel);
           }
+        }
+      }
+      // PATROL_DUMBO_WATER_TANK_V1 — an occasional timber roof tank breaks
+      // the repeated rectangular block silhouette without importing a
+      // cartoon tower. Every curved face shares the existing city mesh.
+      // Fit entirely inside an established Brooklyn building footprint.
+      if(bridgeheadBrooklyn && !destroyed && detailBand===3 &&
+         h>12 && w>7 && d>10 && archType%5===2){
+        const tx=x+w*.16,tz=z+d*.12,roofY=y+h;
+        const n=16,r=.76+(archType%3)*.055;
+        const lower=roofY+1.13,upper=lower+1.43;
+        const woodTones=[[.37,.29,.21],[.34,.27,.20],[.40,.31,.23],
+          [.32,.25,.19]];
+        const darkHoop=[.21,.24,.26],cap=[.30,.32,.33];
+        const p=(k,yy,rad=r)=>{
+          const ang=k*Math.PI*2/n;
+          return [tx+Math.cos(ang)*rad,yy,tz+Math.sin(ang)*rad];
+        };
+        for(let k=0;k<n;k++){
+          addQuad(p(k,lower),p(k+1,lower),p(k+1,upper),p(k,upper),
+            woodTones[(archType+k)%woodTones.length]);
+          addTri([tx,upper+.21,tz],p(k,upper),p(k+1,upper),cap);
+          for(const yy of [lower+.18,upper-.18])
+            addRideBeam(addQuad,p(k,yy,r+.019),
+              p(k+1,yy,r+.019),.024,darkHoop);
+        }
+        // Open steel trestle below the barrel; supports are roof-anchored.
+        for(let k=0;k<4;k++){
+          const at=p(k*4,lower,r*.79);
+          addRideBeam(addQuad,[at[0],roofY+.15,at[2]],at,.074,darkHoop);
+          addRideBeam(addQuad,[at[0],roofY+.62,at[2]],
+            [tx,roofY+.77,tz],.034,darkHoop);
         }
       }
       // PATROL_NYC_AAA_LAYERS_V2: geometry-first near-field Manhattan;
@@ -6133,11 +6472,16 @@ const CENTRAL_PARK_SITES=[
         }
       }
       for(const [cx,cz] of candidates){
+        // Sample seven points per axis across the full foundation and margin.
+        // Even a 5x5 grid can miss a narrow inlet between quarter-points.
         const heights=[];
-        for(const ux of [-.5,0,.5])for(const uz of [-.5,0,.5])
+        for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++){
+          const ux=ix/6-.5,uz=iz/6-.5;
           heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
+        }
         const low=Math.min(...heights),high=Math.max(...heights);
-        if(low<=WATER_H+1.0||high-low>maxSlope)continue;
+        if(!Number.isFinite(low)||!Number.isFinite(high)||
+           low<=WATER_H+1.0||high-low>maxSlope)continue;
         if(alaskaObstacles.some(o=>Math.abs(cx-o.x)<w*.5+o.halfX+2.2 &&
            Math.abs(cz-o.z)<d*.5+o.halfZ+2.2))continue;
         return {x:cx,z:cz,y:low,top:high};
@@ -6239,8 +6583,17 @@ const CENTRAL_PARK_SITES=[
       const porchZ=z-l/2-1.10;
       const porchTerrain=[-1.1,0,1.1].map(dx=>
         sampleTerrainHeight(doorX+dx,porchZ));
+      // The centerline alone misses flooded corners on narrow fjord inlets.
+      // Check the entire 2.66 m by 1.88 m deck at its actual outer edges.
+      const porchFootprintTerrain=[];
+      for(const dx of [-1.33,-.665,0,.665,1.33])
+        for(const dz of [-.94,-.47,0,.47,.94])
+          porchFootprintTerrain.push(sampleTerrainHeight(
+            doorX+dx,porchZ+dz));
       if(Math.min(...porchTerrain)>WATER_H+.95 &&
-          Math.max(...porchTerrain)-Math.min(...porchTerrain)<2.4){
+          Math.max(...porchTerrain)-Math.min(...porchTerrain)<2.4 &&
+          porchFootprintTerrain.every(h=>Number.isFinite(h)&&h>WATER_H+.95) &&
+          Math.max(...porchFootprintTerrain)-Math.min(...porchFootprintTerrain)<2.4){
         const porch=floor+.05;
         box(doorX,porch-.11,porchZ,2.66,.22,1.88,[.42,.33,.24]);
         for(const dx of [-1.08,1.08]){
@@ -6250,7 +6603,14 @@ const CENTRAL_PARK_SITES=[
         }
         // Offset treads follow the downhill elevation, never hang over water.
         const stepZ=porchZ-1.02,stepGround=sampleTerrainHeight(doorX,stepZ);
-        if(stepGround>WATER_H+.95 && porch-stepGround<2.5){
+        // Treads project beyond their centerline toward water; inspect edges.
+        const stepTerrain=[];
+        for(const dx of [-.86,0,.86])
+          for(const dz of [-.43,0,.18])
+            stepTerrain.push(sampleTerrainHeight(doorX+dx,stepZ+dz));
+        if(stepGround>WATER_H+.95 && porch-stepGround<2.5 &&
+            stepTerrain.every(h=>Number.isFinite(h)&&h>WATER_H+.95) &&
+            Math.max(...stepTerrain)-Math.min(...stepTerrain)<2.4){
           const levels=Math.max(1,Math.ceil((porch-stepGround)/.29));
           for(let n=0;n<levels;n++){
             const treadY=porch-(n+1)*(porch-stepGround)/levels;
@@ -6739,7 +7099,7 @@ const CENTRAL_PARK_SITES=[
   let sceneryObjects=[];
   let sceneryMovers=[];
 
-  function findScenerySite(x,z,{water=false,footprint=7,range=90,avoid}={}) {
+  function findScenerySite(x,z,{water=false,footprint=7,range=90,avoid,validate}={}) {
     let nearest=null, best=Infinity;
     for(let dx=-range;dx<=range;dx+=9) for(let dz=-range;dz<=range;dz+=9){
       const score=dx*dx+dz*dz;
@@ -6755,6 +7115,19 @@ const CENTRAL_PARK_SITES=[
         const altitude=sampleTerrainHeight(sx,sz);
         return water?altitude<=WATER_H:!cityLotAt(sx,sz)&&Math.abs(altitude-y)<2.6&&altitude>WATER_H+0.8;
       })||(!water&&cityLotAt(east,north)))continue;
+      // ALASKA_FULL_FOOTPRINT_V1: a shoreline inlet can pass four corners
+      // yet bisect the foundations. Validate interior fifth-grid samples too.
+      if(selectedMap.alaska&&!water){
+        let valid=true;
+        for(let ix=-2;ix<=2&&valid;ix++)for(let iz=-2;iz<=2;iz++){
+          const sx=east+ix*footprint*.5,sz=north+iz*footprint*.5;
+          const altitude=sampleTerrainHeight(sx,sz);
+          if(altitude<=WATER_H+1.0||
+             Math.abs(altitude-y)>2.6||cityLotAt(sx,sz)){valid=false;break;}
+        }
+        if(!valid)continue;
+      }
+      if(validate&&!validate(east,north))continue;
       nearest={x:east,z:north,y};
       best=score;
     }
@@ -6870,7 +7243,7 @@ const CENTRAL_PARK_SITES=[
           waterY:WATER_H,groundY:sampleTerrainHeight(-140,-611),
           spawn:NYC_HERO_ROUTE.spawn,liberty:NYC_HERO_ROUTE.liberty
         });
-        buildManhattanWaterfront({
+        const waterfront=buildManhattanWaterfront({
           addQuad:detail.addQuad,
           box:(...args)=>addModelBox(detail.addQuad,...args),
           beam:(a,b,w,c)=>addRideBeam(detail.addQuad,a,b,w,c),
@@ -6879,7 +7252,13 @@ const CENTRAL_PARK_SITES=[
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
-        else nycHeroScenery=uploaded;
+        else {
+          nycHeroScenery=uploaded;
+          // Activate colliders only for the same NYC scene generation that
+          // owns these pier meshes. Map changes reset sceneryObjects, while
+          // stale asynchronous loads must never leak obstacles into Alaska.
+          sceneryObjects.push(...waterfront.pierObstacles);
+        }
       }).catch(error=>console.warn('[PATROL] Harbor detail fallback:',error));
     }
     // Park geometry uses a separate, bounded triangle batch, but the same
@@ -6947,15 +7326,32 @@ const CENTRAL_PARK_SITES=[
       for(let i=0;i<sides;i++)mesh.addTri([x,tip[0],z],point(tip,i),point(tip,i+1),color);
     }
 
+    // Alaska-only surveyed foundation: reject submerged inlets and steep
+    // slopes across the complete cabin footprint, not only the corners.
+    function alaskaShedPad(x,z,w,d){
+      const heights=[];
+      for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++){
+        const px=x+(ix/6-.5)*(w+.8),pz=z+(iz/6-.5)*(d+.8);
+        heights.push(sampleTerrainHeight(px,pz));
+      }
+      if(!heights.every(Number.isFinite))return null;
+      const low=Math.min(...heights),high=Math.max(...heights);
+      if(low<=WATER_H+1.0||high-low>2.15)return null;
+      return {low,top:high+.12};
+    }
     function shed(site,w,l,body,roofHeight,name){
-      const {x,y,z}=site;
-      // A sea-clamped terrain value cannot support an Alaska cabin.
+      let {x,y,z}=site;
       if(selectedMap.alaska){
-        const samples=[];
-        for(const sx of [-.5,0,.5])for(const sz of [-.5,0,.5])
-          samples.push(sampleTerrainHeight(x+sx*(w+.8),z+sz*(l+.8)));
-        if(Math.min(...samples)<=WATER_H+.82 ||
-           Math.max(...samples)-Math.min(...samples)>2.15)return false;
+        const pad=alaskaShedPad(x,z,w,l);
+        if(!pad)return false;
+        // Raise the foundation to the highest surveyed terrain sample and
+        // visibly support its lower corners instead of floating on the slope.
+        y=pad.top;
+        for(const dx of [-.4,.4])for(const dz of [-.4,.4]){
+          const sx=x+dx*w,sz=z+dz*l,base=sampleTerrainHeight(sx,sz);
+          const height=Math.max(.25,y-base);
+          box(sx,base+height*.5,sz,.27,height,.27,[.36,.31,.26]);
+        }
       }
       box(x,y+1.8,z,w,3.7,l,body);
       const a=x-w/2-.35,b=x+w/2+.35,f=z-l/2-.3,k=z+l/2+.3;
@@ -6971,12 +7367,16 @@ const CENTRAL_PARK_SITES=[
     }
 
     if(selectedMap.alaska) {
-      const camp=findScenerySite(150,314,{footprint:13});
+      // The original small search has no buildable full-footprint site in
+      // the actual USGS DEM; retain the glacier corridor with a bounded search.
+      const camp=findScenerySite(150,314,{footprint:8,range:180,
+        validate:(x,z)=>Boolean(alaskaShedPad(x,z,10,13))});
       if(camp && shed(camp,10,13,[0.80,0.45,0.21],1.5,'research cabin')){
         place('Glacier Research Camp',camp);
         // A second building gets its own land-clearance/spacing survey.
         const annex=findScenerySite(camp.x+17,camp.z+7,{
           footprint:5,range:27,
+          validate:(x,z)=>Boolean(alaskaShedPad(x,z,8,9)),
           avoid:(x,z)=>Math.abs(x-camp.x)<11&&Math.abs(z-camp.z)<12
         });
         if(annex)shed(annex,8,9,[0.62,0.68,0.69],1.1,'research cabin');
@@ -8079,8 +8479,28 @@ const CENTRAL_PARK_SITES=[
         };
         const segments=Math.ceil(length/3.2);
         for(let j=0;j<segments;j++){
-          addQuad(point(j/segments,1),point(j/segments,-1),
-            point((j+1)/segments,-1),point((j+1)/segments,1),color);
+          const first=point(j/segments,1),second=point(j/segments,-1),
+            third=point((j+1)/segments,-1),fourth=point((j+1)/segments,1);
+          // ALASKA_SAFE_ROAD_GATE_V1: clip road pieces intersecting water.
+          // A strip must be dry across its full width, not just its center.
+          if(selectedMap.alaska){
+            // A narrow tidal inlet can pass BETWEEN corner/midpoint samples.
+            // Survey quarter-length intervals across the entire road width,
+            // keeping only dry mesh pieces rather than deleting whole routes.
+            let flooded=false;
+            for(const fraction of [0,.25,.5,.75,1]){
+              const t=(j+fraction)/segments;
+              for(const side of [-1,0,1]){
+                const p=point(t,side);
+                if(sampleTerrainHeight(p[0],p[2])<=WATER_H+.92){
+                  flooded=true;break;
+                }
+              }
+              if(flooded)break;
+            }
+            if(flooded)continue;
+          }
+          addQuad(first,second,third,fourth,color);
         }
       }
     };
@@ -10109,7 +10529,32 @@ const CENTRAL_PARK_SITES=[
   function sampleGroundHeight(x,z) {
     const terrain=sampleTerrainHeight(x,z);
     const lot=cityLotAt(x,z);
-    return lot ? Math.max(terrain,WATER_H+2.38+(lot[6]?1.75:lot[4])) : terrain;
+    if(!lot)return terrain;
+    let roof=Math.max(terrain,WATER_H+2.38+(lot[6]?1.75:lot[4]));
+    // PATROL_DUMBO_WATER_TANK_COLLISION_V1: the 16-sided Brooklyn roof
+    // tanks are rendered above their roofs, not included in the building
+    // parcel's base height. Model their actual circular barrel footprint,
+    // rather than creating an invisible wall across the entire roof.
+    // Keep exactly the same site, LOD and deterministic style gate as the
+    // physical mesh in buildCityBuildings().
+    if(selectedMap.city && !lot[7] && !lot[6] &&
+       lot[0]>205&&lot[0]<435&&lot[1]>-415&&lot[1]<-195 &&
+       lot[4]>12&&lot[2]>7&&lot[3]>10 &&
+       nycDetailBand(lot[0],lot[1])===3){
+      const gx=Math.floor((lot[0]-MANHATTAN_GRID.tilt*lot[1]-
+        MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);
+      const gz=Math.floor(lot[1]/MANHATTAN_GRID.blockLength);
+      const seed=(Math.imul(gx,73856093)^Math.imul(gz,19349663)^
+        Math.imul(gx*gz,83492791))>>>0;
+      const archType=seed%13;
+      if(archType%5===2){
+        const tx=lot[0]+lot[2]*.16,tz=lot[1]+lot[3]*.12;
+        const radius=.76+(archType%3)*.055;
+        if(Math.hypot(x-tx,z-tz)<radius+.09)
+          roof=Math.max(roof,WATER_H+2.38+lot[4]+2.77);
+      }
+    }
+    return roof;
   }
 
   function navigationSurface(x, z) {
@@ -10325,6 +10770,10 @@ const CENTRAL_PARK_SITES=[
       detail:'Stone towers, suspension cables and lit approaches'},
     {name:'Brooklyn Bridge · Deck View',x:82,z:-342,height:15.0,bearing:115,radius:41,rise:8,
       detail:'Close to the suspension cables, raised timber walkway and limestone towers'},
+    // Dedicated close-view camera lets CI inspect Brooklyn street façades
+    // and block infill, rather than only the suspension bridge foreground.
+    {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
+      detail:'Inspect industrial brick facades, rooflines, road grid and street fixtures'},
     {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,
       detail:'Different working piers, ferry dock, handrails and shoreline masonry'},
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
@@ -12564,22 +13013,61 @@ const CENTRAL_PARK_SITES=[
     return true;
   }
   function usableFloatWater(x,z,yaw=plane.yaw){
-    if(selectedMap.city && !clearOfNycHeroDocks(x,z))return false;
-    // Nine samples cover the LENGTH and both FLOATS, not just center.
-    // A water touchdown on an island, shallow coast or pier is not valid.
-    const fx=Math.sin(yaw),fz=Math.cos(yaw),sx=fz,sz=-fx;
-    for(const along of [-3.05,0,3.05])for(const across of [-1.85,0,1.85]){
-      const px=x+fx*along+sx*across,pz=z+fz*along+sz*across;
-      if(sampleTerrainHeight(px,pz)>WATER_H+.06 ||
-         cityLotAt(px,pz)||sceneryObstacle(px,pz))return false;
-      if(selectedMap.alaska && alaskaObstacles.some(o=>
-        Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
+    // Water taxi and touchdown share the moving-vessel clearance gate.
+    // Keep this check inside the exported game function: collision tests
+    // also execute the same function independently of the scene closure.
+    if(typeof boats!=='undefined'&&typeof sceneryPose==='function'&&
+       typeof sceneryTime!=='undefined'){
+      for(const ship of boats){
+        if(!ship||!Number.isFinite(ship.halfLength)||
+           !Number.isFinite(ship.halfWidth))continue;
+        const [bx,bz,heading]=sceneryPose(ship,sceneryTime);
+        if(![bx,bz,heading].every(Number.isFinite))continue;
+        const dx=x-bx,dz=z-bz;
+        // Use the dimensioned C185's 7.8105 m length and 10.922 m span.
+        // The wing-and-float envelope rotates relative to the vessel.
+        const halfLength=3.90525,halfSpan=5.461,buffer=.60;
+        const maxReach=Math.hypot(ship.halfLength,ship.halfWidth)+
+          Math.hypot(halfLength,halfSpan)+buffer;
+        if(Math.hypot(dx,dz)>maxReach)continue;
+        const fx=Math.sin(heading),fz=Math.cos(heading);
+        const along=dx*fx+dz*fz,across=dx*fz-dz*fx;
+        const parallel=Math.abs(Math.cos(yaw-heading));
+        const perpendicular=Math.abs(Math.sin(yaw-heading));
+        const marginAlong=halfLength*parallel+halfSpan*perpendicular+buffer;
+        const marginAcross=halfLength*perpendicular+halfSpan*parallel+buffer;
+        // Four-axis separation (both hull axes and both aircraft axes).
+        // Two-axis AABB rejection alone blocks safe diagonal taxi gaps.
+        if(Math.abs(along)>=ship.halfLength+marginAlong ||
+           Math.abs(across)>=ship.halfWidth+marginAcross)continue;
+        const alongPlane=dx*Math.sin(yaw)+dz*Math.cos(yaw);
+        const acrossPlane=dx*Math.cos(yaw)-dz*Math.sin(yaw);
+        const shipAlong=ship.halfLength*parallel+ship.halfWidth*perpendicular;
+        const shipAcross=ship.halfLength*perpendicular+ship.halfWidth*parallel;
+        if(Math.abs(alongPlane)<halfLength+shipAlong+buffer &&
+           Math.abs(acrossPlane)<halfSpan+shipAcross+buffer)return false;
+      }
     }
+    // Audit the entire twin-pontoon water contact envelope, not just its
+    // center and four corners. Thin shore fingers can hide between the old
+    // nine test points, leading to stranded or partly beached floatplanes.
+    const fx=Math.sin(yaw),fz=Math.cos(yaw),sx=fz,sz=-fx;
+    for(const along of [-3.05,-1.525,0,1.525,3.05])
+      for(const across of [-1.85,-.925,0,.925,1.85]){
+        const px=x+fx*along+sx*across,pz=z+fz*along+sz*across;
+        // Check wing/pontoon clearance against actual authored harbor docks
+        // at every sampled contact point; center-only checks miss dock edges.
+        if(selectedMap.city && !clearOfNycHeroDocks(px,pz))return false;
+        if(sampleTerrainHeight(px,pz)>WATER_H+.06 ||
+           cityLotAt(px,pz)||sceneryObstacle(px,pz))return false;
+        if(selectedMap.alaska && alaskaObstacles.some(o=>
+          Math.abs(px-o.x)<o.halfX+.25&&Math.abs(pz-o.z)<o.halfZ+.25))return false;
+      }
     return true;
   }
   function findFloatWaterStart(){
     // Deterministic, bounded search over measured shorelines / actual city lots.
-    // The nine-point pontoon footprint gate is shared with landing checks.
+    // The dense pontoon footprint gate is shared with landing checks.
     // Keep clear of moving ships at the moment the plane is placed.
     const start=selectedMap.spawn||[0,40,0];
     const limit=(selectedMap.city?NYC_FLIGHT_RADIUS:FLIGHT_RADIUS)-18;
@@ -12595,13 +13083,23 @@ const CENTRAL_PARK_SITES=[
     // water runway to accelerate, rotate and climb away from shore.
     // The original Alaska spawn faces dry USGS land just ~40 units ahead;
     // try perpendicular headings before relocating the aircraft.
+    // Keep Alaska's water lane clear through the initial climb and out
+    // of the world-edge auto-turn zone, not just during the first taxi.
+    const runwayLength=selectedMap.alaska?132:94;
+    const approachLimit=selectedMap.alaska
+      ?FLIGHT_RADIUS-WARNING_DISTANCE-8:limit;
     const runwayClear=(x,z,yaw)=>{
       const fx=Math.sin(yaw),fz=Math.cos(yaw);
-      for(const advance of [0,18,36,54,76,94]){
+      const endX=x+fx*runwayLength,endZ=z+fz*runwayLength;
+      // A line segment stays within this disk if both ends are inside.
+      if(Math.hypot(x,z)>approachLimit ||
+         Math.hypot(endX,endZ)>approachLimit)return false;
+      for(let advance=0;advance<runwayLength;advance+=6){
         const px=x+fx*advance,pz=z+fz*advance;
         if(!safe(px,pz,yaw))return false;
       }
-      return true;
+      // The 94m general-water runway needs its final 4m checked too.
+      return safe(endX,endZ,yaw);
     };
     const headings=primary=>[primary,primary+Math.PI/2,
       primary-Math.PI/2,primary+Math.PI];

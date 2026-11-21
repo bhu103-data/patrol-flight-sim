@@ -1,6 +1,6 @@
 // PATROL NYC original, static LED artwork. No video, no tracking, no remote assets.
 // Art imitates Times Square design grammar; it does not reproduce real ads.
-// PATROL_NYC_UNIQUE_ADS_V6: non-repeating creatives within a
+// PATROL_NYC_UNIQUE_ADS_V6 / EDITORIAL_COPY_V8: non-repeating creatives within a
 // retained browser history. Campaign IDs are monotonic across scenery rebuilds.
 let ephemeralCampaign=0;
 function reserveCreativeSerials(count) {
@@ -17,7 +17,7 @@ function reserveCreativeSerials(count) {
   catch(_error){}
   return {start,nonce};
 }
-function campaignDetails(serial,nonce) {
+export function campaignDetails(serial,nonce) {
   const prefixes=['ASTRA','MERIDIAN','ARCADIA','VANTAGE','ORIGIN','SKYLARK',
     'CALDER','CIRRUS','AURORA','NEXUS','ATELIER','KINETIC','LANTERN',
     'HORIZON','ELEVATE','SOLSTICE','NORTH','MARQUE','STELLAR','CRESCENT',
@@ -29,10 +29,33 @@ function campaignDetails(serial,nonce) {
   // Pairwise different art genres for the first 16 adjacent billboards.
   // The session number is also exposed as a distinctive graphic, not only
   // as invisible bookkeeping or small-print copyright.
-  const artGenre=(Math.imul(serial,11)+(nonce>>>8))%16;
+  // Math.imul is signed 32-bit: normalize before modulo so long-lived
+  // browser histories never yield a negative index into AD_COPY.
+  const artGenre=((Math.imul(serial,11)+(nonce>>>8))>>>0)%16;
+  // Each category has its own editorial voice. The small edition number
+  // supplies cross-rebuild uniqueness without a visible debug "CREATIVE" stamp.
+  const AD_COPY=[
+    ['EVERY SECOND MATTERS','The art of precision'],
+    ['MADE TO MOVE WITH YOU','A new silhouette'],
+    ['TASTE THE MOMENT','An original blend'],
+    ['SEE THE CITY DIFFERENTLY','Your next destination'],
+    ['BUILT FOR YOUR NEXT STEP','The everyday collection'],
+    ['A CLEARER CONNECTION','The future in hand'],
+    ['LIGHTS. CITY. ACTION.','A night worth seeing'],
+    ['LESS, BUT BETTER','Daily rituals, reimagined'],
+    ['THE ROAD IS YOURS','Discover the drive'],
+    ['HEAR EVERY DETAIL','Sound without limits'],
+    ['GO BEYOND THE ORDINARY','Journeys start here'],
+    ['THE FINISHING TOUCH','Objects of distinction'],
+    ['SAVOR SOMETHING NEW','Made for the table'],
+    ['PLAY WITHOUT LIMITS','A world in your hands'],
+    ['DESIGN THE FUTURE','Ideas made visible'],
+    ['FRAME YOUR WORLD','Create the unexpected']
+  ];
+  const [headline,strapline]=AD_COPY[artGenre];
   return {title:prefixes[key%prefixes.length]+' '+suffixes[Math.floor(key/29)%suffixes.length],
     serial:serial.toString(36).toUpperCase().padStart(6,'0'),
-    seed:key,theme:artGenre};
+    seed:key,theme:artGenre,headline,strapline};
 }
 const PALETTES=[
   ['#101b31','#067cb5','#d5f8ff'],['#1c092a','#e03974','#fff2d5'],
@@ -240,7 +263,10 @@ function panelArt(ctx,x,y,size,info,index,campaign){
     ctx.fillStyle='#e8d2a0';ctx.fillRect(w*.75,h*.39,w*.055,h*.035);
   }
   ctx.restore();
-  const label=(info?.label||'NEW YORK').toUpperCase().replace(/[^A-Z0-9 &'-]/g,'').slice(0,24);
+  // Screen-specific copy instead of repeating the map name or large
+  // testing serial on every billboard. The issue code remains in microtype.
+  const locationLabel=(info?.label||'NEW YORK').toUpperCase()
+    .replace(/[^A-Z0-9 &'-]/g,'').slice(0,24);
   const variant=(campaign.seed>>>12)%7;
   ctx.save();ctx.globalAlpha=.10;ctx.fillStyle=ink;
   for(let j=0;j<2+variant;j++){
@@ -250,23 +276,19 @@ function panelArt(ctx,x,y,size,info,index,campaign){
   ctx.restore();
   ctx.shadowColor='rgba(0,0,0,.72)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
   ctx.fillStyle=ink;ctx.textBaseline='top';
-  ctx.font='800 '+Math.round(size*.095)+'px Arial, sans-serif';
-  ctx.fillText(campaign.title,size*.075,size*.075,size*.85);
-  ctx.font='800 '+Math.round(size*.048)+'px Arial, sans-serif';
-  ctx.fillText('CREATIVE '+serial,size*.075,size*.185,size*.80);
-  ctx.font='900 '+Math.round(size*.077)+'px Arial, sans-serif';
-  const split=label.length>14?label.split(' '):[label];
-  if(split.length>1 && label.length>14){
-    ctx.fillText(split.slice(0,2).join(' '),size*.07,size*.73,size*.86);
-    ctx.fillText(split.slice(2).join(' ')||'NEW YORK',size*.07,size*.82,size*.85);
-  }else ctx.fillText(label,size*.07,size*.78,size*.87);
+  const titleY=(kind%3===0?.065:.082);
+  ctx.font='800 '+Math.round(size*.088)+'px Arial, sans-serif';
+  ctx.fillText(campaign.title,size*.075,size*titleY,size*.85);
+  ctx.font='600 '+Math.round(size*.045)+'px Arial, sans-serif';
+  ctx.fillText(campaign.strapline.toUpperCase(),size*.075,size*.186,size*.84);
+  ctx.font='900 '+Math.round(size*.072)+'px Arial, sans-serif';
+  ctx.fillText(campaign.headline,size*.07,size*.788,size*.87);
   ctx.shadowBlur=0;ctx.shadowOffsetY=0;
   ctx.strokeStyle='rgba(255,255,255,.50)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(size*.075,size*.17);ctx.lineTo(size*.22,size*.17);ctx.stroke();
   ctx.fillStyle='rgba(255,255,255,.75)';
-  ctx.font=Math.round(size*.032)+'px Arial, sans-serif';
-  ctx.fillText(['DISCOVER MORE','NYC EDITION','WINTER 2026','ONLY HERE'][index%4]
-    +'  /  CAMPAIGN '+serial,size*.075,size*.94);
+  ctx.font=Math.round(size*.027)+'px Arial, sans-serif';
+  ctx.fillText(locationLabel+'  /  EDITION '+serial,size*.075,size*.943,size*.86);
   // Fine, static LED matrix and seam texture, without dynamic animation.
   ctx.fillStyle='rgba(0,0,0,.075)';
   for(let yy=2;yy<size;yy+=5)ctx.fillRect(0,yy,size,1);

@@ -26,10 +26,10 @@ const water=new Function('plane','WATER_H','sampleTerrainHeight','cityLotAt',
   'sceneryObstacle','selectedMap','alaskaObstacles',
   html.slice(waterStart,runwayStart)+'return usableFloatWater;')(
     {yaw:0},12.2,terrain,()=>false,()=>false,alaska,[]);
-const find=new Function('selectedMap','NYC_FLIGHT_RADIUS','FLIGHT_RADIUS',
+const find=new Function('selectedMap','NYC_FLIGHT_RADIUS','FLIGHT_RADIUS','WARNING_DISTANCE',
   'usableFloatWater','boats','sceneryPose','sceneryTime',
   html.slice(runwayStart,end)+'return findFloatWaterStart;')(
-    alaska,840,800,water,[],()=>[0,0,0],0);
+    alaska,735,860,130,water,[],()=>[0,0,0],0);
 
 test('real USGS Alaska spawn faces a shoreline too near for a safe takeoff',()=>{
   assert.ok(water(-19,-667,0),'starting floats are over water');
@@ -37,14 +37,16 @@ test('real USGS Alaska spawn faces a shoreline too near for a safe takeoff',()=>
     'north at 36 units is already a shallow surveyed bank, not a runway');
 });
 
-test('same global launch point chooses a >=94-unit unobstructed water corridor',()=>{
+test('same global launch point chooses a 132-unit unobstructed water corridor outside boundary assist',()=>{
   const [x,z,yaw]=find();
   assert.ok(Math.hypot(x+19,z+667)<1,
     'keep the historic spawn location when changing its heading is enough');
   assert.ok(Math.abs(yaw-Math.PI/2)<1e-4,
     'initial eastbound fjord channel is long enough; avoid northbound shoreline');
-  for(const d of [0,18,36,54,76,94]){
+  for(let d=0;d<=132;d+=6){
     const px=x+Math.sin(yaw)*d,pz=z+Math.cos(yaw)*d;
     assert.ok(water(px,pz,yaw),'float runway at advance '+d+' must stay open');
+    assert.ok(Math.hypot(px,pz)<=860-130-8,
+      'avoid autopilot boundary assist during water takeoff');
   }
 });

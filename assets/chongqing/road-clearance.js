@@ -111,6 +111,88 @@ export function roadReserveAtSite(site,segments,halfWidth=0,padding=0){
   }
   return false;
 }
+// Reconstruct the analytical terrace centerline between the 27-unit guide
+// points. Linear ribbons between those guides can cut through mountain grades
+// and leave large daylight gaps under moving traffic. This intentionally uses
+// the identical river/tier formula as both streetlife and chongqingTerraceRoads.
+// Bounded <=5.5-unit subdivision adds a few thousand triangles, not a new LOD.
+export function sampleChongqingTerraceSurface(plan,ground,riverCenter,
+  maxStep=5.5,roadLift=1.6){
+  if(!plan||!Array.isArray(plan.points)||plan.points.length<2||
+     !Number.isFinite(plan.side)||!Number.isFinite(plan.tier)||
+     typeof ground!=='function'||typeof riverCenter!=='function'||
+     !Number.isFinite(maxStep)||maxStep<=0||maxStep>30||
+     !Number.isFinite(roadLift))return [];
+  const roadZ=x=>riverCenter(x)+plan.side*
+    (145+plan.tier*105+14*Math.sin(x/115+plan.tier));
+  const result=[];
+  const put=x=>{
+    const z=roadZ(x),y=ground(x,z)+roadLift;
+    if(![x,y,z].every(Number.isFinite))
+      throw Error('Invalid Chongqing terrace surface height');
+    result.push({x,y,z});
+  };
+  put(plan.points[0].x);
+  for(let i=1;i<plan.points.length;i++){
+    const a=plan.points[i-1],b=plan.points[i];
+    const length=Math.hypot(b.x-a.x,b.z-a.z);
+    if(!Number.isFinite(length)||length<=0)
+      throw Error('Invalid Chongqing terrace guide segment');
+    const steps=Math.ceil(length/maxStep);
+    for(let n=1;n<=steps;n++)put(a.x+(b.x-a.x)*n/steps);
+  }
+  return result;
+}
+
+// Do not stretch unbridged road ribbons across Chongqing's perpendicular
+// tributary. Road centerlines and their FULL shoulder widths must both stay
+// on dry terrain; longitudinal midpoint checks close gaps between samples.
+// This operates before the independent building-volume clipping pass.
+export function clipChongqingDryRoadSegments(points,width,ground,riverDist,
+  shoreMargin=2.4,minLength=2.5){
+  if(!Array.isArray(points)||points.length<2||
+     !Number.isFinite(width)||width<=0||typeof ground!=='function'||
+     typeof riverDist!=='function')return [];
+  const result=[];let open=null;
+  const flush=()=>{
+    if(open?.length>1){
+      const len=open.reduce((sum,p,i)=>i?
+        sum+Math.hypot(p.x-open[i-1].x,p.z-open[i-1].z):0,0);
+      if(len>=minLength)result.push(open);
+    }
+    open=null;
+  };
+  for(let i=1;i<points.length;i++){
+    const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z;
+    const length=Math.hypot(dx,dz);
+    if(!Number.isFinite(length)||length<1e-7){flush();continue;}
+    const nx=-dz/length,nz=dx/length,offset=width*.5+Math.max(0,shoreMargin);
+    let dry=true;
+    // Dense longitudinal probes catch narrow tributary channels halfway
+    // between the old endpoint/midpoint checks. This is scene-build work,
+    // not a per-frame runtime cost. Avoid sampling ground twice per probe.
+    for(const t of [0,.25,.5,.75,1]){
+      const x=a.x+dx*t,z=a.z+dz*t;
+      for(const across of [-1,-.5,0,.5,1]){
+        const sx=x+nx*offset*across,sz=z+nz*offset*across;
+        const elevation=ground(sx,sz),waterDistance=riverDist(sx,sz);
+        // Unknown water distance must never be interpreted as dry land.
+        if(!Number.isFinite(elevation)||elevation<=0||
+           !(waterDistance>=shoreMargin)){dry=false;break;}
+      }
+      if(!dry)break;
+    }
+    if(!dry){flush();continue;}
+    if(!open)open=[a,b];else{
+      const prev=open.at(-1);
+      if(Math.hypot(prev.x-a.x,prev.z-a.z)<.001)open.push(b);
+      else{flush();open=[a,b];}
+    }
+  }
+  flush();
+  return result;
+}
+
 export function chongqingTerraceRoads(riverCenter){
   const paths=[];
   for(const side of [-1,1])for(let tier=0;tier<3;tier++){

@@ -21,5 +21,9 @@ test('Chongqing browser visual job can finish despite frequent NYC changes',asyn
  const yaml=await read('.github/workflows/chongqing-visual.yml');
  assert.match(yaml,/concurrency:[\s\S]*?cancel-in-progress:\s*false/);
  assert.match(yaml,/node scripts\/chongqing-browser-smoke\.mjs/);
- assert.match(yaml,/node scripts\/nyc-road-browser-smoke\.mjs/);
+ const ny=await read('.github/workflows/nyc-bridgehead-browser.yml');
+ assert.doesNotMatch(yaml,/node scripts\/nyc-road-browser-smoke\.mjs/,
+   'Chongqing visual QA must not duplicate the full NYC Chromium screenshot');
+ assert.match(ny,/node scripts\/nyc-road-browser-smoke\.mjs/,
+   'NYC has an independent full WebGL screenshot workflow');
 });

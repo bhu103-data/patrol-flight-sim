@@ -68,16 +68,16 @@ jobs:
             assets/aircraft/cessna185-floats.blend
           if-no-files-found: error
           retention-days: 30
-      - name: Publish small Blender GLB to game assets on main
+      - name: Publish GLB and native editable .blend on main
         if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/aircraft/cessna185-floats.glb
+          git add assets/aircraft/cessna185-floats.glb assets/aircraft/cessna185-floats.blend
           if ! git diff --cached --quiet; then
-            git commit -m "build(aircraft): publish Blender-baked Cessna 185 floatplane"
+            git commit -m "build(aircraft): publish Blender C185 GLB and editable scene"
             # Other PATROL jobs may commit while Blender is baking. Keep
             # changes; rebase the single GLB commit with a bounded retry.
             for attempt in {1..15}; do

@@ -21,13 +21,26 @@ export function decodeFloatplaneGLB(bytes, addTri) {
     const a=accessors[index],b=a&&buffers[a.bufferView];
     if(!a||!b||a.type!==type||!components[a.componentType]||a.sparse)
       throw new Error('Unsupported floatplane accessor');
+    // Only floats are valid for positions; GLB indices must be unsigned.
+    if((type==='VEC3'&&a.componentType!==5126) ||
+       (type==='SCALAR'&&![5121,5123,5125].includes(a.componentType)))
+      throw new Error('Unsupported floatplane component type');
     const n=type==='VEC3'?3:1;
-    const step=b.byteStride||n*components[a.componentType];
-    const offset=binBase+(b.byteOffset||0)+(a.byteOffset||0);
-    if(!Number.isSafeInteger(a.count)||a.count<1||a.count>150000 ||
-       offset<binBase||step<n*components[a.componentType] ||
-       offset+(a.count-1)*step+n*components[a.componentType]>binBase+binLength)
+    const componentBytes=components[a.componentType],elementBytes=n*componentBytes;
+    const viewOffset=b.byteOffset??0,viewLength=b.byteLength;
+    const accessorOffset=a.byteOffset??0,step=b.byteStride??elementBytes;
+    // Constrain each accessor to its own bufferView, not neighboring GLB data.
+    if(b.buffer!==0||
+       !Number.isSafeInteger(viewOffset)||viewOffset<0||
+       !Number.isSafeInteger(viewLength)||viewLength<elementBytes||
+       viewOffset+viewLength>binLength||
+       !Number.isSafeInteger(accessorOffset)||accessorOffset<0||
+       !Number.isSafeInteger(step)||step<elementBytes||
+       step%componentBytes!==0||accessorOffset%componentBytes!==0||
+       !Number.isSafeInteger(a.count)||a.count<1||a.count>150000||
+       accessorOffset+(a.count-1)*step+elementBytes>viewLength)
       throw new Error('Floatplane accessor bounds');
+    const offset=binBase+viewOffset+accessorOffset;
     function get(i,k=0){
       const off=offset+i*step+k*components[a.componentType];
       if(a.componentType===5126)return view.getFloat32(off,true);
@@ -48,6 +61,11 @@ export function decodeFloatplaneGLB(bytes, addTri) {
     for(const primitive of mesh?.primitives||[]){
       if(primitive.mode!==undefined&&primitive.mode!==4)continue;
       const positions=accessor(primitive.attributes?.POSITION,'VEC3');
+      // Preserve Blender's smooth/crease normals on curved hull and airfoil.
+      const surfaceNormals=primitive.attributes?.NORMAL===undefined ? null :
+        accessor(primitive.attributes.NORMAL,'VEC3');
+      if(surfaceNormals&&surfaceNormals.count!==positions.count)
+        throw new Error('Floatplane vertex normals mismatch');
       const indices=primitive.indices===undefined?null:accessor(primitive.indices,'SCALAR');
       if(indices&&indices.count%3!==0)throw new Error('Invalid floatplane triangles');
       const count=indices?indices.count:positions.count;
@@ -56,7 +74,7 @@ export function decodeFloatplaneGLB(bytes, addTri) {
       const factor=mat?.pbrMetallicRoughness?.baseColorFactor||[.72,.75,.75,1];
       const color=factor.slice(0,3).map(c=>Math.min(1,Math.max(0,Number(c)||0)));
       for(let i=0;i<count;i+=3){
-        const tri=[];
+        const tri=[],normalTri=[];
         for(let k=0;k<3;k++){
           const n=indices?indices.get(i+k):i+k;
           if(n>=positions.count)throw new Error('Floatplane triangle index outside bounds');
@@ -68,8 +86,16 @@ export function decodeFloatplaneGLB(bytes, addTri) {
             max[axis]=Math.max(max[axis],p[axis]);
           }
           tri.push(p);
+          if(surfaceNormals){
+            const normal=[surfaceNormals.get(n,0),surfaceNormals.get(n,1),surfaceNormals.get(n,2)];
+            const magnitude=Math.hypot(...normal);
+            if(!normal.every(Number.isFinite)||magnitude<.25||magnitude>1.75)
+              throw new Error('Invalid Blender surface normal');
+            normalTri.push(normal.map(v=>v/magnitude));
+          }
         }
-        addTri(tri[0],tri[1],tri[2],color,4);
+        addTri(tri[0],tri[1],tri[2],color,4,
+          surfaceNormals?normalTri:null);
         triangles++;
       }
     }

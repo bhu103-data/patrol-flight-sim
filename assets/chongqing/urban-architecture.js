@@ -77,6 +77,29 @@ export function makeChongqingTowerProfile(style){
    throw Error('Bad tower profile geometry');
  return {positions,uvs,indices};
 }
+// Survey a full 5x5 terrain patch before placing a hillside tower. A center
+// height alone can float an entire high-rise across a 30m Chongqing cliff.
+export function surveyChongqingBuildingPad({x,z,w,d,ground,riverDist,maxGrade=10}){
+ if(![x,z,w,d,maxGrade].every(Number.isFinite)||w<=0||d<=0||
+    typeof ground!=='function'||typeof riverDist!=='function')return null;
+ let minGround=Infinity,maxGround=-Infinity;
+ for(let ix=-2;ix<=2;ix++)for(let iz=-2;iz<=2;iz++){
+   const px=x+w*ix/4,pz=z+d*iz/4;
+   const h=ground(px,pz),shore=riverDist(px,pz);
+   if(!Number.isFinite(h)||Number.isNaN(shore)||shore<5||h<=0)
+     return null;
+   minGround=Math.min(minGround,h);maxGround=Math.max(maxGround,h);
+ }
+ const grade=maxGround-minGround;
+ if(grade>maxGrade)return null;
+ const boundary=[[-.5,-.5],[0,-.5],[.5,-.5],[.5,0],
+   [.5,.5],[0,.5],[-.5,.5],[-.5,0]];
+ const perimeter=boundary.map(([u,v])=>{
+   const px=x+w*u,pz=z+d*v;
+   return [px,ground(px,pz),pz];
+ });
+ return {base:maxGround+.24,minGround,maxGround,grade,perimeter};
+}
 export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr,plannedRoads=[]}){
  const styleMeshes=CHONGQING_BUILDING_STYLES.map((style)=>{
    const geo=makeChongqingTowerProfile(style),geometry=new THREE.BufferGeometry();
@@ -105,8 +128,60 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
  });
  const windows=new THREE.InstancedMesh(
    new THREE.PlaneGeometry(1,1),interiorLightMaterial,4800);
- const stats={towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
-   residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,skippedAdjacentBuilding:0};
+ // Real-depth riverfront facade details reuse five GPU batches across the
+ // 44 closest buildings. Building shells/PBR atlases remain the primary mass;
+ // these windows have separate dark reveals, reflective glass, mullions and
+ // stone sill projections rather than billboard-like painted squares.
+ const facadeCap=3200;
+ const facadeFrameMat=new THREE.MeshStandardMaterial({
+   color:0x26343a,metalness:.23,roughness:.53
+ });
+ const facadeGlassMat=new THREE.MeshStandardMaterial({
+   color:0x527181,metalness:.27,roughness:.25,side:THREE.DoubleSide
+ });
+ const sillMat=new THREE.MeshStandardMaterial({
+   color:0xb2b1aa,metalness:.05,roughness:.83
+ });
+ const awningMat=new THREE.MeshStandardMaterial({
+   color:0x48565a,metalness:.15,roughness:.7
+ });
+ const facadeFrames=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
+ const facadeGlazing=new THREE.InstancedMesh(
+   new THREE.PlaneGeometry(1,1),facadeGlassMat,facadeCap);
+ const facadeMullions=new THREE.InstancedMesh(unit,facadeFrameMat,facadeCap);
+ const facadeSills=new THREE.InstancedMesh(unit,sillMat,facadeCap);
+ const shopGlazing=new THREE.InstancedMesh(
+   new THREE.PlaneGeometry(1,1),facadeGlassMat,32);
+ const shopAwnings=new THREE.InstancedMesh(unit,awningMat,32);
+ for(const mesh of [facadeFrames,facadeGlazing,facadeMullions,
+   facadeSills,shopGlazing,shopAwnings]){
+   mesh.count=0;mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+   mesh.castShadow=false;mesh.receiveShadow=true;
+ }
+ const stats={facadeBuildings:0,facadePanels:0,storefronts:0,
+   towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
+   residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,
+   skippedAdjacentBuilding:0,skippedUnbuildableTerrain:0,retainingWallTriangles:0,
+   maxAcceptedGrade:0};
+ // One shared slope-draped concrete retaining-wall mesh (no 200 separate draws).
+ // Eight wall panels per building anchor to real corner and mid-edge terrain.
+ const foundationPositions=[],foundationUvs=[],foundationIndices=[];
+ function addFoundation(pad){
+   const top=pad.base+.025,edge=pad.perimeter;
+   for(let k=0;k<edge.length;k++){
+     const a=edge[k],b=edge[(k+1)%edge.length];
+     const first=foundationPositions.length/3;
+     // Building perimeter is clockwise viewed from above; reverse winding
+     // so the visible wall normals face OUT of the building.
+     foundationPositions.push(
+       b[0],b[1]-.35,b[2], a[0],a[1]-.35,a[2],
+       a[0],top,a[2], b[0],top,b[2]);
+     const length=Math.hypot(b[0]-a[0],b[2]-a[2]);
+     foundationUvs.push(0,0,length/4,0,length/4,(top-a[1])/4,0,(top-b[1])/4);
+     foundationIndices.push(first,first+1,first+2,first,first+2,first+3);
+     stats.retainingWallTriangles+=2;
+   }
+ }
  const glassGlow=new THREE.Color(), color=new THREE.Color();
  const set=(mesh,index,x,y,z,w,h,depth,rot=0)=>{
    d.position.set(x,y,z);d.scale.set(w,h,depth);d.rotation.set(0,rot,0);
@@ -119,10 +194,10 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    ['#c9bdb3','#b8bebc','#d5c6b8'],
    ['#8ea9b5','#aec1c9','#c2ccd2']
  ];
- function tower(x,z,w,dz,h,styleIndex,colIndex){
+ function tower(x,z,w,dz,h,styleIndex,colIndex,pad){
    const style=styleMeshes[styleIndex],
     profile=CHONGQING_BUILDING_STYLES[styleIndex],
-    base=ground(x,z),n=style.count;
+    base=pad.base,n=style.count;
    if(n>=100)return;
    set(style,n,x,base+h*.5,z,w,h,dz);
    const variants=colors[styleIndex],tint=variants[colIndex%variants.length];
@@ -131,7 +206,12 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    if(styleIndex===0||styleIndex===3)stats.residential++;
    else if(styleIndex===1||styleIndex===4)stats.office++;
    else stats.mixedUse++;
-   obstacles.push({x,z,w:w+2,d:dz+2,base,top:base+h});
+   // The collider extends down through the podium; an underpass may not
+   // sneak through the visible retaining wall below the facade.
+   obstacles.push({x,z,w:w+2,d:dz+2,base:pad.minGround-.35,
+     top:base+h,padBase:base,grade:pad.grade});
+   addFoundation(pad);
+   stats.maxAcceptedGrade=Math.max(stats.maxAcceptedGrade,pad.grade);
    // Roof ledge, mechanical bulkheads and rooftop chillers break flat silhouettes.
    if(stats.rooftops<360){
      set(roof,stats.rooftops++,x+(colIndex%3-1)*w*.18,base+h+.46,z,
@@ -152,6 +232,49 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
        set(acs,stats.airConditioners++,
          x+w*.50*envelope.width+.24,yy-.44,
          z+dz*envelope.depth*(i%3-1)*.22,.54,.47,.70);
+     }
+   }
+   // Geometry-backed close-range windows face the river on BOTH banks.
+   // Respect setbacks at every storey; do not float frames off a narrower
+   // upper tier or spill their projections into the reserved street corridor.
+   const scenic=Math.hypot(x-285,z-225)<580;
+   const face=z>=riverCenter(x)?-1:1;
+   if(scenic&&h>=44&&stats.facadeBuildings<44){
+     stats.facadeBuildings++;
+     const rows=Math.min(16,Math.max(7,Math.floor(h/7.2)));
+     const cols=styleIndex===1||styleIndex===4?4:3;
+     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+       if(stats.facadePanels>=facadeCap)break;
+       const fraction=.066+(row+.46)*.82/rows;
+       const envelope=chongqingTowerEnvelopeAt(profile,fraction-.5);
+       const frontage=w*envelope.width*.78;
+       const xx=x-frontage*.5+(col+.5)*frontage/cols;
+       const yy=base+h*fraction;
+       const span=frontage/cols;
+       const paneWidth=Math.min(2.95,span*.71);
+       const paneHeight=Math.min(2.45,Math.max(1.35,h/rows*.31));
+       const front=z+face*dz*envelope.depth*.5;
+       const id=stats.facadePanels++;
+       set(facadeFrames,id,xx,yy,front+face*.125,
+         paneWidth+.27,paneHeight+.32,.12);
+       set(facadeGlazing,id,xx,yy,front+face*.198,
+         paneWidth,paneHeight,1,face>0?0:Math.PI);
+       set(facadeMullions,id,xx,yy,front+face*.245,
+         .065,paneHeight+.05,.085);
+       set(facadeSills,id,xx,yy-paneHeight*.5-.19,front+face*.30,
+         paneWidth+.47,.11,.46);
+     }
+     // Ground-floor cafe/shop windows and restrained metal canopies only on
+     // gently graded pads. Avoid the visibly floating storefront illusion on
+     // steep retaining walls where actual footpaths are several floors below.
+     if((styleIndex===2||styleIndex===3)&&pad.grade<2.8&&
+         stats.storefronts<32){
+       const id=stats.storefronts++,low=chongqingTowerEnvelopeAt(profile,-.47),
+         front=z+face*(dz*low.depth*.5+.18);
+       set(shopGlazing,id,x,base+2.25,front,
+         w*low.width*.53,3.15,1,face>0?0:Math.PI);
+       set(shopAwnings,id,x,base+4.14,front+face*.78,
+         w*low.width*.58,.23,1.45);
      }
    }
    // Irregular interior lighting, not a complete repeated matrix on every tower.
@@ -201,9 +324,25 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
        Math.abs(z-o.z)<(d+o.d)*.5+2.0)){
        stats.skippedAdjacentBuilding++;continue;
      }
+     const pad=surveyChongqingBuildingPad({
+       x,z,w,d,ground,riverDist,maxGrade:10
+     });
+     if(!pad){stats.skippedUnbuildableTerrain++;continue;}
      const styleIndex=(Math.abs(col*11+tier*7+side*13)%5);
-     tower(x,z,w,d,h,styleIndex,col+tier*3);
+     tower(x,z,w,d,h,styleIndex,col+tier*3,pad);
    }
+ }
+ if(foundationPositions.length){
+   const geo=new THREE.BufferGeometry();
+   geo.setAttribute('position',new THREE.Float32BufferAttribute(foundationPositions,3));
+   geo.setAttribute('uv',new THREE.Float32BufferAttribute(foundationUvs,2));
+   geo.setIndex(foundationIndices);geo.computeVertexNormals();
+   const material=pbr?.concrete||new THREE.MeshStandardMaterial({
+     color:0x9fa19b,roughness:.88,metalness:0
+   });
+   const foundations=new THREE.Mesh(geo,material);
+   foundations.castShadow=false;foundations.receiveShadow=true;
+   scene.add(foundations);
  }
  for(const mesh of styleMeshes){
    mesh.instanceMatrix.needsUpdate=true;
@@ -211,7 +350,10 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    if(mesh.count>0)mesh.computeBoundingSphere();
  }
  for(const [mesh,n] of [[roof,stats.rooftops],[balconies,stats.balconies],
-   [acs,stats.airConditioners],[windows,stats.litWindows]]){
+   [acs,stats.airConditioners],[windows,stats.litWindows],
+   [facadeFrames,stats.facadePanels],[facadeGlazing,stats.facadePanels],
+   [facadeMullions,stats.facadePanels],[facadeSills,stats.facadePanels],
+   [shopGlazing,stats.storefronts],[shopAwnings,stats.storefronts]]){
    mesh.count=n;mesh.instanceMatrix.needsUpdate=true;
    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
    if(n>0)mesh.computeBoundingSphere();
@@ -232,6 +374,16 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      lowDetail=mode==='low';
      balconies.visible=!lowDetail;
      acs.visible=!lowDetail;
+     // Preserve full solid building envelopes in low mode; omit only the
+     // small close-up trim batches that are not needed from a distant aircraft.
+     facadeFrames.visible=!lowDetail;
+     // Glazing itself stays visible in economy mode; the LOD drops only
+     // close-up physical trim, never windows from the facade silhouette.
+     facadeGlazing.visible=true;
+     shopGlazing.visible=true;
+     facadeMullions.visible=!lowDetail;
+     facadeSills.visible=!lowDetail;
+     shopAwnings.visible=!lowDetail;
      updateInteriorLight();
    }
  };
