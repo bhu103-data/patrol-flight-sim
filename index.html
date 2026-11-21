@@ -6012,7 +6012,7 @@ const CENTRAL_PARK_SITES=[
     const glass=variant===0?[.17,.25,.28]:[.15,.23,.27];
     const stories=Math.max(5,Math.min(7,Math.round(h/2.75)));
     const spacing=h/stories;
-    let openings=0,arcs=0,quads=0;
+    let openings=0,arcs=0,quads=0,headerStones=0;
     for(const axis of ['x','z'])for(const side of [-1,1]){
       const span=axis==='x'?w:d,half=span*.5,edge=.12;
       const bays=Math.max(axis==='x'?2:3,
@@ -6062,6 +6062,17 @@ const CENTRAL_PARK_SITES=[
               loading?[.12,.15,.17]:glass,13,-.13);
             if(floor>0){
               shape(u0,u1,a-.04,b-.04,a,b,mortar,12,-.04);
+              // PATROL_DUMBO_ARCH_MASONRY_V2: genuine projecting rowlock
+              // brick wedges along each inset upper-floor opening. Their
+              // small chamfered joints and front projection remain entirely
+              // inside the pre-cleared parcel/sidewalk margin; no colliders.
+              const joint=.013,u0h=u0+joint,u1h=u1-joint;
+              const ha=arc(u0h),hb=arc(u1h);
+              const headerBase=variant===0?[.60,.38,.30]:[.55,.35,.29];
+              const headerTint=headerBase.map(v=>Math.min(.85,v*(k%2?.94:1.035)));
+              shape(u0h,u1h,ha-.035,hb-.035,ha+.075,hb+.075,
+                headerTint,12,.062);
+              headerStones++;
               arcs++;
             }
           }
@@ -6106,7 +6117,7 @@ const CENTRAL_PARK_SITES=[
       if(yy>y+.4)beam([x+u-.12,yy,z+d*.5+.052],
         [x+u+.12,yy,z+d*.5+.052],.034,steel);
     }
-    return {variant,stories,openings,arcs,quads};
+    return {variant,stories,openings,arcs,quads,headerStones};
   }
 
   function buildCityBuildings(parcels,local=false) {
