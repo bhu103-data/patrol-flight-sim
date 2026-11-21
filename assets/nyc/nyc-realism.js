@@ -264,6 +264,14 @@ export async function loadNycRealism(gl){
   // GLBs are requested, preserving original procedural asset fallback.
   const scenarioReady=(async()=>{
     try{
+      // Explicit visual rollback for QA without changing other maps, PBR
+      // street textures or the deployed manifest.
+      // ?nycModels=legacy keeps the built-in procedural landmarks.
+      if(typeof location!=='undefined' &&
+         new URLSearchParams(location.search).get('nycModels')==='legacy'){
+        console.info('[PATROL] Using original NYC landmark geometry (QA rollback)');
+        return;
+      }
       const response=await fetch('./assets/nyc/scenario-manifest.json');
       if(!response.ok)return;
       const manifest=await response.json();
