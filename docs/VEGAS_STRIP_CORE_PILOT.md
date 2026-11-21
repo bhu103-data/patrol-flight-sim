@@ -24,7 +24,7 @@
 - The mountain profile is a placeholder silhouette, not a claimed Spring Mountains or Sunrise Mountain surveyed elevation field. Its world positions deliberately remain `|x|>=686` to avoid existing casino/road collision footprints. The distant scenery should be checked for clipping and flat-shaded facets.
 
 ## Fixed-camera QA / screenshot matrix
-Use one fresh Chromium launch and the existing Las Vegas map selector, then Scenic Views -> **Las Vegas Strip**, angle `0`, same 1280×720 WebGL2 viewport and environment presets. Captures are deterministic interface settings rather than falsely claimed surveyed camera poses.
+Use one fresh Chromium launch and the existing Las Vegas map selector, then Scenic Views -> **Strip Street View**, angle `0`, same 1280×720 WebGL2 viewport and environment presets. Captures are deterministic interface settings rather than falsely claimed surveyed camera poses.
 
 | Shot | Camera target | Zoom | Clock | Check |
 |---|---|---:|---|---|
