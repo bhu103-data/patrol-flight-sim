@@ -1,0 +1,47 @@
+name: NYC Empire State GLB WebGL2 acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/verify-empire-browser.mjs'
+      - 'tools/scenario_model_preview.html'
+      - 'assets/nyc/scenario/empire.glb'
+      - 'assets/nyc/nyc-realism.js'
+      - '.github/workflows/nyc-empire-webgl.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyc-empire-glb-webgl
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Chromium WebGL2 browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve repo on localhost
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-empire-http.log 2>&1 &
+          sleep 2
+      - name: Render actual published Empire GLB and inspect WebGL pixels
+        run: node tools/verify-empire-browser.mjs
+      - name: Publish screenshots and pixel report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empire-state-glb-webgl-screenshot
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
