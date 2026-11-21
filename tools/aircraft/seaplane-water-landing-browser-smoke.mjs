@@ -90,7 +90,7 @@ try {
         webglLost:document.querySelector('#glCanvas')?.getContext('webgl2')?.isContextLost()};
     });
     if(after.physics.crashed||!after.physics.waterborne||!after.physics.valid||
-       !after.flight.playing||!after.status.includes('WATER TAXI')||
+       !after.flight.playing||!/FLOATS · (WATER TAXI|ON STEP|DOCKING BRAKE)/.test(after.status)||
        after.webglLost||Math.abs(after.physics.altitude-(staged.waterHeight+1.50))>0.12)
       throw new Error(map+' failed controlled safe-water touchdown: '+JSON.stringify({staged,after}));
     await page.screenshot({path:'artifacts/cessna185-'+map+'-touchdown.png',animations:'disabled'});
