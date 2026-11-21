@@ -16,11 +16,18 @@ export function buildNycStreetNetwork({
   // widths, terrain, traffic, or collision checks. These asphalt tints stay
   // within the main NYC shader's color-key for Poly Haven CC0 asphalt_04:
   // the same diffuse, normal and ARM (roughness) images remain in use.
-  const dumboAsphalt=[asphalt,[.242,.272,.294],[.258,.287,.305],
-    [.248,.279,.296]];
-  const dumboConcrete=[sidewalk,[.515,.530,.508],[.551,.553,.525]];
-  const dumboSeam=[.209,.236,.257],dumboRepair=[.229,.256,.274],
-    dumboSawcut=[.415,.423,.408];
+  // Preserve shader recognition of asphaltA/asphaltB (.25/.28/.30 and
+  // .28/.29/.32): these colors still receive the existing CC0 photo,
+  // normal and ARM/roughness sampling without touching index.html.
+  const dumboAsphalt=[asphalt,[.222,.250,.271],[.275,.299,.315],
+    [.239,.266,.284]];
+  const dumboWornAsphalt=[[.223,.247,.269],[.278,.299,.314],
+    [.238,.260,.279]];
+  const dumboConcrete=[sidewalk,[.485,.504,.488],[.560,.557,.530],
+    [.515,.524,.506]];
+  const dumboSeam=[.195,.217,.235],dumboRepair=[.229,.256,.274],
+    dumboCrack=[.179,.202,.222],dumboCurbStain=[.455,.465,.447],
+    dumboSawcut=[.412,.418,.395];
   const inDumboMaterialZone=(i,j)=>i>=9&&i<=20&&j>=-13&&j<=-7;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
@@ -29,7 +36,9 @@ export function buildNycStreetNetwork({
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
     preservedRoadSections:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
-    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
+    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0,
+    dumboSurfaceRepairs:0,dumboTarSeams:0,dumboCrackRuns:0,
+    dumboSidewalkPanels:0,dumboCurbStains:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -286,6 +295,77 @@ export function buildNycStreetNetwork({
   // Track only road pieces that were really emitted (including clipped spans),
   // so sidewalk vendors cannot overlap asphalt in the final scene.
   const activeRoadSegments=[];
+  // Material decals only: all coordinates lie within an already-approved
+  // Brooklyn road ribbon. Nothing here creates a new road, modifies the
+  // corridor occupancy tests, or changes flight/vehicle collisions.
+  function dumboRoadSurface(a,b,width,i,j){
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5],lod=detailBand(...mid);
+    if(lod<2||length<11)return;
+    const fx=dx/length,fz=dz/length,nx=fz,nz=-fx;
+    const at=(along,offset=0)=>[
+      a[0]+fx*along+nx*offset,a[1]+fz*along+nz*offset
+    ];
+    // Asphalt resurfacing is patched in rectangles of different widths,
+    // tones and lengths. The existing CC0 asphalt atlas remains visible
+    // because the tint stays within its WebGL material-key threshold.
+    const passes=lod>=3&&length>17&&hash(i,j,111)>.54?2:1;
+    for(let k=0;k<passes;k++){
+      const h=110+k*23;
+      const from=length*(k?.56+.07*hash(i,j,h):.11+.13*hash(i,j,h));
+      const to=Math.min(length-1.1,from+length*(.15+.09*hash(i,j,h+1)));
+      if(to-from<1.1)continue;
+      const widthPatch=width*(.33+.18*hash(i,j,h+2));
+      const offset=(hash(i,j,h+3)-.5)*width*.24;
+      const slightDrift=(hash(i,j,h+4)-.5)*.18;
+      const start=at(from,offset),end=at(to,offset+slightDrift);
+      slab(start,end,widthPatch,
+        dumboWornAsphalt[Math.floor(hash(i,j,h+5)*dumboWornAsphalt.length)],
+        roadY+.005);
+      // A dark sealant edge reads as a true pavement repair from street
+      // height, while all decals remain below the existing lane markings.
+      for(const edge of [from,to]){
+        const p=at(edge,offset+(edge===from?0:slightDrift));
+        orientedRect(p[0],p[1],widthPatch,.027,[dx,dz],
+          dumboSeam,roadY+.012);
+        stats.dumboTarSeams++;
+      }
+      for(const side of [-1,1]){
+        const sideStart=at(from,offset+side*widthPatch*.49);
+        const sideEnd=at(to,offset+slightDrift+side*widthPatch*.49);
+        slab(sideStart,sideEnd,.026,dumboSeam,roadY+.011);
+        stats.dumboTarSeams++;
+      }
+      stats.dumboSurfaceRepairs++;
+    }
+    // Block-length transverse joint, with non-uniform placement/width.
+    const transverse=length*(.23+.51*hash(i,j,83));
+    const cut=at(transverse);
+    orientedRect(cut[0],cut[1],width-.44,.031+.021*hash(i,j,84),
+      [dx,dz],dumboSeam,roadY+.014);
+    stats.dumboTarSeams++;
+    // Irregular branching hairline cracks; no tiny repeated checker pattern.
+    // LOD3 only, so the extra line segments cannot saturate distant views.
+    if(lod>=3 && length>16 && hash(i,j,135)>.43){
+      const along=length*(.14+.31*hash(i,j,136));
+      const across=(hash(i,j,137)-.5)*width*.66;
+      const drift=(hash(i,j,138)-.5)*.48;
+      const run=Math.min(3.1,length*.17);
+      const points=[
+        at(along,across),
+        at(along+run*.32,across+drift*.48),
+        at(along+run*.70,across+drift*.41+.11),
+        at(along+run,across+drift)
+      ];
+      for(let q=0;q<points.length-1;q++)
+        slab(points[q],points[q+1],.027,dumboCrack,roadY+.017);
+      if(hash(i,j,139)>.53){
+        const fork=at(along+run*.86,across+drift+.30);
+        slab(points[2],fork,.021,dumboCrack,roadY+.017);
+      }
+      stats.dumboCrackRuns++;
+    }
+  }
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(mid[0],mid[1],true)||
@@ -342,23 +422,9 @@ export function buildNycStreetNetwork({
       ?dumboAsphalt[Math.floor(hash(i,j,201)*dumboAsphalt.length)]:asphalt;
     slab(a,b,width,asphaltColor);
     activeRoadSegments.push({a,b,width});
-    // Brooklyn/DUMBO close-view asphalt: irregular transverse resurfacing
-    // seams plus occasional longitudinal bitumen repairs. Flush surface
-    // decals only, not additional roads or raised road geometry. Vary the
-    // placement by block to avoid a visibly repeated stamp pattern.
-    if(dumboFinish && detailBand(...mid)>=2 && distance>11){
-      const seamT=.24+.48*hash(i,j,83);
-      orientedRect(a[0]+dx*seamT,a[1]+dz*seamT,
-        width-.46,.035+hash(i,j,84)*.021,[dx,dz],dumboSeam,roadY+.005);
-      if(hash(i,j,85)>.36){
-        const start=.08+.12*hash(i,j,86),end=.58+.21*hash(i,j,87);
-        const p=[a[0]+dx*start,a[1]+dz*start],
-          q=[a[0]+dx*end,a[1]+dz*end];
-        const repair=shift(p,q,(hash(i,j,88)-.5)*width*.55);
-        slab(repair[0],repair[1],.24+.24*hash(i,j,89),
-          dumboRepair,roadY+.006);
-      }
-    }
+    // Visible resurfacing passes, transverse joints and tar-snakes are
+    // surface decals only, all clipped to the previously cleared road.
+    if(dumboFinish)dumboRoadSurface(a,b,width,i,j);
     // Only selected game corridors receive red bus and green bike lanes;
     // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
     const greenBike=kind==='avenue' && (i===1||i===-3) &&
@@ -394,6 +460,39 @@ export function buildNycStreetNetwork({
       const concreteColor=dumboFinish?dumboConcrete[
         Math.floor(hash(i,j,43+side)*dumboConcrete.length)]:sidewalk;
       slab(p[0],p[1],1.42,concreteColor,paveY);
+      if(dumboFinish && detailBand(...mid)>=2 && distance>10){
+        // Thin concrete panel tone overlay, spaced by block so that a
+        // continuous flat sidewalk acquires individual poured-slab wear.
+        // One in three panels is tinted; repeated overlays are avoided.
+        const spacing=4.7+1.3*hash(i,j,73);
+        const origin=1.9+.7*hash(i,j,74+side);
+        const selector=Math.floor(hash(i,j,75+side)*3);
+        for(let k=0,along=origin;along<distance-2.0;
+            k++,along+=spacing){
+          if((k+selector)%3!==0)continue;
+          const to=Math.min(distance-1.25,along+spacing-.14);
+          if(to-along<1)continue;
+          const aa=[a[0]+dx*along/distance,a[1]+dz*along/distance],
+            bb=[a[0]+dx*to/distance,a[1]+dz*to/distance];
+          const panel=shift(aa,bb,side*(half+.53));
+          const tint=dumboConcrete[(k+selector+3)%dumboConcrete.length];
+          slab(panel[0],panel[1],1.30,tint,paveY+.007);
+          stats.dumboSidewalkPanels++;
+        }
+        // Localized dark residue near the outer sidewalk edge. Keep
+        // strips below the joint decals and inside the base concrete.
+        if(hash(i,j,102+side)>.56){
+          const from=distance*(.14+.26*hash(i,j,103+side));
+          const to=Math.min(distance-1.0,from+Math.min(4.2,distance*.19));
+          if(to>from){
+            const aa=[a[0]+dx*from/distance,a[1]+dz*from/distance],
+              bb=[a[0]+dx*to/distance,a[1]+dz*to/distance],
+              stain=shift(aa,bb,side*(half+1.07));
+            slab(stain[0],stain[1],.12,dumboCurbStain,paveY+.013);
+            stats.dumboCurbStains++;
+          }
+        }
+      }
       const c=shift(a,b,side*(half+.035));
       slab(c[0],c[1],.22,granite,roadY+.127);
       const g=shift(a,b,side*(half-.18));
@@ -405,14 +504,15 @@ export function buildNycStreetNetwork({
       // Concrete saw-cut lines break the unrealistic uninterrupted sidewalk.
       if(detailBand(...mid)>=(dumboFinish?2:3) &&
          (dumboFinish||hash(i,j,71)>.39)){
-        const jointSpacing=dumboFinish?5.2+1.3*hash(i,j,73):8.9;
+        const jointSpacing=dumboFinish?4.7+1.3*hash(i,j,73):8.9;
         for(let along=dumboFinish?3.7:6.2;
             along<distance-1.5;along+=jointSpacing){
           const t=along/distance,x=a[0]+dx*t,z=a[1]+dz*t,
             offs=side*(half+.53);
           orientedRect(x+normal[0]*offs,z+normal[1]*offs,
             1.34,dumboFinish?.031:.025,[dx,dz],
-            dumboFinish?dumboSawcut:[.39,.40,.38],paveY+.004);
+            dumboFinish?dumboSawcut:[.39,.40,.38],
+            paveY+(dumboFinish?.017:.004));
           stats.sidewalkJoints++;
         }
       }
