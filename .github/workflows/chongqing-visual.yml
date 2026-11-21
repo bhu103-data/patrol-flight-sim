@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - "chongqing.html"
+      - "index.html"
+      - "assets/nyc/nyc-street-network.js"
+      - "tests/nyc-road-clearance.test.mjs"
       - "assets/chongqing/**"
       - "tests/chongqing-*.test.mjs"
       - "scripts/chongqing-browser-smoke.mjs"
@@ -27,8 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate Chongqing procedural scene
-        run: node --test tests/chongqing-*.test.mjs
+      - name: Validate NYC and Chongqing road/building occupancy
+        run: node --test tests/chongqing-*.test.mjs tests/nyc-road-clearance.test.mjs
       - name: Install headless Chromium
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
