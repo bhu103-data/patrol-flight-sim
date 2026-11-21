@@ -1,0 +1,76 @@
+name: Chongqing Scenario GLB browser preview smoke
+
+on:
+  push:
+    paths:
+      - '.github/workflows/chongqing-scenario-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webgl-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install isolated Playwright browser (not a project dependency)
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start existing static game
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 >/tmp/patrol-http.log 2>&1 &
+          echo $! > /tmp/patrol-http.pid
+          sleep 2
+      - name: Check actual WebGL 2 asset preview and capture image
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node <<'NODE'
+          const {chromium}=require('/tmp/patrol-browser/node_modules/playwright');
+          (async()=>{
+            const browser=await chromium.launch({
+              headless:true,
+              args:['--no-sandbox','--enable-webgl','--use-gl=angle',
+                '--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-gpu-sandbox']
+            });
+            const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+            const logs=[];
+            page.on('console',m=>logs.push(m.type()+': '+m.text().slice(0,300)));
+            page.on('pageerror',e=>logs.push('error: '+String(e).slice(0,350)));
+            try{
+              await page.goto('http://127.0.0.1:8127/chongqing.html?scenario=hongyadong',
+                {waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForFunction(()=>
+                ['ready','off','fallback'].includes(
+                  document.documentElement.dataset.scenarioHongyadong),
+                null,{timeout:65000});
+              await page.waitForTimeout(1500);
+              const report=await page.evaluate(()=>{
+                const canvas=document.getElementById('world');
+                return {
+                  scenario:document.documentElement.dataset.scenarioHongyadong,
+                  webgl2:!!canvas.getContext('webgl2'),
+                  width:canvas.width,height:canvas.height,
+                  loading:!document.getElementById('loading').hidden
+                };
+              });
+              await page.screenshot({path:'artifacts/chongqing-scenario-preview.png'});
+              console.log(JSON.stringify({report,logs:logs.slice(-25)},null,2));
+              if(report.scenario!=='ready'||!report.webgl2) {
+                throw Error('Scenario GLB failed WebGL preview; original scene remains intact');
+              }
+            }finally{await browser.close()}
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Upload visible screenshot for art review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chongqing-scenario-browser-screenshot
+          path: artifacts/chongqing-scenario-preview.png
+          retention-days: 15
+          if-no-files-found: warn
