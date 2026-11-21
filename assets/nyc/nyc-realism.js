@@ -245,25 +245,14 @@ async function photos(gl){
 }
 export async function loadNycRealism(gl){
   const models=Object.create(null),failures=[];
-  // QA rollback must skip ALL imported landmark meshes, including the older
-  // bundled Liberty GLB, not merely skip the manifest-approved Scenario GLBs.
-  // Keep PBR terrain/street photos independent of the landmark choice.
+  // QA rollback skips all imported landmark meshes and uses the procedural
+  // landmarks. Keep PBR terrain/street photos independent of that choice.
   const useProceduralLandmarks=typeof location!=='undefined' &&
     new URLSearchParams(location.search).get('nycModels')==='legacy';
-  const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
-    // The original Empire State Building mesh has significantly more
-    // distinctive facade geometry than the 13 KB approximate GLB.
-    // Keep it instead of replacing it with an even simpler block.
-    ['liberty','statue-of-liberty.glb',31]
-  ].map(async ([kind,filename,height])=>{
-    try{
-      const response=await fetch('./assets/nyc/'+filename);
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const bytes=await response.arrayBuffer();
-      if(gl.isContextLost())return;
-      models[kind]=await decodeGLB(gl,bytes,height);
-    }catch(error){failures.push(kind+': '+error.message);}
-  }));
+  // Liberty is now loaded once through the manifest below. Avoid fetching and
+  // decoding the legacy 37 KB mesh before immediately replacing it with the
+  // licensed 3Dystopia atlas.
+  const modelsReady=Promise.resolve();
   // Scenario for Blender assets are optional; the public game never calls
   // Scenario or includes API tokens. Only exact, manifest-approved same-origin
   // GLBs are requested, preserving original procedural asset fallback.

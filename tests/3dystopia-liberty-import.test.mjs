@@ -7,6 +7,7 @@ const binary=await readFile(new URL('assets/nyc/scenario/liberty-3dystopia-1k.gl
 const provenance=JSON.parse(await readFile(new URL(
   'assets/nyc/scenario/liberty-3dystopia-1k-provenance.json',root)));
 const manifest=JSON.parse(await readFile(new URL('assets/nyc/scenario-manifest.json',root)));
+const loader=await readFile(new URL('assets/nyc/nyc-realism.js',root),'utf8');
 
 function gltfFromGlb(bytes){
   assert.equal(bytes.toString('ascii',0,4),'glTF');
@@ -34,4 +35,6 @@ test('3Dystopia Liberty GLB is imported, licensed, embedded-textured and budgete
   assert.equal(provenance.author,'3Dystopia (@Dystopia)');
   assert.equal(provenance.license,'CC BY 4.0');
   assert.equal(provenance.review_status,'enabled-for-review-branch');
+  assert.doesNotMatch(loader,/\['liberty','statue-of-liberty\.glb',31\]/,
+    'production must not decode the legacy Liberty mesh before the replacement');
 });
