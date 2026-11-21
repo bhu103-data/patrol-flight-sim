@@ -5,21 +5,28 @@
 Photo material asset build: `tools/alaska/build_photo_atlas.py`; GitHub Actions
 build `.github/workflows/alaska-photo-atlas.yml`. Original **CC0 photographic
 maps** are sourced only from [Poly Haven Rock 01](https://polyhaven.com/a/rock_01)
-and [Poly Haven Snow 02](https://polyhaven.com/a/snow_02), under
+and [Poly Haven Snow 02](https://polyhaven.com/a/snow_02),
+[Forest Ground 04](https://polyhaven.com/a/forest_ground_04), and
+[Forest Ground 03 / Pine Needles](https://polyhaven.com/a/forrest_ground_03), under
 [Poly Haven's CC0 license](https://polyhaven.com/license). Artist: Rob Tuytel.
-The separate *local* 512×256 WebP atlases contain color, OpenGL normal RGB and
+The separate *local* 1024×256 WebP atlases contain color, OpenGL normal RGB and
 roughness A channels; the files are committed under `assets/alaska/`.
 `alaska-photo-manifest.json` records provenance and layout. No network
 requests to Poly Haven occur during gameplay. The build job alone downloads
 1K source materials using allowlisted hostnames and a strict size cap.
 
-The Alaska-only world raymarcher blends these photographs with the existing
+The Alaska-only world raymarcher blends these four photographic surfaces with the existing
 USGS-based elevation terrain at camera distances under 255 flight units,
 including simple normal-mapped micro-shading and roughness-based reflectance.
 It uses at most two atlas samples on qualifying nearby pixels. **These are real
 photographs, not measured on-site Alaska imagery.** Geometry is not displaced
 by the normal map, and this lightweight lighting is not a complete energy-
 conserving metal/rough PBR renderer.
+
+The updated forest-floor photographs cover nearby low-elevation shores, while
+snow and rock photographs cover the alpine slopes. Dense but bounded conifer
+forest instances replace the legacy conical tree patches on capable GPUs;
+low-graphics mode retains its original fallback.
 
 The photos are loaded on demand when the Alaska map starts, use mipmaps,
 and are freed when switching maps. Compatibility / low-detail / resource
