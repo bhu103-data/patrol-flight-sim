@@ -1073,13 +1073,10 @@ const CENTRAL_PARK_SITES=[
         const corners = [[-1,-1],[-1,1],[1,-1],[1,1]];
         if (!corners.every(([i,j])=>Math.abs(cityHeight(x+i*width/2,z+j*length/2)*scale-base)<0.4)) continue;
         // Leave room for the authored road corridors before placing city parcels.
-        const streetClearance=6.4+Math.hypot(width,length)*0.5;
-        const inStreet=city.streets.some(street=>street.some(([sx,sz],i)=>{
-          if (!i) return false;
-          const [ax,az]=street[i-1], dx=sx-ax,dz=sz-az;
-          const t=clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz),0,1);
-          return Math.hypot(x-(ax+t*dx),z-(az+t*dz))<streetClearance;
-        }));
+        // Use the same precise footprint-vs-road corridor test as the
+        // rendering filter, instead of a huge circumcircle around each lot.
+        // The old radius erased valid Brooklyn Bridge approach blocks.
+        const inStreet=generatedCityRoadOverlap([x,z,width,length],5.85);
         const track=city.railway;
         const trackDistance=Math.hypot(x-clamp(x,track.west,track.east),z-track.z);
         if(Math.abs(trackDistance-track.radius)<4+Math.hypot(width,length)*0.43) continue;
