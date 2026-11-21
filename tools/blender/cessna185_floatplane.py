@@ -132,7 +132,7 @@ def run(output):
     loft("Skywagon elliptical riveted fuselage",[
         (-3.69,.065,.075,.09),(-2.82,.37,.35,.04),(-1.35,.65,.71,.12),
         (.48,.72,.72,.13),(1.65,.58,.58,.10),(2.75,.40,.39,.07),
-        (3.68,.11,.12,.035),(4.1205,.035,.045,.02)],white,16)
+        (3.68,.11,.12,.035),(3.98,.035,.045,.02)],white,16)
     for side in (-1,1):
         wing("High wing 35ft10in "+str(side),side,silver)
         float_hull("Edo-style float "+str(side),side,float_mat)
@@ -153,9 +153,11 @@ def run(output):
     for side in (-1,1):
         box("fuselage side blue stripe "+str(side),(side*.66,.03,-.38),(.052,.10,3.9),navy)
         beam("float cross brace "+str(side),(side*.48,-.70,0),(side*1.27,-.63,0),.055,silver)
-    beam("propeller vertical blade",(0,.07,4.12),(0,1.15,4.12),.09,black)
-    beam("propeller opposing blade",(0,.07,4.12),(0,-1.01,4.12),.09,black)
-    box("propeller spinner",(0,.07,4.24),(.30,.30,.27),float_mat)
+    # Total aircraft length includes the forward spinner AND the aft fin.
+    # With the fin aft at -3.755m, spinner reaches +4.055m: 7.810m overall.
+    beam("propeller vertical blade",(0,.07,3.95),(0,1.15,3.95),.09,black)
+    beam("propeller opposing blade",(0,.07,3.95),(0,-1.01,3.95),.09,black)
+    box("propeller spinner",(0,.07,3.925),(.30,.30,.26),float_mat)
     bpy.context.scene.unit_settings.system="METRIC"
     bpy.context.scene.unit_settings.scale_length=1
     out=Path(output).resolve()
