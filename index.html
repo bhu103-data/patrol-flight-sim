@@ -6612,6 +6612,14 @@ const CENTRAL_PARK_SITES=[
 
     function shed(site,w,l,body,roofHeight,name){
       const {x,y,z}=site;
+      // A sea-clamped terrain value cannot support an Alaska cabin.
+      if(selectedMap.alaska){
+        const samples=[];
+        for(const sx of [-.5,0,.5])for(const sz of [-.5,0,.5])
+          samples.push(sampleTerrainHeight(x+sx*(w+.8),z+sz*(l+.8)));
+        if(Math.min(...samples)<=WATER_H+.82 ||
+           Math.max(...samples)-Math.min(...samples)>2.15)return false;
+      }
       box(x,y+1.8,z,w,3.7,l,body);
       const a=x-w/2-.35,b=x+w/2+.35,f=z-l/2-.3,k=z+l/2+.3;
       const top=y+3.6, ridge=top+roofHeight;
@@ -6622,17 +6630,28 @@ const CENTRAL_PARK_SITES=[
       box(x,y+1.2,f-0.06,w*0.32,2.35,0.18,timber);
       for(const side of [-1,1])box(x+side*w*0.31,y+2.15,k+0.03,1.3,0.92,0.11,[0.34,0.49,0.54]);
       solidAt(name,x,z,y,ridge,w/2,l/2);
+      return true;
     }
 
     if(selectedMap.alaska) {
       const camp=findScenerySite(150,314,{footprint:13});
-      if(camp){
+      if(camp && shed(camp,10,13,[0.80,0.45,0.21],1.5,'research cabin')){
         place('Glacier Research Camp',camp);
-        shed(camp,10,13,[0.80,0.45,0.21],1.5,'research cabin');
-        shed({...camp,x:camp.x+11,y:sampleTerrainHeight(camp.x+11,camp.z)},8,9,[0.62,0.68,0.69],1.1,'research cabin');
-        cylinder(camp.x-8,camp.z+8,[[camp.y,0.27],[camp.y+9,0.14]],iron,8);
-        box(camp.x-8,camp.y+9,camp.z+8,4.0,0.19,0.18,pale);
-        lamp(camp.x-8,camp.y+9.8,camp.z+8,0.32,0.38,0.32,[0.94,0.30,0.23]);
+        // A second building gets its own land-clearance/spacing survey.
+        const annex=findScenerySite(camp.x+17,camp.z+7,{
+          footprint:5,range:27,
+          avoid:(x,z)=>Math.abs(x-camp.x)<11&&Math.abs(z-camp.z)<12
+        });
+        if(annex)shed(annex,8,9,[0.62,0.68,0.69],1.1,'research cabin');
+        const mast=findScenerySite(camp.x-13,camp.z+11,{
+          footprint:3.2,range:24,
+          avoid:(x,z)=>Math.abs(x-camp.x)<9&&Math.abs(z-camp.z)<10
+        });
+        if(mast){
+          cylinder(mast.x,mast.z,[[mast.y,0.27],[mast.y+9,0.14]],iron,8);
+          box(mast.x,mast.y+9,mast.z,4.0,0.19,0.18,pale);
+          lamp(mast.x,mast.y+9.8,mast.z,0.32,0.38,0.32,[0.94,0.30,0.23]);
+        }
       }
       const routes=[{x:-12,z:-301,rx:18,rz:56},{x:5,z:38,rx:17,rz:61}];
       for(const [index,route] of routes.entries()){
