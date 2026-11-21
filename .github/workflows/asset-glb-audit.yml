@@ -1,0 +1,54 @@
+name: Audit freely redistributable streetlight candidate
+on:
+  pull_request:
+    paths:
+      - "assets/chongqing/street-lamp-review.js"
+      - "tests/chongqing-street-lamp-review.test.mjs"
+      - "scripts/audit-external-glb.mjs"
+      - ".github/workflows/asset-glb-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: asset-glb-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-source-glb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify no unreviewed asset is loaded into PATROL
+        run: node --test tests/chongqing-street-lamp-review.test.mjs
+      - name: Fetch free original source and provenance (no account, no paid services)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/streetlamp-review
+          curl --fail --location --retry 2 --max-time 60 --proto '=https' \
+            https://grab3d.com/dl/street-light/street-light.glb \
+            --output /tmp/patrol-review-street-light.glb
+          curl --fail --location --retry 2 --max-time 40 --proto '=https' \
+            https://grab3d.com/dl/street-light/manifest.json \
+            --output artifacts/streetlamp-review/source-manifest.json
+          curl --fail --location --retry 2 --max-time 40 --proto '=https' \
+            https://grab3d.com/dl/street-light/LICENSE.txt \
+            --output artifacts/streetlamp-review/source-LICENSE.txt
+          grep -Eiq 'CC0|Creative Commons Zero' artifacts/streetlamp-review/source-LICENSE.txt
+      - name: Inspect actual GLB triangles, textures, codec and SHA-256
+        run: |
+          node scripts/audit-external-glb.mjs \
+            /tmp/patrol-review-street-light.glb \
+            artifacts/streetlamp-review/source-manifest.json \
+            artifacts/streetlamp-review/glb-audit.json
+      - name: Retain evidence only, NOT automatic installation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streetlamp-provenance-audit
+          path: artifacts/streetlamp-review/
+          retention-days: 7
+          if-no-files-found: ignore
