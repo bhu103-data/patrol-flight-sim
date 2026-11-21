@@ -9,6 +9,7 @@ import { buildChongqingWetStreets } from './wetstreets.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
+import { createChongqingUrbanArchitecture } from './urban-architecture.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 
 const canvas = document.getElementById('world');
@@ -199,77 +200,14 @@ function riverStrip(main=true){
 }
 riverStrip();riverStrip(false);
 
-// Buildings use instancing: over 300 varied towers with thousands of cheap emissive windows.
-const buildingBase=new THREE.BoxGeometry(1,1,1);
-const towerMesh=new THREE.InstancedMesh(buildingBase,M.concrete,360);
-towerMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-const windowMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),M.window,17000);
-windowMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-const dummy=new THREE.Object3D(), tempColor=new THREE.Color();
-const obstacles=[];
-let towerCount=0,windowCount=0;
-const hues=['#b4b9bf','#96a5af','#9a9ba5','#b1a6a3','#85949f','#b2aea7','#8b9cab'];
-function tower(x,z,w,d,h,k) {
-  const base=ground(x,z);
-  dummy.position.set(x,base+h/2,z);dummy.rotation.set(0,0,0);dummy.scale.set(w,h,d);
-  dummy.updateMatrix();towerMesh.setMatrixAt(towerCount,dummy.matrix);
-  towerMesh.setColorAt(towerCount,new THREE.Color(hues[k%hues.length]));
-  towerCount++;
-  obstacles.push({x,z,w:w+2,d:d+2,base,top:base+h});
-  const nx=Math.max(2,Math.floor(w/6)),ny=Math.max(2,Math.floor(h/7));
-  for(let r=1;r<ny;r++)for(let col=0;col<nx;col++){
-    if(rand()<0.22)continue;
-    const wx=x-w/2+(col+.5)*w/nx, wy=base+(r+.4)*h/ny;
-    dummy.position.set(wx,wy,z+d/2+0.05);
-    dummy.scale.set(Math.max(1.1,w/nx*.45),Math.max(.8,h/ny*.35),1);
-    dummy.rotation.set(0,0,0);dummy.updateMatrix();
-    if(windowCount<17000){
-      windowMesh.setMatrixAt(windowCount,dummy.matrix);
-      windowMesh.setColorAt(windowCount,tempColor.set(rand()<.32?'#ffd18d':'#7baac3'));windowCount++;
-    }
-  }
-  for(let r=1;r<ny;r+=2)for(let col=0;col<Math.floor(d/7);col++){
-    if(rand()<.45)continue;
-    dummy.position.set(x+w/2+.05,base+(r+.4)*h/ny,z-d/2+(col+.5)*7);
-    dummy.scale.set(2.4,2.3,1);dummy.rotation.set(0,Math.PI/2,0);dummy.updateMatrix();
-    if(windowCount<17000){windowMesh.setMatrixAt(windowCount,dummy.matrix);windowMesh.setColorAt(windowCount,tempColor.set('#b8cbe0'));windowCount++;}
-  }
-}
-// Riverfront residential and office blocks are now aligned with terrace roads.
-// Avoid random floating towers, major landmark footprints, train tunnel and riverside promenades.
-// A fixed seed keeps the skyline stable across reloads and avoids repeated geometry.
-for(const side of [-1,1]){
-  for(let tier=0;tier<5;tier++){
-    for(let col=0;col<34&&towerCount<360;col++){
-      const offset=(rand()-.5)*15;
-      const x=-948+col*57.8+offset;
-      const bankDistance=180+tier*102+(rand()-.5)*15;
-      const z=riverCenter(x)+side*bankDistance;
-      if(z<-603||z>603||x<-950||x>950)continue;
-      if(riverDist(x,z)<28)continue;
-      // Preserve distinctive foreground silhouettes and walkable sightseeing corridors.
-      if(Math.hypot(x-285,z-225)<112)continue;
-      if(Math.hypot(x-160,z-150)<175)continue;
-      if(Math.abs(x+355)<220&&Math.abs(z-176)<106)continue;
-      if(Math.abs(x+121)<85&&Math.abs(z+254)<78)continue;
-      if(Math.abs(x+135)<58&&Math.abs(z-335)<60)continue;
-      const w=18+rand()*22,d=17+rand()*23;
-      const business=x>-525&&x<590&&tier<4;
-      const heightBand=business?76:38;
-      const h=heightBand+rand()*(business?165:76);
-      // Mid-rise and low-rise buildings break up an otherwise monotonous wall of towers.
-      const finalH=(rand()<.20?h*.52:h);
-      tower(x,z,w,d,finalH,Math.abs(col*17+tier*11+(side+1)*3));
-    }
-  }
-}
-towerMesh.count=towerCount;windowMesh.count=windowCount;
-towerMesh.instanceMatrix.needsUpdate=true;windowMesh.instanceMatrix.needsUpdate=true;
-if(towerMesh.instanceColor)towerMesh.instanceColor.needsUpdate=true;
-if(windowMesh.instanceColor)windowMesh.instanceColor.needsUpdate=true;
-towerMesh.castShadow=true;
-  towerMesh.receiveShadow=true;
-scene.add(towerMesh,windowMesh);
+// PATROL_CQ_CINEMATIC_V2: five profile/extrusion families replace the one
+// repeated concrete box tower. Shared meshes retain low GPU draw-call cost.
+// Modern Chongqing facade atlases have balcony/AC/window rhythms and realistic
+// rooftop setbacks; original landmark footprints and collisions stay intact.
+const dummy=new THREE.Object3D(),obstacles=[];
+const skyline=createChongqingUrbanArchitecture({
+  THREE,scene,ground,riverDist,riverCenter,rand,obstacles,pbr
+});
 
 // Roads are swept strips following terraces, not an infinite grid.
 function road(points,width,material=M.road){
@@ -563,6 +501,7 @@ function applyQuality(){
   moon.castShadow=!low;
   trees.castShadow=qualityMode==='high';
   detailBuild.setQuality(low?'low':'normal');
+  skyline.setQuality(low?'low':'normal');
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
@@ -1035,6 +974,7 @@ function frame(){
         '\nTriangles '+stats.triangles.toLocaleString()+
         '\nPixel ratio '+renderRatio.toFixed(2)+' / '+qualityMode+
         '\nIndexed buildings '+obstacleIndex.obstacleCount+
+        '\nSkyline profiles '+skyline.stats.towers+' / 5'+
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
         '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips;
     }
