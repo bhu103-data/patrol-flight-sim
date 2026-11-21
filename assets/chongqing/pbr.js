@@ -14,7 +14,7 @@ export function createChongqingPBR(THREE){
     asphaltARM:'asphalt_04_arm_1k.jpg'
   };
   function loadTexture(file,sRGB=false){
-    const texture=loader.load(root+file,()=>{texture.needsUpdate=true;},undefined,()=>{
+    const texture=loader.load(root+file,(loaded)=>{loaded.needsUpdate=true;},undefined,()=>{
       // Keep the material's default color/roughness when a photo map is unavailable.
       // The game never fails to launch solely because one texture is missing.
       console.warn('Chongqing PBR texture unavailable:',file);
