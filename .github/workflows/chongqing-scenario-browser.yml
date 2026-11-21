@@ -5,7 +5,14 @@ on:
     paths:
       - '.github/workflows/chongqing-scenario-browser.yml'
       - 'assets/chongqing/generated/hongyadong-study.glb'
+      - 'assets/chongqing/chongqing.js'
+      - 'assets/chongqing/scenario-assets.js'
+      - 'assets/chongqing/scenario-manifest.json'
   workflow_dispatch:
+
+concurrency:
+  group: chongqing-pbr-browser
+  cancel-in-progress: true
 
 permissions:
   contents: read
