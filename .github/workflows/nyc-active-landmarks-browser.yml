@@ -1,0 +1,47 @@
+name: NYC active three-landmark Manhattan flight smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/verify-nyc-active-landmarks.cjs'
+      - 'assets/nyc/scenario-manifest.json'
+      - 'assets/nyc/nyc-realism.js'
+      - '.github/workflows/nyc-active-landmarks-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nyc-active-landmarks-browser
+  cancel-in-progress: true
+
+jobs:
+  main-flight-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Chromium with WebGL2 SwiftShader
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Serve game on localhost
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 > /tmp/patrol-live-smoke.log 2>&1 &
+          sleep 2
+      - name: Confirm actual Manhattan flight loads trade, empire and chrysler GLBs
+        run: node tools/verify-nyc-active-landmarks.cjs
+      - name: Upload screenshot and request evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manhattan-three-landmarks-webgl
+          path: artifacts/manhattan-three-glbs*
+          if-no-files-found: warn
+          retention-days: 14
