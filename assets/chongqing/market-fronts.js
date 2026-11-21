@@ -39,15 +39,20 @@ export function makeChongqingMarketTileRoof(THREE){
 }
 
 export function buildChongqingMarketFronts({
-  THREE,scene,ground,riverDist=()=>Infinity,obstacles=[]
+  THREE,scene,ground,riverDist=()=>Infinity,obstacles=[],pbr=null
 }){
   const marker=new THREE.Object3D(),unit=new THREE.BoxGeometry(1,1,1);
   const material=(color,roughness=.79,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-  const timberMat=material(0x493e34,.88),stoneMat=material(0x78736a,.93);
-  const glassMat=new THREE.MeshStandardMaterial({
+  // Reuse PATROL's already licensed/loaded CC0 wood, cut-stone and
+  // clay-tile PBR. The supplied roof material updates in-place when its
+  // Poly Haven CC0 photo is available, and retains a local tiled fallback.
+  const timberMat=pbr?.wood??material(0x493e34,.88),
+    stoneMat=pbr?.cutStone??material(0x78736a,.93);
+  const glassMat=pbr?.glass??new THREE.MeshStandardMaterial({
     color:0x3e5964,roughness:.23,metalness:.2,side:THREE.DoubleSide
   });
-  const trimMat=material(0x8e8980,.76),tileMat=material(0x4c5559,.87);
+  const trimMat=pbr?.carvedWood??material(0x8e8980,.76),
+    tileMat=pbr?.roof??material(0x4c5559,.87);
   const batch=(geometry,mat,capacity)=>{
     const mesh=new THREE.InstancedMesh(geometry,mat,capacity);
     mesh.count=0;mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
