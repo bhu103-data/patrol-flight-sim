@@ -109,7 +109,9 @@ try {
  }
  renderer.render(scene,camera);
  frames.sort((a,b)=>a-b);
- const stat={lod:Number(lod),done:true,webgl2:renderer.capabilities.isWebGL2,
+ const gl=renderer.getContext(),dbg=gl.getExtension('WEBGL_debug_renderer_info');
+ const gpuRenderer=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
+ const stat={lod:Number(lod),done:true,webgl2:renderer.capabilities.isWebGL2,gpuRenderer,
    dimensions:size.toArray().map(x=>+x.toFixed(4)),
    centeredAt:world.getCenter(new THREE.Vector3()).toArray(),
    meshes,materials:materials.size,uniqueTextureHandles:images.size,
@@ -120,17 +122,20 @@ try {
      +(sumBrightness/changed).toFixed(2),
    movingNodeNames:movingNodeNames.slice(0,25),
    frameTimesMs:frames.map(x=>+x.toFixed(1)),
-   renderer:'Chromium SwiftShader WebGL2, software only. NOT Windows machine or real GPU FPS'};
+   renderer:'Inspect gpuRenderer. Default CI is SwiftShader; PATROL_WEBGL_NATIVE=1 requests installed Chrome'};
  window.__jetQA=stat;
  ktx.dispose();
 }catch(error){window.__jetQA={done:true,error:String(error?.stack||error)};}
 document.documentElement.dataset.ready='1';
 </script></body></html>`;
 await writeFile(dir+'/stealth-fighter-preview.html',html);
-const browser=await chromium.launch({headless:true,args:[
-  '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-gpu-sandbox','--disable-dev-shm-usage'
-]});
+const nativeMode=process.env.PATROL_WEBGL_NATIVE==='1';
+const browser=await chromium.launch(nativeMode
+  ?{headless:false,channel:'chrome',args:['--enable-webgl']}
+  :{headless:true,args:[
+    '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader','--disable-gpu-sandbox','--disable-dev-shm-usage'
+  ]});
 const outputs=[];
 try{
  for(const lod of [1,2]){
@@ -147,6 +152,8 @@ try{
      const report=await page.evaluate(()=>window.__jetQA);
      if(!report||report.error||!report.webgl2||report.sourceDrawTriangles<3000)
        throw Error('Unverified candidate: '+JSON.stringify(report));
+     if(nativeMode&&/swiftshader|llvmpipe|software/i.test(report.gpuRenderer||''))
+       throw Error('Native Chrome GPU fallback detected: '+report.gpuRenderer);
      if(consoleErrors.length)throw Error('Browser console errors: '+consoleErrors.join(';'));
      const shot=dir+'/stealth-fighter-source-lod'+lod+'-swiftshader.png';
      await page.locator('canvas').screenshot({path:shot,timeout:40000});
@@ -158,6 +165,8 @@ try{
 const result={
   source:'tevy CC0 v1 Stealth Fighter, NOT exactly a Viper or a licensed manufacturer jet',
   approvedForPatrol:false,
+  nativeChromeRequested:nativeMode,
+  windowsHardwareVerified:nativeMode&&process.platform==='win32'&&outputs.every(x=>!x.error),
   fileImport:'Real GLTFLoader + KTX2Loader + MeshoptDecoder original GLBs in temporary standalone viewer',
   limitations:'Original PATROL aircraft mesh/flight physics unchanged; no production texture/PBR renderer added',
   reports:outputs,complete:outputs.every(x=>!x.error)
