@@ -136,6 +136,11 @@ try{
    facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
    'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
  await capture('09-manhattan-window-facades.png');
+ // Restore the same free-flight state as the original tour before invoking
+ // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
+ await page.locator('#resumeFlight').click({force:true});
+ await page.waitForFunction(()=>document.getElementById('hotelViews')?.hidden,
+  null,{timeout:12000});
  // The previous smoke test photographed only the spawn harbor. Explicitly
  // visit the Brooklyn Bridge camera so bridgehead, nearby parcels and road
  // clipping are visible in CI artifacts rather than being inferred from code.
