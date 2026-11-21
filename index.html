@@ -6139,11 +6139,13 @@ const CENTRAL_PARK_SITES=[
         }
       }
       for(const [cx,cz] of candidates){
-        // Test the full cabin/footing envelope, including quarter-points.
-        // A nine-point grid can miss narrow shore inlets beneath a floor.
-        const offsets=[-.5,-.25,0,.25,.5],heights=[];
-        for(const ux of offsets)for(const uz of offsets)
+        // Sample seven points per axis across the full foundation and margin.
+        // Even a 5x5 grid can miss a narrow inlet between quarter-points.
+        const heights=[];
+        for(let ix=0;ix<=6;ix++)for(let iz=0;iz<=6;iz++){
+          const ux=ix/6-.5,uz=iz/6-.5;
           heights.push(sampleTerrainHeight(cx+ux*(w+.65),cz+uz*(d+.65)));
+        }
         const low=Math.min(...heights),high=Math.max(...heights);
         if(!Number.isFinite(low)||!Number.isFinite(high)||
            low<=WATER_H+1.0||high-low>maxSlope)continue;
