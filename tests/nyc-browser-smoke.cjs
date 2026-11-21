@@ -19,9 +19,13 @@ fs.mkdirSync(outDir,{recursive:true});
  const page=await browser.newPage({viewport:{width:1280,height:720},
   deviceScaleFactor:1});
  const logs=[];
+ let parkReadyLog=false;
  page.on('console',m=>{
+   if(m.text().includes('[PATROL] Central Park') && m.type()==='info'){
+     parkReadyLog=true;
+   }
    if(m.type()==='error'||m.type()==='warning')
-    logs.push(m.type()+': '+m.text().slice(0,320));
+    logs.push(m.type()+': '+m.text().slice(0,520));
  });
  page.on('pageerror',e=>logs.push('pageerror: '+String(e).slice(0,350)));
  const photo=async name=>{
@@ -57,7 +61,17 @@ fs.mkdirSync(outDir,{recursive:true});
    return Boolean(load?.classList.contains('done') && menu?.hidden &&
      button && !button.hidden && document.getElementById('glCanvas')?.width>500);
   },null,{timeout:180000,polling:1000});
-  await page.waitForTimeout(1600);
+  // The terrain renderer can be healthy while an optional park mesh throws.
+  // Require the park geometry to finish uploading, not just the P button.
+  const parkDeadline=Date.now()+45000;
+  while(!parkReadyLog && Date.now()<parkDeadline){
+    const fallback=logs.find(t=>t.includes('Central Park fallback'));
+    if(fallback)throw Error('Central Park geometry failed: '+fallback);
+    await page.waitForTimeout(500);
+  }
+  assert.equal(parkReadyLog,true,
+    'Central Park GPU mesh must upload and log a successful build');
+  await page.waitForTimeout(900);
   const initial=await current();
   assert(initial.webgl2&&!initial.contextLost);
   assert(initial.canvasWidth>=500&&initial.canvasHeight>=300);
@@ -103,6 +117,9 @@ fs.mkdirSync(outDir,{recursive:true});
   assert(restored.webgl2&&!restored.contextLost);
   await photo('nyc-flight-after-park.png');
   report.stages.push({stage:'resumed',...restored});
+  assert(!logs.some(line=>line.includes('Central Park fallback')),
+    'Park geometry must never fall back silently');
+  report.parkGeometryBuilt=parkReadyLog;
   console.log('PASS NYC in-page park visual smoke: '+JSON.stringify(report,null,2));
  }catch(error){
   report.error=String(error);
