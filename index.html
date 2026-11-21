@@ -2873,6 +2873,35 @@ const CENTRAL_PARK_SITES=[
         roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
       }
     }
+    // PATROL_NYC_ANON_WINDOW_REFLECTION_V1: nonrepeating close-range
+    // glazing on Manhattan's existing individual mesh windows (surface 5).
+    // Do not cover official GIS 7/10, Brooklyn 13, signs or street vehicles.
+    // Source geometry, parcel bounds and road collision stay unchanged.
+    void nyManhattanGenericGlazing(inout vec3 albedo,inout vec3 n,
+                                   inout float roughness){
+      if(!uManhattanView || !uCityFacade || !uSmooth ||
+         uNyStreetQuality<1.5 || vHarborSurface<4.5 ||
+         vHarborSurface>5.5 || abs(n.y)>.35)return;
+      float close=1.0-smoothstep(80.0,270.0,distance(vWorld,uEye));
+      if(close<.004)return;
+      vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.0001,0.0,.0001));
+      vec2 bay=floor(vec2(dot(vWorld,tangent)*.77,vWorld.y*.41));
+      float office=nyStreetHash(bay+vec2(17.3,53.7));
+      float blind=nyStreetHash(bay+vec2(91.1,7.9));
+      float shade=.54+.40*nyStreetHash(bay+vec2(8.3,26.5));
+      float facing=abs(dot(normalize(uEye-vWorld),n));
+      float fresnel=pow(1.0-clamp(facing,0.0,1.0),5.0);
+      vec3 sky=mix(vec3(.20,.27,.32),vec3(.40,.54,.64),uAtmosphere.x);
+      vec3 room=mix(vec3(.13,.18,.20),vec3(.25,.29,.28),office);
+      vec3 glass=mix(room*shade,sky,.34+.50*fresnel);
+      float lit=step(.83,office)*(1.0-uAtmosphere.x*.89);
+      glass+=vec3(.32,.24,.14)*lit*.34;
+      glass=mix(glass,vec3(.43,.43,.40),
+        step(.88,blind)*close*.21);
+      albedo=mix(albedo,glass,close*.76);
+      roughness=mix(roughness,.19+.13*blind,close*.80);
+    }
+
     // Tagged surface 12: Alaska glacier mesh; distant, other-map and
     // compatibility geometry retains the existing lightweight fallback.
     void alaskaGlacierFace(inout vec3 material,inout vec3 n,
@@ -2989,6 +3018,7 @@ const CENTRAL_PARK_SITES=[
         nyLayeredMaterial(material,n);
         nyBuildingPbr(material,n,surfaceRoughness);
         nyOfficialGisPbr(material,n,surfaceRoughness);
+        nyManhattanGenericGlazing(material,n,surfaceRoughness);
       }
       if(uDcSurface>=0 && uDcSurface<5)dcSurface(material,n,surfaceRoughness);
       alaskaGlacierFace(material,n,surfaceRoughness);
