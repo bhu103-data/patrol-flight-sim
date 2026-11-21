@@ -46,6 +46,20 @@ test('no road ribbon or intersection is painted through an occupied building',()
       assert.fail('Road ribbon inside building footprint');
   }
 });
+test('thin walls between grid samples cannot cut through avenue asphalt',()=>{
+  const wall={x:33.5,z:12.3,w:.16,d:.16};
+  const isClear=(x,z,r=0)=>Math.abs(x-wall.x)>=wall.w*.5+r||
+    Math.abs(z-wall.z)>=wall.d*.5+r;
+  const clean=city(()=>true),occupied=city(isClear);
+  const includesAvenue=slabs=>slabs.some(row=>
+    Math.abs(row.a[0]-30)<1e-7&&Math.abs(row.a[2])<1e-7&&
+    Math.abs(row.b[0]-37.92)<1e-7&&Math.abs(row.b[2]-33)<1e-7&&
+    Math.abs(row.width-6.35)<1e-5);
+  assert.equal(includesAvenue(clean.slabs),true);
+  assert.equal(includesAvenue(occupied.slabs),false,
+    'small building wall must remove the entire obstructed asphalt ribbon');
+  assert.ok(occupied.stats.avenues>500,'retain Manhattan road density');
+});
 test('main NYC lot filter protects street routes in visual and collision data',async()=>{
   const html=await fromFile('../index.html');
   const start=html.indexOf('function nycParcelCrossesRoad(');
