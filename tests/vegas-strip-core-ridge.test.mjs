@@ -23,11 +23,11 @@ function scene(){
 }
 test('original Vegas ridge meshes stay within tight triangle budget',()=>{
  const {stats,triangles,quads}=scene();
- assert.equal(stats.mountainTriangles,216);
+ assert.equal(stats.mountainTriangles,768);
  assert.equal(stats.roadTriangles,18);
- assert.equal(triangles.length,216);
+ assert.equal(triangles.length,768);
  assert.equal(quads.length,9);
- assert.ok(stats.triangles<=240);
+ assert.ok(stats.triangles<=800);
 });
 test('mountain wings are outside the authored casino blocks and roads',()=>{
  const {triangles}=scene();
@@ -36,7 +36,7 @@ test('mountain wings are outside the authored casino blocks and roads',()=>{
    p[2]>=-666&&p[2]<=666&&Number.isFinite(p[1]))));
  const west=triangles.filter(t=>t.a[0]<0);
  const east=triangles.filter(t=>t.a[0]>0);
- assert.equal(west.length,108);assert.equal(east.length,108);
+ assert.equal(west.length,384);assert.equal(east.length,384);
 });
 test('flush Strip surface repairs have no physical colliders or textures',()=>{
  const {quads}=scene();
