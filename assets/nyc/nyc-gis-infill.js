@@ -90,7 +90,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
-  let buildings=0,pieces=0,roofTriangles=0,windows=0;
+  let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0;
   const sourceFids=new Set();
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
@@ -146,10 +146,59 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           [b[0],top,b[1]],[a[0],top,a[1]],wall,6);
         // Narrow, recessed dark windows. Never exceed mobile detail budget.
         const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+        const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+        // PATROL_NYC_TIMES_FID384606_SHOPFRONT_V1: the 5.98-unit polygon
+        // at the 44th Street camera's right foreground had zero window quads:
+        // the generic h<9 infill gate skipped it. Keep the municipal polygon,
+        // intersection cuts, roofs and collision proxies intact. The west-
+        // facing frontage alone gains shallow, batched doors and glazing.
+        // Authored storefront layout, not surveyed shop-window locations.
+        if(rec.fid===384606 && h>5.5 && nx<-.45 && len>=3.2){
+          const bays=Math.max(2,Math.min(7,Math.floor(len/1.7)));
+          const q=(t,y,depth)=>[a[0]+(b[0]-a[0])*t+nx*depth,
+            y,a[1]+(b[1]-a[1])*t+nz*depth];
+          const panel=(u,v,y0,y1,depth,color,tag=6)=>{
+            addQuad(q(u,y0,depth),q(v,y0,depth),
+              q(v,y1,depth),q(u,y1,depth),color,tag);
+            storefrontQuads++;
+          };
+          const frame=[.30,.33,.35],recess=[.105,.14,.17],
+            slate=[.54,.51,.47],clear=[.11,.26,.35],
+            shaded=[.17,.27,.31];
+          for(let bay=0;bay<bays;bay++){
+            const t0=(bay+.085)/bays,t1=(bay+.915)/bays;
+            const door=bay===Math.floor(bays*.5);
+            panel(t0,t1,ground+.48,ground+2.78,.031,recess);
+            panel(t0+.009/bays,t1-.009/bays,ground+.62,
+              ground+2.52,.049,door?shaded:bay%3===0?clear:shaded,7);
+            panel(t0,t1,ground+2.57,ground+2.67,.065,frame);
+            panel(t0,t1,ground+.54,ground+.64,.065,frame);
+            panel(t0,t0+.037/bays,ground+.54,ground+2.63,.067,frame);
+            panel(t1-.037/bays,t1,ground+.54,ground+2.63,.067,frame);
+            if(door){
+              const middle=(t0+t1)*.5;
+              panel(middle,middle+.018/bays,ground+.64,
+                ground+2.52,.071,frame);
+              panel(middle+.035/bays,middle+.085/bays,
+                ground+1.33,ground+1.42,.079,slate);
+            }else{
+              panel(t0+.016/bays,t1-.016/bays,ground+1.91,
+                ground+1.958,.070,frame);
+            }
+            // A restrained upper window band leaves the 6-unit roof intact.
+            panel(t0,t1,ground+3.42,ground+5.13,.033,recess);
+            panel(t0+.012/bays,t1-.012/bays,ground+3.56,
+              ground+4.89,.054,bay%2===0?clear:shaded,7);
+            panel(t0,t1,ground+4.86,ground+4.95,.069,frame);
+            panel(t0,t1,ground+3.47,ground+3.56,.069,slate);
+            if(bay%2===0)panel((t0+t1)*.5-.012/bays,
+              (t0+t1)*.5+.012/bays,ground+3.56,
+              ground+4.89,.071,frame);
+          }
+        }
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
           floors=Math.min(12,Math.floor((h-2.2)/2.35));
-        const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
         for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
           if(windows>=2200)break;
           const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
@@ -194,6 +243,6 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     if(used){buildings++;sourceFids.add(rec.fid);}
   }
   return {inputRecords:asset.features.length,sourceBuildings:buildings,
-    infillPieces:pieces,roofTriangles,windowQuads:windows,
+    infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
 }
