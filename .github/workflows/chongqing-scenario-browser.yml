@@ -26,6 +26,10 @@ jobs:
           python3 -m http.server 8127 --bind 127.0.0.1 >/tmp/patrol-http.log 2>&1 &
           echo $! > /tmp/patrol-http.pid
           sleep 2
+      - name: Verify the current 3.81 MB reviewed model (not a cached earlier GLB)
+        run: |
+          echo "c9937f3fcce539b1d397e466bf214d03ac9bc636cec9b484d8ca6c98a24cecac  assets/chongqing/generated/hongyadong-study.glb" | sha256sum -c -
+
       - name: Check actual WebGL 2 asset preview and capture image
         shell: bash
         run: |
