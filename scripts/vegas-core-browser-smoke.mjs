@@ -5,7 +5,7 @@ import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const output='artifacts/vegas';await mkdir(output,{recursive:true});
-const errors=[],screenshots=[],shots=[];
+const errors=[],screenshots=[],shots=[],startupSnapshots=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -18,15 +18,32 @@ const assert=(yes,message)=>{if(!yes)throw Error(message);};
 let result={status:'failed',errors,screenshots,shots};
 try {
  const navStarted=Date.now();
- const response=await page.goto(base+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+ const response=await page.goto(base+'/index.html?graphics=compat',{waitUntil:'domcontentloaded',timeout:60000});
  assert(response?.ok(),'PATROL launcher request failed');
  await page.locator('input[name="flightMap"][value="vegas"]').check({force:true});
  await page.locator('#startFlight').click({force:true});
- await page.waitForFunction(()=>{
-  const title=document.getElementById('titleOverlay');
-  const load=document.getElementById('loadOverlay');
-  return title?.hidden&&load?.classList.contains('done');
- },null,{timeout:120000});
+ // Software SwiftShader can be slower than hardware Chrome. Watch loading
+ // progress and persist diagnostics rather than silently losing the run.
+ const startupStarted=Date.now();
+ let loaded=false;
+ while(Date.now()-startupStarted<210000){
+  const status=await page.evaluate(()=>{
+   const title=document.getElementById('titleOverlay');
+   const load=document.getElementById('loadOverlay');
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   return {titleHidden:!!title?.hidden,loadDone:!!load?.classList.contains('done'),
+    step:document.getElementById('loadStep')?.textContent,
+    progress:document.getElementById('loadBar')?.style.width,
+    menuError:document.getElementById('menuError')?.textContent,
+    glLost:!!gl?.isContextLost()};
+  });
+  startupSnapshots.push({elapsedMs:Date.now()-startupStarted,...status});
+  if(status.titleHidden&&status.loadDone){loaded=true;break;}
+  if(status.menuError&&status.titleHidden===false&&status.loadDone)break;
+  await page.waitForTimeout(8000);
+ }
+ if(!loaded)throw Error('Vegas startup failed or timed out: '+
+   JSON.stringify(startupSnapshots.slice(-8)));
  const loadMs=Date.now()-navStarted;
  await page.keyboard.press('h');
  await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
@@ -83,12 +100,12 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',loadMs,errors,screenshots,shots,
+ result={status:'passed',loadMs,errors,screenshots,shots,startupSnapshots,
    frameSampling,incrementalGeometry:{triangles:234,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
  errors.push(error.message);
- result={...result,status:'failed',errors};
+ result={...result,status:'failed',errors,startupSnapshots};
  process.exitCode=1;
 }finally{
  await writeFile(output+'/vegas-core-report.json',JSON.stringify(result,null,2));
