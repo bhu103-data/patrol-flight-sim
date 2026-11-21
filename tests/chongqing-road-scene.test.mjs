@@ -43,6 +43,7 @@ class Geo{
   setIndex(v){this.index=v}
   computeVertexNormals(){}
   rotateX(){return this}
+  rotateZ(){return this}
 }
 class Attr{constructor(array,size){this.array=array;this.itemSize=size}}
 class Mat{constructor(props={}){Object.assign(this,props)}clone(){return new Mat(this)}}
