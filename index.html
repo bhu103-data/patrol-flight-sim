@@ -989,7 +989,11 @@ const CENTRAL_PARK_SITES=[
         ? Math.max(downtown,civic*.67)*Math.pow(hash(ix*3,iz*5,1289),2)*18:0;
       const building = island ?
         4.5 + signature * 7 + towers * signature ** 2 * 28 + highrise :
-        3.5 + signature * 9;
+        // Bounded Brooklyn midrise frontage: distinct roof heights trigger
+        // existing window/storefront detail instead of featureless low cubes.
+        brooklynBridgeInfill ?
+          9.4 + signature * 7.1 + hash(ix*3,iz*7,2921)*5.5 :
+          3.5 + signature * 9;
       return Math.min(0.99, (elevation + building) / scale);
     }
 
