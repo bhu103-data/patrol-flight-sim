@@ -72,6 +72,21 @@ async function flight(candidate){
      headers:{...response.headers(),'cache-control':'no-store'}});
   });
  }
+ // Add a nonproduction Scenic View to the TEST BROWSER RESPONSE only.
+ // This changes camera placement, not PATROL's source files or flight physics.
+ // Both rollback and staged candidate are captured from this exact viewpoint.
+ await page.route('**/index.html',async route=>{
+   const response=await route.fetch();
+   if(!response.ok())die('Cannot obtain original PATROL HTML');
+   const html=await response.text();
+   const anchor='const NYC_SCENIC_VIEWS=[';
+   if(html.split(anchor).length!==2)die('NYC scenic anchor changed');
+   const extra=`\n    {name:'Liberty Base QA · Harbor-South',x:-140,z:-611,
+      height:5,bearing:173,radius:38,rise:1.5,
+      detail:'Browser-only low-level pedestal inspection; not production geometry'},`;
+   await route.fulfill({response,contentType:'text/html; charset=utf-8',
+     body:html.replace(anchor,anchor+extra)});
+ });
  page.on('request',req=>{
   if(req.url().endsWith('/assets/nyc/scenario/liberty.glb'))requests.push(req.url());
  });
@@ -127,10 +142,39 @@ async function flight(candidate){
     avgMs:delta.reduce((s,v)=>s+v,0)/delta.length,
     maxMs:Math.max(...delta)};
   });
+  // Low-level harbor-side base test: same 1280x720 WebGL2 scene, camera
+  // just outside Fort Wood. These screenshots must be manually inspected for
+  // bottom-fort overlap; a nonblank test alone cannot prove architectural fit.
+  const nearName='Liberty Base QA · Harbor-South';
+  await page.locator('#hotelTarget').selectOption({label:nearName});
+  await page.locator('#hotelZoom').evaluate(el=>{
+    el.value='60';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('#hotelAngle').evaluate(el=>{
+    el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(850);
+  const lowState=await page.evaluate(()=>{
+    const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+    return {label:document.querySelector('#hotelTarget option:checked')?.textContent,
+      zoom:document.getElementById('hotelZoom')?.value,
+      angle:document.getElementById('hotelAngle')?.value,
+      webgl:!!gl&&!gl.isContextLost(),error:gl?.getError()??null};
+  });
+  if(!lowState.webgl||lowState.error!==0||lowState.label!==nearName||
+     lowState.zoom!=='60')die('Low base camera unavailable '+JSON.stringify(lowState));
+  const suffix=candidate?'candidate':'fallback';
+  const lowBase={state:lowState,source:'browser-only camera preset, no production edits'};
+  lowBase.harborSouth=await screenshot(page,'06-liberty-low-south-'+suffix+'.png');
+  await page.locator('#hotelAngle').evaluate(el=>{
+    el.value='34';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(850);
+  lowBase.oblique=await screenshot(page,'07-liberty-low-oblique-'+suffix+'.png');
   if(pageErrors.length)die('Page exceptions: '+pageErrors.join('; '));
   if(candidate && consoleProblems.some(x=>/scenario liberty|GLB exceeds|nyc asset fallback/i.test(x)))
    die('GLB decoder warned: '+consoleProblems.join('; ').slice(0,500));
-  return {state,pixels,timings,requests:requests.length,responses,
+  return {state,pixels,timings,lowBase,requests:requests.length,responses,
    nonfatalConsole:consoleProblems.slice(0,8)};
  }finally{await page.close();}
 }
