@@ -25,6 +25,31 @@ test('Blender-baked aircraft conforms to wing dimension and triangle budgets',()
   assert.ok(model.bounds.min[1]<-1.50);
 });
 
+test('C185 GLB retains real Blender vertex normals without changing other scenery',()=>{
+  const bytes=data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength);
+  let normals=0,triangles=0,nonFlat=0;
+  decodeFloatplaneGLB(bytes,(a,b,c,color,surface,vertexNormals)=>{
+    triangles++;
+    assert.equal(surface,4);
+    assert.equal(color.length,3);
+    if(!vertexNormals)return;
+    normals++;
+    assert.equal(vertexNormals.length,3);
+    for(const n of vertexNormals){
+      assert.equal(n.length,3);
+      assert.ok(n.every(Number.isFinite));
+      assert.ok(Math.abs(Math.hypot(...n)-1)<.001);
+    }
+    if(Math.hypot(...vertexNormals[0].map((n,i)=>n-vertexNormals[1][i]))>.015)
+      nonFlat++;
+  });
+  assert.equal(triangles,3736);
+  assert.ok(normals>3000,'Blender GLB must store smooth vertex normals');
+  assert.ok(nonFlat>100,'curved surfaces must actually vary across a triangle');
+  assert.match(html,/function addTri\(a, b, c, rgb, surface=0, vertexNormals=null\)/);
+  assert.match(html,/for\(const n of vertexNormals\) norm\.push\(\.\.\.n\)/);
+});
+
 test('left launcher selection exists for all main maps; Chongqing carries it forward',()=>{
   assert.match(html,/name="aircraft" value="seaplane"/);
   assert.match(html,/seaplane: \{ name: 'Cessna 185 Floatplane'/);
