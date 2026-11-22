@@ -1,0 +1,53 @@
+THIRD-PARTY NOTICES — polygon-clipping 0.15.7 UMD bundle
+
+1) polygon-clipping 0.15.7
+   Copyright (c) 2018 Mike Fogel; portions from github:w8r/martinez
+   License: MIT
+   Source: https://github.com/mfogel/polygon-clipping
+   The complete upstream MIT license follows.
+
+The MIT License (MIT)
+
+Copyright (c) 2018 Mike Fogel <mike@fogel.ca> - covers everything not specially attributed to others below.
+
+Copyright (c) 2016 Alexander Milevski <info@w8r.name> - covers all portions originally part of github:w8r/martinez, from which this project was forked on Febuary 2, 2018.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+2) splaytree 3.1.2 (bundled dependency)
+   Copyright (c) 2019 Alexander Milevski <info@w8r.name>
+   License: MIT
+   Source: https://github.com/w8r/splay-tree
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+3) robust-predicates 3.0.2 (bundled dependency)
+   Copyright (c) Vladimir Agafonkin and contributors.
+   License: Unlicense (public-domain dedication)
+   Source: https://github.com/mourner/robust-predicates
+   The upstream source states that it is released into the public domain.
+   The upstream UMD bundle and its embedded notices are retained.
+
+4) Microsoft helper code embedded in the upstream bundle
+   Copyright (c) Microsoft Corporation. All rights reserved.
+   License: Apache License, Version 2.0.
+   The upstream copyright/license notice is preserved verbatim in the vendored
+   bundle. Full license text: https://www.apache.org/licenses/LICENSE-2.0
+
+The minified upstream bundle is retained with its embedded copyright and
+license notices. The sourceMappingURL comment is omitted because its map file
+is not included; no executable code is changed.
