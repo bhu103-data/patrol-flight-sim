@@ -43,7 +43,7 @@ test('new runtime scene renders 118 source buildings plus 89 official street seg
   assert.equal(g.interleaved.length,g.counts.triangles*3*MESH_STRIDE);
   assert.ok(g.interleaved.every(Number.isFinite),'GPU buffer is finite');
   assert.equal(g.provenance.streets,roads.source);
-  assert.match(g.caveat,/illustrative or unverified/);
+  assert.match(g.caveat,/artist-authored or unverified/);
   const y=[];
   for(let i=1;i<g.interleaved.length;i+=MESH_STRIDE)y.push(g.interleaved[i]);
   assert.ok(Math.max(...y)>260,'actual official roof height not compressed');
