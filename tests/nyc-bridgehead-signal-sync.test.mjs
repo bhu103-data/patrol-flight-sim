@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
-const start=html.indexOf('  function bridgeheadSignalGreen(time){');
+const start=html.indexOf('  function bridgeheadSignalPhase(time){');
 const end=html.indexOf('  function bridgeheadTrafficPose(actor,time){',start);
 assert.ok(start>=0&&end>start,'Production signal controller not found');
 const js=html.slice(start,end);
