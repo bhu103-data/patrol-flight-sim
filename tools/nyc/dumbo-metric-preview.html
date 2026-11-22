@@ -235,6 +235,9 @@ window.__metricFly={
     cameraOnly:true,officialGroundAltitudeVerified:false,
     realC185Physics:false,conflictRoadsDriveable:false}),
   probe:(a,b)=>flySafety.sweep(a,b),
+  check:p=>flySafety.obstacle(p),
+  sourceProbe:{fid:buildings[0].fid,roofY:buildings[0].roofY,
+    vertex:[...buildings[0].ring[0]]},
   attempt:(dx,dy,dz)=>flyStep([dx,dy,dz]),
   safety:{radius:flySafety.radius,roofMargin:flySafety.roofMargin,
     buildingCount:flySafety.buildingCount}
