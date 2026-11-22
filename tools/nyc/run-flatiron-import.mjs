@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 
 const REQUEST = 'assets/nyc/scenario/flatiron-import-request.json';
-const DCP_URL = 'https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_mn05.zip';
+const DCP_URL = 'https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_mn05.zip';
 const OTI_URL = 'https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/BUILDING_view/FeatureServer/0/query?where=BIN%3D1016278&outFields=BIN%2CBASE_BBL%2CDOITT_ID%2CHEIGHT_ROOF%2CGROUND_ELEVATION%2CLAST_EDITED_DATE%2CLAST_STATUS_TYPE&outSR=2263&returnGeometry=true&f=pjson';
 
 export async function runFlatironImport(artifactRoot='artifacts/nyc/flatiron-dcp-import') {
