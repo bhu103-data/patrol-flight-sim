@@ -21,6 +21,41 @@ page.on('requestfailed',req=>{
    errors.push('NYC street module failed: '+req.url());
 });
 const check=(v,s)=>{if(!v)throw Error(s);};
+// LOD1 WINDOW QA ONLY: instrument the served HTML response in-memory.
+// No production index.html camera/geometry, shader or flight changes.
+const lodSourceReturn='    return {panes,triangles:panes*18};';
+const lodScenicAnchor='  const DC_SCENIC_VIEWS=[';
+await page.route('**/index.html*',async route=>{
+ const response=await route.fetch();
+ let html=await response.text();
+ check(html.split(lodSourceReturn).length===2,
+   'Actual LOD1 window helper missing from tested game HTML');
+ check(html.split(lodScenicAnchor).length===2,
+   'Expected single NYC scenic array boundary for QA-only camera');
+ const collector=[
+   '    if(panes>0){',
+   '      const sites=(window.__patrolLodSiteSamples??=[]);',
+   '      if(sites.length<256)sites.push({x,z,w,d,y,shaftHeight,panes});',
+   '    }'
+ ].join('\n');
+ html=html.replace(lodSourceReturn,collector+'\n'+lodSourceReturn);
+ const hook=[
+   '  window.__patrolLodInstallCamera=(site,name)=>{',
+   '    if(!site||!Number.isFinite(site.x)||!Number.isFinite(site.z)||',
+   '       !(site.panes>=1))return null;',
+   '    const view={name,site:{name},x:site.x,z:site.z,',
+   '      height:Math.max(7,Math.min(14,site.shaftHeight*.46)),',
+   '      bearing:0,radius:Math.max(19,site.d*.5+15),rise:1.8,',
+   '      detail:"QA-only source-selected real LOD1 window facade"};',
+   '    NYC_SCENIC_VIEWS.push(view);',
+   '    prepareScenicViews();',
+   '    return view;',
+   '  };'
+ ].join('\n');
+ html=html.replace(lodScenicAnchor,hook+'\n'+lodScenicAnchor);
+ await route.fulfill({response,body:html});
+});
+
 
  // Count actual PNG pixels to catch blank/black WebGL frames.
  // These checks are not a photorealism score.
@@ -175,6 +210,51 @@ try{
    facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
    'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
  await capture('09-manhattan-window-facades.png');
+// True game-only close view, not another broad harbor silhouette.
+// Sample actual generated LOD1 helper calls and preserve exact game-space
+// x/z + pose for independent screenshot QA. No fake meshes are drawn.
+const lodSites=await page.evaluate(()=>window.__patrolLodSiteSamples||[]);
+check(lodSites.length>0,'LOD1 helper generated zero source-selected panes');
+const ordered=[...lodSites].sort((a,b)=>
+  b.w*b.shaftHeight-a.w*a.shaftHeight);
+const selected=[];
+for(const site of ordered){
+ if(selected.every(prev=>Math.hypot(prev.x-site.x,prev.z-site.z)>25))
+  selected.push(site);
+ if(selected.length===3)break;
+}
+check(selected.length>=1,'No separated actual LOD1 facade candidates');
+const lodRecords=[];
+for(let i=0;i<selected.length;i++){
+ const site=selected[i],label='QA LOD1 Window Bay '+i;
+ const view=await page.evaluate(({site,label})=>
+   window.__patrolLodInstallCamera?.(site,label),{site,label});
+ check(view?.name===label,'Failed to install test-only scenic camera '+i);
+ await page.locator('#hotelTarget').selectOption({label});
+ await page.locator('#hotelZoom').evaluate(el=>{
+   el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.locator('#hotelAngle').evaluate(el=>{
+   el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.waitForTimeout(1750);
+ const telemetry=await page.evaluate(()=>{
+   const canvas=document.getElementById('glCanvas');
+   const gl=canvas?.getContext('webgl2');
+   return {webgl2:!!gl&&!gl.isContextLost(),glError:gl?.getError(),
+     selected:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
+     canvasSize:[canvas?.width,canvas?.height]};
+ });
+ check(telemetry.webgl2&&telemetry.glError===0&&telemetry.selected===label,
+   'Actual LOD1 near camera or WebGL2 invalid: '+JSON.stringify(telemetry));
+ const shot='10-lod1-window-close-'+i+'.png';
+ await capture(shot);
+ lodRecords.push({name:shot,sourceSite:site,view,telemetry});
+}
+await writeFile(out+'/lod1-window-close-poses.json',
+ JSON.stringify({sourceHead:process.env.GITHUB_SHA||'unknown',
+  count:lodRecords.length,cameraPoses:lodRecords},null,2));
+
  // Restore the same free-flight state as the original tour before invoking
  // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
  await page.locator('#resumeFlight').click({force:true});
