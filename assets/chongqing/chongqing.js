@@ -15,6 +15,7 @@ import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurf
 import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 import { buildChongqingHotpotDisplay } from './hotpot-display.js';
+import { buildChongqingHotpotPaving } from './hotpot-forecourt.js';
 import { gradeChongqingHotpotTerrain } from './hotpot-terrace-grade.js';
 
 const canvas = document.getElementById('world');
@@ -553,6 +554,11 @@ scene.add(trees,stems,branches);
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
+// Bounded physical stone courses sit above the old flat paving slab. Keep
+// this independently instanced layer out of collision and landmark batches.
+const hotpotPaving=buildChongqingHotpotPaving({
+  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
+});
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Static building/landmark collision registration is now complete. Build one
@@ -1394,6 +1400,9 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   hotpotDisplayParts:hotpotDisplay.partCount,
+  hotpotForecourtPavers:hotpotPaving.stoneCount,
+  hotpotForecourtDrainBars:hotpotPaving.drainBarCount,
+  hotpotForecourtTriangles:hotpotPaving.triangleBudget,
   hotpotDisplayHeight:hotpotDisplay.topY-hotpotDisplay.groundY,
   // Live visual QA: corner spread must agree with the actual collision
   // heightmap and not just with a screenshot-only foundation mesh.
