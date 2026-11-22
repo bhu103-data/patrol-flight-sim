@@ -7754,6 +7754,7 @@ const CENTRAL_PARK_SITES=[
       .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
   }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
+  let nycGisSourceStats=null;
   // MIT Petalwake-style near/mid/far bridgehead detail chunks. Unlike the
   // base road mesh these small visual-only draws change with camera distance.
   let nycRoadDetailChunks=[],nycRoadChunkLevel=null;
@@ -7858,6 +7859,7 @@ const CENTRAL_PARK_SITES=[
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
+    nycGisSourceStats=null;
     const heroEpoch=++nycHeroEpoch;
     disposeSceneMesh(mapScenery);
     disposeSceneMesh(mapLights);
@@ -8573,6 +8575,7 @@ const CENTRAL_PARK_SITES=[
             disposeSceneMesh(uploaded);
           else{
             nycGisMesh=uploaded;
+            nycGisSourceStats=stats;
             if(architecturePilot)
               window.__patrolNycArchitectureQa={...stats.recessedPilot,
                 sourceBuildings:stats.sourceBuildings,roofTriangles:stats.roofTriangles};
@@ -10782,6 +10785,9 @@ const CENTRAL_PARK_SITES=[
   const nycVisualProbeEnabled=new URLSearchParams(location.search)
     .get('nycVisualProbe')==='1';
   let nycVisualProbeHidden='none';
+  // Freeze moving traffic, walkers, signals and environmental noise only for
+  // deterministic, opt-in per-FID WebGL framebuffer comparisons.
+  let nycVisualProbeFrozenSceneryTime=null;
   const nycVisualProbeOmits=layer=>nycVisualProbeEnabled &&
     selectedMap.city && nycVisualProbeHidden===layer;
   if(nycVisualProbeEnabled){
@@ -10793,11 +10799,23 @@ const CENTRAL_PARK_SITES=[
         nycVisualProbeHidden=group;
         return {hidden:group,city:Boolean(selectedMap.city)};
       },
+      freezeSceneryTime(value){
+        if(!nycVisualProbeEnabled||!selectedMap.city||
+           !Number.isFinite(value)||value<0)
+          throw Error('Invalid NYC diagnostic scenery-time freeze');
+        nycVisualProbeFrozenSceneryTime=value;
+        sceneryTime=value;
+        skyElapsed=0;
+        skyClock=0;
+        nyStreetWetness=0;
+        return {frozen:true,sceneryTime,skyElapsed,city:true};
+      },
       stats(){return {
         city:Boolean(selectedMap.city),hidden:nycVisualProbeHidden,
         proceduralTriangles:(backgroundBuildings?.count||0)/3,
         sceneryTriangles:(mapScenery?.count||0)/3,
         gisTriangles:(nycGisMesh?.count||0)/3,
+        gisSourceStats:nycGisSourceStats,
         heroTriangles:(nycHeroScenery?.count||0)/3,
         landmarkInstances:selectedMap.city?NEW_YORK_LANDMARKS.length:0
       }}
@@ -11855,8 +11873,10 @@ const CENTRAL_PARK_SITES=[
   }
 
   function sampleFlightEnvironment(dt){
-    skyElapsed+=dt;
-    if(skyTime.value==='auto')skyClock+=dt;
+    if(nycVisualProbeFrozenSceneryTime===null){
+      skyElapsed+=dt;
+      if(skyTime.value==='auto')skyClock+=dt;
+    }
     const day=Math.floor(skyElapsed/ENVIRONMENT_DAY);
     const hour=skyTime.value==='auto'?(skyStartingHour+skyClock*24/ENVIRONMENT_DAY)%24:Number(skyTime.value);
     const season=skySeason.value==='auto'?((day+2)%4):Number(skySeason.value);
@@ -14403,7 +14423,9 @@ const CENTRAL_PARK_SITES=[
       }
     }
 
-    sceneryTime += Math.min(rawDt, 0.12);
+    if(nycVisualProbeFrozenSceneryTime===null)
+      sceneryTime += Math.min(rawDt, 0.12);
+    else sceneryTime=nycVisualProbeFrozenSceneryTime;
     if(scenicViewActive&&sceneryTime>=nextDcView){
       hotelTarget.selectedIndex=(hotelTarget.selectedIndex+1)%DC_SCENIC_VIEWS.length;
       nextDcView=sceneryTime+8;
