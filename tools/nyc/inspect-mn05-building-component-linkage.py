@@ -157,6 +157,10 @@ def inspect() -> None:
         "sourceLinkageAccepted": False,
         "errors": [],
     }
+    footprint_mesh_patches = []
+    footprint_mesh_triangles = 0
+    footprint_mesh_vertices = 0
+    footprint_mesh_degenerate = 0
     try:
         previous = json.loads(PROBE.read_text())
         if previous.get("imported") is not True:
@@ -195,10 +199,6 @@ def inspect() -> None:
             for role in ("footprint", "roof", "facade")
         }
         rows = []
-        footprint_mesh_patches = []
-        footprint_mesh_triangles = 0
-        footprint_mesh_vertices = 0
-        footprint_mesh_degenerate = 0
         for object_index, obj in enumerate(model.Objects):
             role = target_layers.get(obj.Attributes.LayerIndex)
             if role is None:
