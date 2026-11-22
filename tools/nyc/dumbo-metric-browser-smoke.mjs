@@ -4,8 +4,12 @@ import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 const url=process.env.PATROL_BASE_URL||'http://127.0.0.1:8765';
 const output='artifacts/nyc-dumbo-metric';
+const actualHead=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+if(process.env.PR_HEAD_SHA && process.env.PR_HEAD_SHA!==actualHead)
+  throw Error('Browser scene checkout is not PR HEAD: '+actualHead);
 await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,args:[
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -83,10 +87,78 @@ try{
   colors.add([png.data[i],png.data[i+1],png.data[i+2]].join(','));
  }
  assert.ok(colors.size>75,'Suspicious near-blank preview: '+colors.size+' colors');
- const report={passed:true,source:'NYC OTI BUILDING_view 5zhs-2jue',
+ // Operate the actual source-coordinate camera in the same live WebGL2 scene.
+ // This DOES NOT turn the preview into the production C185 airplane.
+ const flyFixture=await page.evaluate(()=>{
+   const qa=window.__metricFly;
+   const {fid,roofY,vertex,clearanceAltitude}=qa.sourceProbe;
+   return {safety:qa.safety,groundCollision:qa.check(
+      [vertex[0],Math.min(roofY,10),vertex[1]]),
+     highClearance:qa.check([vertex[0],clearanceAltitude,vertex[1]]),
+     sourceFid:fid,clearanceAltitude};
+ });
+ assert.equal(flyFixture.safety.buildingCount,48);
+ assert.equal(flyFixture.safety.radius,1.3);
+ assert.equal(flyFixture.groundCollision?.kind,'building');
+ assert.ok(Number.isSafeInteger(flyFixture.groundCollision?.fid),
+  'Collision may belong to overlapping official building not the tested FID');
+ assert.ok(flyFixture.clearanceAltitude>0);
+ assert.equal(flyFixture.highClearance,null,
+  'Clearance above EVERY overlapping original OTI roof AGL must be open');
+ await page.keyboard.press('f');
+ await page.waitForFunction('window.__metricFly?.getState().enabled===true');
+ const spawnState=await page.evaluate(()=>window.__metricFly.getState());
+ assert.equal(spawnState.position[1],9.5);
+ assert.equal(spawnState.sourcePhysicalId,56482);
+ assert.equal(spawnState.streetName,'FRONT ST');
+ assert.ok(spawnState.openAheadMetres>=20,
+  'viewing direction must be source bearing with sufficient 3D swept clearance');
+ assert.ok(Math.abs(spawnState.headingRadians)>1,
+  'source Front St is east-west and must not face into a generic building wall');
+ assert.equal(spawnState.cameraOnly,true);
+ assert.equal(spawnState.realC185Physics,false);
+ assert.equal(spawnState.conflictRoadsDriveable,false);
+ assert.ok(Number.isSafeInteger(spawnState.sourcePhysicalId));
+ await page.keyboard.down('e');
+ try{
+  await page.waitForFunction(
+    'window.__metricFly?.getState().travelledMetres>0.05',null,{timeout:20000});
+ }finally{await page.keyboard.up('e');}
+ const afterLift=await page.evaluate(()=>window.__metricFly.getState());
+ assert.ok(afterLift.position[1]>spawnState.position[1]+.02,
+  'Trusted E input must actually move camera vertically in metric metres');
+ assert.ok(afterLift.travelledMetres>.05);
+ assert.equal(afterLift.blockedAttempts,0);
+ // Real trusted W-key input: verify horizontal movement ALONG the source
+ // Front Street bearing, not only a mode switch or vertical debug jump.
+ await page.keyboard.down('w');
+ try{
+  await page.waitForFunction(
+    'window.__metricFly?.getState().travelledMetres>1.10',null,{timeout:20000});
+ }finally{await page.keyboard.up('w');}
+ const movedState=await page.evaluate(()=>window.__metricFly.getState());
+ assert.ok(movedState.position[0]>afterLift.position[0]+.15,
+  'True-metre Front St W input must advance EAST along its official line');
+ assert.ok(Math.abs(movedState.position[2]-afterLift.position[2])<1.2,
+  'Front St eastgoing travel should not teleport north/south off axis');
+ assert.ok(movedState.travelledMetres>afterLift.travelledMetres+.2);
+ assert.equal(movedState.blockedAttempts,0);
+ const flyImage=await page.screenshot({path:output+'/05-dumbo-true-metre-safe-lowflight.png'});
+ assert.ok(PNG.sync.read(flyImage).width===1280);
+ await page.keyboard.press('Escape');
+ assert.equal(await page.evaluate(()=>window.__metricFly.getState().enabled),false);
+ const flight={spawn:spawnState,afterLift,afterMovement:movedState,fixture:flyFixture,
+   liveVerticalEAndForwardWKeysVerified:true,
+   sourceCrossingRoadsDriveable:false,
+   genuineAircraftFlightDynamics:false,
+   groundElevationAndBridgesSurveyed:false};
+ const report={passed:true,headSha:actualHead,
+  triggerSha:process.env.GITHUB_SHA||null,
+  source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
-  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png'],
+  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png'],
+  lowFlight:flight,
   roadFocus,roadCameraChangedSamples:changed,conflictFocus,
   conflictCameraChangedSamples:conflictChanged,
   limitation:'48 source OTI roofs, limited 2022 Front/Dock pavement and 295 source CSCL centerline segments; 4 unresolved cross-dataset footprint overlaps; no surveyed curbs, actual 2026 lanes, verified elevation/bridges or flight collisions'};
