@@ -25,6 +25,10 @@ FEATURE_QUERY = (
     "https://services2.arcgis.com/IsDCghZ73NgoYoz5/ArcGIS/rest/services/"
     "NYC_Building_Footprint/FeatureServer/0/query"
 )
+HISTORIC_FEATURE_QUERY = (
+    "https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/"
+    "BUILDING_HISTORIC_view/FeatureServer/0/query"
+)
 ORIGIN = (-73.9864883, 40.756421)
 RAD = math.pi / 180.0
 WGS84_A = 6378137.0
@@ -157,7 +161,7 @@ def fetch_current_oti_attributes(fids: list[int]) -> dict[int, dict]:
         "where": where,
         "outFields": (
             "FID,BIN,DOITT_ID,HEIGHTROOF,GROUNDELEV,CNSTRCT_YR,"
-            "LSTMODDATE,GEOMSOURCE,FEAT_CODE"
+            "LSTMODDATE,GEOMSOURCE,LSTSTATTYPE,FEAT_CODE"
         ),
         "returnGeometry": "false",
         "f": "json",
@@ -186,6 +190,173 @@ def fetch_current_oti_attributes(fids: list[int]) -> dict[int, dict]:
             f"missing={missing[:20]}"
         )
     return records
+
+
+
+def fetch_historic_footprints() -> tuple[list[dict], dict[int, dict], dict]:
+    """Fetch bounded NYC Building Historic polygons around the Times Square ROI.
+
+    NYC OTI moves footprints to Building Historic when buildings are demolished
+    or significantly altered. These historic polygons can explain some
+    2014-source/current-footprint height differences.
+    """
+    snapshot = json.loads(FOOTPRINT_PATH.read_text(encoding="utf-8"))
+    coords = [
+        point
+        for feature in snapshot.get("features", [])
+        for ring in feature.get("rings", [])
+        for point in ring
+    ]
+    if not coords:
+        raise ValueError("No WGS84 coordinates in pinned Times Square snapshot")
+    pad = 0.0012
+    xmin = min(float(p[0]) for p in coords) - pad
+    ymin = min(float(p[1]) for p in coords) - pad
+    xmax = max(float(p[0]) for p in coords) + pad
+    ymax = max(float(p[1]) for p in coords) + pad
+    geometry = {
+        "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax,
+        "spatialReference": {"wkid": 4326},
+    }
+    out_fields = (
+        "OBJECTID,BIN,DOITT_ID,CONSTRUCTION_YEAR,DEMOLITION_YEAR,"
+        "FEATURE_CODE,GEOM_SOURCE,GROUND_ELEVATION,HEIGHT_ROOF,"
+        "LAST_EDITED_DATE,LAST_STATUS_TYPE,NAME"
+    )
+    all_features = []
+    offset = 0
+    page_size = 1000
+    while True:
+        params = urllib.parse.urlencode({
+            "where": "1=1",
+            "outFields": out_fields,
+            "returnGeometry": "true",
+            "geometry": json.dumps(geometry, separators=(",", ":")),
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outSR": "4326",
+            "resultOffset": str(offset),
+            "resultRecordCount": str(page_size),
+            "f": "json",
+        })
+        request = urllib.request.Request(
+            HISTORIC_FEATURE_QUERY + "?" + params,
+            headers={"User-Agent": "PATROL-NYC-Open-Data-Vertical-Audit/1.0",
+                     "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=75) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("error"):
+            raise RuntimeError("NYC Building Historic query failed: " +
+                               json.dumps(payload["error"], ensure_ascii=False))
+        page = payload.get("features", [])
+        all_features.extend(page)
+        if not payload.get("exceededTransferLimit") and len(page) < page_size:
+            break
+        if not page:
+            break
+        offset += len(page)
+        if offset > 10000:
+            raise ValueError("Historic footprint query exceeded bounded 10k feature limit")
+    accepted, skipped, attributes = [], [], {}
+    status_counts = {}
+    for feature in all_features:
+        attrs = feature.get("attributes", {})
+        object_id = attrs.get("OBJECTID")
+        if not isinstance(object_id, int) or object_id in attributes:
+            skipped.append({"objectId": object_id, "reason": "invalid-or-duplicate-objectid"})
+            continue
+        status = str(attrs.get("LAST_STATUS_TYPE") or "UNSPECIFIED")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        geometry_data = feature.get("geometry") or {}
+        rings = geometry_data.get("rings")
+        if not isinstance(rings, list) or len(rings) != 1:
+            skipped.append({"objectId": object_id, "reason": "holes-or-multiple-rings"})
+            continue
+        try:
+            ring = _normalise_ring(rings[0])
+        except (TypeError, ValueError, IndexError) as exc:
+            skipped.append({"objectId": object_id, "reason": str(exc)})
+            continue
+        attributes[object_id] = attrs
+        accepted.append({"fid": object_id, "ring": ring})
+    info = {
+        "service": HISTORIC_FEATURE_QUERY,
+        "queryBboxWgs84": [round(xmin, 7), round(ymin, 7), round(xmax, 7), round(ymax, 7)],
+        "returnedFeatureCount": len(all_features),
+        "eligibleOuterRingCount": len(accepted),
+        "skippedCount": len(skipped),
+        "skipped": skipped,
+        "lastStatusTypeCounts": status_counts,
+        "metadataUrl": (
+            "https://github.com/CityOfNewYork/nyc-geo-metadata/blob/main/"
+            "Metadata/Metadata_BuildingHistoric.md"
+        ),
+    }
+    return accepted, attributes, info
+
+
+def build_historic_comparison(mesh: dict, probe: dict,
+                              historic_footprints: list[dict],
+                              historic_attributes: dict[int, dict]) -> dict:
+    unit_factor, unit_label = _z_unit_to_feet(probe.get("modelUnitSystem"))
+    groups = _mesh_groups(mesh)
+    matched, match_stats = match_roof_objects(groups, historic_footprints)
+    rows, comparisons = [], []
+    for object_id, roof in sorted(matched.items()):
+        attrs = historic_attributes.get(object_id, {})
+        ground = _finite_number(attrs.get("GROUND_ELEVATION"))
+        height = _finite_number(attrs.get("HEIGHT_ROOF"))
+        source_z_ft = (
+            roof["roofZMaxRaw"] * unit_factor
+            if unit_factor is not None else None
+        )
+        historic_top_ft = (
+            ground + height if ground is not None and height is not None else None
+        )
+        geometry_source = str(attrs.get("GEOM_SOURCE") or "").strip()
+        is_photogrammetric = geometry_source.lower().startswith("photogramm")
+        eligible = (
+            source_z_ft is not None and historic_top_ft is not None
+            and is_photogrammetric
+        )
+        delta = source_z_ft - historic_top_ft if eligible else None
+        last_edited = _date_from_arcgis(attrs.get("LAST_EDITED_DATE"))
+        record = {
+            "historicObjectId": object_id,
+            "bin": attrs.get("BIN"),
+            "doittId": attrs.get("DOITT_ID"),
+            "constructionYear": attrs.get("CONSTRUCTION_YEAR"),
+            "demolitionYear": attrs.get("DEMOLITION_YEAR"),
+            "lastStatusType": attrs.get("LAST_STATUS_TYPE"),
+            "lastEditedDate": last_edited.isoformat() if last_edited else None,
+            "featureCode": attrs.get("FEATURE_CODE"),
+            "geometrySource": geometry_source or None,
+            "roofObjectCount": roof["roofObjectCount"],
+            "roofVertexCount": roof["roofVertexCount"],
+            "sourceRoofTopZFt": round(source_z_ft, 3) if source_z_ft is not None else None,
+            "historicGroundElevationFt": ground,
+            "historicRoofHeightAboveGroundFt": height,
+            "historicAbsoluteRoofTopFt": (
+                round(historic_top_ft, 3) if historic_top_ft is not None else None
+            ),
+            "deltaSourceMinusHistoricFt": (
+                round(delta, 3) if delta is not None else None
+            ),
+            "photogrammetricGroundDatumCandidate": is_photogrammetric,
+            "verticalComparisonEligible": eligible,
+            "matchedObjectIds": roof["matchedObjectIds"],
+        }
+        rows.append(record)
+        if delta is not None:
+            comparisons.append({"fid": object_id, "deltaFt": delta})
+    return {
+        "matching": match_stats,
+        "photogrammetricMatches": _summarise_deltas(comparisons),
+        "unitInterpretation": unit_label,
+        "perHistoricBuilding": rows,
+    }
 
 
 def _mesh_groups(mesh: dict) -> dict[str, list[tuple[float, float, float]]]:
@@ -368,6 +539,7 @@ def build_audit(mesh: dict, probe: dict, footprints: list[dict],
             "otiAbsoluteRoofTopFt": round(top_ft, 3) if top_ft is not None else None,
             "deltaSourceMinusOtiFt": round(delta, 3) if delta is not None else None,
             "geometrySource": geometry_source or None,
+            "lastStatusType": attributes.get("LSTSTATTYPE"),
             "constructionYear": int(construction_year) if construction_year is not None else None,
             "lastModifiedDate": last_modified.isoformat() if last_modified else None,
             "featureCode": feature_code,
@@ -407,12 +579,16 @@ def build_audit(mesh: dict, probe: dict, footprints: list[dict],
             "queriedFidCount": len(current),
             "fields": [
                 "FID", "BIN", "DOITT_ID", "HEIGHTROOF", "GROUNDELEV",
-                "CNSTRCT_YR", "LSTMODDATE", "GEOMSOURCE", "FEAT_CODE",
+                "CNSTRCT_YR", "LSTMODDATE", "GEOMSOURCE", "LSTSTATTYPE", "FEAT_CODE",
             ],
             "metadataUrl": OTI_FOOTPRINT_METADATA_URL,
             "groundElevationDatumRule": (
                 "OTI metadata says GROUNDELEV is NAVD88 for photogrammetric "
                 "or modern-source records; HEIGHTROOF is above ground."
+            ),
+            "statusTypeRule": (
+                "LSTSTATTYPE is the feature last status type (including "
+                "Demolition, Alteration, Geometry, Initialization and Correction)."
             ),
         },
         "matching": match_stats,
@@ -446,6 +622,11 @@ def main():
     footprints, footprint_info = load_footprints()
     current = fetch_current_oti_attributes([f["fid"] for f in footprints])
     report = build_audit(mesh, probe, footprints, footprint_info, current)
+    historic_footprints, historic_attributes, historic_info = fetch_historic_footprints()
+    report["historicFootprints"] = historic_info
+    report["historicComparison"] = build_historic_comparison(
+        mesh, probe, historic_footprints, historic_attributes
+    )
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                         encoding="utf-8")
