@@ -104,3 +104,62 @@ test('NYC crest highlights are neutralized without modifying non-NYC shader',()=
   assert.match(html,/float oceanHeight\(vec2 xz, float depth, float pixel\)/,
     'physical ocean displacement remains unchanged');
 });
+test('NYC bent long-wave crest is deterministic, continuous and absent in Alaska',()=>{
+  const a=html.indexOf('  const NYC_CREST_BEND = ');
+  const b=html.indexOf('  const oceanVec4 =',a);
+  assert.ok(a>0&&b>a,'source-coupled waveform can be extracted for both profiles');
+  const c=html.indexOf('  const oceanBands =');
+  const source=html.slice(c,b);
+  const getHeight=new Function(source+'return floatOceanHeight;')();
+  const city={city:true},alaska={alaska:true};
+  const x=-84,z=-593,t=20,depth=9;
+  const actual=getHeight(x,z,t,depth,city);
+  const repeat=getHeight(x,z,t,depth,city);
+  assert.ok(Number.isFinite(actual));
+  assert.equal(actual,repeat,'no random terms in water/float contract');
+  const base=new Function(source.replace('const NYC_CREST_BEND = 0.70;',
+    'const NYC_CREST_BEND = 0.00;')+'return floatOceanHeight;')();
+  assert.ok(Math.abs(actual-base(x,z,t,depth,city))>.001,
+    'NYC long crest phase is visibly different from the linear baseline');
+  assert.equal(getHeight(x,z,t,depth,alaska),base(x,z,t,depth,alaska),
+    'Alaska and all non-NYC maps preserve their exact water phase');
+  const h=.01;
+  const dx=(getHeight(x+h,z,t,depth,city)-getHeight(x-h,z,t,depth,city))/(2*h);
+  const dz=(getHeight(x,z+h,t,depth,city)-getHeight(x,z-h,t,depth,city))/(2*h);
+  assert.ok(Number.isFinite(dx)&&Number.isFinite(dz));
+  assert.ok(Math.abs(getHeight(x+.02,z,t,depth,city)-actual)<.03,
+    'bent crest must be continuous for the float contact solver');
+  const A=.027*x+.018*z+.035*t,B=.009*x-.013*z-.020*t;
+  const dX=.70*(.027*Math.cos(A)*Math.sin(B)+.009*Math.sin(A)*Math.cos(B));
+  const dZ=.70*(.018*Math.cos(A)*Math.sin(B)-.013*Math.sin(A)*Math.cos(B));
+  assert.ok(Math.abs(dX)<.026&&Math.abs(dZ)<.023,
+    'bounded analytic phase gradient does not cause folded water');
+});
+test('NYC long-wave analytic GLSL slope agrees with four-pontoon CPU height gradient',()=>{
+  const source=html.slice(html.indexOf('  const oceanBands ='),
+    html.indexOf('  const oceanVec4 ='));
+  const calc=new Function(source+'return {floatOceanHeight,oceanModes};')();
+  const x=-84,z=-593,t=20,depth=9,eps=.001;
+  const asCity={city:true};
+  const centralDiff=(dx,dz)=>
+    (calc.floatOceanHeight(x+eps*dx,z+eps*dz,t,depth,asCity)-
+     calc.floatOceanHeight(x-eps*dx,z-eps*dz,t,depth,asCity))/(2*eps);
+  const a=.027*x+.018*z+.035*t,b=.009*x-.013*z-.020*t;
+  const phaseBend=.70*Math.sin(a)*Math.sin(b);
+  const gradX=.70*(.027*Math.cos(a)*Math.sin(b)+.009*Math.sin(a)*Math.cos(b));
+  const gradZ=.70*(.018*Math.cos(a)*Math.sin(b)-.013*Math.sin(a)*Math.cos(b));
+  let analyticX=0,analyticZ=0;
+  for(let i=0;i<calc.oceanModes.length;i++){
+    const [kx,kz,omega,phase,,amp]=calc.oceanModes[i];
+    const modePhase=kx*x+kz*z-omega*t+phase+(i<6?phaseBend:0);
+    analyticX+=Math.cos(modePhase)*amp*(kx+(i<6?gradX:0));
+    analyticZ+=Math.cos(modePhase)*amp*(kz+(i<6?gradZ:0));
+  }
+  // This water point is fully exposed and 9 units deep, so oceanExposure
+  // and shoaling are both exactly 1. The finite differences therefore
+  // verify the normal slope that WebGL2 should produce.
+  assert.ok(Math.abs(analyticX-centralDiff(1,0))<1e-5,
+    'GLSL long crest dHeight/dx matches CPU sampled water surface');
+  assert.ok(Math.abs(analyticZ-centralDiff(0,1))<1e-5,
+    'GLSL long crest dHeight/dz matches CPU sampled water surface');
+});

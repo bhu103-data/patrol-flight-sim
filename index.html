@@ -1505,8 +1505,11 @@ const CENTRAL_PARK_SITES=[
       return [k*Math.cos(a),k*Math.sin(a),Math.sqrt(9.81*k*1.18),j*2.37+scale*0.17,k,h];
     });
   });
+  // One deterministic long-wave crest bend for BOTH native WebGL height
+  // and four-pontoon buoyancy. A zero constant is a reversible baseline.
+  const NYC_CREST_BEND = 0.70;
   // Same spectrum, phase, coast attenuation and clock as WORLD_FS.
-  // Render-only: the buoyancy pose never changes collision or takeoff logic.
+  // Float buoyancy changes with the visible long-wave phase, not controls.
   function floatOceanHeight(x,z,t,depth,map){
     if(map.vegas||map.dc||map.airfield||depth<=.12)return 0;
     const ease=(a,b,v)=>{
@@ -1514,9 +1517,14 @@ const CENTRAL_PARK_SITES=[
       return q*q*(3-2*q);
     };
     let height=0;
+    // Smooth spatial phase curvature makes Manhattan's long crests less
+    // mechanically parallel; the same analytic expression is in WORLD_FS.
+    const bend=map.city?NYC_CREST_BEND*
+      Math.sin(.027*x+.018*z+.035*t)*
+      Math.sin(.009*x-.013*z-.020*t):0;
     for(let i=0;i<oceanModes.length;i++){
       const [kx,kz,omega,phase,,amp]=oceanModes[i];
-      height+=Math.sin(kx*x+kz*z-omega*t+phase)*amp*
+      height+=Math.sin(kx*x+kz*z-omega*t+phase+(i<6?bend:0))*amp*
         (i<6?ease(0,3.2,depth):ease(.06,.72,depth));
     }
     const exposure=map.city?1-.62*ease(-560,-300,z):1;
@@ -1553,6 +1561,7 @@ const CENTRAL_PARK_SITES=[
 
     ${VEGAS_LIGHTING}
     uniform bool uManhattan;
+    uniform bool uNYCSeaDetail;
     uniform mat4 uWorldViewProj;
     uniform vec3 uCamPos;
     uniform vec3 uCamFwd;
@@ -1672,19 +1681,34 @@ const CENTRAL_PARK_SITES=[
     bool hasOceanCascades() { return !uVegas && !uDc && !uAlderValley; }
     const vec4 OCEAN_PHASE[18] = vec4[18](${oceanModes.map(oceanVec4).join(',')});
     const vec2 OCEAN_WEIGHT[18] = vec2[18](${oceanModes.map(oceanVec2).join(',')});
+    // The long-crest phase curvature has an analytic gradient, so the
+    // reflected normal and physical displacement remain mathematically
+    // consistent. No extra render target, FFT or shader-side randomness.
+    const float NYC_CREST_BEND = ${NYC_CREST_BEND.toFixed(2)};
+    vec3 nycCrestBend(vec2 xz,float t){
+      float a=dot(xz,vec2(0.027,0.018))+t*0.035;
+      float b=dot(xz,vec2(0.009,-0.013))-t*0.020;
+      float sa=sin(a),ca=cos(a),sb=sin(b),cb=cos(b);
+      return NYC_CREST_BEND*vec3(sa*sb,
+        0.027*ca*sb+0.009*sa*cb,
+        0.018*ca*sb-0.013*sa*cb);
+    }
     float oceanModeWeight(int mode, float pixel) {
       vec2 sampleWeight = OCEAN_WEIGHT[mode];
       return sampleWeight.y * (1.0 - smoothstep(0.52, 2.20, sampleWeight.x * pixel));
     }
     vec3 oceanCascade(vec2 xz, float t, float pixel, int first) {
       vec3 wave=vec3(0.0);
+      vec3 bent=vec3(0.0);
+      if(uManhattan && first==0 && oceanModeWeight(0,pixel)>0.0)
+        bent=nycCrestBend(xz,t);
       for(int i=0;i<6;i++){
         int mode=first+i;
         float h=oceanModeWeight(mode,pixel);
         if(h<=0.0) break;
         vec4 p=OCEAN_PHASE[mode];
-        float phase=dot(xz,p.xy)-p.z*t+p.w;
-        wave+=h*vec3(sin(phase),cos(phase)*p.xy);
+        float phase=dot(xz,p.xy)-p.z*t+p.w+bent.x;
+        wave+=h*vec3(sin(phase),cos(phase)*(p.xy+bent.yz));
       }
       return wave;
     }
@@ -1695,11 +1719,15 @@ const CENTRAL_PARK_SITES=[
     float oceanHeight(vec2 xz, float depth, float pixel) {
       float shore=oceanShoaling(depth), edge=smoothstep(0.06,0.72,depth);
       float height=0.0;
+      float bend=0.0;
+      if(uManhattan && oceanModeWeight(0,pixel)>0.0)
+        bend=nycCrestBend(xz,uTime).x;
       for(int mode=0;mode<18;mode++){
         float h=oceanModeWeight(mode,pixel);
         if(h<=0.0) continue;
         vec4 p=OCEAN_PHASE[mode];
-        height+=sin(dot(xz,p.xy)-p.z*uTime+p.w)*h*(mode<6?shore:edge);
+        height+=sin(dot(xz,p.xy)-p.z*uTime+p.w+(mode<6?bend:0.0))*
+          h*(mode<6?shore:edge);
       }
       return oceanExposure(xz)*height*(uAlaska?0.30:1.0);
     }
@@ -1911,6 +1939,8 @@ const CENTRAL_PARK_SITES=[
         if (th <= WATER_H + 0.04) {
           // Swell, chop and capillary ripples share world coordinates; the
           // analytic slopes affect shading only, not collision or water level.
+          // Reversible compile-time NYC visual detail switch (QA A/B only).
+          const bool NYC_TIDEWATER_DETAIL = true;
           float depth = max(WATER_H - th, 0.0);
           float pixel = pixelAngle * length(p - ro) / max(abs(rd.y), 0.10);
           float localDetail = 1.0 - smoothstep(0.18, 1.1, pixel);
@@ -1972,6 +2002,19 @@ const CENTRAL_PARK_SITES=[
           float meanSquareSlope = (0.003 + 0.00512 * (4.0 + wind * 6.0)) * mix(0.5,1.0,openWater);
           float unresolved = smoothstep(0.05, 1.3, pixel);
           float roughness = 0.028 + sqrt(meanSquareSlope) * unresolved;
+          // Wind-driven, low-frequency sea patches are anchored to world
+          // coordinates and stay independent of C185's ocean wave height.
+          float nycGustPatch = 0.0;
+          if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 14.0) {
+            float gustField=vnoise(xz*0.0068+
+              vec2(-uTime*0.0042,uTime*0.0025));
+            float gustDetail=clamp((gust-0.82)/0.36,0.0,1.0);
+            nycGustPatch=smoothstep(0.36,0.76,
+              0.74*gustField+0.26*gustDetail)*
+              (1.0-smoothstep(4.0,14.0,pixel));
+            roughness=clamp(roughness*(1.0+0.20*nycGustPatch),
+              0.025,0.48);
+          }
           vec3 roughRefl = normalize(mix(reflDir, vec3(reflDir.x, max(reflDir.y,0.19), reflDir.z), roughness * 1.7));
           vec3 reflectedSky = getSky(roughRefl);
           // Exact dielectric air-to-water Fresnel with rough-slope grazing correction.
@@ -1980,6 +2023,8 @@ const CENTRAL_PARK_SITES=[
              smoothstep(0.08,1.1,pixel),0.0001,1.0));
            float waterReflectance=clamp(mix(fresnel,filteredFresnel,0.48),0.02,0.975);
            waterCol=mix(waterCol,reflectedSky,waterReflectance);
+           if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL)
+             waterCol *= 1.0-0.058*nycGustPatch;
           float clearSky = (1.0 - uAtmosphere.z * 0.76) * (1.0 - uAtmosphere.w * 0.55);
           float sunAbove = smoothstep(-0.025, 0.08, uSun.y);
           if(hasOceanCascades()){
@@ -1993,7 +2038,11 @@ const CENTRAL_PARK_SITES=[
             float shallowFloor=(1.0-fresnel)*exp(-depth*0.42)*floorMask;
             float focus=0.0;
             if(depth<3.2 && localDetail>0.03 && uSun.y>0.08){
-              focus=oceanCaustic(floorXZ,depth)*localDetail*sunAbove*clearSky*litFactor;
+              // Filter unresolved NYC focusing instead of shimmering lines.
+              float causticFootprint=(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL)
+                ?1.0-smoothstep(0.24,0.86,pixel):1.0;
+              focus=oceanCaustic(floorXZ,depth)*localDetail*
+                causticFootprint*sunAbove*clearSky*litFactor;
             }
             waterCol=mix(waterCol,bottom*waterTransmission*(0.72+focus*0.62),shallowFloor*0.76);
             float back=pow(max(dot(normalize(uSun.xz+vec2(0.0001)),normalize(rd.xz+vec2(0.0001))),0.0),4.0);
@@ -2044,6 +2093,17 @@ const CENTRAL_PARK_SITES=[
                       * (1.0 - fresnel) * sunAbove * clearSky * litFactor;
           }
 
+          if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL && pixel < 2.0){
+            // Tear caps and nearshore foam into patches using already
+            // sampled advected noise; unresolved detail fades to a mean.
+            float foamFragment=smoothstep(0.30,0.70,
+              breakup*0.64+foamCells*0.36);
+            float foamResolve=1.0-smoothstep(0.42,2.0,pixel);
+            float fragmented=mix(1.0,0.52+0.48*foamFragment,
+              foamResolve*0.78);
+            caps *= fragmented;
+            shore *= fragmented;
+          }
           waterCol = mix(waterCol, vec3(0.78,0.88,0.89), clamp(caps + shore, 0.0, 0.85));
 
           // Bow pressure, hull wash and broken Kelvin crests are evaluated over the water surface.
@@ -12888,6 +12948,7 @@ const CENTRAL_PARK_SITES=[
     uWorld = {
     sun:gl.getUniformLocation(worldProg,'uSun'), moon:gl.getUniformLocation(worldProg,'uMoon'),
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
+    nycSeaDetail:gl.getUniformLocation(worldProg,'uNYCSeaDetail'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
@@ -14145,6 +14206,11 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.sun,environment.sun);
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
+    // No optional ocean decoration on Compat, Balanced or Street FX Off.
+    // The shared physical ocean phase stays enabled on every quality level.
+    gl.uniform1i(uWorld.nycSeaDetail,
+      Boolean(selectedMap.city && !graphicsCompat &&
+        Number(nyStreetQuality.value) >= 2)?1:0);
     gl.uniform4fv(uWorld.climate,environment.climate);
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);

@@ -44,11 +44,32 @@ const inject=html=>html.replace(camera,`
   };
 `+bridge).replace(clock,'gl.uniform1f(uWorld.time, 20.0);')
     .replace(aircraftClock,'plane.yaw,20.0,');
-const sourceBefore=inject(src.replace(modern,old)),sourceAfter=inject(src);
-const origin=new URL(url).origin,report={cameraTime:20,frames:[],errors:[],note:'Test-only fixed shader time, not a runtime setting'};
-const browser=await chromium.launch({headless:true,args:[
-  '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
+const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
+const crestWarpAB=process.env.PATROL_COMPARE_MODE==='crest-warp';
+const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
+const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
+if(seaDetailAB&&src.split(detailEnabled).length!==2)
+  throw Error('Missing reversible NYC sea detail marker');
+const warpEnabled='const NYC_CREST_BEND = 0.70;';
+const warpDisabled='const NYC_CREST_BEND = 0.00;';
+if(crestWarpAB&&src.split(warpEnabled).length!==2)
+  throw Error('Missing shared NYC physical/render crest bend parameter');
+const sourceBefore=inject(crestWarpAB
+  ?src.replace(warpEnabled,warpDisabled)
+  :seaDetailAB?src.replace(detailEnabled,detailDisabled)
+  :src.replace(modern,old));
+const sourceAfter=inject(src);
+const origin=new URL(url).origin,report={
+  mode:crestWarpAB?'crest-warp':seaDetailAB?'sea-detail':'crest',
+  cameraTime:20,frames:[],errors:[],
+  note:'Test-only fixed shader time, not a runtime setting'};
+const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';
+report.browser=chrome?'installed Chrome':'Chromium SwiftShader';
+const browser=await chromium.launch({headless:true,
+  ...(chrome?{channel:'chrome'}:{}),
+  args:chrome?['--ignore-gpu-blocklist']:[
+    '--no-sandbox','--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
 try{
   for(const [version,html] of [['before',sourceBefore],['after',sourceAfter]]){
     const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -64,14 +85,46 @@ try{
     });
     try{
       await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-      await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
-      await page.locator('input[name="aircraft"][value="seaplane"]').check({force:true});
-      await page.locator('input[name="waterStart"]').check({force:true});
+      // CI software browsers occasionally synthesize a click without
+      // committing styled radio state. Select through real form properties,
+      // dispatch the app's change handler, and assert FormData before launch.
+      const selected=await page.evaluate(()=>{
+        const select=(selector)=>{
+          const el=document.querySelector(selector);
+          if(!el)throw Error('Missing flight form input '+selector);
+          el.checked=true;
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        };
+        select('input[name="flightMap"][value="manhattan"]');
+        select('input[name="aircraft"][value="seaplane"]');
+        select('input[name="waterStart"]');
+        const v=new FormData(document.getElementById('flightSetup'));
+        const state={map:v.get('flightMap'),aircraft:v.get('aircraft'),
+          afloat:v.has('waterStart'),
+          enabled:!document.getElementById('waterStart').disabled};
+        if(state.map!=='manhattan'||state.aircraft!=='seaplane'||
+           !state.afloat||!state.enabled)
+          throw Error('Water QA form selection not stable: '+JSON.stringify(state));
+        return state;
+      });
+      report.form=selected;
       await page.locator('#startFlight').click({force:true});
       await page.waitForFunction(()=>document.getElementById('titleOverlay')?.hidden &&
         document.getElementById('loadOverlay')?.classList.contains('done')&&
         window.PatrolCrestCompare&&window.PatrolSpaceBridge?.getState()?.playing,
         null,{timeout:150000,polling:450});
+      // Pin game weather/time and NYC graphics quality, not just shader phase.
+      await page.evaluate(()=>{
+        for(const [id,value] of [
+          ['skyTime','12'],['skySeason','1'],['skyWeather','Clear'],
+          ['nyStreetQuality','2']]){
+          const control=document.getElementById(id);
+          if(!control)throw Error('Missing QA control '+id);
+          control.value=value;
+          control.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+      });
       const stage=await page.evaluate(()=>window.PatrolCrestCompare.lock());
       await page.waitForTimeout(1200);
       await page.addStyleTag({content:'body.crest-only *{visibility:hidden!important;} '+
@@ -83,9 +136,23 @@ try{
       if(!responses.includes(200)||errors.length)
         throw Error('GLB/console failure: '+JSON.stringify({responses,errors}));
       await page.evaluate(()=>document.body.classList.add('crest-only'));
-      const file=root+'/nyc-water-crest-'+version+'.png';
+      const file=root+'/nyc-water-'+report.mode+'-'+version+'.png';
       await page.locator('#glCanvas').screenshot({path:file,animations:'disabled',timeout:90000});
-      report.frames.push({version,file,stage,state,modelHttp:responses});
+      // Actual RAF pacing, not elapsed screenshot time and not GPU timestamp.
+      const intervals=await page.evaluate(async()=>{
+        const out=[];let previous;
+        for(let i=0;i<17;i++){
+          const t=await new Promise(ok=>requestAnimationFrame(ok));
+          if(previous!==undefined)out.push(t-previous);
+          previous=t;
+        }
+        return out;
+      });
+      const sorted=[...intervals].sort((a,b)=>a-b);
+      report.frames.push({version,file,stage,state,modelHttp:responses,
+        rafP50ms:sorted[Math.floor(sorted.length*.5)],
+        rafP95ms:sorted[Math.floor(sorted.length*.95)],
+        rafSamples:intervals.length,gpuFrameMs:null});
       report.errors.push(...errors);
     }finally{await page.close();}
   }
@@ -98,7 +165,8 @@ try{
   report.passed=true;
 }catch(e){report.passed=false;report.failure=String(e.stack||e);process.exitCode=1;}
 finally{
-  writeFileSync(root+'/nyc-water-crest-comparison.json',JSON.stringify(report,null,2));
+  writeFileSync(root+'/nyc-water-'+report.mode+'-comparison.json',
+    JSON.stringify(report,null,2));
   await browser.close();
 }
 console.log(JSON.stringify(report,null,2));
