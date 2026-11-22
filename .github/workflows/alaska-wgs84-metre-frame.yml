@@ -1,0 +1,27 @@
+name: Alaska WGS84 metre frame and source coordinates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - assets/alaska/tracy-arm-geodesy.js
+      - tests/alaska-wgs84-metre-frame.test.mjs
+      - .github/workflows/alaska-wgs84-metre-frame.yml
+
+permissions:
+  contents: read
+
+jobs:
+  original-coordinate-contract:
+    if: github.head_ref == 'feat/alaska-wgs84-metre-frame-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: WGS84 source coordinate and vertical datum contract
+        run: node --test tests/alaska-wgs84-metre-frame.test.mjs
+      - name: JavaScript syntax check
+        run: node --check assets/alaska/tracy-arm-geodesy.js
