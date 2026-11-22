@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/alaska-official-aoi-fetch.yml'
       - 'tools/alaska/audit_landfire_aoi.py'
+      - 'tools/alaska/probe_noaa_shoreline.py'
   workflow_dispatch:
 
 permissions:
@@ -122,6 +123,8 @@ jobs:
             --input alaska-official-aoi-results \
             --dem assets/alaska/tracy-arm-3dep.json \
             --output alaska-official-aoi-results/qa
+      - name: Discover current NOAA NGS shoreline service and Alaska CUSP headers
+        run: python3 tools/alaska/probe_noaa_shoreline.py
       - name: Preserve downloaded samples and failure logs
         if: always()
         uses: actions/upload-artifact@v4
