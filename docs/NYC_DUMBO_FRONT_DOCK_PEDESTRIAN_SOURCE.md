@@ -47,3 +47,43 @@ Windows GPU P50/P95 must precede any gameplay change. Do not transplant the
 Times Square-only sidewalk pilot #262 into Brooklyn. Do not combine #284's
 four flagged centerline/building intersections with active driving lanes.
 No change to main, #259, flight control, other maps or source JSON.
+
+
+## Independently measured current source overlap (2026-11-22 run)
+
+The first verified source artifact [run 45041048665](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45041048665)
+contains 11 actual SIDEWALK features/3,161 vertices, 46 CURB features/1,609
+vertices and 28 CURB_CUT features/211 vertices. Each is retained verbatim in
+the uploaded original source.json; this is not a new user-facing game mesh.
+
+A separate GEOS/Shapely 2.1.2 audit projects those original WGS84 shapes
+against the unchanged #270/#259 2022 ROADBED source origin and clip.
+It preserves road triangle duplicates and all original municipal IDs, and
+records the *union*, rather than comparing misleading summed source areas.
+
+First independently measured audit (areas in square metres; not a survey):
+- 553 nondegenerate ROADBED triangles: 3714.84 summed area; only about
+  3467.03 m² union area owing to overlapping source triangles.
+- 11 valid SIDEWALK polygons: about 1839.87 m² within road audit clip,
+  with **about 160.63 m² polygon intersection with the ROADBED union**.
+  Largest sidewalk contributor FIDs: 50716 (~74.61m²), 50417 (~58.62m²),
+  50509 (~26.03m²). Do not silently remove or snap any of these.
+- Official CURB lines total 647.20m inside the clip, about 89.49% of
+  clipped line length within 1 metre of the roadbed union boundary.
+- CURB_CUT lines total 44.74m inside the clip, with 28 source records.
+  Some are DRIVEWAY curb cuts, **not** verified accessible pedestrian ramps.
+
+These represent *cross-layer planimetric disagreements*, not proof the
+road source or pedestrian source is erroneous. No street collision or 2026
+ramp implementation should be enabled while the exact overlap is unresolved.
+The file topology-audit.json is preserved beside the full source.json.
+To reproduce locally after source extraction:
+1. python -m pip install shapely==2.1.2
+2. python tools/nyc/audit-front-dock-pedestrian-topology.py
+
+The audit deliberately reports topologyReleaseGate as
+BLOCKED_UNRESOLVED_SOURCE_OVERLAP when overlaps exist; this **does not
+cause the SOURCE QA workflow itself to fail**, because valid raw data should
+still be collected and preserved. It is **not permission to merge into
+production**. The missing vertical datum, current field survey, real GPU and
+real overlap attribution must be resolved separately.
