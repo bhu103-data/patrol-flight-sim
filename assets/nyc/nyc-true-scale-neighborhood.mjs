@@ -80,7 +80,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   }
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
-    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,\n    historicalRoofTriangles:0,historicalFacadeTriangles:0,historicalRoofFids:0,historicalFacadeFids:0};
+    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
+    historicalRoofTriangles:0,historicalFacadeTriangles:0,historicalRoofFids:0,historicalFacadeFids:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -287,6 +288,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     provenance:{buildings:massing.source,streets:streetSource.source,
       streetSourceDate:streetSource.capturedAt,
       roadbed:officialRoadbed?.source||null,
-      roadbedImageryYear:officialRoadbed?.imagery||null,\n      historicalMesh:historicalMesh?{source:historicalMesh.source,sourceVintage:historicalMesh.sourceVintage,sourceRhinoSha256:historicalMesh.sourceRhinoSha256,sourceVerticalDatumVerified:historicalMesh.sourceVerticalDatumVerified}:null},
+      roadbedImageryYear:officialRoadbed?.imagery||null,
+      historicalMesh:historicalMesh?{source:historicalMesh.source,sourceVintage:historicalMesh.sourceVintage,sourceRhinoSha256:historicalMesh.sourceRhinoSha256,sourceVerticalDatumVerified:historicalMesh.sourceVerticalDatumVerified}:null},
     caveat:historicalMesh?'True 1:1 2022 OTI footprints and DCM alignment plus matched original NYC DCP 2014 MN05 cached roof/facade source triangles for a bounded 33-roof-FID/30-facade-FID subset. Historical geometry is not a 2026 survey; vertical datum is unknown; facades have no source photo/PBR material; collision remains the 2022 footprint prism.':'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
 }
