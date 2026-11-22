@@ -50,6 +50,10 @@ jobs:
         env:
           PATROL_COMPARE_MODE: footprint
         run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: NYC gust-aligned crosswind optical normal A/B (height unchanged)
+        env:
+          PATROL_COMPARE_MODE: crosswind
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
         uses: actions/upload-artifact@v4
