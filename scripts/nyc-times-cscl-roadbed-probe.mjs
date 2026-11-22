@@ -3,7 +3,8 @@
 // Official NYC CSCL metadata: CityOfNewYork/nyc-geo-metadata/Metadata/Metadata_StreetCenterline.md
 // STREETWIDTH (source feet) is paved-area width, NOT DCM mapped ROW width.
 // Actual vehicle use, plazas and signal phases require DOT/field verification.
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {auditRoadFootprintClearance} from './nyc-cscl-footprint-clearance.mjs';
 import {pathToFileURL} from 'node:url';
 import {toLocalMeters} from '../assets/nyc/times-square-metric-massing.js';
 
@@ -144,16 +145,30 @@ export async function run(fetcher=fetch){
     }
     const checked=checkFeatureCollection({type:'FeatureCollection',features});
     const summary=summarize(checked,features.length);
+    const frozenBuildings=JSON.parse(await readFile(new URL(
+      '../assets/nyc/times-square-footprints.json',import.meta.url),'utf8'));
+    const clearance=auditRoadFootprintClearance(checked.accepted,frozenBuildings);
     if(checked.accepted.length<15||summary.constructedVehicleCandidates<5)
       throw Error('Too few official roadway candidates: '+JSON.stringify(summary));
-    report={...report,passed:true,summary,requestTimestamp:new Date().toISOString(),
+    report={...report,passed:true,summary,clearance,requestTimestamp:new Date().toISOString(),
       layerLastEditReported:'2026-11-07 (official ArcGIS metadata at check time)',
       sourceFeatureIds:checked.accepted.map(x=>x.id),rejected:checked.rejects};
+    if(clearance.buildingFootprintsChecked<110||
+       clearance.motorizedCenterlinesChecked!==summary.constructedVehicleCandidates||
+       clearance.directVehicleIntrusions.length||
+       clearance.possibleSymmetricPavedWidthIntrusions.length){
+      report.passed=false;
+      throw Error('CSCL official roadway clearance requires human review: '+
+        JSON.stringify({buildings:clearance.buildingFootprintsChecked,
+          motorRoads:clearance.motorizedCenterlinesChecked,
+          direct:clearance.directVehicleIntrusions,
+          widthEnvelope:clearance.possibleSymmetricPavedWidthIntrusions}));
+    }
     await writeFile(folder+'/roadbed-candidate-lines.json',JSON.stringify({
       source:SERVICE,frame:'WGS84 ellipsoid local East/North metres; origin One Times Square',
       licenseApprovedForGame:false,
       records:checked.accepted},null,2));
-    console.log('NYC source CSCL roadbed audit PASS',JSON.stringify(summary));
+    console.log('NYC source CSCL roadbed audit PASS',JSON.stringify({summary,clearance}));
   }catch(e){
     report.errors.push(String(e.stack||e));
     console.error('NYC CSCL roadbed source FAILED',e);
