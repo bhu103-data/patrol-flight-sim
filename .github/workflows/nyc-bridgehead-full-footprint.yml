@@ -36,7 +36,7 @@ jobs:
           node --test tests/nyc-bridgehead-vehicle-connector.test.mjs tests/nyc-petalwake-road-chunks.test.mjs tests/nyc-bridgehead-signal-sync.test.mjs
       - name: Install free headless WebGL2 Chromium
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
           npx playwright install --with-deps chromium
       - name: Serve original PATROL game
         run: |
