@@ -66,3 +66,24 @@ test('band-filter A/B toggles only shader optical filter and validates flight fo
   assert.match(qa,/new FormData\(document\.getElementById\('flightSetup'\)\)/);
   assert.match(qa,/Water QA form selection not stable/);
 });
+
+test('NYC optical far-water fix does not reintroduce a physical crest phase bend',()=>{
+  const start=html.indexOf('  const oceanBands =');
+  const end=html.indexOf('  const oceanVec4 =',start);
+  assert.ok(start>0&&end>start,'CPU wave spectrum can be isolated');
+  const {floatOceanHeight,oceanModes}=new Function(
+    html.slice(start,end)+'return {floatOceanHeight,oceanModes};')();
+  const x=-84,z=-593,t=20,depth=9;
+  assert.equal(oceanModes.length,18);
+  const unwarped=oceanModes.reduce((sum,[kx,kz,omega,phase,,amp])=>
+    sum+Math.sin(kx*x+kz*z-omega*t+phase)*amp,0);
+  const city=floatOceanHeight(x,z,t,depth,{city:true});
+  assert.ok(Number.isFinite(city));
+  assert.ok(Math.abs(city-unwarped)<1e-12,
+    'deep open-harbor C185 height must remain the original 18-mode phase');
+  assert.ok(Math.abs(floatOceanHeight(x,z,t,depth,{alaska:true})-unwarped*.30)<1e-12,
+    'Alaska scale remains unchanged by NYC optical filtering');
+  assert.equal(floatOceanHeight(x,z,t,depth,{dc:true}),0);
+  assert.doesNotMatch(html,/nycCrestBend|NYC_CREST_BEND/,
+    'rejected physical crest warp must not return');
+});
