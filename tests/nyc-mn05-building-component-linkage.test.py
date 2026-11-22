@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import importlib.util
 import pathlib
-import sys
 import unittest
 
-sys.path.insert(0, str(pathlib.Path("tools/nyc").resolve()))
-from inspect_mn05_building_component_linkage import (
-    classify_layer,
-    safe_group_ids,
-    safe_user_strings,
-    summarize_group_roles,
-)
+SCRIPT_PATH = pathlib.Path("tools/nyc/inspect-mn05-building-component-linkage.py")
+SPEC = importlib.util.spec_from_file_location("mn05_component_linkage", SCRIPT_PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+classify_layer = MODULE.classify_layer
+safe_group_ids = MODULE.safe_group_ids
+safe_user_strings = MODULE.safe_user_strings
+summarize_group_roles = MODULE.summarize_group_roles
 
 
 class FakeAttributes:
