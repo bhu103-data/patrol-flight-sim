@@ -207,11 +207,66 @@ const injection=String.raw`
           bridgeheadResolvedTravel(sedan,joinTime)
       };
     }
+    // 3D upright oriented hulls taken from real buildStreetVehicle()
+    // vertices in tests/nyc-bridgehead-mesh-3d-clearance.test.mjs.
+    // taxi mesh has 990 triangles, sedan 942. Sizes are asserted from
+    // production source by Node; keep this client probe independent.
+    const modelHull={
+      taxi:{center:[0,.96375,.006],half:[1.005,.95375,2.006]},
+      sedan:{center:[0,.8,.006],half:[1.005,.79,2.006]}
+    };
+    const pair3d={samples:0,refined:0,near:0,minGap:Infinity,
+      bad:0,firstIssue:null,threshold:.08,bounds:modelHull};
+    const clearance3d=(a,b)=>{
+      const ma=modelHull.taxi,mb=modelHull.sedan;
+      const c=[Math.cos(a.yaw),Math.cos(b.yaw)],
+        ss=[Math.sin(a.yaw),Math.sin(b.yaw)];
+      const ca=ma.center,cb=mb.center,ra=ma.half,rb=mb.half;
+      const ax=a.x+c[0]*ca[0]+ss[0]*ca[2],
+        az=a.z-ss[0]*ca[0]+c[0]*ca[2],ay=a.y+ca[1];
+      const bx=b.x+c[1]*cb[0]+ss[1]*cb[2],
+        bz=b.z-ss[1]*cb[0]+c[1]*cb[2],by=b.y+cb[1];
+      const dx=ax-bx,dz=az-bz;
+      let separation=Math.abs(ay-by)-ra[1]-rb[1];
+      for(const [u,v] of [
+        [c[0],-ss[0]],[ss[0],c[0]],
+        [c[1],-ss[1]],[ss[1],c[1]]
+      ]){
+        const extent=ra[0]*Math.abs(u*c[0]-v*ss[0])+
+          ra[2]*Math.abs(u*ss[0]+v*c[0])+
+          rb[0]*Math.abs(u*c[1]-v*ss[1])+
+          rb[2]*Math.abs(u*ss[1]+v*c[1]);
+        separation=Math.max(separation,Math.abs(dx*u+dz*v)-extent);
+      }
+      return separation;
+    };
+    if(cars.length===2)for(let k=0;k<=36000;k++){
+      const t=k*.25,dist=clearance3d(
+        trafficPose(cars[0],t),trafficPose(cars[1],t));
+      pair3d.samples++;
+      if(dist<pair3d.minGap)pair3d.minGap=dist;
+      if(dist<.5)pair3d.near++;
+      if(!Number.isFinite(dist)||dist<pair3d.threshold){
+        pair3d.bad++;pair3d.firstIssue??={t,dist};
+      }
+      // Extra densely sampled near encounters, including true vertical
+      // bounds; an interval check cannot certify swept triangle meshes.
+      if(dist<.9&&k>0)for(let j=1;j<25;j++){
+        const rt=t-.25+j*.01;
+        const r=clearance3d(
+          trafficPose(cars[0],rt),trafficPose(cars[1],rt));
+        pair3d.refined++;
+        if(r<pair3d.minGap)pair3d.minGap=r;
+        if(!Number.isFinite(r)||r<pair3d.threshold){
+          pair3d.bad++;pair3d.firstIssue??={t:rt,dist:r};
+        }
+      }
+    }
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
       streetY:STREET_Y,waterY:WATER_H,
       lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair,
-      followerBlend};
+      followerBlend,pair3d};
   };
   // Test-only snapshot clock: drive the production signal's actual scene
   // time to known red/green windows for a stable physical-lens comparison.
@@ -307,6 +362,12 @@ try{
     traffic.pair.minGap>=traffic.pair.minimumRequiredClearance,
     'Live taxi/sedan body envelopes collide during long-run bridge traffic: '+
     JSON.stringify(traffic.pair));
+  assert(traffic.pair3d?.samples===36001&&
+    traffic.pair3d.near>30&&traffic.pair3d.refined>1000&&
+    traffic.pair3d.bad===0&&
+    traffic.pair3d.minGap>=traffic.pair3d.threshold,
+    'Real-mesh 3D car envelopes overlap in live NYC WebGL2: '+
+    JSON.stringify(traffic.pair3d));
   const blend=traffic.followerBlend;
   assert(blend&&Math.abs(blend.joinTime-5)<.001&&
     Math.abs(blend.entrySpeed-5.6)<.01&&
