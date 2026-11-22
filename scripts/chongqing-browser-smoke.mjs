@@ -152,7 +152,9 @@ try{
     document.getElementById('mobile').style.display='grid';
     window.__patrolTouchQa={};
     for(const [name,selector] of [
-      ['joystick','#joystick'],['space','#mobile button[data-key="Space"]']
+      ['joystick','#joystick'],['space','#mobile button[data-key="Space"]'],
+      ['hotpot','#mobile button[data-key="KeyE"]'],
+      ['flight','#mobile button[data-key="KeyF"]']
     ]){
       document.querySelector(selector).addEventListener('pointerdown',event=>{
         window.__patrolTouchQa[name]={
@@ -193,6 +195,23 @@ try{
       'Flight button QA did not exercise a trusted Chromium touch pointer');
     check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
       'Touch Space flight button left Digit8 inspection camera active');
+    // Interactions that do not move the avatar must retain the inspection view.
+    // KeyE may show an out-of-range hotpot message but must not exit Digit8.
+    await page.keyboard.press('8');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Could not re-enter Digit8 before nonmovement touch control');
+    await tapTouch('#mobile button[data-key="KeyE"]');
+    const hotpotTouch=await page.evaluate(()=>window.__patrolTouchQa.hotpot);
+    check(hotpotTouch?.pointerType==='touch'&&hotpotTouch.isTrusted,
+      'Hotpot button QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Nonmovement touch KeyE incorrectly dismissed Digit8 inspection camera');
+    await tapTouch('#mobile button[data-key="KeyF"]');
+    const flightTouch=await page.evaluate(()=>window.__patrolTouchQa.flight);
+    check(flightTouch?.pointerType==='touch'&&flightTouch.isTrusted,
+      'Flight toggle QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'Touch KeyF flight toggle left Digit8 inspection camera active');
   }finally{
     await touchSession.send('Emulation.setTouchEmulationEnabled',{enabled:false});
     await touchSession.detach();
