@@ -34,7 +34,8 @@ Times Square (longitude -73.9864883, latitude 40.756421).
 * Not full Times Square: the 120-record snapshot is an incomplete bounded
   extraction, and historical/modern building identities still require
   verification.
-* **No** municipal LION/CSCL street geometries, roadbed widths, sidewalks,
+* Official **DCM Street Center Line** geometry is now an optional public-network overlay in the same WGS84 metre frame. It is NOT drivable roadbed, street width, curb, sidewalk or surveyed lane geometry; a failed live DCM fetch is prominently disclosed, with no invented fallback.
+* **No** complete LION/CSCL street carriageway geometry, roadbed widths, sidewalks,
   turning logic, traffic signals or pedestrian plazas in this pilot.
 * Ground is a flat visual zero datum rather than a surveyed NYC elevation
   surface; original municipal roof HEIGHTROOF values are heights above ground,
@@ -67,8 +68,7 @@ The grid is 50 m. Compare actual FIDs and coordinates, not invented facade art.
 
 ## Mandatory next changes before real visual acceptance
 
-1. Load a **source-exact, bounded NYC LION/CSCL** subset and validate
-   intersections/traffic directions in the same ENU metres.
+1. Preserve and review the bounded live **NYC DCM Street Center Line** overlay from this stacked experiment and the source-only #234 export. Then obtain source-verified street surfaces/curbs and validate intersections/traffic directions in the SAME WGS84 ENU metres. A DCM centerline alone cannot be driven.
 2. Import verified NYC 3D building roof polygons (CityGML or legal alternative),
    retaining unique IDs and source timestamps. Replace rather than overlay
    provisional extrusions.
@@ -92,3 +92,7 @@ The grid is 50 m. Compare actual FIDs and coordinates, not invented facade art.
 * NYC Open Data terms: https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje
 
 The repository's original footprint source files stay unmodified.
+
+## Stacked DCM experiment provenance (2026-11-22)
+
+Source: [NYC DCP DCM Street Center Line](https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/ArcGIS/rest/services/DCM_Street_Center_Line/FeatureServer/0), [official NYC Open Data terms](https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje). Bounds lon -73.9900…-73.9822, lat 40.7552…40.7610, page-size 200, fail hard on invalid API data. Uses the existing `lonLatToENU()` exact WGS84 conversion, not a second hand-authored game coordinate transform. Shows only bounded original DCM polylines and source statuses; record/paper streets are dashed. No imagery or proprietary assets copied. Browser/network availability is a separate CI gate, not silently replaced with fictional streets.
