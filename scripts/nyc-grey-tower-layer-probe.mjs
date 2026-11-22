@@ -86,6 +86,12 @@ try{
     'body.patrol-qa-scene-only * {visibility:hidden!important} '+
     'body.patrol-qa-scene-only #glCanvas {visibility:visible!important}'});
   await page.waitForTimeout(1200);
+  const frozen=await page.evaluate(()=>
+    window.__patrolNycVisualProbe.freezeSceneryTime(42));
+  check(frozen.frozen&&frozen.sceneryTime===42&&frozen.city,
+    'Could not freeze the exact Manhattan scenery clock');
+  report.frozenSceneryTime=frozen;
+  await page.waitForTimeout(180);
   report.initial=await page.evaluate(()=>window.__patrolNycVisualProbe.stats());
   check(report.initial.city&&report.initial.proceduralTriangles>0,
     'Did not load live Manhattan background building mesh');
@@ -129,7 +135,9 @@ try{
   });
   check(Array.isArray(baselineStats.sourceFids)&&baselineStats.sourceFids.length>0,
     'GIS source FID inventory is unavailable');
-  await page.evaluate(()=>{
+  await page.evaluate(async()=>{
+    await new Promise(resolve=>requestAnimationFrame(()=>
+      requestAnimationFrame(resolve)));
     const canvas=document.getElementById('glCanvas'),gl=canvas?.getContext('webgl2');
     if(!gl||gl.isContextLost())throw Error('WebGL2 context unavailable for source FID scan');
     gl.finish();
@@ -138,7 +146,7 @@ try{
     window.__patrolNycGisBaseline={width:canvas.width,height:canvas.height,data};
   });
   report.gisSourceFids=baselineStats.sourceFids;
-  report.fidScan=await page.evaluate(async fids=>{
+  report.fidScan=await page.evaluate(async ({fids,baselineSourceBuildings})=>{
     const api=window.__patrolNycVisualProbe,canvas=document.getElementById('glCanvas'),
       gl=canvas?.getContext('webgl2'),baseline=window.__patrolNycGisBaseline;
     if(!gl||!baseline||baseline.width!==canvas.width||baseline.height!==canvas.height)
@@ -148,6 +156,10 @@ try{
       const stats=api.setGisSkippedFids([fid]);
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       gl.finish();
+      if(stats.skippedDiagnosticFids!==1||
+         stats.sourceBuildings!==baselineSourceBuildings-1||
+         stats.sourceFids.includes(fid))
+        throw Error('Per-FID A/B did not remove exactly one rendered source building: '+fid);
       const after=new Uint8Array(width*height*4);
       gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,after);
       let pixels=0,changed24=0,changed45=0,meanAbs=0;
@@ -166,6 +178,7 @@ try{
       }
       results.push({fid,sourceBuildings:stats.sourceBuildings,
         skippedDiagnosticFids:stats.skippedDiagnosticFids,
+        removedExactlyOneSourceBuilding:true,
         changed24Fraction:Number((changed24/pixels).toFixed(4)),
         changed45Fraction:Number((changed45/pixels).toFixed(4)),
         meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
@@ -175,13 +188,18 @@ try{
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     gl.finish();
     return results.sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
-  },baselineStats.sourceFids);
-  report.fidScanHypothesis=report.fidScan[0]
-    ?'Highest-impact single GIS source FID: '+report.fidScan[0].fid
-    :'No individually rendered GIS source FIDs were scanned';
+  },{fids:baselineStats.sourceFids,baselineSourceBuildings:baselineStats.sourceBuildings});
+  const topFid=report.fidScan[0],runnerUp=report.fidScan[1];
+  report.fidScanMargin=topFid&&runnerUp?
+    Number((topFid.changed45Fraction-runnerUp.changed45Fraction).toFixed(4)):null;
+  report.fidScanAmbiguous=!topFid||!runnerUp||
+    report.fidScanMargin<Math.max(.005,topFid.changed45Fraction*.10);
+  report.fidScanHypothesis=report.fidScanAmbiguous
+    ?'INCONCLUSIVE: frozen per-FID A/B does not isolate one dominant building'
+    :'Highest-impact single GIS source FID: '+topFid.fid;
   report.fidScanTop=report.fidScan.slice(0,10);
   report.fidScanGlErrors=report.fidScan.filter(x=>x.glError!==0);
-  if(report.fidScan[0]?.changed45Fraction>=.01){
+  if(!report.fidScanAmbiguous&&topFid.changed45Fraction>=.01){
     const topFid=report.fidScan[0].fid;
     await page.evaluate(fid=>window.__patrolNycVisualProbe.setGisSkippedFids([fid]),topFid);
     await capture('44th-skip-fid-'+topFid,'none');
@@ -211,6 +229,8 @@ try{
   check(report.fidScan.length===baselineStats.sourceFids.length && report.fidScan.length>0,
     'Per-FID GIS occlusion scan did not cover every rendered source FID');
   check(report.fidScanGlErrors.length===0,'WebGL errors during per-FID GIS scan');
+  check(!report.fidScanAmbiguous,
+    'Frozen per-FID scan is ambiguous; do not attribute the grey wall to one building');
   check(best&&best.changed45Fraction>=.035,
     'Left-wall ROI did not react to any probed mesh source; another render group remains uninstrumented');
   report.passed=true;
