@@ -161,7 +161,7 @@ def fetch_current_oti_attributes(fids: list[int]) -> dict[int, dict]:
         "where": where,
         "outFields": (
             "FID,BIN,DOITT_ID,HEIGHTROOF,GROUNDELEV,CNSTRCT_YR,"
-            "LSTMODDATE,GEOMSOURCE,LSTSTATTYPE,FEAT_CODE"
+            "LSTMODDATE,GEOMSOURCE,LSTSTATYPE,FEAT_CODE"
         ),
         "returnGeometry": "false",
         "f": "json",
@@ -539,7 +539,7 @@ def build_audit(mesh: dict, probe: dict, footprints: list[dict],
             "otiAbsoluteRoofTopFt": round(top_ft, 3) if top_ft is not None else None,
             "deltaSourceMinusOtiFt": round(delta, 3) if delta is not None else None,
             "geometrySource": geometry_source or None,
-            "lastStatusType": attributes.get("LSTSTATTYPE"),
+            "lastStatusType": attributes.get("LSTSTATYPE"),
             "constructionYear": int(construction_year) if construction_year is not None else None,
             "lastModifiedDate": last_modified.isoformat() if last_modified else None,
             "featureCode": feature_code,
@@ -579,7 +579,7 @@ def build_audit(mesh: dict, probe: dict, footprints: list[dict],
             "queriedFidCount": len(current),
             "fields": [
                 "FID", "BIN", "DOITT_ID", "HEIGHTROOF", "GROUNDELEV",
-                "CNSTRCT_YR", "LSTMODDATE", "GEOMSOURCE", "LSTSTATTYPE", "FEAT_CODE",
+                "CNSTRCT_YR", "LSTMODDATE", "GEOMSOURCE", "LSTSTATYPE", "FEAT_CODE",
             ],
             "metadataUrl": OTI_FOOTPRINT_METADATA_URL,
             "groundElevationDatumRule": (
@@ -587,7 +587,7 @@ def build_audit(mesh: dict, probe: dict, footprints: list[dict],
                 "or modern-source records; HEIGHTROOF is above ground."
             ),
             "statusTypeRule": (
-                "LSTSTATTYPE is the feature last status type (including "
+                "LSTSTATYPE is the feature last status type (including "
                 "Demolition, Alteration, Geometry, Initialization and Correction)."
             ),
         },
