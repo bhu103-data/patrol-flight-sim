@@ -13,10 +13,10 @@ test('Alaska terrain photo scales reflect rock, wind-snow and forest independent
   assert.match(alaska,/vec2 wallUV=abs\(n\.x\)>abs\(n\.z\)\?p\.zy:p\.xy/);
   assert.match(alaska,/textureLod\(uAlaskaPhotoAlbedo,groundUV,lod\)/);
   assert.match(alaska,/textureLod\(uAlaskaPhotoAlbedo,forestUV,lod\)/);
-  assert.match(alaska,/if\\(uAlaskaPhotoReady\\)/,'atlas-missing fallback preserved');
-  assert.match(alaska,/float forestNear=forestWeight\\*/);
-  assert.match(alaska,/smoothstep\\(68\\.0,210\\.0,hitDist\\)/);
-  assert.match(alaska,/float colorStrength=mix\\(\\.19\\+\\.18\\*forestNear,\\.78/);
+  assert.ok(alaska.includes('if(uAlaskaPhotoReady)'), 'atlas-missing fallback preserved');
+  assert.ok(alaska.includes('float forestNear=forestWeight*'));
+  assert.ok(alaska.includes('smoothstep(68.0,210.0,hitDist)'));
+  assert.ok(alaska.includes('float colorStrength=mix(.19+.18*forestNear,.78'));
 });
 test('Surveyed DEM shoreline darkening is only color and never changes geometry',()=>{
   assert.match(alaska,/float coastalStone=\(1\.0-smoothstep\(\.18,1\.85,alt\)\)/);
