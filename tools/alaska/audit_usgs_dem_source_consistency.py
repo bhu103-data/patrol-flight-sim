@@ -70,6 +70,21 @@ def export_metadata(request_url, adjust=None):
         "publishedByServer":True
     }
 
+
+def arcgis_default_aspect_bbox(bbox,width=256,height=256):
+    """Esri exportImage default adjustAspectRatio=true: image pixels are square
+    in the output spatial reference; preserve centre, enlarge narrow axis.
+    This remains a modeled extent until actual server response/GeoTIFF tags
+    validate it, not a license to silently rewrite georeferenced assets."""
+    west,south,east,north=map(float,bbox)
+    dx=east-west;dy=north-south
+    if dx/dy>width/height:
+        dy=dx*height/width
+    else:
+        dx=dy*width/height
+    cx=(west+east)/2;cy=(south+north)/2
+    return [cx-dx/2,cy-dy/2,cx+dx/2,cy+dy/2]
+
 def distribution(a):
     a=np.asarray(a,dtype=np.float64)
     a=a[np.isfinite(a)]
@@ -125,6 +140,26 @@ def main():
         "coarseLastIndex":[round(float(X[-1,-1]),6),round(float(Y[-1,-1]),6)]
     }
     report["fineMinusBakedCoarse"]=distribution(fine-old_interp)
+    # Model documented ArcGIS default auto aspect independently from any
+    # potentially unreliable service f=json endpoint.
+    modelOld=arcgis_default_aspect_bbox(old_meta["bbox"])
+    modelFine=arcgis_default_aspect_bbox(fine_meta["bbox"])
+    xmodel=modelFine[0]+(np.arange(256)+.5)*(modelFine[2]-modelFine[0])/256
+    ymodel=modelFine[1]+(np.arange(256)+.5)*(modelFine[3]-modelFine[1])/256
+    MX,MY=np.meshgrid(
+       (xmodel-modelOld[0])/(modelOld[2]-modelOld[0])*256-.5,
+       (ymodel-modelOld[1])/(modelOld[3]-modelOld[1])*256-.5)
+    dmodel=fine-bilinear(old,MX,MY)
+    report["modeledArcgisDefaultAspect"]={
+      "publishedByServer":False,
+      "coarseEffectiveBBox":modelOld,
+      "fineEffectiveBBox":modelFine,
+      "fineMinusCoarseAfterAspectFix":distribution(dmodel),
+      "reductionFromWrongRequestedBBoxRmseMetres":round(
+        report["fineMinusBakedCoarse"]["rmse"]-distribution(dmodel)["rmse"],3),
+      "actualServerJSONCrosscheckRequired":True,
+      "esriReference":"https://developers.arcgis.com/rest/services-reference/enterprise/export-image/"
+    }
     report["fineVsCoarseWaterStatus"]={
         "coarseWaterFineLandGt20m":int(np.count_nonzero((old_interp<=1)&(fine>20))),
         "coarseLandGt20mFineWater":int(np.count_nonzero((old_interp>20)&(fine<=1))),
@@ -237,7 +272,7 @@ def main():
         "fineMinusBakedCoarse","bestCoarsePixelShiftDiagnostic",
         "rmseImprovementVsOriginal","freshOriginalSource","stitchGate",
         "arcgisActualExportExtents","fineMinusCoarseUsingActualArcgisExtents",
-        "expandedBestCoarseShiftDiagnostic"] if k in report}),
+        "expandedBestCoarseShiftDiagnostic","modeledArcgisDefaultAspect"] if k in report}),
       flush=True)
 
 if __name__=="__main__":
