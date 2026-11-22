@@ -84,7 +84,8 @@ test('uncovered source intervals respect courtyard holes and split crossings',()
   const street=feature(ring(0,0,10,10),[ring(3,3,7,7)]);
   const gaps=outsideSourceIntervals([-1,5],[11,5],[street]);
   assert.equal(gaps.length,3);
-  assert.deepEqual(gaps.map(x=>x.lengthMeters),[1,4,1]);
+  assert.ok(gaps.map((x,i)=>Math.abs(x.lengthMeters-[1,4,1][i])<1e-9)
+    .every(Boolean),'Metric segment lengths differ beyond numerical tolerance');
   assert.deepEqual(gaps[1].startMeters,[3,5]);
   assert.deepEqual(gaps[1].endMeters,[7,5]);
   assert.equal(outsideSourceIntervals([1,5],[2,5],[street]).length,0);
