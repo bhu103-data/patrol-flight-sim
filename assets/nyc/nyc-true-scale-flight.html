@@ -195,12 +195,12 @@ async function start(){
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
     ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
     massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' authentic core-road boundary roof triangles';
+    stats.officialRoadbedTriangles+' official source pavement triangles';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
-    trueRoadbedVerified:!!roadbed,trueFacadeVerified:false,
+    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
