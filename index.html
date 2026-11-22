@@ -15085,11 +15085,11 @@ const CENTRAL_PARK_SITES=[
         }
         const classId=({empire:1,liberty:2,chrysler:3,trade:4,flatiron:5,times:6})[mark.kind]||0;
         gl.uniform1i(uMesh.nySurfaceClass,classId);
-        drawMeshWithOutline(photoModel||meshes.body,model,false,mark.kind==='flatiron');
+        drawMeshWithOutline(displayedModel,model,false,mark.kind==='flatiron');
         gl.uniform1f(uMesh.dimLights,mark.kind==='times'?0:1);
         // The procedural lights follow the old model, so do not overlay them
         // when a real GLB mesh has replaced its architectural geometry.
-        if(meshes.lights.count && !photoModel)
+        if(meshes.lights.count && displayedModel===meshes.body)
           drawMeshWithOutline(meshes.lights,model,true);
         gl.uniform1f(uMesh.dimLights,0);
       }
