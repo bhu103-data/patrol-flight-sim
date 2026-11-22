@@ -26,12 +26,14 @@
 <p class="muted" id="metadata"></p>
 <p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
 </aside>
-<footer>NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
+<footer id="flightModeStatus">NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
 <script type="module">
 import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
+import {makeC185AirborneState,c185SourceAirborneStep,c185SceneCollision}
+  from './nyc-c185-metre-airborne.mjs';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
       metadata=document.getElementById('metadata');
@@ -176,6 +178,27 @@ async function start(){
     yaw:sourceStreetSpawn.yaw,pitch:sourceStreetSpawn.pitch
   });
   let camera=reset(),last=0,frames=0;
+  // A deliberately restricted PATROL airborne-only aircraft-control slice.
+  // Original game floatplanes, water taxi, gear, HUD, terrain, weapons,
+  // glTF plane and takeoff physics are NOT ported or claimed here.
+  let airborneEnabled=new URLSearchParams(location.search).get('flight')==='patrol-c185';
+  const airborneLaunch=()=>makeC185AirborneState(
+    [sourceStreetSpawn.position[0],85,sourceStreetSpawn.position[2]],
+    Math.PI-sourceStreetSpawn.yaw);
+  const sourceCollision=c185SceneCollision(massing,geometry.center,buildingContains,1.2);
+  let airborne=airborneLaunch();
+  const flightModeStatus=document.getElementById('flightModeStatus');
+  function updateAirborneMode(){
+    document.getElementById('c185Airborne').textContent=airborneEnabled?
+      'Return to free camera':'C185 airborne cockpit (prototype)';
+    if(airborneEnabled)airborne=airborneLaunch();
+  }
+  document.getElementById('c185Airborne').addEventListener('click',()=>{
+    airborneEnabled=!airborneEnabled;
+    if(!airborneEnabled)camera=reset();
+    updateAirborneMode();
+  });
+  updateAirborneMode();
   document.getElementById('reset').addEventListener('click',()=>camera=reset());
   document.getElementById('aerial').addEventListener('click',()=>{
     camera={position:[0,340,Math.min(450,span*.55)],yaw:0,pitch:-.40};
@@ -233,6 +256,7 @@ async function start(){
     sourceRoads:geometry.provenance.streets,
     sourceBuildings:geometry.provenance.buildings,
     renderer:'native WebGL2',usesOriginalAircraftPhysics:false,
+    usesPatrolAirborneEquations:true,airborneFullPhysics:false,
     spawnFromOfficialStreet:sourceStreetCandidates.length>0,
     streetEyeMetres:sourceStreetCandidates.length?streetEyeMetres:null,
     streetClearanceRadiusMetres:streetClearanceMetres,
@@ -241,6 +265,7 @@ async function start(){
   const bound=Math.max(420,span*.7);
   function frame(t){
     const dt=Math.min(.05,Math.max(0,(t-last)/1000||0));last=t;
+    if(!airborneEnabled){
     const spin=dt*1.3;
     if(keySet.has('arrowleft'))camera.yaw-=spin;
     if(keySet.has('arrowright'))camera.yaw+=spin;
@@ -272,6 +297,43 @@ async function start(){
     }else if(!buildingContains(massing,proposed[0]+geometry.center.east,
       geometry.center.north-proposed[2],proposed[1])){
       camera.position=proposed;
+    }
+    }
+    if(airborneEnabled){
+      const control={
+        turn:Number(keySet.has('d')||keySet.has('arrowright'))-
+          Number(keySet.has('a')||keySet.has('arrowleft')),
+        pitch:Number(keySet.has('w')||keySet.has('arrowup'))-
+          Number(keySet.has('s')||keySet.has('arrowdown')),
+        boost:keySet.has(' ')||keySet.has('shift'),
+        brake:keySet.has('b')
+      };
+      const substeps=Math.max(1,Math.ceil(dt/.025));
+      for(let step=0;step<substeps;step++)
+        airborne=c185SourceAirborneStep(airborne,control,dt/substeps,sourceCollision);
+      // PATROL forward vector is +Z-north; official source flight camera
+      // uses -Z-north. The pi-yaw transform is mathematically exact.
+      camera.position=[
+        airborne.pos[0],airborne.pos[1]+.42,airborne.pos[2]
+      ];
+      camera.yaw=Math.PI-airborne.yaw;
+      camera.pitch=airborne.pitch;
+      qa.airborneMode=true;
+      qa.airbornePos=[...airborne.pos];
+      qa.airborneSpeed=airborne.speed;
+      qa.airborneYaw=airborne.yaw;
+      qa.airbornePitch=airborne.pitch;
+      qa.airborneBank=airborne.bank;
+      qa.airborneGForce=airborne.gForce;
+      qa.airborneCollision=airborne.collision;
+      qa.airborneSteps=airborne.steps;
+      flightModeStatus.textContent='Experimental C185 PATROL airborne subset · '+
+        airborne.speed.toFixed(1)+' game units/s · '+airborne.pos[1].toFixed(1)+
+        ' m model-ground height · '+(airborne.collision?'BUILDING HOLD':'AIRBORNE')+
+        ' · NO full aircraft/water/terrain physics';
+    }else{
+      qa.airborneMode=false;
+      flightModeStatus.textContent='OTI true-metre free-camera · C185 airborne optional';
     }
     const scale=Math.min(devicePixelRatio||1,1.5);
     const w=Math.max(1,Math.floor(canvas.clientWidth*scale)),
