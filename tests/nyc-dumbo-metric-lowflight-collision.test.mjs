@@ -43,6 +43,14 @@ test('a true CSCL non-conflicting segment supplies an actually safe 1:1 camera s
     (bounds.minZ+bounds.maxZ)*.5];
   const spawn=realSafety.sourceStreetSpawn(network.lines,focus);
   assert.ok(Number.isSafeInteger(spawn.sourcePhysicalId));
+  assert.equal(spawn.sourcePhysicalId,56482,
+    'closest verified Front Street source physical ID changed');
+  assert.equal(spawn.streetName,'FRONT ST');
+  assert.ok(spawn.openAheadMetres>=20&&spawn.openAheadMetres<=30,
+    'inspection must aim along a swept-clear source road tangent');
+  assert.ok(Math.abs(spawn.headingRadians)>1.0&&
+    Math.abs(spawn.headingRadians)<2.3,
+    'east-west Front Street should not face the adjoining warehouse wall');
   assert.ok(spawn.position.every(Number.isFinite));
   assert.equal(spawn.position[1],9.5);
   assert.equal(spawn.yIsDiagnosticAGL,true);
