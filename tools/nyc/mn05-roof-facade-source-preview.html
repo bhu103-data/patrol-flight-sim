@@ -13,7 +13,7 @@ small{color:#c1ccd5}
 <h1>时代广场 · NYC DCP 2014 官方屋顶与立面网格</h1>
 <p><strong>不是 2026 实景扫描，也不是 PATROL 正式地图。</strong></p>
 <p>灰色：2026-11-20 官方建筑足迹/HEIGHTROOF 简化体块；橙色：2014 Rhino 缓存屋顶网格；蓝色：2014 Rhino 缓存立面网格。</p>
-<p>原始 Z 垂直基准未确认。仅按每栋楼的相对 Z 范围归一化到现代 HEIGHTROOF，不使用绝对历史海拔。</p>
+<p>Rhino 模型单位已验证为 Feet；但原始 Z 垂直基准未确认。仅按每栋楼的相对 Z 范围归一化到现代 HEIGHTROOF，不使用绝对历史海拔。</p>
 <label><input id="roof" type="checkbox" checked/> 显示 2014 原始屋顶三角面</label>
 <label><input id="facade" type="checkbox" checked/> 显示 2014 原始立面三角面</label>
 <p id="status">正在载入原始市政网格…</p>
@@ -61,7 +61,7 @@ canvas.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-last[0
 canvas.addEventListener('wheel',e=>{distance=Math.max(70,Math.min(2400,distance*Math.exp(e.deltaY*.001)));e.preventDefault();},{passive:false});
 gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.035,.064,.093,1);
 function draw(){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);const eye=[target[0]+distance*Math.cos(pitch)*Math.sin(yaw),target[1]+distance*Math.sin(pitch),target[2]+distance*Math.cos(pitch)*Math.cos(yaw)];gl.uniformMatrix4fv(uniform,false,mul(perspective(w/h),look(eye,target)));gl.bindVertexArray(grid.vao);gl.drawArrays(gl.LINES,0,grid.count);gl.bindVertexArray(base.vao);gl.drawArrays(gl.TRIANGLES,0,base.count);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1);if(roofToggle.checked){gl.bindVertexArray(roof.vao);gl.drawArrays(gl.TRIANGLES,0,roof.count);}if(facadeToggle.checked){gl.bindVertexArray(facade.vao);gl.drawArrays(gl.TRIANGLES,0,facade.count);}gl.disable(gl.POLYGON_OFFSET_FILL);gl.bindVertexArray(null);requestAnimationFrame(draw);}
-window.mn05RoofFacadeQA={ready:true,sourceYear:2014,matchedFids:src.counts.matchedBuildingFids,roofTriangles:src.counts.roofTriangles,facadeTriangles:src.counts.facadeTriangles,sourceVerticalDatumVerified:false,relativeHeightAnchor:true,roofVisible:()=>roofToggle.checked,facadeVisible:()=>facadeToggle.checked,roofDrawn:()=>roofToggle.checked?roof.count/3:0,facadeDrawn:()=>facadeToggle.checked?facade.count/3:0};
+window.mn05RoofFacadeQA={ready:true,sourceYear:2014,matchedFids:src.counts.matchedBuildingFids,roofTriangles:src.counts.roofTriangles,facadeTriangles:src.counts.facadeTriangles,sourceVerticalDatumVerified:false,sourceVerticalUnitVerified:src.sourceVerticalUnitVerified===true,sourceModelUnitSystem:src.sourceModelUnitSystem,relativeHeightAnchor:true,roofVisible:()=>roofToggle.checked,facadeVisible:()=>facadeToggle.checked,roofDrawn:()=>roofToggle.checked?roof.count/3:0,facadeDrawn:()=>facadeToggle.checked?facade.count/3:0};
 status.textContent='2014 原始屋顶 '+src.counts.roofTriangles+' 三角面 · 原始立面 '+src.counts.facadeTriangles+' 三角面 · 匹配建筑 '+src.counts.matchedBuildingFids+' 栋';
 draw();
 })().catch(e=>{window.mn05RoofFacadeQA={ready:false,error:String(e)};document.getElementById('status').textContent='QA 失败：'+e.message;console.error(e);});
