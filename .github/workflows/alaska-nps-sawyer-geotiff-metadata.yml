@@ -29,7 +29,8 @@ jobs:
       - name: Stream two official NPS archives within 350 MiB each; extract metadata only
         run: |
           python3 tools/alaska/audit_nps_sawyer_raster_metadata.py \
-            --timeout 90 --output artifacts/alaska-nps-sawyer-geotiff-metadata.json
+            --timeout 90 --sample-valid-pixels \
+            --output artifacts/alaska-nps-sawyer-geotiff-metadata.json
       - name: Upload JSON manifest only, even when source metadata is blocked
         if: always()
         uses: actions/upload-artifact@v4
