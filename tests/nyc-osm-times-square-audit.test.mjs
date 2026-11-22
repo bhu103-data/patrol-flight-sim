@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildOverpassQuery,polygonMetrics,analyzeOsmFeatures,fetchOverpass,OSM_LICENSE,OSM_ATTRIBUTION
+  polygonMetrics,analyzeOsmFeatures,OSM_LICENSE,OSM_ATTRIBUTION,NYCOSM_COMMIT
 } from '../scripts/nyc-osm-times-square-audit.mjs';
 
 const rect=(cx,cy,dx=.0001,dy=.0001)=>[
@@ -12,23 +12,21 @@ const sourceRing=rect(-73.9865,40.7570);
 const source={reference:'NYC Building Footprints',retrieved:'2026-11-20',
   bboxWGS84:[-73.9885,40.756,-73.9835,40.7595],
   features:[{fid:123,heightFt:80,rings:[sourceRing]}]};
-const way={
-  type:'way',id:456,tags:{
-    building:'commercial','building:levels':'12',height:'45 m',
-    'roof:shape':'flat','building:material':'glass',
-    'building:colour':'#7899aa',name:'Example Tower'
-  },
-  geometry:sourceRing.map(([lon,lat])=>({lon,lat}))
-};
+const way={type:'way',id:456,tags:{
+  building:'commercial','building:levels':'12',height:'45 m',
+  'roof:shape':'flat','building:material':'glass','building:colour':'#7899aa',name:'Example Tower'
+},geometry:sourceRing.map(([lon,lat])=>({lon,lat}))};
 
-test('Overpass query is bounded to the source WGS84 Times Square bbox',()=>{
-  const q=buildOverpassQuery(source.bboxWGS84);
-  assert.match(q,/way\["building"\]/);
-  assert.match(q,/relation\["building"\]/);
-  assert.match(q,/way\["building:part"\]/);
-  assert.match(q,/relation\["building:part"\]/);
-  assert.match(q,/40\.756,-73\.9885,40\.7595,-73\.9835/);
-  assert.throws(()=>buildOverpassQuery([1,2,0,3]),/Invalid WGS84 bbox/);
+test('pinned NYC OSM source uses the exact ODbL extract and attribution',()=>{
+  assert.equal(NYCOSM_COMMIT,'75ec01ced7fdd85619493d59f4e7e9236e0990fd');
+  const report=analyzeOsmFeatures(source,{elements:[way]});
+  assert.equal(report.source.package,'kjhealy/nycosm');
+  assert.equal(report.source.extractDate,'2026-10-18');
+  assert.equal(report.source.license,OSM_LICENSE);
+  assert.equal(report.source.attribution,OSM_ATTRIBUTION);
+  assert.equal(report.redistribution.rawOsmSnapshotCommitted,false);
+  assert.equal(report.redistribution.rawOsmSnapshotUploaded,false);
+  assert.equal(report.redistribution.runtimeImport,false);
 });
 
 test('polygon metrics reject invalid geometry and measure a closed ring',()=>{
@@ -51,9 +49,6 @@ test('only a unique matched building outline contributes to tag coverage',()=>{
   assert.equal(report.tagCoverage.matched['roof:shape'],1);
   assert.equal(report.tagCoverage.matched['building:material'],1);
   assert.equal(report.tagCoverage.matched.wikidata,0);
-  assert.equal(report.source.license,OSM_LICENSE);
-  assert.equal(report.source.attribution,OSM_ATTRIBUTION);
-  assert.equal(report.redistribution.rawOsmSnapshotCommitted,false);
 });
 
 test('building parts are not falsely matched as whole-building outlines',()=>{
@@ -62,31 +57,13 @@ test('building parts are not falsely matched as whole-building outlines',()=>{
   assert.equal(report.osmCounts.buildingParts,1);
   assert.equal(report.osmCounts.buildingWays,0);
   assert.equal(report.join.uniqueMatches,0);
-  assert.deepEqual(report.join.unmatchedFids,[123]);
+  assert.equal(report.join.unmatchedCount,1);
 });
 
 test('multiple overlapping candidate outlines are flagged ambiguous, not guessed',()=>{
   const second={...way,id:457};
   const report=analyzeOsmFeatures(source,{elements:[way,second]});
   assert.equal(report.join.uniqueMatches,0);
-  assert.equal(report.join.ambiguousFids.length,1);
-  assert.deepEqual(report.join.ambiguousFids[0].candidateOsmIds,[456,457]);
-});
-
-test('Overpass fallback records the endpoint that actually returned data',async()=>{
-  let calls=0;
-  const result=await fetchOverpass('bounded-query',{
-    endpoints:['https://first.invalid','https://second.invalid'],
-    timeoutMs:100,
-    fetchImpl:async(url,options)=>{
-      calls++;
-      assert.equal(options.method,'POST');
-      assert.match(String(options.body),/data=bounded-query/);
-      if(calls===1)return {ok:false,status:503};
-      return {ok:true,json:async()=>({elements:[{type:'way',id:1}]})};
-    }
-  });
-  assert.equal(calls,2);
-  assert.equal(result.endpoint,'https://second.invalid');
-  assert.equal(result.data.elements.length,1);
+  assert.equal(report.join.ambiguousCount,1);
+  assert.equal(report.join.unmatchedCount,0);
 });
