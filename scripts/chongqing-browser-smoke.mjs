@@ -42,7 +42,7 @@ window.__patrolQaOblique=(siteId,side)=>{
 window.__patrolQaFoundation=()=>{
   const site=marketFronts.snapshot().find(s=>s.id==='stone-stair');
   if(!site)throw Error('Missing real stone-stair market shop');
-  // Earlier #207 `03i` was hidden by the next commercial shop and
+  // Earlier #207 oblique foundation shot was hidden by the next shop and
   // gallery post from x+25,z+15: use the genuinely clear 4-unit-wide
   // corridor between shop x=[x-10,x+10] and east neighbor x+24.
   // Camera is OUTSIDE the floor collider, looking toward the existing
