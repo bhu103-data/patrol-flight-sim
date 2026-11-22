@@ -120,6 +120,7 @@ async function start(){
   sourceZRangeFeet:source.rawSourceZFeetRange,sourceVerticalDatumVerified:false,
   sourceCoordinateFrame:'EPSG:2263 US survey feet XY -> DUMBO local east/south metres',
   webgl2:true,glError:0,contextLost:false,frames:0,camera:[]};
+ canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();qa.contextLost=true;});
  status.textContent='Loaded '+qa.sourceFacadePatches+' real 2014 facade patches + '+qa.sourceRoofPatches+' roof patches';
  countsNode.textContent='48 current OTI 2022 reference footprints · '+qa.sourceTriangles.toLocaleString()+
   ' source triangles · '+qa.renderedTriangles.toLocaleString()+' drawn triangles · raw Z normalized only for preview';
