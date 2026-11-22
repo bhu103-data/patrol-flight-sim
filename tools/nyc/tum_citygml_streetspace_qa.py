@@ -619,7 +619,7 @@ def main() -> int:
         if not args.current_cscl.exists():
             raise RuntimeError(f"Missing current CSCL GeoJSON: {args.current_cscl}")
         report["currentCscl"] = current_cscl_comparison(roadbed_path, args.current_cscl, args.output_dir, bbox, args.cscl_buffer_degrees)
-        if report["currentCscl"]["featureCount"] == 0:
+        if report["currentCscl"]["featureCountIntersectingExactRoi"] == 0:
             report["errors"].append("Current CSCL query returned zero ROI features")
     except Exception as error:
         report["errors"].append(f"current CSCL comparison: {error}")
