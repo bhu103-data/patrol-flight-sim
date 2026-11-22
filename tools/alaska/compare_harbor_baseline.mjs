@@ -10,6 +10,13 @@ const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
  // Neither the actual game source nor the benchmark geometry is changed.
  function cameraQAPage(input,output){
    let html=readFileSync(input,'utf8');
+   const activeModule='./assets/alaska/alaska-fjord-detail.js';
+   if(html.split(activeModule).length!==2)
+     throw Error('Cannot prove actual glacier module import on '+input);
+   if(input==='alaska-baseline.html'){
+     html=html.replace(activeModule,
+       './assets/alaska/alaska-fjord-detail-baseline-qa.js');
+   }
    const marker='  window.PatrolSpaceBridge = {getState: () => ({';
    if(html.split(marker).length!==2)throw Error('QA bridge anchor missing: '+input);
    const hook=`  window.PatrolHarborNearQA = () => {
@@ -92,8 +99,13 @@ async function capture(label,file){
   const page=await browser.newPage({
     viewport:{width:1280,height:800},deviceScaleFactor:1
   });
-  const errors=[];
+  const errors=[],alaskaModules=[];
   page.on('pageerror',e=>errors.push(e.message));
+  page.on('response',response=>{
+    const path=new URL(response.url()).pathname;
+    if(path.includes('alaska-fjord-detail'))
+      alaskaModules.push({path,status:response.status()});
+  });
   const startupClock=Date.now();
   const response=await page.goto(root+'/'+file+'?alaskaView=harbor',
     {waitUntil:'domcontentloaded',timeout:30000});
@@ -108,6 +120,13 @@ async function capture(label,file){
     const title=document.getElementById('titleOverlay');
     return (err&&!err.hidden)||(load?.classList.contains('done')&&title?.hidden);
   },null,{timeout:110000});
+  const expectedModule=label==='baseline'?
+    '/assets/alaska/alaska-fjord-detail-baseline-qa.js':
+    '/assets/alaska/alaska-fjord-detail.js';
+  if(!alaskaModules.some(asset=>asset.path===expectedModule&&asset.status===200)||
+      alaskaModules.some(asset=>asset.path!==expectedModule))
+    throw Error('Floe A/B mixed or missing module bytes '+label+': '+
+      JSON.stringify({expectedModule,alaskaModules}));
   // Measured browser-harness wall-clock time to the first playable scene.
   // This includes UI/selection and is not a pure asset download benchmark.
   const firstPlayableMs=Date.now()-startupClock;
@@ -166,7 +185,7 @@ async function capture(label,file){
   }));
   const sorted=intervals.slice().sort((a,b)=>a-b);
   const percentile=p=>sorted.length?sorted[Math.max(0,Math.ceil(p*sorted.length)-1)]:null;
-  records[label]={...state.flight,after,near,floe,floePose,pageErrors:errors,
+  records[label]={...state.flight,after,near,floe,floePose,alaskaModules,pageErrors:errors,
     firstPlayableMs,softwareRafSamples:sorted.length,
     softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
   if(label==='updated'){
