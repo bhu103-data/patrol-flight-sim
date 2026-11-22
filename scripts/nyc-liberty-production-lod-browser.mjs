@@ -118,6 +118,9 @@ try{
   assert.ok(report.visualDiff.fraction>.07,
     'CC0 model produced no visible source-dependent change: '+JSON.stringify(report.visualDiff));
   await run('rollback','nycLibertyCC0=1&nycModels=legacy&nycLibertyLodQA=1');
+  // Simulate an actual HTTP/network resource failure and prove the original
+  // bundled/procedural statue still renders without a WebGL context error.
+  await run('network-fail','nycLibertyCC0=1&nycLibertyLodQA=1',{rejectCandidate:true});
   report.status='PASS';
   console.log('NYC Liberty production optin WebGL PASS '+JSON.stringify(report));
 }catch(e){
