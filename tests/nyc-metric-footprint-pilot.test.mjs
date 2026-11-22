@@ -78,7 +78,9 @@ test('metric viewer is WebGL2, no paid tiles or passive import into the flight m
  assert.match(html,/webgl2/);
  assert.match(html,/nyc-metric-footprints\.mjs/);
  assert.match(html,/times-square-footprints\.json/);
- assert.match(html,/未接入官方道路/);
+ assert.match(html,/官方 CSCL 道路中心线/);
+ assert.match(html,/CSCL 并非路缘测绘图/);
+ assert.match(html,/经核准的路面及路缘几何/);
  assert.doesNotMatch(html,/maps\.googleapis\.com|google\.com\/maps\/v1|Cesium|apiKey/i);
  // Syntax of test and of shared node/browser module.
  assert.doesNotThrow(()=>execFileSync(process.execPath,
