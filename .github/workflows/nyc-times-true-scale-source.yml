@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/nyc-times-true-scale-pilot.mjs'
       - 'tests/nyc-times-true-scale-pilot.test.mjs'
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/true-scale-browser-smoke.mjs'
       - '.github/workflows/nyc-times-true-scale-source.yml'
       - 'assets/nyc/times-square-footprints.json'
   workflow_dispatch:
@@ -31,6 +33,22 @@ jobs:
           node scripts/nyc-times-true-scale-pilot.mjs
           test -s artifacts/nyc-true-scale/source.json
           test -s artifacts/nyc-true-scale/plan.svg
+          cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
+      - name: Install browser for real measured-source WebGL2 acceptance
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve source snapshot in the separate 1:1 scene
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-true-scale > /tmp/nyc-source-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify actual WebGL2 metre-scene and capture screenshot
+        run: |
+          node tools/nyc/true-scale-browser-smoke.mjs
       - name: Upload measured-source pilot (NOT production game scene)
         if: always()
         uses: actions/upload-artifact@v4
