@@ -123,7 +123,8 @@ test('Manhattan only and preserves low graphics and map-switch fallback',()=>{
   const mapScenery=html.indexOf('createMapScenery();',build);
   assert.ok(dispose>0&&dispose<build&&build<mapScenery,
     'release previous signal meshes before rebuilding the new city landscape');
-  const mapCreation=html.slice(html.indexOf('function createMapScenery() {'),build);
+  const mapCreation=html.slice(html.indexOf('function createMapScenery() {'),
+    html.indexOf('const heroEpoch=++nycHeroEpoch;'));
   assert.ok(!mapCreation.includes('nycTimesSignalMeshes=null'),
     'late map scenery initialization must not destroy live signal geometry');
 
