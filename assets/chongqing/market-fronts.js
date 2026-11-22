@@ -226,6 +226,18 @@ export function buildChongqingMarketFronts({
         earth+5.6,z+2.42,.095,4.12,.16);
       position(lattice,x+dx,earth+6.35+(site.id==='tea-lane'?.23:-.18),
         z+2.42,4.04,.10,.16);
+      // These are actual low-poly shop fittings INSIDE the pane, not paint
+      // added to the glass or another copy of the exterior wood sash.
+      // Three staggered z depths create visible parallax against the old
+      // solid-blue window texture, at roughly a third of the outer facade cost.
+      position(beams,x+dx,earth+4.30,z+1.48,3.44,.20,.68);
+      position(beams,x+dx,earth+6.35+(site.id==='river-market'?.16:-.12),
+        z+1.57,3.65,.13,.40);
+      // Varied goods pedestal: inside at z+1.4, behind front glazing z+2.11.
+      position(beams,x+dx+(dx<0?-.96:.93),earth+4.62,
+        z+1.43,.64,.47,.48);
+      position(lattice,x+dx+(site.id==='stone-stair'?.56:-.48),
+        earth+5.21,z+1.71,.17,1.68,.18);
     }
     // Upper windows sit behind the 3D jambs, ahead of the old box wall.
     const upper=site.id==='tea-lane'?[-6.4,-2.15,2.2,6.35]:
@@ -240,6 +252,15 @@ export function buildChongqingMarketFronts({
       // Real projecting slate sill outside the jamb; not a painted line.
       position(stone,x+upper[i],earth+12.03,z+2.91,
         bayWidth+.18,.17,.46);
+      // Shallow inset timber privacy screens are spaced differently per
+      // storefront and sit IN FRONT of the backing but behind glazing.
+      // The second-floor shutters are genuine box volumes, not UV stripes.
+      position(lattice,x+upper[i]+(i%2?-.38:.38),
+        earth+13.40+(site.id==='tea-lane'?.16:0),z+1.61,
+        bayWidth*.29,1.38,.18);
+      if(i%2===0)
+        position(lattice,x+upper[i],earth+12.88,
+          z+1.68,bayWidth*.79,.13,.17);
     }
     for(const dx of [-8.4,-4.2,0,4.2,8.4]){
       // Two-storey dark timber window rhythm varies by archetype and does
@@ -300,6 +321,9 @@ export function buildChongqingMarketFronts({
     galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
     meshes:10,batchDraws:7,interiorBackings:interiors.count,
+    // 6 downstairs windows × (3 timber counters/shelves + 1 partition)
+    // + 12 upstairs shutters + 6 staggered upper timber slats.
+    interiorFittings:sites.length*14,
     openFacades:facades.length,
     // THREE.BufferGeometry.getIndex() is a BufferAttribute in real WebGL
     // (.count), unlike the array-based headless fixture (.length).
