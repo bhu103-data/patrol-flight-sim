@@ -130,6 +130,54 @@ function difference(a,b){
         'Black or empty production game screenshot');
       report.snapshots.push({mode,...summary});
       imgs.push(png);
+      if(mode==='on'){
+        // This exact original aircraft game, not the #248 standalone pilot:
+        // aircraft control must change actual native plane state in flight.
+        await page.keyboard.press('h');
+        await page.locator('#glCanvas').focus();
+        const before=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+        assert(before?.playing&&Array.isArray(before.position),'Real aircraft state missing');
+        await page.keyboard.down('w');
+        let movementObserved=false;
+        try{
+          await page.waitForFunction(start=>{
+            const now=window.PatrolSpaceBridge?.getState?.();
+            return now?.playing&&Array.isArray(now.position)&&
+              Math.hypot(...now.position.map((v,i)=>v-start.position[i]))>.02 &&
+              Math.abs(now.pitch-start.pitch)>.005;
+          },before,{polling:350,timeout:25000});
+          movementObserved=true;
+        }finally{await page.keyboard.up('w')}
+        assert(movementObserved,'W key never moved native original flight plane');
+        const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+        report.flightControl={
+          observed:true,input:'W',before:before.position,after:after.position,
+          pitchDelta:Math.abs(after.pitch-before.pitch)};
+        await page.locator('#flightMenuBtn').click({force:true});
+        await page.waitForFunction(()=>!document.querySelector('#titleOverlay')?.hidden,
+          null,{timeout:15000});
+        const startMap=async map=>{
+          await page.locator('input[name=flightMap][value='+map+']').check({force:true});
+          await page.locator('#startFlight').click({force:true});
+          await page.waitForFunction(()=>{
+            const a=document.querySelector('#loadOverlay'),
+              b=document.querySelector('#titleOverlay');
+            return a?.classList.contains('done')&&b?.hidden;
+          },null,{timeout:150000});
+          const state=await page.evaluate(()=>{
+            const g=document.querySelector('#glCanvas')?.getContext('webgl2');
+            return {state:window.PatrolSpaceBridge?.getState?.(),glError:g?.getError()};
+          });
+          assert.equal(state.state?.map,map,'Selected map switching failed');
+          assert(state.state?.playing,'Airplane did not resume after changing maps');
+          assert.equal(state.glError,0);
+          return {map,playing:true,glError:0};
+        };
+        const coast=await startMap('coast');
+        await page.locator('#flightMenuBtn').click({force:true});
+        const back=await startMap('manhattan');
+        report.crossMap={coast,back};
+      }
       await page.close();
     }
     report.difference=difference(imgs[0],imgs[1]);
