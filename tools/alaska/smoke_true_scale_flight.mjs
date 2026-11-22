@@ -50,6 +50,10 @@ try{
       start.sourceCollectionEnd===1347062400000&&
       start.sourceVerticalDatumEvidence?.includes('EPSG:5703 / GEOID09')&&
       start.sourceCoverageValidFraction===1&&
+      start.tileSeamP95Metres>0&&start.tileSeamP95Metres<=10&&
+      start.tileOverlapRmseMetres>=0&&start.tileOverlapRmseMetres<=.5&&
+      start.tileOverlapP95AbsMetres>=0&&start.tileOverlapP95AbsMetres<=1&&
+      start.sourceLicense==='USGS 3DEP public domain'&&
       start.sourceTileSha256?.length===2&&start.sourceTileSha256.every(x=>/^[a-f0-9]{64}$/.test(x))&&
       start.sourcePeak>1800&&start.sourcePeak<2000
     : fine
