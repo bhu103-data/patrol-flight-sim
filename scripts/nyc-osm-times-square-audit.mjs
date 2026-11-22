@@ -140,9 +140,19 @@ export function analyzeOsmFeatures(source,osm,{retrievedAt=new Date().toISOStrin
     },
     join:{
       uniqueMatches:matches.length,
-      ambiguousFids:ambiguous,
-      unmatchedFids:unmatched,
-      matches
+      ambiguousCount:ambiguous.length,
+      unmatchedCount:unmatched.length,
+      matchQuality:{
+        medianCentroidDistanceMeters:matches.length
+          ?Number([...matches].map(x=>x.centroidDistanceMeters).sort((a,b)=>a-b)[Math.floor(matches.length/2)].toFixed(3)):null,
+        maxCentroidDistanceMeters:matches.length
+          ?Math.max(...matches.map(x=>x.centroidDistanceMeters)):null,
+        minAreaRatio:matches.length
+          ?Math.min(...matches.map(x=>x.areaRatio)):null,
+        maxAreaRatio:matches.length
+          ?Math.max(...matches.map(x=>x.areaRatio)):null
+      },
+      matchPolicy:'unique candidate only; no FID/OSM-ID pair list exported'
     },
     tagCoverage:{
       denominatorUniqueMatches:matchedWays.length,
