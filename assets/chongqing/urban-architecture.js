@@ -186,12 +186,21 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
  const shopGlazing=new THREE.InstancedMesh(
    new THREE.PlaneGeometry(1,1),facadeGlassMat,32);
  const shopAwnings=new THREE.InstancedMesh(unit,awningMat,32);
+ // River-facing spandrels and roof-line cornices interrupt the flat,
+ // repeated-window silhouette without touching the collision footprint.
+ // Each building contributes only a few horizontal stone/metal courses.
+ const facadeCourseMat=new THREE.MeshStandardMaterial({
+   color:0xa5a49c,metalness:.12,roughness:.76
+ });
+ const facadeCourses=new THREE.InstancedMesh(unit,facadeCourseMat,240);
+ const facadeCornices=new THREE.InstancedMesh(unit,facadeCourseMat,48);
  for(const mesh of [facadeFrames,facadeGlazing,facadeMullions,
-   facadeSills,shopGlazing,shopAwnings]){
+   facadeSills,shopGlazing,shopAwnings,facadeCourses,facadeCornices]){
    mesh.count=0;mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
    mesh.castShadow=false;mesh.receiveShadow=true;
  }
- const stats={facadeBuildings:0,facadePanels:0,storefronts:0,
+ const stats={facadeBuildings:0,facadePanels:0,facadeCourses:0,
+   facadeCornices:0,storefronts:0,
    towers:0,balconies:0,airConditioners:0,rooftops:0,litWindows:0,
    residential:0,office:0,mixedUse:0,skippedRoadOverlap:0,skippedBridgeOverlap:0,
    skippedAdjacentBuilding:0,skippedUnbuildableTerrain:0,retainingWallTriangles:0,
@@ -288,6 +297,16 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
        const paneHeight=Math.min(2.45,Math.max(1.35,h/rows*.31));
        const front=z+face*dz*envelope.depth*.5;
        const id=stats.facadePanels++;
+       if(col===0&&row%3===0&&stats.facadeCourses<240){
+         // A real wall course belongs BELOW the glazed bay, not pasted
+         // through its aperture; thickness projects <0.4 world units.
+         const courseId=stats.facadeCourses++;
+         set(facadeCourses,courseId,x,yy-paneHeight*.5-.52,
+           front+face*.26,frontage*.98,.15,.30);
+         facadeCourses.setColorAt(courseId,color.set(
+           styleIndex===1||styleIndex===4?'#71848c':
+           styleIndex===2?'#b1a79a':'#a3a097'));
+       }
        // Metal reveal surrounds a true opening; glazing is recessed
        // behind its front face instead of sitting over a painted box.
        set(facadeFrames,id,xx,yy,front+face*.205,
@@ -298,6 +317,17 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
          .065,paneHeight+.05,.085);
        set(facadeSills,id,xx,yy-paneHeight*.5-.19,front+face*.30,
          paneWidth+.47,.11,.46);
+     }
+     // Roof parapet profile follows the physically stepped tower envelope,
+     // rather than extending a straight cornice across an upper setback.
+     if(stats.facadeCornices<48){
+       const top=chongqingTowerEnvelopeAt(profile,.49);
+       const topWidth=w*top.width,topDepth=dz*top.depth;
+       const id=stats.facadeCornices++;
+       set(facadeCornices,id,x,base+h-.32,
+         z+face*(topDepth*.5+.20),topWidth*.93,.32,.38);
+       facadeCornices.setColorAt(id,color.set(
+         styleIndex===1||styleIndex===4?'#8799a3':'#aca69a'));
      }
      // Ground-floor cafe/shop windows and restrained metal canopies only on
      // gently graded pads. Avoid the visibly floating storefront illusion on
@@ -388,7 +418,8 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
    [acs,stats.airConditioners],[windows,stats.litWindows],
    [facadeFrames,stats.facadePanels],[facadeGlazing,stats.facadePanels],
    [facadeMullions,stats.facadePanels],[facadeSills,stats.facadePanels],
-   [shopGlazing,stats.storefronts],[shopAwnings,stats.storefronts]]){
+   [shopGlazing,stats.storefronts],[shopAwnings,stats.storefronts],
+   [facadeCourses,stats.facadeCourses],[facadeCornices,stats.facadeCornices]]){
    mesh.count=n;mesh.instanceMatrix.needsUpdate=true;
    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
    if(n>0)mesh.computeBoundingSphere();
@@ -419,6 +450,10 @@ export function createChongqingUrbanArchitecture({THREE,scene,ground,riverDist,r
      facadeMullions.visible=!lowDetail;
      facadeSills.visible=!lowDetail;
      shopAwnings.visible=!lowDetail;
+     // Simple silhouette courses stay visible in low quality (few pieces);
+     // intricate window trims remain quality-gated.
+     facadeCourses.visible=true;
+     facadeCornices.visible=true;
      updateInteriorLight();
    }
  };
