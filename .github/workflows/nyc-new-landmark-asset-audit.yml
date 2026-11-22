@@ -1,0 +1,81 @@
+name: Review NEW NYC landmark GLBs and Sketchfab rights (not game import)
+on:
+  push:
+    branches:
+      - review/nyc-new-landmark-glb-provenance-20261121
+    paths:
+      - tools/nyc/audit-new-landmark-candidates.mjs
+      - .github/workflows/nyc-new-landmark-asset-audit.yml
+      - docs/NYC_NEW_FREE_GLB_SCREENING.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: nyc-new-only-glb-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-rights-and-original-geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check audit script syntax; no production files touched
+        run: node --check tools/nyc/audit-new-landmark-candidates.mjs
+      - name: Obtain original publisher CC0 NYC Liberty Island GLB and license page
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nyc-new-landmark-audit
+          curl --fail --show-error --silent --location --retry 2 --max-time 50 \
+            'https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f' \
+            -o artifacts/nyc-new-landmark-audit/innerscene-page.html
+          curl --fail --show-error --silent --location --retry 2 --max-time 180 \
+            'https://www.innerscene.com/api/library/statue-of-liberty-on-its-pedestal-c8a7318f/download' \
+            -o /tmp/nyc-statue-on-pedestal.glb
+          test "$(stat -c%s /tmp/nyc-statue-on-pedestal.glb)" -gt 1000
+          test "$(stat -c%s /tmp/nyc-statue-on-pedestal.glb)" -lt 18000000
+          grep -q 'Original Innerscene model' artifacts/nyc-new-landmark-audit/innerscene-page.html
+          grep -q 'Public domain (CC0)' artifacts/nyc-new-landmark-audit/innerscene-page.html
+      - name: Check official Sketchfab creator, CC BY 4.0, face counts and authorization obstacle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for id in \
+            a1ea746e42d6499080d73db514848d6b \
+            84094e8d5e724b5c882cf576ca12e44e \
+            44e60b2d0d764fdab74d33703847d38e; do
+              model="https://api.sketchfab.com/v3/models/${id}"
+              metadata_status=$(curl -L -sS --max-time 50 -w '%{http_code}' \
+                "${model}" -o "/tmp/sf-${id}.json") || metadata_status=network-error
+              download_status=$(curl -L -sS --max-time 50 -w '%{http_code}' \
+                "${model}/download" -o "/tmp/sf-download-${id}.json") || download_status=network-error
+              export SF_ID="$id" SF_META_STATUS="$metadata_status" SF_DOWNLOAD_STATUS="$download_status"
+              node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const id=process.env.SF_ID;
+          let m={};
+          try{m=JSON.parse(readFileSync('/tmp/sf-'+id+'.json','utf8'));}catch{}
+          const metadata={};
+          for(const key of ['uid','name','isDownloadable','faceCount','vertexCount','license','description'])
+            if(m[key]!==undefined)metadata[key]=m[key];
+          metadata.user=m.user?{username:m.user.username,displayName:m.user.displayName,profileUrl:m.user.profileUrl}:null;
+          writeFileSync('artifacts/nyc-new-landmark-audit/sketchfab-'+id+'.json',
+            JSON.stringify({metadataHTTP:Number(process.env.SF_META_STATUS)||process.env.SF_META_STATUS,
+              downloadHTTP:Number(process.env.SF_DOWNLOAD_STATUS)||process.env.SF_DOWNLOAD_STATUS,
+              metadata},null,2)+String.fromCharCode(10));
+          NODE
+          done
+      - name: Independently parse GLB triangles and embedded texture byte budget
+        run: node tools/nyc/audit-new-landmark-candidates.mjs
+      - name: Publish evidence only, never automatically import a candidate into Manhattan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-new-cc0-ccby-glb-geometry-and-rights
+          path: artifacts/nyc-new-landmark-audit/
+          retention-days: 10
+          if-no-files-found: ignore
