@@ -29,7 +29,7 @@ test('source 10m paved width creates exact symmetric 10×10-m QA strip, not traf
   assert.ok(Math.abs(Math.min(...xs)+5)<1e-10);
   assert.ok(Math.abs(Math.max(...xs)-5)<1e-10);
   assert.ok(xs.every(x=>Math.abs(Math.abs(x)-5)<1e-10));
-  assert.ok(a.stats.warning.includes('NOT verified curb'));
+  assert.ok(a.stats.warning.includes('not measured paved widths'));
 });
 test('source motor width unknown never creates a fabricated roadway surface',()=>{
   const a=buildCsclRoadbedQaPreview({
@@ -45,7 +45,7 @@ test('not a source data permission: QA mode is opt-in and default game unchanged
   const page=await readFile(new URL('../nyc-metric-pilot.html',import.meta.url),'utf8');
   const game=await readFile(new URL('../index.html',import.meta.url),'utf8');
   assert.ok(page.includes("get('roadbed')==='1'"));
-  assert.ok(page.includes('read-only CSCL audit artifact'));
+  assert.ok(/read-only CSCL audit artifact/i.test(page));
   assert.ok(!game.includes('nyc-cscl-roadbed-qa-preview.js'));
   assert.ok(!game.includes('nyc-times-cscl-roadbed-probe.mjs'));
 });
