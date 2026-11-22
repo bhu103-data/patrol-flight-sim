@@ -34,13 +34,23 @@ class BK02OtiMatchTest(unittest.TestCase):
                 self.assertTrue(math.isfinite(row["centroidDistanceM"]))
                 self.assertGreater(row["sourceToOtiAreaRatio"],0)
             if row["matchStatus"]=="high-confidence-footprint-match":
+                self.assertTrue(row["assignedOneToOne"],
+                  "High-confidence candidates must have an exclusive source-object assignment")
                 self.assertGreaterEqual(row["footprintIoU"],.85)
                 self.assertLessEqual(row["centroidDistanceM"],1.0)
+            if not row["assignedOneToOne"]:
+                self.assertNotEqual(row["matchStatus"],"high-confidence-footprint-match")
     def test_relative_height_comparison_is_not_promoted_to_absolute_elevation(self):
         for row in self.data["matches"]:
             evidence=row["sourceHeightEvidence"]
+            if evidence is None:
+                self.assertEqual(row["heightComparisonStatus"],"not-comparable")
+                self.assertIsNone(row["heightDeltaFeet"])
+                continue
             if evidence["sourceRelativeHeightRhinoFeet"] is not None:
                 self.assertTrue(math.isfinite(evidence["sourceRelativeHeightRhinoFeet"]))
                 self.assertIn(row["heightComparisonStatus"],
                   ("within-2m","within-5m","height-difference-over-5m"))
+            else:
+                self.assertEqual(row["heightComparisonStatus"],"not-comparable")
 if __name__=="__main__":unittest.main()
