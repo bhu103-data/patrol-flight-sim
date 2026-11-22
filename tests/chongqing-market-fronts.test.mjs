@@ -115,7 +115,8 @@ test('all 21 panes sit behind physical jambs with varied projecting sashes and s
   assert.equal(stone.count,27,'four added upper sills per shop');
   assert.equal(lattice.count,58,'varied timber trim without another GPU draw');
   for(const s of sites){
-    const panes=glass.transforms.filter(t=>Math.abs(t.pos[2]-(s.z+2.11))<.0001);
+    const panes=glass.transforms.filter(t=>
+      Math.abs(t.pos[2]-(s.z+2.11))<.0001&&Math.abs(t.pos[0]-s.x)<9.5);
     assert.equal(panes.length,7);
     for(const card of panes){
       assert.ok((s.z+2.78)-(card.pos[2]+card.scale[2]/2)>.58,
