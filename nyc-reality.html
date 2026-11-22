@@ -17,6 +17,7 @@
     #metrics { color:#bfe5ff; font-variant-numeric:tabular-nums; }
     #limits { color:#e9c6a8; font-size:12px; }
     #selected { color:#c8eacd; }
+    #roadStatus { color:#aee7f4; font-variant-numeric:tabular-nums; }
     #controls { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0 7px; }
     button { padding:8px 10px; color:#eaf5ff; background:#173c55;
       border:1px solid #6b93ad; border-radius:7px; font:inherit; cursor:pointer; }
@@ -36,6 +37,7 @@
     <p><strong>True WGS84 horizontal positions · 1 unit = 1 meter</strong></p>
     <p id="metrics">Loading municipal building polygons…</p>
     <p id="selected">Click a building to inspect its municipal FID and roof height.</p>
+    <p id="roadStatus" aria-live="polite">Official DCM street centerlines: loading…</p>
     <div id="controls">
       <button id="aerial" type="button">Aerial</button>
       <button id="street" type="button">Street-height</button>
@@ -44,7 +46,8 @@
     <small>W/A/S/D: move · E/Q: rise/descend · drag: look · Shift: faster</small>
     <p id="limits">This is a source-based <strong>geometry validator, not a photorealistic Manhattan release</strong>.
       Materials are illustrative, ground is a flat zero datum, municipal sample is incomplete;
-      no LION streets, accurate facades, billboards, terrain, collisions or flight physics yet.
+      DCM lines are <strong>street centerlines only, not curb lines or drivable roads</strong>;
+      no lane geometry, accurate facades, billboards, terrain, collisions or flight physics yet.
       No Google imagery or proprietary 3D models are included.</p>
     <p><small>Source: NYC municipal Building Footprints, bundled snapshot dated 2026-11-20.
       Original source IDs and heights preserved. Two multi-ring records are withheld rather
@@ -56,10 +59,13 @@
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
     import {auditTimesSquareSnapshot, NYC_REALITY_ORIGIN}
       from './assets/nyc/nyc-reality-projection.mjs';
+    import {fetchOfficialDCM}
+      from './assets/nyc/nyc-reality-street-centerlines.mjs';
 
     const canvas = document.getElementById('stage');
     const metrics = document.getElementById('metrics');
     const selected = document.getElementById('selected');
+    const roadStatus = document.getElementById('roadStatus');
     const status = document.getElementById('status');
     const errorLabel = document.getElementById('error');
     const scene = new THREE.Scene();
@@ -93,6 +99,10 @@
       .map(color=>new THREE.MeshStandardMaterial({color, roughness:.84, metalness:.06}));
     const edgeMaterial = new THREE.LineBasicMaterial({color:0xb7d3e4,transparent:true,opacity:.48});
     const buildings = [];
+    const builtLineMaterial = new THREE.LineBasicMaterial({color:0x34b9df});
+    const recordedLineMaterial = new THREE.LineDashedMaterial({
+      color:0xf8b24f,dashSize:4,gapSize:3
+    });
     const keys = new Set();
     const raycaster = new THREE.Raycaster();
     let yaw = 0, pitch = 0, dragging = false, moved = false, lastX = 0, lastY = 0;
@@ -179,6 +189,21 @@
       scene.add(line);
     }
 
+    function addOfficialDCMRoad(record) {
+      // A source centerline must never be turned into an invented roadbed.
+      for(const line of record.metreLines){
+        if(line.length<2)continue;
+        const positions=line.map(([east,north])=>
+          new THREE.Vector3(east,0.075,-north));
+        const geometry=new THREE.BufferGeometry().setFromPoints(positions);
+        const ink=new THREE.Line(geometry,record.built?
+          builtLineMaterial:recordedLineMaterial);
+        if(!record.built)ink.computeLineDistances();
+        ink.userData={source:'NYC DCM',objectId:record.objectId,
+          streetName:record.name,built:record.built};
+        scene.add(ink);
+      }
+    }
     function resize(){
       const w=canvas.clientWidth,h=canvas.clientHeight;
       if (canvas.width !== Math.round(w*renderer.getPixelRatio()) ||
@@ -219,6 +244,21 @@
         ' withheld · original roof heights in metres, no 0.32× compression';
       aerial();
       renderer.setAnimationLoop(frame);
+      // Official DCP/OTI DCM source. No fictional fallback or invented widths.
+      try {
+        const roads=await fetchOfficialDCM();
+        for(const record of roads.records)addOfficialDCMRoad(record);
+        roadStatus.textContent='Official DCM: '+roads.records.length+
+          ' records / '+roads.totalLines+' centerline pieces · '+
+          roads.builtCount+' marked improved city streets · not lanes or curbs';
+        window.PatrolRealityStreetStatus={status:'loaded',count:roads.records.length,
+          lines:roads.totalLines,built:roads.builtCount,origin:roads.origin};
+        console.info('[PATROL] NYC official DCM meter centerlines',window.PatrolRealityStreetStatus);
+      }catch(err){
+        roadStatus.textContent='Official DCM unavailable: '+String(err.message||err);
+        window.PatrolRealityStreetStatus={status:'error',message:String(err.message||err)};
+        console.warn('[PATROL] DCM streets not loaded; no fallback',err);
+      }
       console.info('[PATROL] NYC Reality 1:1 pilot', {
         shown:audit.accepted.length, withheld:audit.rejected,
         origin:audit.origin,units:audit.units,knownLimits:audit.knownLimits
