@@ -24,10 +24,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install GDAL command-line tools
+      - name: Install GDAL and geometry QA dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes gdal-bin
+          python -m pip install --disable-pip-version-check shapely pyproj
 
       - name: Test the source inspection helpers
         run: python -m unittest discover -s tests -p "test_nyc_tum_citygml_streetspace_qa.py" -v
@@ -44,12 +45,18 @@ jobs:
           curl --fail --location --retry 4 --retry-delay 5 --connect-timeout 30 --max-time 1800 \
             "https://www.3dcitydb.net/3dcitydb/fileadmin/public/datasets/NYC/NYC_street_space_CityGML_LoD2/NYC_CityGML_LoD2_Median_Painted.zip" \
             --output /tmp/nyc-tum-source/NYC_CityGML_LoD2_Median_Painted.zip
-          sha256sum /tmp/nyc-tum-source/*.zip
+          curl --fail --location --retry 4 --retry-delay 5 --connect-timeout 30 --max-time 1800 --get \
+            --data-urlencode '$where=within_box(the_geom,40.753539,-73.991040,40.761460,-73.981483)' \
+            --data-urlencode '$limit=5000' \
+            "https://data.cityofnewyork.us/resource/inkn-q76z.geojson" \
+            --output /tmp/nyc-tum-source/current-cscl-2026.geojson
+          sha256sum /tmp/nyc-tum-source/*.zip /tmp/nyc-tum-source/current-cscl-2026.geojson
 
-      - name: Inspect CRS, layers, features and clip Times Square ROI
+      - name: Inspect CRS, validate geometry and compare against current CSCL
         run: |
           python tools/nyc/tum_citygml_streetspace_qa.py \
             --input-dir /tmp/nyc-tum-source \
+            --current-cscl /tmp/nyc-tum-source/current-cscl-2026.geojson \
             --output-dir artifacts/nyc-tum-streetspace \
             --bbox -73.991040 40.753539 -73.981483 40.761460
 
