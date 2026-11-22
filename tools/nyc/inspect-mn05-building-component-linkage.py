@@ -232,6 +232,13 @@ def inspect() -> None:
                     "faceCount": len(geom.Faces) if hasattr(geom, "Faces") else None,
                 })
 
+        for role in ("footprint", "roof", "facade"):
+            for field in (
+                "totalObjects", "roiObjects", "roiBreps",
+                "roiObjectsWithGroups", "roiObjectsWithNames",
+                "roiObjectsWithUserStrings", "missingBoundingBox",
+            ):
+                counters[role].setdefault(field, 0)
         report["layers"] = {
             role: dict(counters[role])
             for role in ("footprint", "roof", "facade")
