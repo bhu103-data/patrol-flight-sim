@@ -1,0 +1,35 @@
+{
+  "format": "patrol-usgs-arcgis-export-actual-extent-v1",
+  "source": "USGS 3DEP ArcGIS ImageServer exportImage f=json",
+  "originalRaster": "assets/alaska/tracy-arm-3dep.json",
+  "requestedBboxWgs84": [
+    -133.265,
+    57.851,
+    -133.135,
+    57.923
+  ],
+  "actualPixelBboxWgs84": [
+    -133.265,
+    57.822,
+    -133.135,
+    57.952
+  ],
+  "outputImageSize": [
+    256,
+    256
+  ],
+  "outputCrs": "EPSG:4326",
+  "serverDefaultAdjustAspectRatio": true,
+  "verifiedDate": "2026-11-22",
+  "originalRequestUrl": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox=-133.265%2C57.851%2C-133.135%2C57.923&bboxSR=4326&imageSR=4326&size=256%2C256&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image",
+  "actualExtentLookupUrl": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox=-133.265%2C57.851%2C-133.135%2C57.923&bboxSR=4326&imageSR=4326&size=256%2C256&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=json",
+  "withDisabledAspectBboxWgs84": [
+    -133.265,
+    57.851,
+    -133.135,
+    57.923
+  ],
+  "evidence": "GitHub Actions run 45042134667; source query f=json returned exact effective extents in alaska-tracyarm-registration-audit.json",
+  "status": "Source pixel-to-latitude registration corrected for separate real-coordinate pilot; does not alter existing integrated PATROL terrain or original archived raster bytes",
+  "verticalDatumWarning": "USGS service ImageServer returned 4326 horizontal CRS only; IfSAR project index indicates EPSG:5703 but exported TIFF vertical conversion still not independently proven"
+}
