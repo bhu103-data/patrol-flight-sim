@@ -1,4 +1,5 @@
-name: NYC 2014 authentic MN05 baked Brep rooftop mesh extraction
+name: NYC 2014 authentic MN05 roof and facade Brep mesh extraction
+# Runs on the stacked facade child only when the original source/mesh files change
 on:
   pull_request:
     paths:
