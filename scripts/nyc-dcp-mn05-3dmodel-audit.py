@@ -57,8 +57,8 @@ def intersects(a, b):
 
 def layer_name(model, index):
     try:
-        layer = model.Layers[index]
-        return getattr(layer, "FullPath", None) or layer.Name
+        layer = model.Layers.FindIndex(index)
+        return layer.Name if layer is not None else "layer-index-" + str(index)
     except Exception:
         return "layer-index-" + str(index)
 
@@ -167,9 +167,10 @@ def inspect(model_path: Path, report_path: Path):
     for layer in model.Layers:
         layers.append({
             "index": layer.Index,
-            "name": getattr(layer, "FullPath", None) or layer.Name,
-            "visible": layer.IsVisible,
-            "locked": layer.IsLocked,
+            "name": layer.Name,
+            "fullPath": getattr(layer, "FullPath", None),
+            "visible": getattr(layer, "IsVisible", None),
+            "locked": getattr(layer, "IsLocked", None),
         })
 
     target_layer_report = {}
