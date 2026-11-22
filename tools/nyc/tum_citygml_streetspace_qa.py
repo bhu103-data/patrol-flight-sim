@@ -657,6 +657,21 @@ def main() -> int:
         report["currentCscl"] = current_cscl_comparison(roadbed_path, args.current_cscl, args.output_dir, bbox, args.cscl_buffer_degrees)
         if report["currentCscl"]["featureCountIntersectingExactRoi"] == 0:
             report["errors"].append("Current CSCL query returned zero ROI features")
+        else:
+            match_summary = report["currentCscl"]["tumRoadbedToCurrentCscl"]
+            spatial_mismatches = match_summary["physicalIdSpatialMismatchCount"]
+            if spatial_mismatches:
+                report["warnings"].append(
+                    f"{spatial_mismatches} TUM physical-ID candidates are more than 10m from their roadbed centroid; "
+                    "the report records the original ID distance and uses a nearer same-name CSCL segment only when it is closer"
+                )
+            lane_compared = match_summary["totalLaneCountComparedCount"]
+            lane_agreed = match_summary["totalLaneCountAgreementCount"]
+            if lane_compared and lane_agreed / lane_compared < 0.8:
+                report["warnings"].append(
+                    f"2016 TUM lane counts agree with current CSCL for {lane_agreed}/{lane_compared} matched roadbeds; "
+                    "do not use TUM lane counts as current routing truth"
+                )
     except Exception as error:
         report["errors"].append(f"current CSCL comparison: {error}")
 
