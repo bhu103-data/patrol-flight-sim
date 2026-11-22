@@ -26,16 +26,16 @@
 <canvas id="scene" tabindex="0" aria-label="Flightable real-coordinate Tracy Arm USGS terrain"></canvas>
 <div class="hud">
   <h1>TRACY ARM · real-coordinate terrain pilot</h1>
-  <p class="hint">256² USGS 3DEP source elevation · true east/north metres · original mountain relative relief</p>
+  <p class="hint">256² USGS source elevation · real east/north metres · original mountain relief · licensed CC0 photographic rock/snow/forest</p>
   <p id="status" role="status">Loading the original source DEM and building terrain…</p>
   <p class="small">W/S forward/back · A/D strafe · Q/E descend/climb · arrows or drag to look · Shift fast · R reset</p>
   <p><a href="./index.html">Return to PATROL</a></p>
 </div>
-<div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed coastline, orthoimagery, verified vertical datum or post-2025 glacier reconstruction.</div>
+<div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed shoreline, orthoimagery or verified vertical datum. Local Poly Haven CC0 PBR atlas is photographic but not an on-site scan.</div>
 <script type="module">
 import {decodeAlaskaDEM} from './assets/alaska/usgs-dem.js';
-import {rasterCellToLocalEnu,sourceTileOrigin,wgs84ToLocalEnu,
-  localEnuToWgs84,sampleSourceElevationMetres,oldPatrolGamePointToWgs84,
+import {rasterCellToLocalEnu,sourceTileOrigin,
+  localEnuToWgs84,sampleSourceElevationMetres,
   validateTracyArmRaster} from './assets/alaska/tracy-arm-geodesy.js';
 
 const canvas=document.getElementById('scene'),status=document.getElementById('status');
@@ -61,34 +61,60 @@ in vec3 vNormal;
 in float vWater;
 uniform vec3 uCamera;
 uniform float uTime;
+uniform sampler2D uAlbedo;
+uniform bool uPhoto;
 out vec4 fragColor;
+vec3 atlasColor(float tile,vec3 n){
+  // Choose a locally planar projection on steep cliffs: no stretched
+  // bird's-eye UV on vertical rock. Tiling in real-world metres.
+  vec3 a=abs(n);vec2 uv;
+  if(a.y>=a.x&&a.y>=a.z)uv=vPos.xz;
+  else if(a.x>=a.z)uv=vPos.zy;
+  else uv=vPos.xy;
+  uv=clamp(fract(uv/26.0),vec2(.008),vec2(.992));
+  vec2 atlasUV=vec2((tile+uv.x)/4.0,uv.y);
+  return texture(uAlbedo,atlasUV).rgb;
+}
 void main(){
   vec3 n=normalize(vNormal);
-  vec3 sun=normalize(vec3(0.43,0.82,-0.39));
-  float brightness=0.28+0.72*max(dot(n,sun),0.0);
+  // Side-lit granite walls, with enough ambient to avoid solid black cliffs.
+  vec3 sun=normalize(vec3(-.52,.76,-.31));
+  float brightness=.49+.51*max(dot(n,sun),0.0);
   vec3 color;
   if(vWater>0.5){
     float wave=sin(vPos.x*.027+vPos.z*.042+uTime*.58)*.5+
                sin(vPos.z*.036-vPos.x*.018-uTime*.43)*.5;
     color=mix(vec3(.024,.14,.19),vec3(.062,.28,.32),.46+wave*.17);
-    brightness=.85;
+    brightness=.91;
   }else{
     float cliff=1.0-clamp(n.y,0.0,1.0);
     float treeline=1.0-smoothstep(390.0,710.0,vPos.y);
-    vec3 vegetation=mix(vec3(.14,.27,.18),vec3(.25,.36,.26),smoothstep(80.0,390.0,vPos.y));
-    vec3 stone=mix(vec3(.31,.32,.31),vec3(.46,.45,.44),smoothstep(180.0,1400.0,vPos.y));
-    color=mix(stone,vegetation,treeline*(1.0-smoothstep(.13,.46,cliff)));
+    vec3 vegetation=mix(vec3(.14,.27,.18),vec3(.25,.36,.26),
+      smoothstep(80.0,390.0,vPos.y));
+    vec3 stone=mix(vec3(.35,.36,.36),vec3(.52,.51,.49),
+      smoothstep(180.0,1400.0,vPos.y));
+    float forestMix=treeline*(1.0-smoothstep(.13,.46,cliff));
+    color=mix(stone,vegetation,forestMix);
     float snow=smoothstep(650.0,1000.0,vPos.y)*(.90-.28*cliff);
     color=mix(color,vec3(.79,.86,.91),snow);
+    if(uPhoto){
+      // Existing, bundled Poly Haven CC0 atlas: rock / snow / forest floor.
+      // NOT captured on-site; only photographic surface detail.
+      vec3 rock=atlasColor(0.0,n);
+      vec3 forest=atlasColor(2.0,n);
+      vec3 ice=atlasColor(1.0,n);
+      vec3 photos=mix(rock,forest,forestMix);
+      photos=mix(photos,ice,snow);
+      color=mix(color,photos,.78);
+    }
   }
   color*=brightness;
   float distanceToCamera=length(vPos-uCamera);
   float haze=clamp((distanceToCamera-1700.0)/7800.0,0.0,.72);
   color=mix(color,vec3(.57,.69,.76),haze);
-  color=pow(max(color,vec3(0.0)),vec3(.94));
+  color=pow(max(color,vec3(0.0)),vec3(.90));
   fragColor=vec4(color,1.0);
-}
-`;
+}`;
 function compile(type,src){
   const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))
@@ -104,6 +130,32 @@ if(!gl.getProgramParameter(program,gl.LINK_STATUS))
 const uViewProj=gl.getUniformLocation(program,'uViewProj');
 const uCamera=gl.getUniformLocation(program,'uCamera');
 const uTime=gl.getUniformLocation(program,'uTime');
+const uAlbedo=gl.getUniformLocation(program,'uAlbedo');
+const uPhoto=gl.getUniformLocation(program,'uPhoto');
+let photoTexture=null,photoReady=false;
+async function loadLocalCC0Atlas(){
+  try{
+    const photo=new Image();
+    photo.src='./assets/alaska/alaska-photo-albedo.webp';
+    await photo.decode();
+    if(photo.naturalWidth!==1024||photo.naturalHeight!==256)
+      throw Error('Unexpected photographic atlas dimensions');
+    const t=gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,photo);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    photoTexture=t;photoReady=true;
+  }catch(error){
+    console.warn('Tracy Arm source-scale CC0 photographic fallback',error);
+    photoReady=false;
+  }
+}
 gl.enable(gl.DEPTH_TEST);
 gl.disable(gl.CULL_FACE);
 
@@ -147,7 +199,7 @@ function multiply(a,b){
 const keys=new Set(),pose={xyz:[0,240,0],yaw:0,pitch:-.12};
 let bounds,dem,land,sea,origin,frameCount=0,previous=0,elapsed=0,active=false;
 let lastFrameSeconds=0,glErrors=[];
-const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=0;pose.pitch=-.08};
+const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=-.48;pose.pitch=-.09};
 let spawn=[0,240,0];
 document.addEventListener('keydown',e=>{
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))
@@ -212,6 +264,10 @@ function draw(frameTime){
   gl.uniformMatrix4fv(uViewProj,false,new Float32Array(vp));
   gl.uniform3fv(uCamera,new Float32Array(pose.xyz));
   gl.uniform1f(uTime,elapsed);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D,photoTexture);
+  gl.uniform1i(uAlbedo,0);
+  gl.uniform1i(uPhoto,photoReady);
   for(const m of [land,sea]){
     gl.bindVertexArray(m.vao);
     gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
@@ -272,10 +328,14 @@ async function boot(){
     sx,waterY,nz, 0,1,0, 1,
     ex,waterY,nz, 0,1,0, 1
   ],[0,2,1,1,2,3]);
-  const [spawnLon,spawnLat]=oldPatrolGamePointToWgs84(dem,-19,-667);
-  const [e,north]=wgs84ToLocalEnu(spawnLon,spawnLat,0,...origin);
-  // GPS anchor taken from the existing safe-water DEM source sample.
-  spawn=[e,225,north];
+  // A wider measured fjord channel in the original south-first USGS raster.
+  // Cell (170,105) is water; starting in the old route's narrow edge channel
+  // blocked the camera with a nearly full-screen rock face.
+  if(dem.heights[105*dem.width+170]>1)
+    throw Error('Survey-source launch channel unexpectedly dry');
+  const [e,north]=rasterCellToLocalEnu(dem,170,105,0);
+  spawn=[e,320,north];
+  await loadLocalCC0Atlas();
   initial();
   active=true;
   status.textContent='Source terrain loaded: '+count.toLocaleString()+
@@ -289,7 +349,7 @@ window.PatrolTrueScaleQA=()=>({
   terrainPeak:dem?.heights.reduce((h,y)=>Math.max(h,y),0)||0,
   bounds:bounds?{...bounds}:null,origin:origin?[...origin]:null,
   camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
-  gpuErrors:[...glErrors],lastFrameSeconds
+  gpuErrors:[...glErrors],lastFrameSeconds,photoReady
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
 </script>
