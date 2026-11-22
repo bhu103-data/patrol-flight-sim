@@ -139,6 +139,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
       // Downward x-z winding creates upward +Y roofs and outward wall normals.
       const ring=signed(part)>0?part.slice().reverse():part;
       const top=ground+h;
+      let pieceWindows=0;
       for(let k=0;k<ring.length;k++){
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
@@ -199,8 +200,24 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
           floors=Math.min(12,Math.floor((h-2.2)/2.35));
-        for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
-          if(windows>=2200)break;
+        if(bays<1||floors<1)continue;
+        // PATROL_NYC_GIS_FAIR_WINDOW_COVERAGE_V1: the former unbounded
+        // row-major traversal exhausted all 2,200 windows halfway through
+        // the 76 distinct clipped source footprints. Later Times Square
+        // buildings then rendered as unbroken masonry slabs in the LED
+        // canyon even though their real polygon walls were present.
+        //
+        // Keep the same 2,200-glass-quad global cap and source coordinates,
+        // but reserve <=28 panes PER piece, stratified across every eligible
+        // edge and multiple floor elevations. This makes windows visible on
+        // distant facades too, without adding a shader/draw call or fake lot.
+        const edgeQuota=Math.max(2,Math.floor(28/Math.max(4,ring.length)));
+        const rowBands=Math.min(floors,Math.max(2,Math.ceil(Math.sqrt(edgeQuota))));
+        const colBands=Math.min(bays,Math.max(1,Math.floor(edgeQuota/rowBands)));
+        for(let rr=0;rr<rowBands;rr++)for(let bb=0;bb<colBands;bb++){
+          if(windows>=2200||pieceWindows>=28)break;
+          const row=Math.min(floors-1,Math.floor((rr+.5)*floors/rowBands));
+          const bay=Math.min(bays-1,Math.floor((bb+.5)*bays/colBands));
           const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
           const q=(t,y)=>[a[0]+(b[0]-a[0])*t+nx*.045,y,
             a[1]+(b[1]-a[1])*t+nz*.045];
@@ -209,7 +226,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           const shade=((rec.fid+row*17+bay*31)%11);
           const tint=shade<2?[.43,.51,.54]:shade<4?[.17,.26,.30]:[.12,.20,.25];
           addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint,7);
-          windows++;
+          windows++;pieceWindows++;
         }
       }
       // Finish transition: one slim horizontal cornice near the crown and
