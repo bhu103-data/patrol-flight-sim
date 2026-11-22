@@ -941,14 +941,14 @@ function scenicView(key){
     }
   }
   if(key==='Digit8'){
-    const site=marketFronts.snapshot()[1]??marketFronts.snapshot()[0];
+    const site=marketFronts.snapshot()[2]??marketFronts.snapshot()[1];
     if(site){
-      // A second, closer angle reveals the physical window jamb depth;
+      // Inspect the river-facing third shop at pedestrian-like elevation;
       // Digit7 stays unchanged for baseline before/after comparisons.
       const eyeX=site.x+3,eyeZ=site.z+18;
       destinations.Digit8={
         name:'山城商铺 · 实体窗洞近景',
-        pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
+        pos:[eyeX,ground(eyeX,eyeZ)+9,eyeZ],
         target:[site.x,site.base+9.6,site.z+2.6],
         // Aim the lens at two ground openings rather than the pilot's helmet.
         // Only Digit8 gets this inspect target; player camera control is unchanged.
@@ -967,7 +967,7 @@ function scenicView(key){
   jumpQueued=false;
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
-  viewPitch=key==='Digit8'?-.22:key==='Digit7'?-.28:.23;
+  viewPitch=key==='Digit8'?-.12:key==='Digit7'?-.28:.23;
   cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
@@ -1336,6 +1336,9 @@ function updateCamera(dt){
   // The collision-safe camera stays behind the player, but this one inspector
   // looks at the physical door/window reveals instead of centering the avatar.
   if(marketDetailTarget)cameraAim.set(...marketDetailTarget);
+  // Hide ONLY the pilot mesh while inspecting a facade; movement resets it.
+  // Keep the full avatar rig, collision, and third-person camera unmodified.
+  avatar.visible=!marketDetailTarget;
   camera.lookAt(cameraAim);
   const desiredFov=68+clamp((speed-26)*.24,0,15);
   const newFov=camera.fov+(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
@@ -1417,7 +1420,8 @@ window.PatrolSpaceBridge={getState:()=>({
   marketGalleryInstances:marketFronts.stats.instances,
   marketOpenFacades:marketFronts.stats.openFacades,
   marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles,
-  marketDetailInspect:Boolean(marketDetailTarget)
+  marketDetailInspect:Boolean(marketDetailTarget),
+  marketDetailAvatarHidden:!avatar.visible
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
