@@ -51,6 +51,7 @@ try{
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   const initial=await page.locator('#scene').screenshot({
     path:out+'/01-true-scale-flythrough.png',timeout:90000});
+  const initialCapturedUTC=new Date().toISOString();
   const png=PNG.sync.read(initial);
   let pixels=0;
   for(let y=45;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
@@ -92,13 +93,16 @@ try{
     'Registration drift between the two original same-pose screenshots');
   const repeated=await page.locator('#scene').screenshot({
     path:out+'/01b-registered-street-eye-repeat.png',timeout:90000});
+  const repeatedCapturedUTC=new Date().toISOString();
+  check(Date.parse(repeatedCapturedUTC)>Date.parse(initialCapturedUTC),
+    'Real screenshot timestamps did not advance between captures');
   report.registeredEvidence=[
     {image:'01-true-scale-flythrough.png',
       sha256:createHash('sha256').update(initial).digest('hex'),
-      capturedUTC:new Date().toISOString(),record:camera1},
+      capturedUTC:initialCapturedUTC,record:camera1},
     {image:'01b-registered-street-eye-repeat.png',
       sha256:createHash('sha256').update(repeated).digest('hex'),
-      capturedUTC:new Date().toISOString(),record:camera2}
+      capturedUTC:repeatedCapturedUTC,record:camera2}
   ];
   await page.keyboard.down('w');
   await page.waitForTimeout(900);
