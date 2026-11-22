@@ -9,7 +9,7 @@ const renderer=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const {buildAlaskaFjordDetail}=await import('data:text/javascript;base64,'+
   Buffer.from(moduleSource).toString('base64'));
 
-test('all 86 afloat floe snowcaps select existing glacier PBR surface 12',()=>{
+test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
   const triangles=[];
   const stats=buildAlaskaFjordDetail({
     waterY:12.2,terrainAt:()=>11,
@@ -26,18 +26,22 @@ test('all 86 afloat floe snowcaps select existing glacier PBR surface 12',()=>{
   assert.equal(stats.iceFloes,86);
   assert.equal(stats.iceFloesRejectedShore,0);
   assert.equal(snowcaps.length,expected);
-  assert.ok(snowcaps.every(face=>face.surface===12),
-    'floe top must use existing surface 12 rather than flat untagged vertex color');
+  assert.ok(snowcaps.every(face=>face.surface===13),
+    'floe top must use mirrored CC0 surface 13 rather than flat vertex color');
   assert.ok(snowcaps.every(({a,b,c})=>
     Math.abs(a[1]-b[1])<1e-6&&Math.abs(a[1]-c[1])<1e-6),
     'floe cap vertices remain unchanged in a horizontal fan');
 });
 
-test('surface 12 uses bundled CC0 atlas with a color-only fallback',()=>{
-  assert.match(renderer,/vHarborSurface<11\.5 \|\| vHarborSurface>12\.5/);
+test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
+  assert.match(renderer,/vHarborSurface<11\.5 \|\| vHarborSurface>13\.5/);
   assert.ok(renderer.includes('if(uAlaskaPhotoReady)'),
     'shader must preserve color-only rendering when the atlas is not loaded');
+  assert.ok(renderer.includes('vec2 tile=vHarborSurface>12.5'));
+  assert.ok(renderer.includes('1.0-abs(mod(uv0,vec2(2.0))-1.0)'));
+  assert.ok(renderer.includes(': fract(uv0);'),
+    'original glacier UV mode must remain unchanged');
   assert.ok(renderer.includes('uAlaskaPhotoNormalRough'));
   assert.ok(renderer.includes('uAlaskaPhotoAlbedo'));
-  assert.ok(moduleSource.includes('iceTri(center,a,b,top)'));
+  assert.ok(moduleSource.includes('addTri(center,a,b,top,13)'));
 });
