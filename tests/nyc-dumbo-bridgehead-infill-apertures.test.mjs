@@ -103,8 +103,8 @@ test('graphics compatibility and low-detail settings retain the original body',(
     assert.ok(boxes.some(b=>b[0]===x&&b[2]===z&&
       b[3]===w&&b[4]===h&&b[5]===d),
       'low-quality rendering must keep the original cheap cuboid');
-    assert.ok(quads.filter(q=>q.at(-1)===13).length<16,
-      'low-quality rendering must not create four-sided aperture shell');
+    assert.ok(quads.length<140,
+      'fallback must keep old light facade, not 400+ aperture wall faces');
   }
 });
 
