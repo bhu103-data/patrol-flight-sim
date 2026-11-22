@@ -1,0 +1,21 @@
+{
+  "request": "one-time official model import for Flatiron",
+  "source": "NYC DCP / DOITT NYC 3D Model by Community District, Manhattan CD05, 2014",
+  "source_archive": "nyc_3dmodel_mn05.zip",
+  "target": {
+    "name": "Flatiron Building",
+    "BIN": 1016278,
+    "BBL": "1008510001"
+  },
+  "current_footprint_crs": "EPSG:2263",
+  "output": "assets/nyc/scenario/flatiron.glb",
+  "hard_gates": {
+    "footprint_iou_min": 0.88,
+    "hausdorff_ft_max": 5,
+    "height_delta_ft_max": 12,
+    "triangles_min": 450,
+    "triangles_max": 25000,
+    "glb_bytes_max": 8388608
+  },
+  "mode": "cached render meshes only; no procedural reconstruction"
+}
