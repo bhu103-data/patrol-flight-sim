@@ -40,13 +40,19 @@ try{
     state.contextLost||state.webglError!==0||
     state.canvas[0]!==1280||state.canvas[1]!==800)
     throw Error('Meter-scale scene audit not valid '+JSON.stringify(state));
- await page.screenshot({path:out+'/times-square-metre-oblique.png'});
+ // Remove only the HTML QA overlay during scene-only evidence; the actual
+ // game/viewer geometry and camera remain unchanged.
+ await page.evaluate(()=>{
+   document.querySelector('aside').style.visibility='hidden';
+   document.querySelector('footer').style.visibility='hidden';
+ });
+ await page.locator('canvas').screenshot({path:out+'/times-square-metre-oblique.png'});
  await page.locator('#top').click();
  await page.waitForTimeout(400);
  const top=await page.evaluate(()=>window.PatrolNycMetricQA().camera);
  if(Math.abs(top.pitch-1.56)>.001||Math.abs(top.yaw)>.001)
     throw Error('North-up top camera cannot be selected');
- await page.screenshot({path:out+'/times-square-metre-north-up.png'});
+ await page.locator('canvas').screenshot({path:out+'/times-square-metre-north-up.png'});
  result.passed=errors.length===0 && warnings.length===0;
  Object.assign(result,{state,topCamera:top,
    images:['times-square-metre-oblique.png',
