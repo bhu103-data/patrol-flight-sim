@@ -68,7 +68,7 @@ const $=selector=>document.querySelector(selector);
 const gl=$('#preview').getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
 const state=$('#state'),landmark=$('#landmark'),file=$('#modelFile');
 const label=(id,value)=>{document.getElementById(id).textContent=value;};
-let decodeGLB=null,mesh=null,program=null,sourceBytes=null,sourceName='',height=31.3;
+let scenarioManifest=null,decodeGLB=null,mesh=null,program=null,sourceBytes=null,sourceName='',height=31.3;
 let autoRotate=0,orbitYaw=.75,orbitPitch=.23,drag=null,raf=0;
 const MAX_BYTES=8388608;
 function status(ok,message){
@@ -231,12 +231,15 @@ async function loadTrade(){
  }catch(error){status(false,error.message);console.error(error)}
 }
 async function loadEmpire(){
- status(null,'Fetching original authored Empire State Building GLB');
+ status(null,'Fetching manifest-approved Empire State Building GLB');
  try{
   landmark.value='empire';
-  const response=await fetch('../assets/nyc/scenario/empire.glb',{cache:'no-store'});
+  const modelFile=scenarioManifest?.landmarks?.empire?.file;
+  if(typeof modelFile!=='string'||!/^scenario\/[a-z0-9_-]+\.glb$/.test(modelFile))
+   throw Error('Empire GLB missing from approved scenario manifest');
+  const response=await fetch('../assets/nyc/'+modelFile,{cache:'no-store'});
   if(!response.ok)throw Error('Empire GLB HTTP '+response.status);
-  await loadBuffer(await response.arrayBuffer(),'Original Empire State Building');
+  await loadBuffer(await response.arrayBuffer(),'Empire State Building · manifest model');
  }catch(error){status(false,error.message);console.error(error)}
 }
 async function loadChrysler(){
@@ -252,7 +255,8 @@ async function init(){
  if(!gl)throw Error('WebGL2 unavailable');
  const res=await fetch('../assets/nyc/scenario-manifest.json');
  if(!res.ok)throw Error('Manifest HTTP '+res.status);
- const manifest=await res.json();
+ scenarioManifest=await res.json();
+ const manifest=scenarioManifest;
  const names={liberty:'Statue of Liberty',trade:'One World Trade Center',
   empire:'Empire State Building',chrysler:'Chrysler Building',
   flatiron:'Flatiron Building',times:'One Times Square'};
