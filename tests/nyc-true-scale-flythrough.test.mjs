@@ -101,3 +101,19 @@ test('street view uses 3.2m eye height and 1.2m OTI footprint clearance, not 65m
   assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/,
     'aerial view remains available without affecting the original free-flight map');
 });
+
+// Source-camera evidence uses the existing 3.2m cross-clearance street view.
+// It may not invent a 3D GPS height or substitute a fictional camera pose.
+test('live WGS84 camera registration preserves original 3.2m street safety',async()=>{
+  const html=await readFile(new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  const smoke=await readFile(new URL('../scripts/nyc-true-scale-flight-browser-smoke.mjs',import.meta.url),'utf8');
+  assert.match(html,/const streetEyeMetres=3\.2,streetClearanceMetres=1\.2;/);
+  assert.match(html,/cameraRegistration\(frame,w,h\)/);
+  assert.match(html,/metersToWgs84\(\[east,north\],massing\.origin\)/);
+  assert.match(html,/eyeAbsoluteAltitudeMeters:null/);
+  assert.match(html,/verticalDatum:'unknown'/);
+  assert.match(html,/qa\.cameraRegistration=cameraRegistration\(frames,w,h\)/);
+  assert.match(smoke,/01b-registered-street-eye-repeat\.png/);
+  assert.match(smoke,/fingerprint\(camera1\)===fingerprint\(camera2\)/);
+  assert.match(smoke,/streetClearanceRadiusMetres===1\.2/);
+});

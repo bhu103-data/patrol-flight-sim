@@ -30,7 +30,7 @@
 </aside>
 <footer>NYC OTI + DCM source data · metres · flythrough pilot · authored facade textures</footer>
 <script type="module">
-import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
+import {buildMeteredMassing,wgs84ToMeters,metersToWgs84} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
@@ -203,6 +203,28 @@ async function start(){
     streetClearanceRadiusMetres:streetClearanceMetres,
     safeStreetCandidateCount:sourceStreetCandidates.length,
     frames:0,errors:[]};
+  // Real WGS84 2D origin and source FIDs, but no absolute height datum.
+  // Local up is a game ground-plane offset, never a GPS or NAVD88 altitude.
+  const sourceBuildingFids=massing.buildings.map(b=>b.fid).sort((a,b)=>a-b);
+  function cameraRegistration(frame,w,h){
+    const east=camera.position[0]+geometry.center.east,
+      north=geometry.center.north-camera.position[2];
+    return {
+      schema:'patrol-nyc-metric-camera-v1',
+      originWGS84LonLat:[massing.origin.lon,massing.origin.lat],
+      originAltitudeMeters:null,verticalDatum:'unknown',
+      eyeENUmeters:[east,north,camera.position[1]],
+      eyeWGS84LonLat:metersToWgs84([east,north],massing.origin),
+      eyeAbsoluteAltitudeMeters:null,
+      yawRadians:camera.yaw,pitchRadians:camera.pitch,
+      verticalFovRadians:Math.PI/3,viewportPixels:[w,h],
+      quality:qualityLow?'low':'standard',frame,
+      lighting:'fixed illustrative shader sun, no real timestamped weather',
+      sourceBuildingFids,sourceStreetFeatures:stats.streetFeatures,
+      sourceBuildings:geometry.provenance.buildings,
+      sourceStreets:geometry.provenance.streets
+    };
+  }
   const bound=Math.max(420,span*.7);
   function frame(t){
     const dt=Math.min(.05,Math.max(0,(t-last)/1000||0));last=t;
@@ -253,6 +275,7 @@ async function start(){
     gl.drawArrays(gl.TRIANGLES,0,geometry.interleaved.length/10);
     qa.frames=++frames;
     qa.camera=[...camera.position];
+    qa.cameraRegistration=cameraRegistration(frames,w,h);
     if(frames%45===1)qa.glError=gl.getError();
     requestAnimationFrame(frame);
   }
