@@ -14,8 +14,29 @@ try{
   const response=await page.goto('http://127.0.0.1:8765/preview.html',
     {waitUntil:'domcontentloaded',timeout:30000});
   if(response?.status()!==200)throw Error('Pilot preview HTML is unavailable');
-  await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
-    null,{timeout:90000});
+  // The source CI must build *all* assets consumed by today's preview.
+  // An absent roadbed/pedestrian mesh or flight module is a fast, explicit
+  // failure instead of a misleading 90-second "scene did not load" timeout.
+  const expected=['source.json','roadbed-mesh.json','pedestrian-mesh.json',
+    'flight.mjs','street-envelope.mjs'];
+  const missing=await page.evaluate(async names=>{
+    const results=await Promise.all(names.map(async name=>{
+      try {
+        const r=await fetch('./'+name,{cache:'no-store'});
+        return {name,status:r.status,ok:r.ok};
+      }catch(e){return {name,status:0,ok:false,error:String(e)};}
+    }));
+    return results.filter(r=>!r.ok);
+  },expected);
+  if(missing.length)throw Error('Required official preview assets missing: '+
+    JSON.stringify(missing));
+  try {
+    await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
+      null,{timeout:90000});
+  }catch(e){
+    throw Error('True-metre preview browser did not initialize: '+
+      JSON.stringify({errors,detail:String(e)}));
+  }
   const stats=await page.evaluate(()=>{
     const state=window.geoPilotQA;
     const canvas=document.getElementById('scene');
