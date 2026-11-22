@@ -29,13 +29,14 @@
   <p class="hint">256² USGS source elevation · real east/north metres · original mountain relief · licensed CC0 photographic rock/snow/forest</p>
   <p id="status" role="status">Loading the original source DEM and building terrain…</p>
   <p class="small">W/S forward/back · A/D strafe · Q/E descend/climb · arrows or drag to look · Shift fast · R reset</p>
-  <p><a href="./index.html">Return to PATROL</a></p>
+  <p><a href="./index.html">Return to PATROL</a> · <a href="./tracy-arm-true-scale.html?alaskaDetail=5m">Experimental local ~5m DEM</a> · <a href="./tracy-arm-true-scale.html">Original full ~30m DEM</a></p>
 </div>
 <div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed shoreline, orthoimagery or verified vertical datum. Local Poly Haven CC0 PBR atlas is photographic but not an on-site scan.</div>
 <script type="module">
 import {decodeAlaskaDEM} from './assets/alaska/usgs-dem.js';
-import {rasterCellToLocalEnu,sourceTileOrigin,
-  localEnuToWgs84,sampleSourceElevationMetres,
+import {decodeAlaskaFiveMetreTile} from './assets/alaska/usgs-5m-tile.js';
+import {rasterCellToLocalEnu,rasterCellWgs84,wgs84ToLocalEnu,
+  sourceTileOrigin,localEnuToWgs84,sampleSourceElevationMetres,
   validateTracyArmRaster} from './assets/alaska/tracy-arm-geodesy.js';
 
 const canvas=document.getElementById('scene'),status=document.getElementById('status');
@@ -225,6 +226,7 @@ function multiply(a,b){
 }
 const keys=new Set(),pose={xyz:[0,240,0],yaw:0,pitch:-.12};
 let bounds,dem,land,sea,origin,frameCount=0,previous=0,elapsed=0,active=false;
+let detailMode='coarse-30m',detailWarning=null;
 let lastFrameSeconds=0,glErrors=[];
 const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=-.48;pose.pitch=-.09};
 let spawn=[0,240,0];
@@ -316,14 +318,32 @@ async function boot(){
   if(!response.ok)throw Error('Bundled USGS DEM unavailable: HTTP '+response.status);
   const payload=await response.json();
   validateTracyArmRaster(payload);
-  dem={...payload,...decodeAlaskaDEM(payload)};
-  origin=sourceTileOrigin(dem);
+  const coarse={...payload,...decodeAlaskaDEM(payload)};
+  dem=coarse;
+  // Both 30m and 5m modes share the SAME world origin. The 5m tile must NOT
+  // silently re-center its east/north coordinates to its own small subregion.
+  origin=sourceTileOrigin(coarse);
+  if(new URLSearchParams(location.search).get('alaskaDetail')==='5m'){
+    try{
+      const response=await fetch('./assets/alaska/tracy-arm-five-metre-tile.json',
+        {cache:'force-cache'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      dem=decodeAlaskaFiveMetreTile(await response.json(),coarse);
+      detailMode='source-5m-local';
+    }catch(error){
+      detailWarning='5m source tile is unavailable/invalid; showing verified ~30m landscape: '+error.message;
+      console.warn('[PATROL] '+detailWarning);
+      dem=coarse;
+    }
+  }
   const count=dem.width*dem.height,n=dem.width,m=dem.height;
   const points=new Float32Array(count*3);
   let minE=Infinity,maxE=-Infinity,minN=Infinity,maxN=-Infinity,highest=0;
   for(let row=0;row<m;row++)for(let col=0;col<n;col++){
     const i=row*n+col;
-    const [east,north]=rasterCellToLocalEnu(dem,col,row,0);
+    const [east,north]=dem.highRes
+      ? wgs84ToLocalEnu(...rasterCellWgs84(dem,col,row),0,...origin)
+      : rasterCellToLocalEnu(dem,col,row,0);
     const elev=dem.heights[i];
     points[i*3]=east;points[i*3+1]=elev<=1?-4:elev;points[i*3+2]=north;
     minE=Math.min(minE,east);maxE=Math.max(maxE,east);
@@ -358,15 +378,16 @@ async function boot(){
   // A wider measured fjord channel in the original south-first USGS raster.
   // Cell (170,105) is water; starting in the old route's narrow edge channel
   // blocked the camera with a nearly full-screen rock face.
-  if(dem.heights[105*dem.width+170]>1)
+  if(coarse.heights[105*coarse.width+170]>1)
     throw Error('Survey-source launch channel unexpectedly dry');
-  const [e,north]=rasterCellToLocalEnu(dem,170,105,0);
+  const [e,north]=rasterCellToLocalEnu(coarse,170,105,0);
   spawn=[e,320,north];
   await loadLocalCC0Atlas();
   initial();
   active=true;
   status.textContent='Source terrain loaded: '+count.toLocaleString()+
-    ' original geographic cells · '+indices.length/3+' terrain triangles · peak '+highest+' m';
+    ' original geographic cells · '+indices.length/3+' terrain triangles · peak '+highest.toFixed(1)+' m'
+    +' · '+detailMode+(detailWarning?'\n'+detailWarning:'');
   requestAnimationFrame(draw);
 }
 window.PatrolTrueScaleQA=()=>({
@@ -376,7 +397,9 @@ window.PatrolTrueScaleQA=()=>({
   terrainPeak:dem?.heights.reduce((h,y)=>Math.max(h,y),0)||0,
   bounds:bounds?{...bounds}:null,origin:origin?[...origin]:null,
   camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
-  gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array'
+  gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array',
+  detailMode,detailWarning,bbox:dem?.bbox?[...dem.bbox]:null,
+  sourceSpacingMeters:dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
 </script>
