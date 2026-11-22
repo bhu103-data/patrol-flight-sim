@@ -106,3 +106,18 @@ test('GIS glazing coverage is independent of source FID sort order',()=>{
     Math.floor(x/8)+':'+Math.floor(z/8)));
   assert.ok(buckets.size>=12,'surveyed infill panes must cover the district');
 });
+
+test('44th Street inspected FID receives bounded deep upper windows',()=>{
+  const source=data.features.find(f=>f.fid===1000156);
+  assert.ok(source&&source.heightFt>450,'refer to real municipal footprint');
+  const one=simulate({...data,features:[source]});
+  assert.ok(one.stats.infillPieces>=1,'inspected parcel must survive road cuts');
+  assert.ok(one.stats.windowQuads>=40&&one.stats.windowQuads<=180,
+    'dense but bounded facade, not a shader-only effect');
+  assert.ok(one.glazingCenters.filter(p=>p[1]>14.93+27).length>=8,
+    'upper floors must contain genuine glass quads');
+  assert.ok(one.surfaces.get(6)>one.surfaces.get(7)/2,
+    'masonry returns and source geometry must remain intact');
+  assert.match(js,/showcaseRemaining--/);
+  assert.match(js,/const stone=\[\.37,\.39,\.40\],front=\.075/);
+});
