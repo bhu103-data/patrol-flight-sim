@@ -178,9 +178,13 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       // Floe-only surface 13 keeps the parent's mirror-repeat CC0 atlas.
       // Four shared planar bands form a continuous center/rim surface;
       // these three triangles replace ONE perfectly flat top triangle.
-      addTri(crown,ridge[k],ridge[next],top,13);
-      addTri(ridge[k],rimA,rimB,top,13);
-      addTri(ridge[k],rimB,ridge[next],top,13);
+      // The game derives vertex normals directly from triangle winding.
+      // In world x/y/z the +angle ring is CLOCKWISE when viewed from +Y:
+      // reversing the old order makes snow caps face upward (+Y), so
+      // their CC0 PBR normal and sunlight are evaluated from the air side.
+      addTri(crown,ridge[next],ridge[k],top,13);
+      addTri(ridge[k],rimB,rimA,top,13);
+      addTri(ridge[k],ridge[next],rimB,top,13);
       stats.floeCapTriangles+=3;
       // Break up the uniform cyan wall at the waterline. Subtle darker facets
       // separate the floe silhouette from bright coastal snow at a distance;
@@ -190,7 +194,9 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
         v*(.73+.23*facet)*(channel===0?.94:1)));
       // Upper lip follows the exact top border, preventing cracks; submerged
       // lower edge is unchanged at the original, flat game waterline.
-      addQuad(rimB,rimA,[a[0],y-.12,a[2]],[b[0],y-.12,b[2]],sideShade);
+      // The outer skirt must also face OUTWARD, not point into the ice.
+      // Keep the exact shared lifted upper lip and old submerged y.
+      addQuad(rimA,rimB,[b[0],y-.12,b[2]],[a[0],y-.12,a[2]],sideShade);
     }
     stats.iceFloes++;
   }
