@@ -539,7 +539,8 @@ def main() -> int:
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
         help="Times Square ROI in WGS84, EPSG:4326",
     )
-    parser.add_argument("--cscl-buffer-degrees", type=float, default=0.005)\n    args = parser.parse_args()
+    parser.add_argument("--cscl-buffer-degrees", type=float, default=0.005)
+    args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     bbox = tuple(args.bbox)
     if bbox[0] >= bbox[2] or bbox[1] >= bbox[3]:
