@@ -37,7 +37,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   // actual official 2022 OTI polygon source. DCM traces remain measured lines.
   if(sourceRoadbedOnly&&officialRoadbed===null)
     throw Error('Source-only roadbed requires official NYC OTI polygons');
-  if(materialCatalog!==null)validateNycMaterialCatalog(materialCatalog);
+  if(materialCatalog!==null)validateNycMaterialCatalog(
+    materialCatalog,massing.buildings.map(b=>b.fid));
   const [minE,minN,maxE,maxN]=massing.boundsMeters;
   const centerE=(minE+maxE)*.5,centerN=(minN+maxN)*.5;
   const [roadOffsetE,roadOffsetN]=wgs84ToMeters(streetSource.originWGS84,massing.origin);
