@@ -16,8 +16,10 @@ export const OTI_2022_LAYERS=Object.freeze({
 });
 const SOURCE_TERMS='https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje';
 const FIELDS='OBJECTID,SOURCE_ID,FEATURE_CODE,SUB_FEATURE_CODE,STATUS';
-const PAGE_SIZE=200;
-const MAX_PAGES=10;
+const PAGE_SIZE_BY_LAYER=Object.freeze({
+  roadbed:200,plaza:200,sidewalk:150,curb:150,curbCut:150
+});
+const MAX_RECORDS=2000;
 export const OTI_2022_MINIMUMS=Object.freeze({
   roadbedFeatures:70,plazaFeatures:5,sidewalkFeatures:40,
   curbFeatures:150,curbCutFeatures:150,roadbedTriangles:8000,
@@ -27,24 +29,26 @@ const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const equalPoint=(a,b)=>Math.abs(a[0]-b[0])<1e-12&&Math.abs(a[1]-b[1])<1e-12;
 
 export function officialLayerQuery(kind,offset=0){
-  const base=OTI_2022_LAYERS[kind];
-  if(!base)throw new Error('Unknown NYC OTI layer '+kind);
-  if(!Number.isSafeInteger(offset)||offset<0)throw new Error('Invalid OTI result offset');
+  const base=OTI_2022_LAYERS[kind],pageSize=PAGE_SIZE_BY_LAYER[kind];
+  if(!base||!pageSize)throw new Error('Unknown NYC OTI layer '+kind);
+  if(!Number.isSafeInteger(offset)||offset<0||offset%pageSize!==0)
+    throw new Error('Invalid OTI result offset');
   const url=new URL(base+'/query');
   for(const [key,value] of Object.entries({
     where:'1=1',geometry:OTI_2022_BBOX.join(','),
     geometryType:'esriGeometryEnvelope',inSR:'4326',outSR:'4326',
     spatialRel:'esriSpatialRelIntersects',outFields:FIELDS,
     orderByFields:'OBJECTID',resultOffset:String(offset),
-    resultRecordCount:String(PAGE_SIZE),returnGeometry:'true',f:'geojson'
+    resultRecordCount:String(pageSize),returnGeometry:'true',f:'geojson'
   }))url.searchParams.set(key,value);
   return url.toString();
 }
 
 async function fetchLayer(kind,fetcher){
-  const features=[],ids=new Set();
-  for(let page=0;page<MAX_PAGES;page++){
-    const offset=page*PAGE_SIZE,controller=new AbortController();
+  const features=[],ids=new Set(),pageSize=PAGE_SIZE_BY_LAYER[kind];
+  if(!pageSize)throw new Error('Unknown NYC OTI layer '+kind);
+  for(let offset=0;offset<MAX_RECORDS;offset+=pageSize){
+    const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),45000);
     let response,data;
     try{
@@ -61,9 +65,9 @@ async function fetchLayer(kind,fetcher){
       if(ids.has(id))throw new Error('NYC OTI '+kind+' repeated OBJECTID '+id);
       ids.add(id);features.push(feature);
     }
-    if(data.features.length<PAGE_SIZE)return {type:'FeatureCollection',features};
+    if(data.features.length<pageSize)return {type:'FeatureCollection',features};
   }
-  throw new Error('NYC OTI '+kind+' pagination exceeded '+(PAGE_SIZE*MAX_PAGES)+' records');
+  throw new Error('NYC OTI '+kind+' pagination exceeded '+MAX_RECORDS+' records');
 }
 
 function polygonSets(geometry){
