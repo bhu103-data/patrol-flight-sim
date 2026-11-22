@@ -8817,6 +8817,8 @@ const CENTRAL_PARK_SITES=[
       if(!graphicsCompat && smoothScenery() &&
          new URLSearchParams(location.search).get('nycGIS')!=='off'){
         const sceneEpoch=heroEpoch;
+        const nycFidProbeEnabled=new URLSearchParams(location.search)
+          .get('nycFidProbe')==='1';
         Promise.all([
           import('./assets/nyc/nyc-gis-infill.js'),
           fetch('./assets/nyc/times-square-footprints.json').then(r=>{
@@ -8825,21 +8827,40 @@ const CENTRAL_PARK_SITES=[
           })
         ]).then(([module,asset])=>{
           if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
-          const dataMesh=createTriangleMesh();
-          const stats=module.buildTimesSquareGisInfill(asset,{
-            addQuad:(a,b,c,d,color,surface=0)=>
-              dataMesh.addQuad(a,b,c,d,color,surface),
-            addTri:(a,b,c,color,surface=0)=>
-              dataMesh.addTri(a,b,c,color,surface),
-            box:(...args)=>addModelBox(dataMesh.addQuad,...args),
-            ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
-            protectedSites:protectedTimesSites
-          });
-          const uploaded=dataMesh.upload();
+          const buildGisMesh=(skipFids=[])=>{
+            const dataMesh=createTriangleMesh();
+            const stats=module.buildTimesSquareGisInfill(asset,{
+              addQuad:(a,b,c,d,color,surface=0)=>
+                dataMesh.addQuad(a,b,c,d,color,surface),
+              addTri:(a,b,c,color,surface=0)=>
+                dataMesh.addTri(a,b,c,color,surface),
+              box:(...args)=>addModelBox(dataMesh.addQuad,...args),
+              ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
+              protectedSites:protectedTimesSites,
+              skipFids:new Set(skipFids)
+            });
+            return {mesh:dataMesh.upload(),stats};
+          };
+          const built=buildGisMesh(),uploaded=built.mesh,stats=built.stats;
           if(sceneEpoch!==nycHeroEpoch||gl.isContextLost())
             disposeSceneMesh(uploaded);
           else{
             nycGisMesh=uploaded;
+            if(nycFidProbeEnabled){
+              window.__patrolNycFidProbe={
+                setSkippedFids(ids){
+                  if(!Array.isArray(ids)||ids.length>128||
+                      !ids.every(Number.isSafeInteger))
+                    throw Error('Invalid diagnostic NYC source FID list');
+                  if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())
+                    throw Error('Diagnostic FID rebuild is no longer on the active Manhattan scene');
+                  const next=buildGisMesh(ids),previous=nycGisMesh;
+                  nycGisMesh=next.mesh;
+                  if(previous)disposeSceneMesh(previous);
+                  return next.stats;
+                }
+              };
+            }
             console.info('[PATROL] NYC official footprint infill',stats);
           }
         }).catch(error=>console.warn('[PATROL] GIS fallback',error));
