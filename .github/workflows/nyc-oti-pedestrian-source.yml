@@ -1,11 +1,13 @@
 name: NYC official 2022 plaza-sidewalk roadbed source and screenshot QA
 on:
   pull_request:
-    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat]
+    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat, feat/nyc-oti-times-square-plaza-sidewalk-20261122-chat]
     paths:
       - 'scripts/nyc-times-pedestrian-plaza-source.mjs'
       - 'scripts/nyc-times-pedestrian-topology-audit.mjs'
       - 'tests/nyc-times-pedestrian-topology-audit.test.mjs'
+      - 'scripts/nyc-times-broadway-surface-gaps.mjs'
+      - 'tests/nyc-times-broadway-surface-gaps.test.mjs'
       - 'tests/nyc-times-pedestrian-plaza-source.test.mjs'
       - 'tools/nyc/pedestrian-plaza-browser-smoke.mjs'
       - '.github/workflows/nyc-oti-pedestrian-source.yml'
@@ -29,7 +31,8 @@ jobs:
           node --check scripts/nyc-times-pedestrian-plaza-source.mjs
           node --check tools/nyc/pedestrian-plaza-browser-smoke.mjs
           node --check scripts/nyc-times-pedestrian-topology-audit.mjs
-          node --test tests/nyc-times-pedestrian-plaza-source.test.mjs tests/nyc-times-pedestrian-topology-audit.test.mjs
+          node --check scripts/nyc-times-broadway-surface-gaps.mjs
+          node --test tests/nyc-times-pedestrian-plaza-source.test.mjs tests/nyc-times-pedestrian-topology-audit.test.mjs tests/nyc-times-broadway-surface-gaps.test.mjs
       - name: Fetch genuine building, DCM and OTI 2022 roadbed source artefacts
         run: |
           node scripts/nyc-times-true-scale-pilot.mjs
@@ -44,6 +47,11 @@ jobs:
         run: |
           node scripts/nyc-times-pedestrian-topology-audit.mjs
           test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
+      - name: Geolocate Broadway DCM fragments outside all three 2022 surface layers
+        run: |
+          node scripts/nyc-times-broadway-surface-gaps.mjs
+          test -s artifacts/nyc-oti-pedestrian-source/broadway-surface-gap-locations.json
+          test -s artifacts/nyc-oti-pedestrian-source/broadway-surface-gap-locations.geojson
       - name: Install free browser pixel QA tools
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
