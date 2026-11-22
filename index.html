@@ -6313,6 +6313,96 @@ const CENTRAL_PARK_SITES=[
     return {openings,returns,faces,levels};
   }
 
+
+  // PATROL_DUMBO_BRIDGEHEAD_ROOFLINE_V1
+  // Bounded game-scale industrial rooftop detail for the SAME three
+  // non-surveyed bridgehead infill blocks as the inset-window patch.
+  // No historic-building claim, imported textures or collider mutation.
+  function buildDumboBridgeheadInfillRoofline(addTri,addQuad,box,beam,site){
+    const {x,y,z,w,d,h,brick,stone,seed}=site;
+    const roofY=y+h,metal=[.26,.30,.32],dark=[.18,.21,.23];
+    // Vary silhouettes by actual neighboring block, not repeating arch seed.
+    const glass=[.16,.28,.31],style=((Math.floor(x/24)%3)+3)%3;
+    const put=(...args)=>{box(...args);boxes++};
+    let boxes=0,quads=0,triangles=0,beams=0;
+    const topCap=(cx,cy,cz,bw,bh,bd,color)=>put(
+      cx,cy,cz,bw,bh,bd,color,12);
+    // Short brick perimeter parapet with real stone coping. All edge
+    // bounds are inset at least .09 from the existing cleared parcel.
+    const frontH=.38+style*.085,rearH=.31+((seed+1)%3)*.075;
+    const sideH=.29+((seed+2)%3)*.06;
+    for(const side of [-1,1]){
+      const ph=side>0?frontH:rearH;
+      const zz=z+side*(d*.5-.17);
+      topCap(x,roofY+ph*.5-.018,zz,w-.40,ph,.20,brick);
+      topCap(x,roofY+ph+.015,zz,w-.38,.085,.245,stone);
+      const xx=x+side*(w*.5-.17);
+      topCap(xx,roofY+sideH*.5-.018,z,.20,sideH,d-.42,brick);
+      topCap(xx,roofY+sideH+.015,z,.245,.085,d-.40,stone);
+    }
+    // Masonry corner piers and a variably raised front parapet segment.
+    for(const sx of [-1,1])for(const sz of [-1,1]){
+      const px=x+sx*(w*.5-.245),pz=z+sz*(d*.5-.245);
+      const ph=.46+((seed+Math.abs(sx+sz))%3)*.07;
+      topCap(px,roofY+ph*.5-.01,pz,.26,ph,.26,brick);
+      topCap(px,roofY+ph+.025,pz,.30,.072,.30,stone);
+    }
+    if(style===0){
+      topCap(x,roofY+frontH+.14,z+d*.5-.17,
+        Math.min(2.35,w*.35),.27,.19,brick);
+      topCap(x,roofY+frontH+.30,z+d*.5-.17,
+        Math.min(2.43,w*.37),.07,.235,stone);
+    }else if(style===1){
+      for(const side of [-1,1]){
+        const cx=x+side*w*.24;
+        topCap(cx,roofY+frontH+.11,z+d*.5-.17,
+          .68,.22,.19,brick);
+        topCap(cx,roofY+frontH+.25,z+d*.5-.17,
+          .73,.062,.23,stone);
+      }
+    }else{
+      topCap(x,roofY+frontH+.10,z+d*.5-.17,
+        w*.48,.20,.19,brick);
+      topCap(x,roofY+frontH+.22,z+d*.5-.17,
+        w*.49,.06,.23,stone);
+    }
+    // A real two-slope metal-framed industrial rooflight. Unlike the
+    // previous generic HVAC cuboid, it has sloping panes, closed gable
+    // ends, a ridge and separate structural rafters.
+    const cw=Math.min(3.30,w*.39),cd=Math.min(2.70,d*.29);
+    const cx=x+(seed%2?.25:-.20),cz=z+((seed%3)-1)*.15;
+    const low=roofY+.125,ridge=roofY+.64;
+    const p=(u,v,yy)=>[cx+u,yy,cz+v];
+    topCap(cx,roofY+.063,cz,cw+.16,.09,cd+.15,metal);
+    addQuad(p(-cw*.5,-cd*.5,low),p(-cw*.5,0,ridge),
+      p(cw*.5,0,ridge),p(cw*.5,-cd*.5,low),glass,13);
+    addQuad(p(-cw*.5,0,ridge),p(-cw*.5,cd*.5,low),
+      p(cw*.5,cd*.5,low),p(cw*.5,0,ridge),glass,13);
+    quads+=2;
+    for(const sign of [-1,1]){
+      const u=sign*cw*.5;
+      // Outward-facing gable normals: -X on west, +X on east.
+      // The opposite winding backface-culled both physical endwalls.
+      if(sign<0)addTri(p(u,cd*.5,low),p(u,0,ridge),
+        p(u,-cd*.5,low),dark,12);
+      else addTri(p(u,-cd*.5,low),p(u,0,ridge),
+        p(u,cd*.5,low),dark,12);
+      triangles++;
+      for(const side of [-1,1]){
+        beam(p(u,side*cd*.5,low),p(u,0,ridge),.034,metal);
+        beams++;
+      }
+      topCap(cx,roofY+.10,cz+sign*cd*.5,cw+.12,.07,.09,metal);
+    }
+    beam(p(-cw*.5,0,ridge),p(cw*.5,0,ridge),.042,metal);beams++;
+    // Side gutter and one compact roof vent; both anchored to the slab.
+    const ventX=x-w*.29,ventZ=z-d*.28;
+    topCap(ventX,roofY+.24,ventZ,.34,.43,.34,brick);
+    topCap(ventX,roofY+.47,ventZ,.48,.075,.46,metal);
+    return {boxes,quads,triangles,beams,style,roofY,
+      maxNewHeight:roofY+Math.max(.68,frontH+.34,rearH+.10)};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6489,8 +6579,17 @@ const CENTRAL_PARK_SITES=[
           [x+w*.5,roofY,z+d*.5],[x+w*.5,roofY,z-d*.5],
           [.34,.36,.35],14);
       }
+      if(dumboInfillRecessed){
+        // Distinct roofline only after the matching LOD3 window shell is
+        // selected; shared mesh and original collision footprint remain.
+        buildDumboBridgeheadInfillRoofline(addTri,addQuad,
+          (...args)=>addModelBox(addQuad,...args),
+          (a,b,r,tint)=>addRideBeam(addQuad,a,b,r,tint),{
+            x,y,z,w,d,h,brick:material,stone:trim,seed:archType
+          });
+      }
       const roof=[0.31,0.34,0.35];
-      if(detailBand>=2 && h>13){
+      if(detailBand>=2 && h>13 && !dumboInfillRecessed){
         addModelBox(addQuad,
           roofProfile.x+roofProfile.w*(tone-.5)*.20,
           y+h+.48,z-roofProfile.d*.12,
@@ -6759,7 +6858,7 @@ const CENTRAL_PARK_SITES=[
         }
         // Air handlers, vents and access housings fit the REAL crown,
         // including narrow Art Deco tops; no disconnected floating cubes.
-        if(h>13.0){
+        if(h>13.0 && !dumboInfillRecessed){
           const roofY=y+h;
           const offset=tone>.5?-.12:.12;
           const mx=roofProfile.x+roofProfile.w*offset;

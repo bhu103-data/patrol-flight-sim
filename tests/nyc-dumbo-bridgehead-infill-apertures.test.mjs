@@ -29,10 +29,12 @@ function build(lot,band=3,compat=false,smooth=true){
   const fn=new Function(
     'createTriangleMesh','addModelBox','addRideBeam','nycDetailBand',
     'MANHATTAN_GRID','WATER_H','tintSeed','addDowntownFacadeRelief',
-    'buildDumboBridgeheadInfillApertures','graphicsCompat','smoothScenery',
+    'buildDumboBridgeheadInfillApertures','buildDumboBridgeheadInfillRoofline',
+    'graphicsCompat','smoothScenery',
     'return ('+builderSource+')'
   )(mesh,(_q,...args)=>boxes.push(args),(_q,a,b,c)=>beams.push([a,b,c]),
-    ()=>band,grid,12.2,()=>.5,()=>0,geometry,compat,()=>smooth);
+    ()=>band,grid,12.2,()=>.5,()=>0,geometry,
+    ()=>null,compat,()=>smooth);
   fn([lot]);
   return {boxes,quads,beams};
 }
