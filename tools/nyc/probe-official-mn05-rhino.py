@@ -85,6 +85,10 @@ try:
    metadata["readerVersion"]=str(getattr(rhino3dm,"__version__","unknown"))
    rhino=rhino3dm.File3dm.Read(str(raw_path))
    if rhino is None:raise ValueError("rhino3dm failed to parse official archive model")
+   model_units=getattr(getattr(rhino,"Settings",None),"ModelUnitSystem",None)
+   metadata["modelUnitSystem"]=str(model_units)
+   try:metadata["modelUnitSystemValue"]=int(model_units)
+   except Exception:metadata["modelUnitSystemValue"]=None
    layers=[{"index":i,"name":layer.Name,
             "fullPath":getattr(layer,"FullPath",None)}
            for i,layer in enumerate(rhino.Layers)]
@@ -118,7 +122,8 @@ except Exception as exc:
  metadata["error"]=f"{type(exc).__name__}: {exc}"
 finally:
  # Keep verified evidence only, never bundle a large model into the repo.
- (OUT/"mn05-source.3dm").unlink(missing_ok=True)
+ if os.environ.get("PATROL_KEEP_MN05") != "1":
+   (OUT/"mn05-source.3dm").unlink(missing_ok=True)
  archive.unlink(missing_ok=True)
  (OUT/"mn05-probe.json").write_text(json.dumps(metadata,ensure_ascii=False,indent=2))
  print(json.dumps(metadata,ensure_ascii=False,indent=2))
