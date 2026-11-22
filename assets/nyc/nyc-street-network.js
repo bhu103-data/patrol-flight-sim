@@ -4,13 +4,31 @@
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, addParkedCar, isClear=()=>true
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
     gutter=[.17,.19,.21],patch=[.22,.25,.27],steel=[.45,.48,.49],
     leaf=[.22,.42,.31],hydrant=[.72,.18,.13],signalYellow=[.86,.69,.24];
   const roadY=streetY+.086,markY=streetY+.117,paveY=streetY+.154;
+  // PATROL_DUMBO_CC0_PBR_SURFACE_V1. Only tint the existing road strips and
+  // lay narrow, flush repair/joint decals; do not alter any road alignments,
+  // widths, terrain, traffic, or collision checks. These asphalt tints stay
+  // within the main NYC shader's color-key for Poly Haven CC0 asphalt_04:
+  // the same diffuse, normal and ARM (roughness) images remain in use.
+  // Preserve shader recognition of asphaltA/asphaltB (.25/.28/.30 and
+  // .28/.29/.32): these colors still receive the existing CC0 photo,
+  // normal and ARM/roughness sampling without touching index.html.
+  const dumboAsphalt=[asphalt,[.222,.250,.271],[.275,.299,.315],
+    [.239,.266,.284]];
+  const dumboWornAsphalt=[[.223,.247,.269],[.278,.299,.314],
+    [.238,.260,.279]];
+  const dumboConcrete=[sidewalk,[.485,.504,.488],[.560,.557,.530],
+    [.515,.524,.506]];
+  const dumboSeam=[.195,.217,.235],dumboRepair=[.229,.256,.274],
+    dumboCrack=[.179,.202,.222],dumboCurbStain=[.455,.465,.447],
+    dumboSawcut=[.412,.418,.395];
+  const inDumboMaterialZone=(i,j)=>i>=9&&i<=20&&j>=-13&&j<=-7;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
@@ -18,7 +36,12 @@ export function buildNycStreetNetwork({
     accessibleCorners:0,skippedBuildings:0,skippedRoadFootprints:0,
     preservedRoadSections:0,
     bikeLaneSegments:0,busLaneSegments:0,bikeSymbols:0,
-    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0};
+    intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0,
+    multiLaneSegments:0,oneWaySideStreets:0,signalizedIntersections:0,
+    dumboSurfaceRepairs:0,dumboTarSeams:0,dumboCrackRuns:0,
+    dumboSidewalkPanels:0,dumboCurbStains:0,
+    bridgeheadEdgeGuides:0,bridgeheadGuardrailSpans:0,
+    bridgeheadSignalTrims:0,bridgeheadSignalizedJunctions:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -271,10 +294,135 @@ export function buildNycStreetNetwork({
   }
   // An intersection exists only if painted asphalt actually reaches the node.
   // Clipped remote portions must not count as connected streets.
-  const connectedStreetNodes=new Set();
+  const connectedStreetNodes=new Map();
+  function connect(key,approach){
+    connectedStreetNodes.set(key,(connectedStreetNodes.get(key)??0)|approach);
+  }
   // Track only road pieces that were really emitted (including clipped spans),
   // so sidewalk vendors cannot overlap asphalt in the final scene.
   const activeRoadSegments=[];
+  // Material decals only: all coordinates lie within an already-approved
+  // Brooklyn road ribbon. Nothing here creates a new road, modifies the
+  // corridor occupancy tests, or changes flight/vehicle collisions.
+  function dumboRoadSurface(a,b,width,i,j){
+    const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+    const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5],lod=detailBand(...mid);
+    if(lod<2||length<11)return;
+    const fx=dx/length,fz=dz/length,nx=fz,nz=-fx;
+    const at=(along,offset=0)=>[
+      a[0]+fx*along+nx*offset,a[1]+fz*along+nz*offset
+    ];
+    // Asphalt resurfacing is patched in rectangles of different widths,
+    // tones and lengths. The existing CC0 asphalt atlas remains visible
+    // because the tint stays within its WebGL material-key threshold.
+    const passes=lod>=3&&length>17&&hash(i,j,111)>.54?2:1;
+    for(let k=0;k<passes;k++){
+      const h=110+k*23;
+      const from=length*(k?.56+.07*hash(i,j,h):.11+.13*hash(i,j,h));
+      const to=Math.min(length-1.1,from+length*(.15+.09*hash(i,j,h+1)));
+      if(to-from<1.1)continue;
+      const widthPatch=width*(.33+.18*hash(i,j,h+2));
+      const offset=(hash(i,j,h+3)-.5)*width*.24;
+      const slightDrift=(hash(i,j,h+4)-.5)*.18;
+      const start=at(from,offset),end=at(to,offset+slightDrift);
+      slab(start,end,widthPatch,
+        dumboWornAsphalt[Math.floor(hash(i,j,h+5)*dumboWornAsphalt.length)],
+        roadY+.005);
+      // A dark sealant edge reads as a true pavement repair from street
+      // height, while all decals remain below the existing lane markings.
+      for(const edge of [from,to]){
+        const p=at(edge,offset+(edge===from?0:slightDrift));
+        orientedRect(p[0],p[1],widthPatch,.027,[dx,dz],
+          dumboSeam,roadY+.012);
+        stats.dumboTarSeams++;
+      }
+      for(const side of [-1,1]){
+        const sideStart=at(from,offset+side*widthPatch*.49);
+        const sideEnd=at(to,offset+slightDrift+side*widthPatch*.49);
+        slab(sideStart,sideEnd,.026,dumboSeam,roadY+.011);
+        stats.dumboTarSeams++;
+      }
+      stats.dumboSurfaceRepairs++;
+    }
+    // Block-length transverse joint, with non-uniform placement/width.
+    const transverse=length*(.23+.51*hash(i,j,83));
+    const cut=at(transverse);
+    orientedRect(cut[0],cut[1],width-.44,.031+.021*hash(i,j,84),
+      [dx,dz],dumboSeam,roadY+.014);
+    stats.dumboTarSeams++;
+    // Irregular branching hairline cracks; no tiny repeated checker pattern.
+    // LOD3 only, so the extra line segments cannot saturate distant views.
+    if(lod>=3 && length>16 && hash(i,j,135)>.43){
+      const along=length*(.14+.31*hash(i,j,136));
+      const across=(hash(i,j,137)-.5)*width*.66;
+      const drift=(hash(i,j,138)-.5)*.48;
+      const run=Math.min(3.1,length*.17);
+      const points=[
+        at(along,across),
+        at(along+run*.32,across+drift*.48),
+        at(along+run*.70,across+drift*.41+.11),
+        at(along+run,across+drift)
+      ];
+      for(let q=0;q<points.length-1;q++)
+        slab(points[q],points[q+1],.027,dumboCrack,roadY+.017);
+      if(hash(i,j,139)>.53){
+        const fork=at(along+run*.86,across+drift+.30);
+        slab(points[2],fork,.021,dumboCrack,roadY+.017);
+      }
+      stats.dumboCrackRuns++;
+    }
+  }
+  // PATROL_NYC_BRIDGEHEAD_APPROACH_FINISH_V1
+  // Reuse only existing, cleared DUMBO cross street j=-11 (z=-363).
+  // i=13..14 lies just east/south of the Brooklyn Bridge terminal (253,-342).
+  // All road topology and clearance gates remain in streetSegment().
+  function bridgeheadApproachFinish(a,b,width,kind,i,j){
+    if(kind!=='street'||j!==-11||i<13||i>14)return;
+    const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    if(length<14)return;
+    const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
+    if(detailBand(...mid)<2)return;
+    // A restrained road-edge stripe, inset from the existing curb. It
+    // cannot generate an unconnected lane or alter vehicle routing.
+    for(const side of [-1,1]){
+      const start=.17,end=.83;
+      const p=[a[0]+(b[0]-a[0])*start,a[1]+(b[1]-a[1])*start];
+      const q=[a[0]+(b[0]-a[0])*end,a[1]+(b[1]-a[1])*end];
+      const [u,v]=shift(p,q,side*(width*.5-.43));
+      slab(u,v,.055,[.68,.71,.69],markY+.005);
+      stats.bridgeheadEdgeGuides++;
+    }
+    // A short pedestrian-side guardrail at the OUTER sidewalk edge on the
+    // bridge-facing side. Keep both intersections open (18% end insets),
+    // verify all post footprints before adding any rail, and never extend
+    // beyond the full-footprint dry/collision-clear swept road corridor.
+    // Match streetFurniture's per-block choice. Existing furniture
+    // on the OPPOSITE sidewalk is fine; a same-side shelter/rack is not.
+    const otherFixture=hash(i,j,49)>=.76;
+    const otherSide=hash(i,j,58)<.5?-1:1;
+    if(otherFixture&&otherSide===1)return;
+    const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+    const nx=dz,nz=-dx,offset=width*.5+1.16;
+    const at=t=>[
+      a[0]+(b[0]-a[0])*t+nx*offset,
+      a[1]+(b[1]-a[1])*t+nz*offset
+    ];
+    const feet=[.18,.50,.82].map(at);
+    if(!feet.every(([x,z])=>siteClear(x,z,.16)&&!nearOld(x,z,3.0)))return;
+    const footY=paveY+.025,postH=1.00,rail=[.365,.83];
+    const darkSteel=[.305,.336,.345],cap=[.53,.56,.56];
+    for(const [x,z] of feet){
+      beam([x,footY,z],[x,footY+postH,z],.057,darkSteel);
+      const crown=[x,footY+postH+.035,z];
+      box(crown[0],crown[1],crown[2],.12,.07,.12,cap);
+    }
+    for(let k=0;k<feet.length-1;k++)
+      for(const h of rail)
+        beam([feet[k][0],footY+h,feet[k][1]],
+          [feet[k+1][0],footY+h,feet[k+1][1]],
+          h>.8?.052:.045,darkSteel);
+    stats.bridgeheadGuardrailSpans+=feet.length-1;
+  }
   function streetSegment(a,b,kind,i,j,allowClip=true){
     const mid=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
     if(!permitted(mid[0],mid[1],true)||
@@ -326,8 +474,14 @@ export function buildNycStreetNetwork({
     }
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
-    slab(a,b,width,asphalt);
+    const dumboFinish=inDumboMaterialZone(i,j);
+    const asphaltColor=dumboFinish
+      ?dumboAsphalt[Math.floor(hash(i,j,201)*dumboAsphalt.length)]:asphalt;
+    slab(a,b,width,asphaltColor);
     activeRoadSegments.push({a,b,width});
+    // Visible resurfacing passes, transverse joints and tar-snakes are
+    // surface decals only, all clipped to the previously cleared road.
+    if(dumboFinish)dumboRoadSurface(a,b,width,i,j);
     // Only selected game corridors receive red bus and green bike lanes;
     // these are DOT-inspired, NOT an inventory of actual Manhattan routes.
     const greenBike=kind==='avenue' && (i===1||i===-3) &&
@@ -359,7 +513,43 @@ export function buildNycStreetNetwork({
     for(const side of [-1,1]){
       const p=shift(a,b,side*(half+.53));
       // Wider concrete frontage leaves space for a furnishings strip.
-      slab(p[0],p[1],1.42,sidewalk,paveY);
+      // Keep the same sidewalk footprint; vary only the concrete finish.
+      const concreteColor=dumboFinish?dumboConcrete[
+        Math.floor(hash(i,j,43+side)*dumboConcrete.length)]:sidewalk;
+      slab(p[0],p[1],1.42,concreteColor,paveY);
+      if(dumboFinish && detailBand(...mid)>=2 && distance>10){
+        // Thin concrete panel tone overlay, spaced by block so that a
+        // continuous flat sidewalk acquires individual poured-slab wear.
+        // One in three panels is tinted; repeated overlays are avoided.
+        const spacing=4.7+1.3*hash(i,j,73);
+        const origin=1.9+.7*hash(i,j,74+side);
+        const selector=Math.floor(hash(i,j,75+side)*3);
+        for(let k=0,along=origin;along<distance-2.0;
+            k++,along+=spacing){
+          if((k+selector)%3!==0)continue;
+          const to=Math.min(distance-1.25,along+spacing-.14);
+          if(to-along<1)continue;
+          const aa=[a[0]+dx*along/distance,a[1]+dz*along/distance],
+            bb=[a[0]+dx*to/distance,a[1]+dz*to/distance];
+          const panel=shift(aa,bb,side*(half+.53));
+          const tint=dumboConcrete[(k+selector+3)%dumboConcrete.length];
+          slab(panel[0],panel[1],1.30,tint,paveY+.007);
+          stats.dumboSidewalkPanels++;
+        }
+        // Localized dark residue near the outer sidewalk edge. Keep
+        // strips below the joint decals and inside the base concrete.
+        if(hash(i,j,102+side)>.56){
+          const from=distance*(.14+.26*hash(i,j,103+side));
+          const to=Math.min(distance-1.0,from+Math.min(4.2,distance*.19));
+          if(to>from){
+            const aa=[a[0]+dx*from/distance,a[1]+dz*from/distance],
+              bb=[a[0]+dx*to/distance,a[1]+dz*to/distance],
+              stain=shift(aa,bb,side*(half+1.07));
+            slab(stain[0],stain[1],.12,dumboCurbStain,paveY+.013);
+            stats.dumboCurbStains++;
+          }
+        }
+      }
       const c=shift(a,b,side*(half+.035));
       slab(c[0],c[1],.22,granite,roadY+.127);
       const g=shift(a,b,side*(half-.18));
@@ -369,25 +559,68 @@ export function buildNycStreetNetwork({
         point(c[1][0],c[1][1],roadY+.128),
         point(c[0][0],c[0][1],roadY+.128),granite);
       // Concrete saw-cut lines break the unrealistic uninterrupted sidewalk.
-      if(detailBand(...mid)>=3 && hash(i,j,71)>.39){
-        for(let along=6.2;along<distance-1.5;along+=8.9){
+      if(detailBand(...mid)>=(dumboFinish?2:3) &&
+         (dumboFinish||hash(i,j,71)>.39)){
+        const jointSpacing=dumboFinish?4.7+1.3*hash(i,j,73):8.9;
+        for(let along=dumboFinish?3.7:6.2;
+            along<distance-1.5;along+=jointSpacing){
           const t=along/distance,x=a[0]+dx*t,z=a[1]+dz*t,
             offs=side*(half+.53);
-          orientedRect(x+normal[0]*offs,z+normal[1]*offs,1.34,.025,
-            [dx,dz],[.39,.40,.38],paveY+.004);
+          orientedRect(x+normal[0]*offs,z+normal[1]*offs,
+            1.34,dumboFinish?.031:.025,[dx,dz],
+            dumboFinish?dumboSawcut:[.39,.40,.38],
+            paveY+(dumboFinish?.017:.004));
           stats.sidewalkJoints++;
         }
       }
     }
-    const lines=kind==='avenue'?2:1;
-    for(let along=4;along<distance-1.5;along+=7.4){
-      const t=along/distance,u=Math.min(1,(along+2.6)/distance);
-      const p=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],
-        q=[a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u];
-      slab(p,q,.105,lines===2?yellow:paint,markY);
-      if(lines===2){
-        const off=shift(p,q,.20);
-        slab(off[0],off[1],.065,yellow,markY);
+    // Game-grid lane layouts, not surveyed lane counts. Reuse the approved
+    // asphalt footprint: avenue trunk = 2+1; special corridors = one lane
+    // each way plus the existing bus/bike lane; numbered streets = one way.
+    const arterial=kind==='avenue',special=greenBike||redBus;
+    const divider=arterial?(greenBike?-.65:redBus?1.00:-half/3):0;
+    const line=(from,to,offset,w,color)=>{
+      if(to<=from)return;
+      const p=[a[0]+dx*from/distance,a[1]+dz*from/distance];
+      const q=[a[0]+dx*to/distance,a[1]+dz*to/distance];
+      const [m,n]=shift(p,q,offset);
+      slab(m,n,w,color,markY);
+    };
+    const end=distance-5.6;
+    if(arterial){
+      line(5.6,end,divider-.08,.062,yellow);
+      line(5.6,end,divider+.08,.062,yellow);
+      if(!special){
+        stats.multiLaneSegments++;
+        for(let pos=5.6;pos<end;pos+=5.1)
+          line(pos,Math.min(end,pos+2.25),half/3,.080,paint);
+      }
+    }else{
+      stats.oneWaySideStreets++;
+      // A single offset separator leaves a curbside parking strip.
+      const curb=j%2===0?-1:1;
+      for(let pos=5.6;pos<end;pos+=6)
+        line(pos,Math.min(end,pos+2),curb*(half-1.43),.065,paint);
+      if(distance>=20&&end>12){
+        const heading=j%2===0?1:-1,pointAt=(u,v)=>[
+          mid[0]+normal[0]*(-curb*.47+u)+dx/distance*v*heading,
+          markY+.010,
+          mid[1]+normal[1]*(-curb*.47+u)+dz/distance*v*heading];
+        const arrow=[pointAt(-.40,.22),pointAt(0,.86),pointAt(.40,.22)];
+        const shaft=[pointAt(-.10,-.72),pointAt(-.10,.23),
+          pointAt(.10,.23),pointAt(.10,-.72)];
+        addTri(...(heading>0?arrow:arrow.reverse()),paint);
+        addQuad(...(heading>0?shaft:shaft.reverse()),paint);
+        // Sparse curbside traffic uses the existing shared vehicle renderer.
+        // Never place a parked car on an authored traffic route or junction.
+        const x=mid[0]+normal[0]*curb*(half-.72);
+        const z=mid[1]+normal[1]*curb*(half-.72);
+        if(addParkedCar&&stats.civilianCars<34&&detailBand(...mid)>=3&&
+          hash(i,j,105)>.64&&!nearOld(x,z,10)&&siteClear(x,z,1.65)){
+          addParkedCar({kind:hash(i,j,106)>.85?'taxi':'sedan',
+            parked:{x,y:roadY+.012,z,yaw:Math.atan2(dx*heading,dz*heading)}});
+          stats.civilianCars++;
+        }
       }
     }
     if(hash(i,j,9)>.65){
@@ -410,11 +643,10 @@ export function buildNycStreetNetwork({
       ?[avenueX(i,(j+1)*grid.blockLength),(j+1)*grid.blockLength]
       :[avenueX(i+1,j*grid.blockLength),j*grid.blockLength];
     const closeTo=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1])<1.35;
-    if(closeTo(a,startNode))connectedStreetNodes.add(
-      (kind==='avenue'?'a':'s')+i+':'+j);
-    if(closeTo(b,endNode))connectedStreetNodes.add(
-      (kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
-      (kind==='avenue'?j+1:j));
+    if(closeTo(a,startNode))connect((kind==='avenue'?'a':'s')+i+':'+j,1);
+    if(closeTo(b,endNode))connect((kind==='avenue'?'a':'s')+(kind==='avenue'?i:i+1)+':'+
+      (kind==='avenue'?j+1:j),2);
+    bridgeheadApproachFinish(a,b,width,kind,i,j);
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
@@ -446,13 +678,13 @@ export function buildNycStreetNetwork({
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
-  function signal(x,z,phase=0,i=0,j=0){
+  function signal(x,z,phase=0,i=0,j=0,forward=ave,inward=-1){
     const base=streetY+.16;
     // Align the physical signal head and its circular lens normals to the
     // slanted avenue bearing. Axis-aligned X/Z cubes looked sideways relative
     // to Manhattan traffic and made the lights look like rectangular stickers.
-    const sideways=cross,forward=ave;
-    const hx=x-sideways[0]*.96,hz=z-sideways[1]*.96;
+    const sideways=[forward[1],-forward[0]];
+    const hx=x+sideways[0]*inward*.96,hz=z+sideways[1]*inward*.96;
     const at=(u,v,depth)=>[
       hx+sideways[0]*u+forward[0]*depth,
       base+3.59+v,
@@ -469,6 +701,17 @@ export function buildNycStreetNetwork({
       at(u0,v0,d0),at(u1,v0,d1),at(u1,v1,d1),at(u0,v1,d0),color);
     q(-.18,-.42,.18,.42,housingBack,housingBack,signalYellow);
     q(-.18,-.42,.18,.42,housingFront,housingFront,iron);
+    // Small retroreflective yellow rim ONLY on the connected Brooklyn
+    // bridgehead signals. It is forward of the existing black front,
+    // not a coincident face, and does not modify signal phases.
+    if(i>=12&&i<=15&&j>=-11&&j<=-9){
+      const rimDepth=housingFront+.018,reflective=[.86,.76,.37];
+      q(-.195,-.435,.195,-.395,rimDepth,rimDepth,reflective);
+      q(-.195,.395,.195,.435,rimDepth,rimDepth,reflective);
+      q(-.195,-.395,-.155,.395,rimDepth,rimDepth,reflective);
+      q(.155,-.395,.195,.395,rimDepth,rimDepth,reflective);
+      stats.bridgeheadSignalTrims++;
+    }
     for(const side of [-1,1]){
       const u=side*.18;
       addQuad(at(u,-.42,housingBack),at(u,-.42,housingFront),
@@ -509,7 +752,7 @@ export function buildNycStreetNetwork({
       phase%2===0?[.82,.49,.22]:[.15,.60,.47]);
     box(x,base+.56,z,.18,1.13,.18,steel);
     // Retain the budgeted street blades and original readable labels.
-    if(lettering && stats.streetNamePlates<88 && (i+j)%2===0){
+    if(forward===ave && lettering && stats.streetNamePlates<88 && (i+j)%2===0){
       const named=j===-1?'W 42 ST':j===0?'W 44 ST':
         j===1?'W 46 ST':j===2?'W 48 ST':'ONE WAY';
       box(x,base+4.65,z+.025,1.62,.32,.12,[.055,.31,.22]);
@@ -519,13 +762,14 @@ export function buildNycStreetNetwork({
     }
     stats.signals++;
   }
-  function crosswalk(x,z,i,j){
+  function crosswalk(x,z,i,j,avenueArms,streetArms){
     const s=grid.blockWidth;
     // Opposing ladder crosswalks plus recessed stop bars.
     for(const side of [-1,1]){
       // Avenue crosses this junction on a slight diagonal. All ladder bars
       // and stop bars follow that road bearing, avoiding the previous
       // axis-aligned, visibly pasted-on road markings.
+      if(avenueArms&(side>0?1:2)){
       const c=[x+ave[0]*side*3.75,z+ave[1]*side*3.75];
       for(let k=-3;k<=3;k++){
         orientedRect(c[0]+cross[0]*k*.77,
@@ -533,10 +777,11 @@ export function buildNycStreetNetwork({
         stats.crosswalks++;
       }
       orientedRect(x+ave[0]*side*5,z+ave[1]*side*5,
-        s*.32,.10,ave,paint,markY+.004);
+        Math.min(6,s*.26),.10,ave,paint,markY+.004);
+      }
       // Second pedestrian crossing, across the numbered east-west side street
       // where the narrow side-road corridor is present.
-      if(detailBand(x,z)>=3 && hash(i,j,31)>.30){
+      if(streetArms&(side>0?1:2)){
         for(let k=-3;k<=3;k++){
           orientedRect(x+side*4.20,z+k*.73,
             .46,1.21,[1,0],paint,markY+.009);
@@ -559,12 +804,25 @@ export function buildNycStreetNetwork({
       for(let k=-2;k<=2;k++)
         rect(xx+k*.115,zz,.034,.41,steel,markY+.010);
     }
+    stats.intersections++;
+    // Signal only where the grid reaches both ends of the avenue and the
+    // one-way street actually enters the junction. Snapshot, not AI control.
+    const fromEast=j%2!==0;
+    const side=fromEast?1:-1;
     const cornerX=x+4.48,cornerZ=z+4.55;
-    if(hash(i,j,3)>.40 && siteClear(cornerX,cornerZ,.30)){
-      // Alternating red and green visual state, rather than random yellow
-      // at most corners. Still static, not a vehicle control simulation.
-      signal(cornerX,cornerZ,(Math.abs(i+j)%2)?2:0,i,j);
-      stats.intersections++;
+    // Manhattan's 220 pair budget is exhausted before Brooklyn runs.
+    // Add at most 12 more at already connected, clearance-checked
+    // bridgehead junctions; other districts keep their previous limit.
+    const bridgeheadSignal=i>=12&&i<=15&&j>=-11&&j<=-9;
+    const signalQuota=bridgeheadSignal?232:220;
+    if(avenueArms===3&&(streetArms&(fromEast?1:2))&&
+       stats.signalizedIntersections<signalQuota&&
+       siteClear(cornerX,cornerZ,.30)&&siteClear(x+side*4.48,z-4.55,.30)){
+      const phase=(Math.abs(i+j)%2)?2:0;
+      signal(cornerX,cornerZ,phase,i,j);
+      signal(x+side*4.48,z-4.55,2-phase,i,j,[side,0],-side);
+      stats.signalizedIntersections++;
+      if(bridgeheadSignal)stats.bridgeheadSignalizedJunctions++;
     }
     // Pedestrian tactile curb ramp pads; restricted to featured intersections.
     if(stats.accessibleCorners<65 && detailBand(x,z)>=3 &&
@@ -603,8 +861,8 @@ export function buildNycStreetNetwork({
       !permitted(x-4,z-4)||!permitted(x+4,z+4))continue;
     // An intersection cannot have painted zebra stripes unless both the
     // approaching avenue AND cross street survived full-footprint clearance.
-    const hasAvenue=connectedStreetNodes.has('a'+i+':'+j);
-    const hasStreet=connectedStreetNodes.has('s'+i+':'+j);
+    const hasAvenue=connectedStreetNodes.get('a'+i+':'+j);
+    const hasStreet=connectedStreetNodes.get('s'+i+':'+j);
     if(!hasAvenue||!hasStreet)continue;
     // Crossings are drawn independently of road strips, so they must also
     // reserve the full intersection box. Otherwise zebra paint and yellow
@@ -631,7 +889,7 @@ export function buildNycStreetNetwork({
       else stats.skippedRoadFootprints++;
       continue;
     }
-    crosswalk(x,z,i,j);
+    crosswalk(x,z,i,j,hasAvenue,hasStreet);
   }
   // Hot-dog sidewalk cart — visibly stainless steel with under-counter
   // storage, 10-sided umbrella, menu, condiment bottles and a small wheelbase.

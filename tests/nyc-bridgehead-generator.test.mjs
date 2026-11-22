@@ -180,3 +180,54 @@ test('Brooklyn road ribbons are rendered as actual clear segments',async()=>{
   assert.ok(stats.streets>=90,'cross streets grow across the bridgehead');
   assert.ok(bridgeRibbons>300,'nonempty visible Brooklyn street batch');
 });
+
+
+test('bridgehead road-edge and guardrail visible in real generated lot clearance',async()=>{
+  const streetSource=await readFile(new URL(
+    '../assets/nyc/nyc-street-network.js',import.meta.url),'utf8');
+  const {buildNycStreetNetwork}=await import('data:text/javascript;base64,'+
+    Buffer.from(streetSource).toString('base64'));
+  const hash=(ix,iy,seed)=>{
+    let n=(ix*374761393+iy*668265263+seed*1442695041)|0;
+    n=(n^(n>>>13))*1274126177;
+    return ((n^(n>>>16))>>>0)/4294967295;
+  };
+  const ground=new Function('city','hash','water','scale','clamp','return ('+
+    functionSource('cityHeight')+')')(city,hash,12.2,54,
+    (v,a,b)=>Math.max(a,Math.min(b,v)));
+  const detailBand=(x,z)=>city.focusZones.some(zone=>
+    (x-zone[0])**2+(z-zone[1])**2<zone[2]**2)?2:0;
+  const isClear=(x,z,r=.1)=>!terrain.parcels.some(lot=>
+    Math.abs(x-lot[0])<=lot[2]/2+r&&Math.abs(z-lot[1])<=lot[3]/2+r);
+  const guards=[],stripes=[];
+  const stats=buildNycStreetNetwork({
+    addQuad(){},addTri(){},box(){},
+    beam:(a,b,w)=>{
+      // Street j=-11 south sidewalk: x~255..303, z~-367.
+      if(a[0]>250&&a[0]<305&&a[2]>-369&&a[2]<-363)
+        guards.push({a,b,w});
+    },
+    ribbon:(a,b,w)=>{
+      if(Math.abs(w-.055)<1e-8)stripes.push([a,b]);
+    },
+    terrainAt:(x,z)=>ground(x,z)*54,
+    detailBand,grid:city,streetY:14.86,waterY:12.2,
+    timesBounds:city.timesSquareBounds,existingStreets:city.streets,isClear
+  });
+  assert.ok(stats.bridgeheadEdgeGuides>=2,'real dry bridgehead road has guide paint');
+  assert.ok(stats.bridgeheadGuardrailSpans>=2,'real lot-safe sidewalk has short rail');
+  assert.ok(stats.bridgeheadSignalTrims>=2,'existing connected junction has highlighted signal');
+  assert.ok(stats.bridgeheadSignalizedJunctions>=1,'signal not placed on a dead-end');
+  assert.equal(stripes.length,stats.bridgeheadEdgeGuides,
+    'guide ribbons are painted only inside accepted roads');
+  assert.ok(guards.length>=3,'bridge-facing sidewalk rail posts emitted');
+  assert.ok(stats.bridgeheadSignalizedJunctions<=12,'bridgehead signal budget capped');
+});
+
+test('bridgehead wet reflection is NYC-only and dry-weather gated',()=>{
+  assert.match(source,/PATROL_NYC_BRIDGEHEAD_WET_REFLECTION_V1/);
+  assert.match(source,/bridgeDetail=bridgeWetZone\*step\(1\.5,uNyStreetQuality\)/);
+  assert.match(source,/road<0\.01 \|\| wet<0\.025/);
+  assert.match(source,/if\(uManhattanView && uNyStreetQuality>0\.5\)/);
+  assert.match(source,/return oldNight\+skyGlint;/);
+});

@@ -1,0 +1,59 @@
+name: NYC stacked bridgehead full-cycle footprint WebGL2 QA
+
+on:
+  push:
+    branches:
+      - qa/nyc-bridgehead-full-footprint-20261121-chat
+    paths:
+      - scripts/nyc-bridgehead-full-footprint-qa.mjs
+      - .github/workflows/nyc-bridgehead-full-footprint.yml
+  pull_request:
+    paths:
+      - scripts/nyc-bridgehead-full-footprint-qa.mjs
+      - .github/workflows/nyc-bridgehead-full-footprint.yml
+      - index.html
+      - tests/nyc-bridgehead-vehicle-connector.test.mjs
+      - tests/nyc-bridgehead-mesh-3d-clearance.test.mjs
+
+concurrency:
+  group: nyc-bridgehead-full-footprint-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live-traffic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check bridgehead QA syntax and targeted connector tests
+        run: |
+          node --check scripts/nyc-bridgehead-full-footprint-qa.mjs
+          node --test tests/nyc-bridgehead-vehicle-connector.test.mjs tests/nyc-petalwake-road-chunks.test.mjs tests/nyc-bridgehead-signal-sync.test.mjs tests/nyc-bridgehead-mesh-3d-clearance.test.mjs
+      - name: Install free headless WebGL2 Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve original PATROL game
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-bridgehead-traffic-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Inspect complete bridgehead trajectory, car footprint/rail clearance, capture two cameras
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+          PATROL_NYC_SIGNAL_VISUAL_QA: '1' # test-response-only close lens red/green evidence
+        run: node scripts/nyc-bridgehead-full-footprint-qa.mjs
+      - name: Upload real browser traffic report and fixed camera PNGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-bridgehead-full-footprint-qa
+          path: artifacts/nyc-bridgehead-full-footprint/
+          retention-days: 7
+          if-no-files-found: ignore
