@@ -92,7 +92,7 @@ for tag, info in PACKS.items():
                 if total > 15_000_000:
                     raise ValueError("source exceeded streamed byte cap")
                 data.extend(chunk)
-        if not data.startswith(b"PK\\x03\\x04".replace(b"\\\\", b"\\")):
+        if not data.startswith(b"PK\x03\x04"):
             raise ValueError("Official response not ZIP: " + repr(bytes(data[:50])))
         zip_path = OUT / (tag + "-original.zip")
         zip_path.write_bytes(data)
