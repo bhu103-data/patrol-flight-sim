@@ -1,0 +1,63 @@
+name: NYC DUMBO OTI fixed-camera SwiftShader rAF A/B
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/nyc/dumbo-oti-raf-ab.mjs"
+      - ".github/workflows/nyc-dumbo-oti-raf-ab.yml"
+
+concurrency:
+  group: nyc-dumbo-oti-raf-ab-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fixed-raf-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout verified source-only baseline #192
+        uses: actions/checkout@v4
+        with:
+          ref: 0eff65fdd133c8c3bd2a762e407e967bc024e299
+          path: baseline
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check QA script and install free headless Chromium
+        working-directory: candidate
+        run: |
+          node --check tools/nyc/dumbo-oti-raf-ab.mjs
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Serve exact builds without altering either HTML
+        run: |
+          python3 -m http.server 8765 -d baseline --bind 127.0.0.1 >/tmp/patrol-oti-baseline.log 2>&1 &
+          python3 -m http.server 8766 -d candidate --bind 127.0.0.1 >/tmp/patrol-oti-candidate.log 2>&1 &
+          for port in 8765 8766; do
+            for attempt in {1..30}; do
+              if curl -fsS "http://127.0.0.1:${port}/index.html" -o /dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS "http://127.0.0.1:${port}/index.html" -o /dev/null
+          done
+      - name: Measure same-view ABBA real software WebGL2 rAF cadence
+        env:
+          PATROL_QA_BASELINE_URL: http://127.0.0.1:8765
+          PATROL_QA_CANDIDATE_URL: http://127.0.0.1:8766
+        run: node candidate/tools/nyc/dumbo-oti-raf-ab.mjs
+      - name: Retain performance JSON and two fixed-camera PNGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-oti-source-exact-raf-ab
+          path: artifacts/nyc-dumbo-oti-perf/
+          retention-days: 7
+          if-no-files-found: warn
