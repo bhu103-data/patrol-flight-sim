@@ -184,6 +184,15 @@ No model files or derivatives from this dataset were downloaded, committed,
 or used in PATROL. This is a fail-closed provenance decision, not a claim
 that the public dataset is unusable for every purpose.
 
+
+- The existing NYC Building Footprints source snapshot (`3g6p-4u5s`) and DCM
+  centerline snapshot are publicly accessible municipal datasets, but the
+  checked-in provenance must not be described as CC0: the current source
+  metadata/terms do not state a named SPDX/CC license in the project record.
+  Retain attribution and source URLs, and treat redistribution of raw or
+  derived source snapshots as a separate rights-review item. No new
+  NYC-derived source snapshot was added by this follow-up.
+
 ### Current release decision
 
 - Keep #211 Draft and keep #293/#248/#239 as isolated opt-in experiments.
