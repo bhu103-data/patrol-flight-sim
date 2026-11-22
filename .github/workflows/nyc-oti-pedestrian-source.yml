@@ -1,0 +1,61 @@
+name: NYC official 2022 plaza-sidewalk roadbed source and screenshot QA
+on:
+  pull_request:
+    branches: [qa/nyc-real-roadbed-polygons-20261122-chat]
+    paths:
+      - 'scripts/nyc-times-pedestrian-plaza-source.mjs'
+      - 'tests/nyc-times-pedestrian-plaza-source.test.mjs'
+      - 'tools/nyc/pedestrian-plaza-browser-smoke.mjs'
+      - '.github/workflows/nyc-oti-pedestrian-source.yml'
+      - 'docs/NYC_TIMES_OFFICIAL_PEDESTRIAN_SURFACES.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pedestrian-sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate official pedestrian polygon parser and source-specific QA
+        run: |
+          node --check scripts/nyc-times-pedestrian-plaza-source.mjs
+          node --check tools/nyc/pedestrian-plaza-browser-smoke.mjs
+          node --test tests/nyc-times-pedestrian-plaza-source.test.mjs
+      - name: Fetch genuine building, DCM and OTI 2022 roadbed source artefacts
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+      - name: Fetch OTI 2022 actual plaza and sidewalk polygon geometries
+        run: |
+          node scripts/nyc-times-pedestrian-plaza-source.mjs
+          test -s artifacts/nyc-oti-pedestrian-source/pedestrian-surfaces.json
+          test -s artifacts/nyc-oti-pedestrian-source/pedestrian-roadbed-overlay.svg
+      - name: Install free browser pixel QA tools
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start static source-only SVG preview server
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-oti-pedestrian-source > /tmp/nyc-oti-plaza.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8765/pedestrian-roadbed-overlay.svg -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture actual official roadbed plaza and sidewalk pixels
+        run: node tools/nyc/pedestrian-plaza-browser-smoke.mjs
+      - name: Upload exact source evidence and image, including on QA failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-oti-times-plaza-sidewalk
+          path: artifacts/nyc-oti-pedestrian-source/
+          if-no-files-found: ignore
+          retention-days: 7
