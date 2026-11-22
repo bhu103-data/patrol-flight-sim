@@ -1,5 +1,15 @@
 name: NYC OSM Times Square building-tag source audit (no game import)
 on:
+  push:
+    branches:
+      - qa/nyc-osm-times-square-tags-20261122-chat
+    paths:
+      - "assets/nyc/times-square-footprints.json"
+      - "scripts/nyc-osm-times-square-audit.mjs"
+      - "scripts/nyc_osm_times_square_extract.py"
+      - "tests/nyc-osm-times-square-audit.test.mjs"
+      - "tests/test_nyc_osm_times_square_extract.py"
+      - "docs/NYC_OSM_TIMES_SQUARE_TAG_AUDIT.md"
   pull_request:
     paths:
       - "assets/nyc/times-square-footprints.json"
