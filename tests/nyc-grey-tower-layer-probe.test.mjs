@@ -17,7 +17,7 @@ test('each actual NYC mesh draw path has exactly one diagnostic layer gate',()=>
   for(const [layer,pattern] of [
     ['background',/backgroundBuildings && !nycVisualProbeOmits\('procedural'\)/],
     ['hand-authored landmark blocks',/mapScenery && !nycVisualProbeOmits\('scenery'\)/],
-    ['GIS infill',/nycGisMesh\?\.count && !nycVisualProbeOmits\('gis'\)/],
+    ['GIS infill',/if\(selectedMap\.city && nycGisMesh\?\.count\)\{\s*if\(!nycVisualProbeOmits\('gis'\)\)/],
     ['NYC distant hero detail',/nycHeroScenery\?\.count && !nycVisualProbeOmits\('hero'\)/],
     ['named landmark meshes',/selectedMap\.city && !nycVisualProbeOmits\('landmarks'\)/]
   ])assert.match(html,pattern,'Missing guarded '+layer);
