@@ -5030,34 +5030,64 @@ const CENTRAL_PARK_SITES=[
   // signal uses the same scene clock as its physically illuminated lens.
   // Red 12s, green 20s. Only the two dedicated bridge connector cars
   // obey this stop line; no change to other city traffic or maps.
-  function bridgeheadSignalGreen(time){
+  // PATROL_NYC_BRIDGEHEAD_SIGNAL_AMBER_EASE_V2:
+  // Red 0..12s, green 12..27s, amber 27..32s. Shared by real lamp
+  // and only the two bridge-to-DUMBO connector vehicles.
+  function bridgeheadSignalPhase(time){
     const phase=((time%32)+32)%32;
-    return phase>=12;
+    return phase<12?'red':phase<27?'green':'amber';
+  }
+  function bridgeheadSignalGreen(time){
+    return bridgeheadSignalPhase(time)==='green';
   }
 
-  // Analytic travel with red-light waits, independent of draw cadence.
-  // The signal is checked at the stop line; clearing after green resumes
-  // progress without teleporting or modifying the authored road route.
+  // Analytic speed-continuous stopping and starting, unaffected by
+  // frame rate / rendering cull. A red/amber nominal arrival triggers
+  // a braking arc over the last 8 route units. After the next green,
+  // accelerate over 8 more units; neither leg exceeds normal speed.
   function bridgeheadSignalTravel(actor,time){
     if(time<=0 || !Number.isFinite(time))return actor.offset+time*actor.pace;
     const radius=actor.laneOffset??1.07;
     const period=2*(actor.route.total+Math.PI*radius);
     const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
       (actor.signalQueueSlot??0)*5.5;
+    const speed=actor.pace;
     let now=0,distance=actor.offset;
     for(let count=0;count<256 && now<time;count++){
       const laps=Math.floor((distance-stopAt)/period)+1;
       const nextStop=stopAt+laps*period;
-      const arrival=now+(nextStop-distance)/actor.pace;
-      if(arrival>=time)return distance+(time-now)*actor.pace;
-      distance=nextStop;now=arrival;
+      const remaining=nextStop-distance;
+      const nominalArrival=now+remaining/speed;
+      if(bridgeheadSignalGreen(nominalArrival)){
+        if(time<=nominalArrival)return distance+(time-now)*speed;
+        distance=nextStop;now=nominalArrival;
+        continue;
+      }
+      const brakeDistance=Math.min(8,remaining);
+      const start=now+(remaining-brakeDistance)/speed;
+      const duration=2*brakeDistance/speed;
+      if(time<=start)return distance+(time-now)*speed;
+      if(time<start+duration){
+        const u=(time-start)/duration;
+        return nextStop-brakeDistance+brakeDistance*(2*u-u*u);
+      }
+      now=start+duration;distance=nextStop;
       if(!bridgeheadSignalGreen(now)){
         const phase=((now%32)+32)%32;
-        now+=12-phase;
+        // On amber, wait through the following red until next green.
+        now+=phase<12?12-phase:44-phase;
       }
-      if(now>=time)return distance;
+      if(time<=now)return distance;
+      // Acceleration: x=x0+D*u², derivative grows 0 -> cruise speed.
+      const accelDuration=2*brakeDistance/speed;
+      if(time<now+accelDuration){
+        const u=(time-now)/accelDuration;
+        return distance+brakeDistance*u*u;
+      }
+      distance+=brakeDistance;
+      now+=accelDuration;
     }
-    // Fail closed on an extreme time jump instead of jumping past red.
+    // Fail closed if the scene time jumps across >256 signal cycles.
     return distance;
   }
 
@@ -5641,7 +5671,8 @@ const CENTRAL_PARK_SITES=[
       addModelBox(mesh.addQuad,0,0,0,.034,.135,.158,color);
       return mesh.upload();
     };
-    return {red:make([.99,.115,.065]),green:make([.14,.98,.28])};
+    return {red:make([.99,.115,.065]),amber:make([.99,.76,.12]),
+      green:make([.14,.98,.28])};
   })();
   const taxiLamps=(()=>{
     const mesh=createTriangleMesh();
@@ -5700,9 +5731,12 @@ const CENTRAL_PARK_SITES=[
       const bridge=EAST_RIVER_BRIDGE;
       const end=bridge.x+bridge.halfLength+bridge.ramp;
       const headZ=bridge.z-(bridge.halfWidth+.36)+1.05;
+      const phase=bridgeheadSignalPhase(sceneryTime);
       const green=bridgeheadSignalGreen(sceneryTime);
-      const lamp=green?nycBridgeheadSignalFaces.green:nycBridgeheadSignalFaces.red;
-      const lampPos=[end-.202,STREET_Y+3.83+(green?-.25:.25),headZ];
+      const lamp=phase==='amber'?nycBridgeheadSignalFaces.amber:
+        green?nycBridgeheadSignalFaces.green:nycBridgeheadSignalFaces.red;
+      const lampPos=[end-.202,STREET_Y+3.83+
+        (phase==='red'?.25:phase==='amber'?0:-.25),headZ];
       drawMesh(lamp,mat4FromBasis(lampPos,[1,0,0],worldUp,[0,0,1],1),true);
     }
     for (const actor of cityTraffic) {
