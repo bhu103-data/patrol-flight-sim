@@ -94,7 +94,14 @@ export function buildChongqingHotpotUpperWindows({THREE,scene,pbr,shopX,shopZ,sh
   const glassMat=pbr.glassPane?.clone?.()??new THREE.MeshStandardMaterial({
     color:0x9bb0b6,metalness:.23,roughness:.25
   });
-  glassMat.transparent=false;glassMat.roughness=.30;
+  // Real WebGL daylight A/B caught an oversized orange point-light glare
+  // from the inherited highly metallic smooth-glass material. The pane now
+  // reads as slightly weathered glass rather than a polished metal mirror;
+  // never modify the shared PBR glass material used by other buildings.
+  glassMat.transparent=false;
+  if(glassMat.color?.setHex)glassMat.color.setHex(0xb9c8cd);
+  glassMat.roughness=.64;glassMat.metalness=.08;
+  if('emissiveIntensity' in glassMat)glassMat.emissiveIntensity=.12;
   const timberMat=pbr.carvedWood?.clone?.()??new THREE.MeshStandardMaterial({
     color:0x9c8c77,roughness:.85
   });
