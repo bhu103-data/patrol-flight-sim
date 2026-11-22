@@ -27,15 +27,15 @@ FEATURE_QUERY = (
 )
 ORIGIN = (-73.9864883, 40.756421)
 RAD = math.pi / 180.0
+WGS84_A = 6378137.0
+WGS84_F = 1.0 / 298.257223563
+WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 LAT = ORIGIN[1] * RAD
-METERS_PER_DEG_LON = (
-    111412.84 * math.cos(LAT)
-    - 93.5 * math.cos(3 * LAT)
-    + 0.118 * math.cos(5 * LAT)
-)
-METERS_PER_DEG_LAT = (
-    111132.92 - 559.82 * math.cos(2 * LAT)
-    + 1.175 * math.cos(4 * LAT)
+SIN_LAT = math.sin(LAT)
+WGS84_DENOM = math.sqrt(1.0 - WGS84_E2 * SIN_LAT * SIN_LAT)
+METERS_PER_RAD_LON = WGS84_A / WGS84_DENOM * math.cos(LAT)
+METERS_PER_RAD_LAT = (
+    WGS84_A * (1.0 - WGS84_E2) / (WGS84_DENOM ** 3)
 )
 DCP_SOURCE_URL = "https://data.cityofnewyork.us/d/u5j4-zxpn"
 DCP_METADATA_URL = (
@@ -52,9 +52,11 @@ VERTICAL_TOLERANCE_FT = 1.6
 def wgs84_to_local_meters(lon: float, lat: float) -> tuple[float, float]:
     if not all(math.isfinite(v) for v in (lon, lat)):
         raise ValueError("Non-finite WGS84 footprint coordinate")
+    # Match assets/nyc/times-square-metric-massing.js exactly: local
+    # WGS84 ellipsoid east/north metres, not degrees-per-degree scaled twice.
     return (
-        (lon - ORIGIN[0]) * RAD * METERS_PER_DEG_LON,
-        (lat - ORIGIN[1]) * RAD * METERS_PER_DEG_LAT,
+        (lon - ORIGIN[0]) * RAD * METERS_PER_RAD_LON,
+        (lat - ORIGIN[1]) * RAD * METERS_PER_RAD_LAT,
     )
 
 
