@@ -213,12 +213,22 @@ try{
   await page.keyboard.down('w');
   await page.keyboard.down('d');
   await page.keyboard.down('Space');
+  try{
+    await page.waitForFunction(()=>
+      window.PatrolMetricFlightQA?.airborneActiveControlFrames>=2,
+      null,{timeout:18000});
+  }catch(error){
+    report.c185InputDiagnostic=await page.evaluate(()=>({
+      keys:window.PatrolMetricFlightQA?.keyboardDiagnostics,
+      activeFrames:window.PatrolMetricFlightQA?.airborneActiveControlFrames||0,
+      lastControl:window.PatrolMetricFlightQA?.airborneLastControl,
+      hasFocus:document.hasFocus(),activeElement:document.activeElement?.id
+    }));
+    throw Error('C185 controls never reached RAF: '+JSON.stringify(report.c185InputDiagnostic));
+  }
   await page.waitForFunction(n=>
     window.PatrolMetricFlightQA?.airborneSteps>=n+6,
     report.c185Before.steps,{timeout:65000});
-  await page.keyboard.up('Space');
-  await page.keyboard.up('d');
-  await page.keyboard.up('w');
   report.c185After=await page.evaluate(()=>({
     pos:window.PatrolMetricFlightQA.airbornePos,
     yaw:window.PatrolMetricFlightQA.airborneYaw,
@@ -229,8 +239,14 @@ try{
     collision:window.PatrolMetricFlightQA.airborneCollision,
     steps:window.PatrolMetricFlightQA.airborneSteps,
     glError:window.PatrolMetricFlightQA.glError,
-    errors:window.PatrolMetricFlightQA.errors
+    errors:window.PatrolMetricFlightQA.errors,
+    activeControlFrames:window.PatrolMetricFlightQA.airborneActiveControlFrames||0,
+    keyHistory:window.PatrolMetricFlightQA.airborneKeyHistory||[],
+    inputDiagnostics:window.PatrolMetricFlightQA.keyboardDiagnostics
   }));
+  await page.keyboard.up('Space');
+  await page.keyboard.up('d');
+  await page.keyboard.up('w');
   report.c185AirborneMovedMeters=Math.hypot(
     ...report.c185Before.pos.map((v,i)=>report.c185After.pos[i]-v)
   );
