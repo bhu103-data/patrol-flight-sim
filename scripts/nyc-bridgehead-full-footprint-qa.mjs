@@ -4,6 +4,7 @@
 // in Git and its production runtime remain unchanged. Chromium uses software
 // WebGL2 on CI; rAF intervals below are NOT GPU timing measurements.
 import {chromium} from 'playwright';
+import {PNG} from 'pngjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
@@ -12,6 +13,23 @@ await mkdir(out,{recursive:true});
 const errors=[],screenshots=[];
 const result={passed:false,errors,screenshots,renderer:'unverified',probeInjected:false};
 const assert=(ok,message)=>{if(!ok)throw Error(message);};
+// Fixed camera ROI calibrated against the first actual 1280x720 WebGL PNGs,
+// not an inferred shader color. Rescale coordinates if capture DPR changes.
+// Small lamp ROI, not a photorealism or scene-wide brightness measurement.
+function lampMeanRgb(bytes,roi){
+  const png=PNG.sync.read(bytes);
+  const [l,t,r,b]=roi;
+  const x0=Math.floor(l*png.width/1280),x1=Math.ceil(r*png.width/1280);
+  const y0=Math.floor(t*png.height/720),y1=Math.ceil(b*png.height/720);
+  const sums=[0,0,0];let n=0;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+    const i=(y*png.width+x)*4;
+    sums[0]+=png.data[i];sums[1]+=png.data[i+1];
+    sums[2]+=png.data[i+2];n++;
+  }
+  assert(n>40,'Signal screenshot ROI unexpectedly too small');
+  return sums.map(v=>Number((v/n).toFixed(1)));
+}
 const injection=String.raw`
   // Test-only closure access; this string never enters the repository's index.
   window.__patrolBridgeheadQa = () => {
@@ -135,6 +153,15 @@ const injection=String.raw`
       streetY:STREET_Y,waterY:WATER_H,
       lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows};
   };
+  // Test-only snapshot clock: drive the production signal's actual scene
+  // time to known red/green windows for a stable physical-lens comparison.
+  window.__patrolBridgeheadLightState = () => ({
+    time:sceneryTime,green:bridgeheadSignalGreen(sceneryTime)
+  });
+  window.__patrolBridgeheadVisualClock = time => {
+    sceneryTime=time;
+    return window.__patrolBridgeheadLightState();
+  };
 `;
 
 const browser=await chromium.launch({headless:true,args:[
@@ -155,7 +182,18 @@ try{
     assert(html.includes(marker),'Production traffic entry missing');
     assert(html.split(marker).length===2,'Traffic injection marker is ambiguous');
     assert(!html.includes('__patrolBridgeheadQa'),'Probe name already in production');
-    await route.fulfill({response,body:html.replace(marker,injection+marker)});
+    let instrumented=html.replace(marker,injection+marker);
+    if(process.env.PATROL_NYC_SIGNAL_VISUAL_QA==='1'){
+      // This scenic view exists ONLY in the served test response, never
+      // in the committed gameplay or normal Scenic Views dropdown.
+      const key='  const NYC_SCENIC_VIEWS=[';
+      assert(instrumented.includes(key),'NYC scenic views marker missing');
+      assert(instrumented.split(key).length===2,'NYC scenic view anchor ambiguous');
+      instrumented=instrumented.replace(key,key+`\n    {name:'Bridge Signal QA · Close',x:253,z:-345.51,
+      height:4.05,bearing:-90,radius:13,rise:2.3,
+      detail:'Test-only west-facing view of active bridge signal'},`);
+    }
+    await route.fulfill({response,body:instrumented});
     result.probeInjected=true;
   });
   const response=await page.goto(base+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
@@ -246,6 +284,68 @@ try{
       await page.evaluate(()=>document.body.classList.remove('patrol-bridge-qa'));
     }
     screenshots.push({name,label,view});
+  }
+  if(process.env.PATROL_NYC_SIGNAL_VISUAL_QA==='1'){
+    await page.locator('#hotelTarget').selectOption(
+      {label:'Bridge Signal QA · Close'});
+    await page.locator('#hotelZoom').evaluate(el=>{
+      el.value='90';el.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    await page.waitForTimeout(1700);
+    result.signalVisual={camera:'Bridge Signal QA · Close',captures:[],
+      roi:{upperRed:[633,344,648,361],lowerGreen:[633,380,648,393]},
+      colorContrast:null};
+    for(const [want,time,name] of [
+      [false,1,'03-bridge-signal-close-red.png'],
+      [true,18,'04-bridge-signal-close-green.png']
+    ]){
+      // Force *real* signal clock only in intercepted test HTML; render
+      // the actual existing 3D housing and selected red/green mesh.
+      // Screenshots include scene pixels only, never test overlays.
+      let snapshot=null;
+      for(let attempt=0;attempt<3;attempt++){
+        const set=await page.evaluate(t=>
+          window.__patrolBridgeheadVisualClock?.(t),time);
+        assert(set?.green===want,'Test-only clock failed to select light color');
+        await page.waitForTimeout(500);
+        const before=await page.evaluate(()=>
+          window.__patrolBridgeheadLightState?.());
+        assert(before?.green===want,'Scene signal phase already drifted');
+        await page.evaluate(()=>
+          document.body.classList.add('patrol-bridge-qa'));
+        let pngBytes=null;
+        try{
+          pngBytes=await page.locator('#glCanvas').screenshot({
+            path:out+'/'+name,timeout:90000,animations:'allow'
+          });
+        }finally{
+          await page.evaluate(()=>
+            document.body.classList.remove('patrol-bridge-qa'));
+        }
+        const after=await page.evaluate(()=>
+          window.__patrolBridgeheadLightState?.());
+        snapshot={name,want,before,after,attempt:attempt+1,
+          topRedRgb:lampMeanRgb(pngBytes,[633,344,648,361]),
+          bottomGreenRgb:lampMeanRgb(pngBytes,[633,380,648,393])};
+        if(after?.green===want)break;
+      }
+      assert(snapshot?.after?.green===want,
+        'Screenshot drifted into wrong signal phase: '+JSON.stringify(snapshot));
+      const gl=await page.evaluate(()=>document.getElementById('glCanvas')
+        ?.getContext('webgl2')?.getError());
+      assert(gl===0,'Signal close-up WebGL error: '+gl);
+      result.signalVisual.captures.push(snapshot);
+      screenshots.push({name,label:'Bridge Signal QA · Close',
+        phase:want?'green':'red'});
+    }
+    const red=result.signalVisual.captures[0],
+      green=result.signalVisual.captures[1];
+    const upperRedGain=Number((red.topRedRgb[0]-green.topRedRgb[0]).toFixed(1));
+    const lowerGreenGain=Number((green.bottomGreenRgb[1]-red.bottomGreenRgb[1]).toFixed(1));
+    result.signalVisual.colorContrast={upperRedGain,lowerGreenGain};
+    assert(upperRedGain>=25&&lowerGreenGain>=40,
+      'Physical bridge signal is not visually distinguishable red vs green: '+
+      JSON.stringify(result.signalVisual));
   }
   assert(errors.length===0,'Browser exceptions/assets: '+errors.join('; '));
   result.passed=true;
