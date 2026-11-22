@@ -1,0 +1,39 @@
+name: NYC DUMBO official OTI polygon/height source QA
+
+on:
+  push:
+    branches:
+      - data/nyc-dumbo-oti-footprint-pilot-20261122-chat
+    paths:
+      - scripts/nyc-dumbo-oti-source-qa.mjs
+      - .github/workflows/nyc-dumbo-oti-source.yml
+  pull_request:
+    paths:
+      - scripts/nyc-dumbo-oti-source-qa.mjs
+      - .github/workflows/nyc-dumbo-oti-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-dumbo-footprints:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check source collector JavaScript
+        run: node --check scripts/nyc-dumbo-oti-source-qa.mjs
+      - name: Fetch and independently validate public municipal DUMBO polygons
+        run: node scripts/nyc-dumbo-oti-source-qa.mjs
+      - name: Upload verified WGS84 footprints, heights and source provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-oti-source-pilot
+          path: artifacts/nyc-dumbo-oti/
+          retention-days: 7
+          if-no-files-found: ignore
