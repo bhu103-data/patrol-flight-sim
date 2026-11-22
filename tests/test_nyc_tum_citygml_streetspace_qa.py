@@ -1,8 +1,11 @@
 import json
 import tempfile
+import sys
 import unittest
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.nyc.tum_citygml_streetspace_qa import (
     geometry_positions,
@@ -55,5 +58,5 @@ class TumCityGmlStreetspaceQaTests(unittest.TestCase):
                 safe_extract_zip(archive_path, root / "extract")
 
 
-if (import_name := __name__) == "__main__":
+if __name__ == "__main__":
     unittest.main()
