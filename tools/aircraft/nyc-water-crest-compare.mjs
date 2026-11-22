@@ -46,6 +46,7 @@ const inject=html=>html.replace(camera,`
     .replace(aircraftClock,'plane.yaw,20.0,');
 const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
 const bandFilterAB=process.env.PATROL_COMPARE_MODE==='band-filter';
+const footprintAB=process.env.PATROL_COMPARE_MODE==='footprint';
 const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
 const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
 if(seaDetailAB&&src.split(detailEnabled).length!==2)
@@ -54,13 +55,18 @@ const bandEnabled='const bool NYC_HORIZON_SLOPE_FILTER = true;';
 const bandDisabled='const bool NYC_HORIZON_SLOPE_FILTER = false;';
 if(bandFilterAB&&src.split(bandEnabled).length!==2)
   throw Error('Missing reversible NYC horizon shading filter');
-const sourceBefore=inject(bandFilterAB
-  ?src.replace(bandEnabled,bandDisabled)
+const earlyEnabled='const bool NYC_HORIZON_FOOTPRINT_EARLY = true;';
+const earlyDisabled='const bool NYC_HORIZON_FOOTPRINT_EARLY = false;';
+if(footprintAB&&src.split(earlyEnabled).length!==2)
+  throw Error('Missing reversible NYC earlier horizon footprint switch');
+const sourceBefore=inject(footprintAB
+  ?src.replace(earlyEnabled,earlyDisabled)
+  :bandFilterAB?src.replace(bandEnabled,bandDisabled)
   :seaDetailAB?src.replace(detailEnabled,detailDisabled)
   :src.replace(modern,old));
 const sourceAfter=inject(src);
 const origin=new URL(url).origin,report={
-  mode:bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
+  mode:footprintAB?'footprint':bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
   note:'Test-only fixed shader time, not a runtime setting'};
 const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';
