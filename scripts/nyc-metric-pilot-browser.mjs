@@ -47,7 +47,11 @@ try{
    document.querySelector('footer').style.visibility='hidden';
  });
  await page.locator('canvas').screenshot({path:out+'/times-square-metre-oblique.png'});
+ // The real top-view control lives inside the overlay. Restore it for the
+ // genuine click before hiding the panel again for the matched canvas shot.
+ await page.evaluate(()=>document.querySelector('aside').style.visibility='visible');
  await page.locator('#top').click();
+ await page.evaluate(()=>document.querySelector('aside').style.visibility='hidden');
  await page.waitForTimeout(400);
  const top=await page.evaluate(()=>window.PatrolNycMetricQA().camera);
  if(Math.abs(top.pitch-1.56)>.001||Math.abs(top.yaw)>.001)
