@@ -12,7 +12,7 @@
 - Source horizontal CRS is NAD83 / New York Long Island **EPSG:2263 in US survey feet**. It must never be read as WGS84 degrees or metres.
 - DCP describes a hybrid LoD1/LoD2 model. Most buildings are LoD1/1.5; roughly 100 iconic buildings have LoD2 roof geometry. Small rooftop structures may be absent.
 
-**BK02 layer-name correction:** the actual archived model inventory uses `Buildings::Surface_RoofTop`, `Buildings::Surface_Facade`, and `Buildings::Surface_FootPrint`. These are the selected cached surface layers. The parallel `Buildings::Building_RoofTop`, `Building_Facade`, and `Building_FootPrint` catalog layers are deliberately excluded so the same source surfaces are not counted/rendered twice. MN05's separate `RoofTop Surface` / `Facade Surface` aliases remain supported by the exact layer classifier.
+**BK02 layer-name correction:** the actual archived model inventory uses `Buildings::Surface_RoofTop`, `Buildings::Surface_Facade`, and `Buildings::Surface_FootPrint`. These are the selected cached surface layers for this pilot. The parallel `Buildings::Building_RoofTop`, `Building_Facade`, and `Building_FootPrint` catalog family is deliberately excluded from this extraction scope; its geometry relationship to the `Surface_*` family has not been established and must not be assumed. MN05's separate `RoofTop Surface` / `Facade Surface` aliases remain supported by the exact layer classifier.
 
 ## Executable work in this branch
 
