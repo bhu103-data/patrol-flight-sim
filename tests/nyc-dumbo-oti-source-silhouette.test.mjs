@@ -68,13 +68,49 @@ test('actual source topology produces non-box silhouettes and watertight roof ar
     }
     assert.ok(result.walls>=8&&result.windows>=20);
     assert.ok(result.floors>=3);
-    assert.ok(quads.filter(q=>q.at(-1)===13).length===result.windows,
+    assert.ok(quads.filter(q=>q.at(-1)===13).length===result.windows+result.doors,
       'one source-derived window pane per authored bay, no duplicate main box');
-    assert.ok(quads.length<=165 && tris.length<=13,
+    assert.ok(quads.length<=500 && tris.length<=13,
       'bounded same-mesh quad/triangle budget for WebGL2');
   }
   assert.ok(new Set(shapeCounts).size>=2,
     'GIS silhouettes should not be three clone rectangles');
+});
+
+test('all 129 pilot windows and three original authored entries have 0.18-unit wall cavities',()=>{
+  assert.match(source,/PATROL_DUMBO_OTI_RECESSED_BAYS_V2/);
+  const {select,build}=setup();
+  let totalWindows=0,totalDoors=0,totalQuads=0;
+  for(const lot of sites){
+    const {result,quads,tris}=audit(lot,select(lot,3),build);
+    assert.equal(result.doors,1,'exactly one authored entry per pilot');
+    assert.equal(result.windowReveals,4*result.windows,
+      'left/right/sill/header are real 3D faces for every window');
+    const panes=quads.filter(q=>q.at(-1)===13);
+    assert.equal(panes.length,result.windows+result.doors);
+    for(const pane of panes){
+      const cx=pane.slice(0,4).reduce((s,p)=>s+p[0],0)/4;
+      const cz=pane.slice(0,4).reduce((s,p)=>s+p[2],0)/4;
+      let distance=Infinity;
+      for(let k=0;k<result.ring.length;k++){
+        const a=result.ring[k],b=result.ring[(k+1)%result.ring.length];
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        const t=Math.max(0,Math.min(1,
+          ((cx-a[0])*dx+(cz-a[1])*dz)/(dx*dx+dz*dz)));
+        distance=Math.min(distance,
+          Math.hypot(cx-a[0]-t*dx,cz-a[1]-t*dz));
+      }
+      assert.ok(distance>=.17&&distance<=.19,
+        'each glass/door plane must sit 0.18 units behind the shell');
+    }
+    assert.ok(quads.length<=500&&tris.length<=13,
+      'recessed detail must remain within native one-batch mesh budget');
+    totalWindows+=result.windows;totalDoors+=result.doors;
+    totalQuads+=quads.length;
+  }
+  assert.equal(totalWindows,129);
+  assert.equal(totalDoors,3);
+  assert.ok(totalQuads<=1300);
 });
 
 test('fitted WGS84 polygon never crosses original road-cleared collision proxy',()=>{
