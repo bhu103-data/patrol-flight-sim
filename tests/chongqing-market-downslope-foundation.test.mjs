@@ -89,3 +89,14 @@ test('foundation remains pooled, license-free and collision-neutral',()=>{
   assert.ok(game.includes('const gx=208,gz=148;'),
     'terrain geometry resolution unchanged');
 });
+
+// The actual Chromium browser-runner is an independent Node ESM file: a
+// template-literal quoting error once escaped all game/geometry assertions.
+// Check syntax *without importing Playwright or launching Chromium* in CI.
+test('real WebGL smoke script parses before expensive Chromium boot',async()=>{
+  const {spawnSync}=await import('node:child_process');
+  const {fileURLToPath}=await import('node:url');
+  const path=fileURLToPath(new URL('../scripts/chongqing-browser-smoke.mjs',import.meta.url));
+  const command=spawnSync(process.execPath,['--check',path],{encoding:'utf8'});
+  assert.equal(command.status,0,command.stderr||command.stdout||'smoke parser failed');
+});

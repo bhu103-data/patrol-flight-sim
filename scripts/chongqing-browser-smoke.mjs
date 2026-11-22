@@ -14,6 +14,64 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-unsafe-swiftshader'
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+// Browser-only source instrumentation for repeatable close oblique seam shots.
+// The response is modified ONLY in this smoke runner: GitHub production assets
+// and the deployed game never receive a QA camera or debug state.
+const qaCameraMarker='let marketInspect=null;';
+let qaCameraInjected=false;
+await page.route('**/assets/chongqing/chongqing.js',async route=>{
+  const response=await route.fetch();
+  check(response.ok(),'Unable to fetch actual Chongqing runtime for oblique QA');
+  const runtime=await response.text();
+  check(runtime.split(qaCameraMarker).length===2,
+    'QA camera injection anchor absent or ambiguous');
+  const hook=`
+window.__patrolQaOblique=(siteId,side)=>{
+  const site=marketFronts.snapshot().find(s=>s.id===siteId);
+  if(!site||![1,-1].includes(side))throw Error('Unknown oblique market target');
+  const x=site.x+side*19,z=site.z+17;
+  const y=Math.max(site.base+9,ground(x,z)+5);
+  const aim=[site.x+side*9.72,site.base+7.5,site.z+2.55];
+  marketInspect={eye:new THREE.Vector3(x,y,z),aim:new THREE.Vector3(...aim)};
+  return {siteId,side,eye:[x,y,z],aim,
+    groundClearance:y-ground(x,z),
+    facadeOuter:site.x+side*9.76};
+};
+// QA-only look DOWN to the downhill end of a real cut-stone pier, not at
+// the upstairs storefront openings. This never ships as production game code.
+window.__patrolQaFoundation=()=>{
+  const site=marketFronts.snapshot().find(s=>s.id==='stone-stair');
+  if(!site)throw Error('Missing real stone-stair market shop');
+  // Earlier #207 03i was hidden by the next commercial shop and
+  // gallery post from x+25,z+15: use the genuinely clear 4-unit-wide
+  // corridor between shop x=[x-10,x+10] and east neighbor x+24.
+  // Camera is OUTSIDE the floor collider, looking toward the existing
+  // earth-embedded footing from slightly behind the building.
+  const x=site.x+12.1,z=site.z-19;
+  const y=ground(x,z)+7.5;
+  const footX=site.x+9.45,footZ=site.z-5;
+  const downhillFoot=ground(footX,footZ);
+  const aim=[footX,downhillFoot+2.2,footZ];
+  let minRayTerrainClearance=Infinity;
+  for(let i=0;i<=24;i++){
+    const t=i/24,rx=x+(footX-x)*t,rz=z+(footZ-z)*t;
+    const ry=y+(aim[1]-y)*t;
+    minRayTerrainClearance=Math.min(minRayTerrainClearance,ry-ground(rx,rz));
+  }
+  marketInspect={eye:new THREE.Vector3(x,y,z),aim:new THREE.Vector3(...aim)};
+  return {siteId:site.id,eye:[x,y,z],aim,
+    groundClearance:y-ground(x,z),
+    downhillFoot,shopBase:site.base,minRayTerrainClearance,
+    // shop outer east wall x+10, next west wall x+14
+    corridorFromShop:x-(site.x+10),
+    corridorToNeighbor:(site.x+14)-x};
+};
+`;
+  await route.fulfill({response,body:runtime.replace(
+    qaCameraMarker,qaCameraMarker+'\n'+hook)});
+  qaCameraInjected=true;
+});
+
 page.on('pageerror',err=>errors.push(err.message));
 page.on('console',msg=>{if(msg.type()==='error')warnings.push(msg.text());});
 page.on('requestfailed',req=>{
@@ -141,6 +199,50 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
+  // #200's first left oblique of stone-stair was occluded by a higher
+  // hillside. Inspect the actual lower river-market LEFT seam instead,
+  // while retaining stone-stair RIGHT seam and our NEW footing close-up.
+  check(qaCameraInjected,'Browser-only market camera hook was not installed');
+  for(const [siteId,side,name] of [
+    ['stone-stair',1,'03g-stone-stair-right-seam-oblique'],
+    ['river-market',-1,'03h-river-market-left-seam-oblique']
+  ]){
+    const pose=await page.evaluate(({siteId,side})=>
+      window.__patrolQaOblique?.(siteId,side),{siteId,side});
+    check(pose?.siteId===siteId&&pose.side===side&&
+      pose.eye.every(Number.isFinite)&&pose.aim.every(Number.isFinite)&&
+      pose.groundClearance>=4.9,
+      'Invalid actual-world oblique inspection camera '+JSON.stringify(pose));
+    await page.waitForTimeout(850);
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+      .marketInspectorActive===true,
+      'Oblique QA must use the real fixed architectural camera');
+    await capture(name);
+    screenshots[screenshots.length-1].obliquePose=pose;
+  }
+  // Extra downhill-footing view is the new acceptance point for this
+  // child PR: the oblique seam angles above cannot show ground contact.
+  const footPose=await page.evaluate(()=>window.__patrolQaFoundation?.());
+  check(footPose?.siteId==='stone-stair'&&
+    footPose.eye.every(Number.isFinite)&&footPose.aim.every(Number.isFinite)&&
+    footPose.groundClearance>=7.4&&
+    footPose.corridorFromShop>=2&&
+    footPose.corridorToNeighbor>=1.8&&
+    footPose.minRayTerrainClearance>1.5&&
+    footPose.shopBase-footPose.downhillFoot>5,
+    'Invalid actual-grade pier camera '+JSON.stringify(footPose));
+  await page.waitForTimeout(1100);
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .marketInspectorActive===true,
+    'Footing QA must use the real market inspection render camera');
+  await capture('03i-market-downslope-foundation-oblique');
+  screenshots[screenshots.length-1].footPose=footPose;
+  // Restore the stock Digit8 view before testing all mobile input paths.
+  await page.keyboard.press('8');
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .marketInspectorActive===true,
+    'Could not restore Digit8 following seam angle captures');
+
   // The game renders desktop screenshots above, but its separate mobile
   // joystick and on-screen flight button must also release this fixed eye.
   // Use Chromium's CDP touch input on the real on-screen controls,
