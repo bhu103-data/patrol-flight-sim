@@ -10,6 +10,7 @@ import { buildChongqingWetStreets } from './wetstreets.js';
 import { buildChongqingRiverlife } from './riverlife.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
+import { buildChongqingMarketRockOutcrop } from './market-cliff-outcrop.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
 import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,collectChongqingShorelineRoadEnds } from './road-clearance.js';
@@ -170,6 +171,9 @@ const groundMaterial=pbr.hillside.clone();groundMaterial.vertexColors=true;groun
 const terrainMesh=new THREE.Mesh(worldGeometry,groundMaterial);
 terrainMesh.receiveShadow=true;
 scene.add(terrainMesh);
+// Original physical shale relief on the steep, EXISTING market rock face.
+// Decorative skin only; no ground(), collision or flight physics changes.
+const marketRockOutcrop=buildChongqingMarketRockOutcrop({THREE,scene,ground,pbr});
 
 const waterUniforms={uTime:{value:0},uDaylight:{value:.38}};
 const waterMaterial=new THREE.ShaderMaterial({
@@ -1433,6 +1437,8 @@ window.PatrolSpaceBridge={getState:()=>({
   marketGalleryInstances:marketFronts.stats.instances,
   marketOpenFacades:marketFronts.stats.openFacades,
   marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles,
+  marketCliffOutcropTriangles:marketRockOutcrop.stats.triangleCount,
+  marketCliffOutcropDraws:marketRockOutcrop.stats.drawCalls,
   marketInspectorActive:Boolean(marketInspect)
 })};
 window.addEventListener('resize',()=>{
