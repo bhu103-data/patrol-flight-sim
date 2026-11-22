@@ -5,6 +5,9 @@ on:
     paths:
       - 'tools/nyc/extract-mn05-cached-roof-mesh.py'
       - 'tools/nyc/inspect_mn05_support.py'
+      - 'tools/nyc/inspect_mn05_facade_support.py'
+      - 'tools/nyc/extract-mn05-cached-facade-mesh.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
       - 'tests/nyc-mn05-cached-roof-source.test.py'
       - '.github/workflows/nyc-mn05-cached-roof-source.yml'
       - 'tools/nyc/probe-official-mn05-rhino.py'
@@ -30,6 +33,7 @@ jobs:
         run: |
           python -m py_compile tools/nyc/extract-mn05-cached-roof-mesh.py
           python tests/nyc-mn05-cached-roof-source.test.py
+          python tests/nyc-mn05-cached-facade-source.test.py
           python tests/nyc-official-mn05-coordinate-frame.test.py
       - name: Obtain immutable original NYC DCP MN05 2014 3DM, never modified
         run: |
@@ -37,8 +41,10 @@ jobs:
           test -s artifacts/nyc-official-mn05/mn05-source.3dm
       - name: Export only authentic Rhino-cached roof face triangles and source FID evidence
         run: |
-          python tools/nyc/extract-mn05-cached-roof-mesh.py
+          PATROL_KEEP_MN05=1 python tools/nyc/extract-mn05-cached-roof-mesh.py
           test -s artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+          python tools/nyc/extract-mn05-cached-facade-mesh.py
+          test -s artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
           test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
       - uses: actions/setup-node@v4
         with:
@@ -62,6 +68,8 @@ jobs:
           test -s artifacts/nyc-official-mn05/roof-browser-report.json
           test -s artifacts/nyc-official-mn05/municipal-roof-off.png
           test -s artifacts/nyc-official-mn05/municipal-roof-on.png
+          test -s artifacts/nyc-official-mn05/facade-off.png
+          test -s artifacts/nyc-official-mn05/facade-on.png
       - name: Publish bounded 2014 original-mesh evidence, not 627MB Rhino source
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,9 +78,12 @@ jobs:
           path: |
             artifacts/nyc-official-mn05/mn05-probe.json
             artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+            artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
             artifacts/nyc-official-mn05/roof-browser-report.json
             artifacts/nyc-official-mn05/municipal-roof-off.png
             artifacts/nyc-official-mn05/municipal-roof-on.png
+            artifacts/nyc-official-mn05/facade-off.png
+            artifacts/nyc-official-mn05/facade-on.png
             artifacts/nyc-official-mn05/preview.html
           retention-days: 7
           if-no-files-found: warn
