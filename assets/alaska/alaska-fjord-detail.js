@@ -15,6 +15,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   stats.iceFloesRejectedShore=0;
   stats.floeCapTriangles=0;
   stats.floeCapMaxRelief=0;
+  stats.floeBevelTriangles=0;
+  stats.floeBevelMaxInset=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
   // Surface 12 requests Alaska's PBR ice photo/normal/roughness shader.
@@ -171,21 +173,36 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       center[1]+relief*(.43+.42*hash(i*67+k*13+7)),
       crown[2]+(point[2]-crown[2])*.47
     ]);
+    // Replace the visibly 90-degree snow/ice plate edge with a shallow
+    // inward snow shoulder. The OUTER footprint and submerged waterline
+    // stay byte-for-byte untouched: all new vertices lie INSIDE the original
+    // shore-tested polygon, with one scale per floe to avoid folding edges.
+    // NOAA sea-ice observations show raised, uneven rubble/snow ridges;
+    // this is a lightweight authored approximation, NOT survey/scan data.
+    const shoulderScale=.73+.09*hash(i*43+57);
+    const shoulder=ring.map((point,k)=>[
+      center[0]+(point[0]-center[0])*shoulderScale,
+      center[1]+relief*(.40+.11*hash(i*97+k*19+31)),
+      center[2]+(point[2]-center[2])*shoulderScale
+    ]);
+    stats.floeBevelMaxInset=Math.max(stats.floeBevelMaxInset,
+      1-shoulderScale);
     stats.floeCapMaxRelief=Math.max(stats.floeCapMaxRelief,relief);
     for(let k=0;k<corners;k++){
       const next=(k+1)%corners,a=ring[k],b=ring[next];
       const rimA=raisedRim[k],rimB=raisedRim[next];
-      // Floe-only surface 13 keeps the parent's mirror-repeat CC0 atlas.
-      // Four shared planar bands form a continuous center/rim surface;
-      // these three triangles replace ONE perfectly flat top triangle.
-      // The game derives vertex normals directly from triangle winding.
-      // In world x/y/z the +angle ring is CLOCKWISE when viewed from +Y:
-      // reversing the old order makes snow caps face upward (+Y), so
-      // their CC0 PBR normal and sunlight are evaluated from the air side.
+      // Retain the exact #217 skyward normal convention on ALL facets.
+      // The original three cap triangles end at an inner shoulder; two
+      // sloping CC0 snow-band triangles seal that shoulder to the existing
+      // ice wall. The outer silhouette and side quad are not moved.
+      const shA=shoulder[k],shB=shoulder[next];
       addTri(crown,ridge[next],ridge[k],top,13);
-      addTri(ridge[k],rimB,rimA,top,13);
-      addTri(ridge[k],ridge[next],rimB,top,13);
-      stats.floeCapTriangles+=3;
+      addTri(ridge[k],shB,shA,top,13);
+      addTri(ridge[k],ridge[next],shB,top,13);
+      addTri(shA,shB,rimB,top,13);
+      addTri(shA,rimB,rimA,top,13);
+      stats.floeCapTriangles+=5;
+      stats.floeBevelTriangles+=2;
       // Break up the uniform cyan wall at the waterline. Subtle darker facets
       // separate the floe silhouette from bright coastal snow at a distance;
       // no new shoreline geometry, height samples or collision surfaces.
