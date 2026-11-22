@@ -37,6 +37,18 @@ function qaDocument(input,output){
     '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
     '    }else{','      flightStep=advanceFlight(dt);','    }'
   ].join(eol));
+  // Test copies only: do not change actual game shaders. Live RAF samples
+  // are collected before the screenshots use a common GPU time phase.
+  for(const [original,replacement] of [
+    ['gl.uniform1f(uWorld.time, time);',
+      'gl.uniform1f(uWorld.time, window.__patrolDemFrozenTime ?? time);'],
+    ['gl.uniform1f(uMesh.sceneTime,sceneryTime);',
+      'gl.uniform1f(uMesh.sceneTime, window.__patrolDemFrozenTime ?? sceneryTime);']
+  ]){
+    if(html.split(original).length!==2)
+      throw Error('Nonunique DEM QA shader-time anchor: '+original+' in '+input);
+    html=html.replace(original,replacement);
+  }
   writeFileSync(output,html);
 }
 qaDocument('alaska-dem-normal-base.html','alaska-dem-normal-base-qa.html');
@@ -96,6 +108,7 @@ async function capture(label,file){
     const record={};
     for(const [name,mode,hour] of scenarios){
       await page.evaluate(({mode,hour})=>{
+        window.__patrolDemFrozenTime=null; // time advances during frame pacing
         for(const [id,value] of [['skyTime',hour],['skyWeather','Clear'],['skySeason','1']]){
           const el=document.getElementById(id);
           el.value=value;
@@ -112,8 +125,14 @@ async function capture(label,file){
       });
       await page.addStyleTag({content:
         '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
+      // Freeze only AFTER timing samples, allowing two WebGL redraws at
+      // an identical phase across separately loaded baseline/patch pages.
+      await page.evaluate(async()=>{
+        window.__patrolDemFrozenTime=42;
+        await new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok)));
+      });
       await page.screenshot({path:'artifacts/alaska-dem-normal-'+label+'-'+name+'.png'});
-      record[name]={pose,timing,canvas};
+      record[name]={pose,timing,canvas,frozenShaderTime:42};
     }
     if(errors.length||failedAssets.length)throw Error(label+' errors: '+errors.join('; ')+failedAssets.join('; '));
     return record;
@@ -128,8 +147,10 @@ try{
     if(drift>.01||Math.abs(b.pose.yaw-n.pose.yaw)>.005)
       throw Error('Mismatch '+key+' camera: '+drift);
     if(b.canvas.lost||n.canvas.lost)throw Error('Lost WebGL2 context');
+    if(b.frozenShaderTime!==42||n.frozenShaderTime!==42)
+      throw Error('Mismatched shader phase in '+key);
     result[key]={cameraDrift:drift,baselineFps:b.timing.observedFps,
-      updatedFps:n.timing.observedFps,baselineCanvas:b.canvas,updatedCanvas:n.canvas};
+      updatedFps:n.timing.observedFps,baselineCanvas:b.canvas,updatedCanvas:n.canvas,frozenShaderTime:42};
   }
   console.log('Alaska DEM normal live A/B',JSON.stringify(result));
   writeFileSync('artifacts/alaska-dem-normal-performance.json',JSON.stringify(result,null,2));
