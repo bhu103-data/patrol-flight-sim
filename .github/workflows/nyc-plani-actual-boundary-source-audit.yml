@@ -1,0 +1,35 @@
+name: NYC 2022 actual roadbed/edge/plaza source polygon audit
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/nyc-times-plani-real-boundary-probe.mjs"
+      - "tests/nyc-times-plani-real-boundary.test.mjs"
+      - ".github/workflows/nyc-plani-actual-boundary-source-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-historical-planimetrics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test official layer IDs, source topology and historic pavement coverage
+        run: node --test tests/nyc-times-plani-real-boundary.test.mjs
+      - name: Preflight read-only geometry source before network
+        run: node --check scripts/nyc-times-plani-real-boundary-probe.mjs
+      - name: Query original OTI 2022 paved polygon, edge and public plaza geometry
+        run: node scripts/nyc-times-plani-real-boundary-probe.mjs
+      - name: Upload 2022-vs-2026 geometry mismatch and source rights caveats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-square-historic-actual-road-boundaries
+          path: artifacts/nyc-plani-boundary/
+          if-no-files-found: ignore
+          retention-days: 7

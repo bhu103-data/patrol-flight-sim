@@ -1,0 +1,57 @@
+name: NYC CSCL constructed roadbed source audit (no game import)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/nyc-times-cscl-roadbed-probe.mjs"
+      - "assets/nyc/times-square-metric-massing.js"
+      - "tests/nyc-cscl-roadbed-source.test.mjs"
+      - "tests/nyc-cscl-footprint-clearance.test.mjs"
+      - "scripts/nyc-cscl-footprint-clearance.mjs"
+      - "assets/nyc/nyc-cscl-roadbed-qa-preview.js"
+      - "nyc-metric-pilot.html"
+      - "scripts/nyc-cscl-roadbed-preview-smoke.mjs"
+      - "tests/nyc-cscl-roadbed-preview.test.mjs"
+      - ".github/workflows/nyc-cscl-roadbed-source-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cscl-official-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate schema, physical road classification and unavailable lanes
+        run: node --test tests/nyc-cscl-roadbed-source.test.mjs tests/nyc-cscl-footprint-clearance.test.mjs tests/nyc-cscl-roadbed-preview.test.mjs
+      - name: Syntax preflight before network query
+        run: node --check scripts/nyc-times-cscl-roadbed-probe.mjs
+      - name: Query current NYC OTI official CSCL roadbed layer (read-only)
+        run: node scripts/nyc-times-cscl-roadbed-probe.mjs
+      - name: Preflight camera comparison script
+        run: node --check scripts/nyc-cscl-roadbed-preview-smoke.mjs
+      - name: Install software WebGL Chromium for source-width comparison
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start local QA preview server
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/patrol-cscl-preview.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8766/nyc-metric-pilot.html >/dev/null
+      - name: Same-camera CSCL paved-width A/B source WebGL2 captures
+        env:
+          CSCL_PREVIEW_URL: http://127.0.0.1:8766
+        run: node scripts/nyc-cscl-roadbed-preview-smoke.mjs
+      - name: Upload CSCL real paved widths, directions and exceptions — source QA only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-square-cscl-source-audit
+          path: artifacts/nyc-cscl-roadbed/
+          retention-days: 7
+          if-no-files-found: ignore

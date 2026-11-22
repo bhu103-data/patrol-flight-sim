@@ -1,0 +1,33 @@
+name: NYC official street centerline source audit (not a game import)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/nyc-times-square-street-source-probe.mjs"
+      - ".github/workflows/nyc-street-source-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-terms-and-geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Preflight read-only official NYC centerline source probe
+        run: node --check scripts/nyc-times-square-street-source-probe.mjs
+      - name: Query official NYC DCP line records for Times Square only
+        run: node scripts/nyc-times-square-street-source-probe.mjs
+      - name: Upload source attributes and rights review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-square-street-source-audit
+          path: artifacts/nyc-street-source/
+          retention-days: 7
+          if-no-files-found: ignore
