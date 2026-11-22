@@ -7641,9 +7641,7 @@ const CENTRAL_PARK_SITES=[
     alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
-    if(nycTimesSignalMeshes)for(const m of Object.values(nycTimesSignalMeshes))
-      disposeSceneMesh(m);
-    nycTimesSignalMeshes=null;
+
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
@@ -12723,6 +12721,9 @@ const CENTRAL_PARK_SITES=[
       disposeSceneMesh(landscapeDetails);
       backgroundBuildings = selectedMap.city ? buildCityBuildings(cityLots) : null;
       if(selectedMap.city && smoothScenery())prepareNycRealismAssets();
+    if(nycTimesSignalMeshes)for(const m of Object.values(nycTimesSignalMeshes))
+      disposeSceneMesh(m);
+    nycTimesSignalMeshes=null;
       landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
       prepareAlaskaLandmarks();
       prepareCoastalTraffic();
