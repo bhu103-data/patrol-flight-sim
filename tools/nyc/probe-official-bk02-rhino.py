@@ -12,6 +12,8 @@ OUT.mkdir(parents=True,exist_ok=True)
 MAX_COMPRESSED=400*1024*1024
 MAX_3DM=2*1024*1024*1024
 MAX_OBJECTS=500000
+EXPECTED_ZIP_SHA256='e16f1dae5521f02835042ac5a6a36f3750603b03170d218d7d6b9f2a616c6ff1'
+EXPECTED_3DM_SHA256='c22a7e7225425e01b5f50e5d68f6dc75b93a9d05c8a4ae566f1c1d40ec981493'
 SRC=[
  "https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_bk02.zip",
  "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_bk02.zip"
@@ -63,8 +65,11 @@ try:
                         digest.update(chunk);dst.write(chunk)
             if not zipfile.is_zipfile(archive):
                 raise ValueError("Official response is not a valid ZIP archive")
+            zip_sha=digest.hexdigest()
             metadata.update({"acceptedUrl":url,"compressedBytes":count,
-                             "zipSha256":digest.hexdigest()})
+                             "zipSha256":zip_sha})
+            if zip_sha!=EXPECTED_ZIP_SHA256:
+                raise ValueError("Official BK02 ZIP SHA differs from the reviewed source snapshot")
             break
         except Exception as err:
             metadata["attempts"].append({"url":url,"error":f"{type(err).__name__}: {err}"})
@@ -90,6 +95,8 @@ try:
         with zp.open(selected) as src,raw_path.open("wb") as dst:
             for chunk in iter(lambda:src.read(1024*1024),b""):dst.write(chunk)
     metadata["source3dmSha256"]=sha256_file(raw_path)
+    if metadata["source3dmSha256"]!=EXPECTED_3DM_SHA256:
+        raise ValueError("Official BK02 Rhino 3DM SHA differs from the reviewed source snapshot")
     import rhino3dm
     metadata["readerVersion"]=str(getattr(rhino3dm,"__version__","unknown"))
     model=rhino3dm.File3dm.Read(str(raw_path))
