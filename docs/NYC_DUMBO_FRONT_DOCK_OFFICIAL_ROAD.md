@@ -50,12 +50,21 @@ Do not infer widths or grades as present-day metres inside the legacy game.
 On actual `index.html?nycDumboRoadbed=on`, the existing Manhattan-only
 async `nyc-street-network.js` importer reads this JSON, runs schema, FID,
 finite-coordinate and no-degenerate checks and paints approved source
-triangles into the **existing street mesh draw batch**. Only after source
-acceptance does it skip precisely two 24-unit generic road strips at grid
-(j=-9, i=16 and i=17). The original source shapes are kept, not expanded
-from a centerline guessed width. Full-footprint terrain and building
-safety checks can clip the rendering further. Missing data, invalid JSON,
-unsafe/wet source polygons or opt-out restores conventional streets.
+triangles into the **existing street mesh draw batch**. IMPORTANT CORRECTION:
+the genuine polygon covers only parts of the invented j=-9 road grid. In
+a 21×5 longitudinal/across-width test the official source covers:
+i=15: 35/105 (33.33%), i=16: 54/105 (51.43%), i=17: 40/105 (38.10%).
+Removing the earlier hardcoded i=16/17 whole strips would leave artificial
+road holes. The implementation now permits removal ONLY when the entire
+corresponding old paved corridor is source-covered; none pass this test.
+Therefore **this is a thin, source-grounded polygon overlay on a continuous
+fictional original street network, NOT an in-place surveyed street
+replacement**. Source asphalt draws at streetY+0.090, a 0.004-unit visual
+bias over old streetY+0.086 (the old +0.150 raised slab was removed), to avoid
+z-fighting, not a real curb or road grade. Terrain and building vertex/centroid
+safety sampling can reject uncertain triangles, but it is not a mathematically
+complete 3D polygon-intersection or vehicle-collision proof. Missing or
+invalid data, unsafe/wet source polygons or opt-out preserves old roads.
 The original traffic paths, vehicle collision and all aircraft code are
 untouched. Default parameter OFF; `?graphics=compat` also preserves old
 fallback.
@@ -74,11 +83,14 @@ proof of a real-world active light.
 - Node: `node --test tests/nyc-dumbo-front-dock-production-road.test.mjs`
   and main `PATROL regression tests`, exact current PR head.
 - Actual original PATROL game `index.html` named Scenic View
-  `DUMBO · Front Dock Real Road`, 1280×720 WebGL2 OFF vs ON;
-  two unedited screenshots and `report.json` uploaded by
+  `DUMBO · Front Dock Real Road` and
+  `DUMBO · Front Dock Road Aerial`, original-game 1280×720 WebGL2
+  OFF vs ON. **Four unedited screenshots and `report.json`** via
   `.github/workflows/nyc-dumbo-front-dock-browser.yml`.
-  Check polygon is visible, no 2D upside-down triangles / wet shoreline /
-  signal clipping; compare two source-equivalent camera poses.
+  The aerial screenshots hide only game HUD and use an in-game 3-D oblique
+  camera above a warehouse that occluded the street-level view. Actual
+  source-road paint is visible but still tiny relative to the fake old
+  building grid; no pixel-level real-world registration.
 - Source QA on actual game should include emitted official triangles and
   rejected counts, 2026 planned bike paint, signal heads, no new textures,
   no added draw calls (same batch), triangle and GPU-buffer budget.
