@@ -24,14 +24,15 @@
 <h1>Times Square | 1:1 official-data flythrough</h1>
 <p id="status">Loading the repository's original NYC footprint subset…</p>
 <p class="muted" id="metadata"></p>
-<p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
+<p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. When online, this bounded Times Square tile loads official NYC OTI 2022 roadbed, plaza and sidewalk polygons; offline fallback retains the checked-in 11-FID roadbed core. These are 2D planimetrics, not 2026 road access, surveyed elevations, lane markings, curb-ramp heights or collision. Facades remain artist-authored illustrations.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI surface focus FID 24700</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
 </aside>
-<footer id="flightModeStatus">NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
+<footer id="flightModeStatus">NYC OTI 2022 roadbed / plaza / sidewalk source · true metres · illustrative facades</footer>
 <script type="module">
 import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
+import {fetchOfficialOtiSurfaces} from './nyc-oti-surface-runtime.mjs';
 import {makeC185AirborneState,c185SourceAirborneStep,c185SceneCollision}
   from './nyc-c185-metre-airborne.mjs';
 const canvas=document.getElementById('scene'),
@@ -122,17 +123,43 @@ async function start(){
   const roadSource=await roadsResponse.json();
   const params=new URLSearchParams(location.search);
   const qualityLow=params.get('quality')==='low';
-  // Only the experimental NYC TRUE-SCALE free-flight loads this original
-  // 2022 OTI slice. ?roadbed=off retains the prior source-centreline bands
-  // for controlled screenshots. The normal PATROL aircraft map is untouched.
   const roadbedOff=params.get('roadbed')==='off';
+  const surfacesOff=params.get('surfaces')==='off';
+  // The 11-FID checked-in slice is a resilient offline fallback. Online, the
+  // experimental map requests the complete bounded 2022 OTI roadbed/plaza/
+  // sidewalk tile. The production PATROL aircraft map remains untouched.
   const roadbedResponse=roadbedOff?null:
     await fetch('./nyc-oti-roadbed-core-2022.json',{cache:'no-cache'});
   if(roadbedResponse&&!roadbedResponse.ok)
-    throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
+    throw Error('OTI local fallback HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
-  const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
+  let officialSurfaces=null,surfaceLoadError=null;
+  if(!surfacesOff){
+    status.textContent='Loading official NYC OTI 2022 roadbed, plaza and sidewalk polygons…';
+    try{
+      officialSurfaces=await fetchOfficialOtiSurfaces({origin:massing.origin});
+    }catch(error){
+      surfaceLoadError=String(error?.message||error);
+    }
+  }else{
+    surfaceLoadError='Live OTI surfaces disabled by ?surfaces=off';
+  }
+  let geometry;
+  try{
+    geometry=buildNeighborhoodMesh(massing,roadSource,{
+      detail:!qualityLow,maxWindows:qualityLow?0:6200,
+      officialRoadbed:officialSurfaces?null:roadbed,officialSurfaces
+    });
+  }catch(error){
+    if(!officialSurfaces)throw error;
+    surfaceLoadError='Official OTI mesh rejected; local fallback used: '+
+      String(error?.message||error);
+    officialSurfaces=null;
+    geometry=buildNeighborhoodMesh(massing,roadSource,{
+      detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed
+    });
+  }
+  const surfaceDataReady=!!officialSurfaces;
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -246,21 +273,46 @@ async function start(){
   });
   const stats=geometry.counts;
   status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
-    ' municipal streets / '+stats.streetSegments+' source line segments · '+
-    stats.officialRoadbedPolygons+' OTI 2022 true roadbed polygons · free flight camera';
+    ' municipal streets / '+stats.streetSegments+' DCM source segments · '+
+    (surfaceDataReady
+      ?stats.officialRoadbedPolygons+' OTI roadbeds / '+stats.officialPlazaPolygons+
+        ' plazas / '+stats.officialSidewalkPolygons+' sidewalks (2022)'
+      :stats.officialRoadbedPolygons+' local OTI roadbed fallback polygons')+
+    ' · 1:1 metre free-flight camera';
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
-    ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
-    massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' official source pavement triangles';
+    ' authored, NOT surveyed windows · '+stats.triangles+' triangles · '+
+    stats.officialSurfaceHoles+' official polygon holes preserved · '+
+    stats.officialSurfaceTriangles+' official surface triangles · display offsets are NOT elevation';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
-    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
+    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed||surfaceDataReady,
+    trueFacadeVerified:false,
+    officialSurfaceDataReady:surfaceDataReady,
+    officialSurfaceDataError:surfaceLoadError,
+    officialSurfaceDataSource:officialSurfaces?.sources||null,
+    officialSurfaceDataCounts:officialSurfaces?.counts||null,
+    officialSurfaceDataBbox:officialSurfaces?.bboxLonLat||null,
+    officialSurfaceDataOrigin:officialSurfaces?.origin||null,
+    officialSurfaceDataLoadMilliseconds:officialSurfaces?.loadMilliseconds??null,
+    officialSurfaceReferenceYear:officialSurfaces?.imageryYear??roadbed?.imagery??null,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
-    roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
+    officialPlazaPolygons:stats.officialPlazaPolygons,
+    officialPlazaTriangles:stats.officialPlazaTriangles,
+    officialSidewalkPolygons:stats.officialSidewalkPolygons,
+    officialSidewalkTriangles:stats.officialSidewalkTriangles,
+    officialSurfaceFeatures:stats.officialSurfaceFeatures,
+    officialSurfaceRings:stats.officialSurfaceRings,
+    officialSurfaceVertices:stats.officialSurfaceVertices,
+    officialSurfaceHoles:stats.officialSurfaceHoles,
+    officialSurfaceTriangles:stats.officialSurfaceTriangles,
+    officialSurfaceAreaSquareMetres:stats.officialSurfaceAreaSquareMetres,
+    officialSurfaceMaxAreaError:stats.officialSurfaceMaxAreaError,
+    illustrativeRoadBandSegments:stats.illustrativeRoadBandSegments,
+    roadbedReferenceYear:geometry.provenance.surfaceImageryYear,
     roadbedFullNYCCoverage:false,
     roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
     sourceRoads:geometry.provenance.streets,

@@ -38,11 +38,15 @@ try{
   check(report.initial.streetSegments>=80,'Official source geometry incomplete');
   check(report.initial.metresPerWorldUnit===1,'Wrong scene geographic scale');
   check(report.initial.coreRoadbedGeometryVerified===true&&
-    report.initial.officialRoadbedPolygons===11&&
-    report.initial.officialRoadbedIntersections===3&&
-    report.initial.officialRoadbedTriangles===207&&
+    report.initial.officialSurfaceDataReady===true&&
+    report.initial.officialRoadbedPolygons>=70&&
+    report.initial.officialPlazaPolygons>=10&&
+    report.initial.officialSidewalkPolygons>=40&&
+    report.initial.officialSurfaceHoles>=20&&
+    report.initial.illustrativeRoadBandSegments===0&&
+    report.initial.officialRoadbedTriangles>=200&&
     report.initial.roadbedReferenceYear===2022,
-    'Official OTI 2022 source polygons missing from 1:1 flythrough');
+    'Complete bounded OTI 2022 roadbed/plaza/sidewalk source polygons missing');
   check(report.initial.trueRoadbedVerified===false,
     '11 central roadbed polygons are NOT a full city roadbed verification');
   check(report.initial.spawnFromOfficialStreet===true,
@@ -122,18 +126,24 @@ try{
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
     'Fallback lost surveyed footprints');
-  check(report.fallback.officialRoadbedPolygons===11,
-    'Quality fallback must retain official roadbed shape');
+  check(report.fallback.officialSurfaceDataReady===true&&
+    report.fallback.officialRoadbedPolygons===report.initial.officialRoadbedPolygons&&
+    report.fallback.officialPlazaPolygons===report.initial.officialPlazaPolygons&&
+    report.fallback.officialSidewalkPolygons===report.initial.officialSidewalkPolygons,
+    'Quality-low mode must retain the complete official OTI surface set');
   // Controlled on/off comparison: same camera, same FOV, source-given
   // building/centreline geometry, only 11 actual 2022 roadbed polygons differ.
-  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?roadbed=off',
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?surfaces=off&roadbed=off',
     {waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
     window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
   report.sourceOff=await page.evaluate(()=>window.PatrolMetricFlightQA);
-  check(report.sourceOff.officialRoadbedPolygons===0&&
+  check(report.sourceOff.officialSurfaceDataReady===false&&
+    report.sourceOff.officialRoadbedPolygons===0&&
+    report.sourceOff.officialPlazaPolygons===0&&
+    report.sourceOff.officialSidewalkPolygons===0&&
     report.sourceOff.coreRoadbedGeometryVerified===false,
-    'Source polygon A/B-off view still using new official geometry');
+    'Source polygon A/B-off view still using official geometry');
   check(report.sourceOff.sourceBuildingCount===report.initial.sourceBuildingCount&&
     report.sourceOff.streetSegments===report.initial.streetSegments,
     'Source roadbed A/B switch accidentally changed buildings or DCM routing');
@@ -200,13 +210,19 @@ try{
     nativePhysics:window.PatrolMetricFlightQA.usesOriginalAircraftPhysics,
     airborneSubset:window.PatrolMetricFlightQA.usesPatrolAirborneEquations,
     completePhysics:window.PatrolMetricFlightQA.airborneFullPhysics,
-    sourceRoadbed:window.PatrolMetricFlightQA.officialRoadbedPolygons
+    sourceRoadbed:window.PatrolMetricFlightQA.officialRoadbedPolygons,
+    sourcePlaza:window.PatrolMetricFlightQA.officialPlazaPolygons,
+    sourceSidewalk:window.PatrolMetricFlightQA.officialSidewalkPolygons,
+    fullSurfaceSource:window.PatrolMetricFlightQA.officialSurfaceDataReady
   }));
   check(report.c185Before.airborneSubset===true&&
     report.c185Before.completePhysics===false&&
     report.c185Before.nativePhysics===false&&
-    report.c185Before.sourceRoadbed===11,
-    'Do not claim full native aircraft physics or lose exact OTI source geometry');
+    report.c185Before.fullSurfaceSource===true&&
+    report.c185Before.sourceRoadbed===report.initial.officialRoadbedPolygons&&
+    report.c185Before.sourcePlaza===report.initial.officialPlazaPolygons&&
+    report.c185Before.sourceSidewalk===report.initial.officialSidewalkPolygons,
+    'Do not claim full native aircraft physics or lose official OTI source geometry');
   const cockpitBefore=await page.locator('#scene').screenshot({
     path:out+'/07-c185-source-airborne-cockpit-before.png',timeout:90000
   });
