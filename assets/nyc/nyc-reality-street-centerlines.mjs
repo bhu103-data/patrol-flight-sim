@@ -99,6 +99,30 @@ export function projectDCMRoads(collection,origin=NYC_REALITY_ORIGIN) {
     builtCount:records.filter(r=>r.built).length
   };
 }
+// Select a pedestrian-height QA camera ON an official built street centerline,
+// rather than inventing a game-space street address or flying through a wall.
+export function chooseOfficialStreetCamera(records,streetName='7 Avenue') {
+  if(!Array.isArray(records))throw TypeError('Missing verified street records');
+  const options=records.filter(r=>r.built&&r.name===streetName)
+    .flatMap(r=>r.metreLines.map(line=>{
+      const a=line[0],b=line.at(-1);
+      const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const centre=[(a[0]+b[0])*.5,(a[1]+b[1])*.5];
+      return {objectId:r.objectId,streetName,vertices:line,
+        length,distance:Math.hypot(centre[0],centre[1])};
+    })).filter(r=>r.length>30&&r.distance<260)
+    .sort((a,b)=>a.distance-b.distance||a.objectId-b.objectId);
+  const s=options[0];
+  if(!s)throw Error('No source-verified built street segment for camera');
+  const a=s.vertices[0],b=s.vertices.at(-1);
+  const lerp=(f)=>[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f];
+  const start=lerp(.15),end=lerp(.85);
+  return {objectId:s.objectId,streetName,
+    eye:[start[0],2.3,-start[1]],
+    look:[end[0],2.3,-end[1]],
+    source:'NYC official DCM centreline; not curb/roadbed'};
+}
+
 export async function fetchOfficialDCM(fetcher=fetch) {
   const features=[],ids=new Set();
   for(let offset=0;offset<2000;offset+=200){
