@@ -12,7 +12,7 @@ import numpy as np
 import rhino3dm
 import trimesh
 from pyproj import Transformer
-from shapely.geometry import Polygon, Point, MultiPolygon
+from shapely.geometry import Polygon, Point, MultiPolygon, GeometryCollection
 from shapely.ops import unary_union
 import matplotlib
 matplotlib.use("Agg")
@@ -51,7 +51,11 @@ def wgs84_to_local(lon, lat):
 def current_bounds(features):
     points = []
     for feature in features:
-        if len(feature.get("rings", [])) != 1:
+        if (not isinstance(feature.get("fid"), int) or
+            not isinstance(feature.get("heightFt"), (int, float)) or
+            not math.isfinite(float(feature["heightFt"])) or
+            not (0 < float(feature["heightFt"]) <= 2500) or
+            len(feature.get("rings", [])) != 1):
             continue
         for lon, lat in feature["rings"][0]:
             points.append(wgs84_to_local(lon, lat))
@@ -181,7 +185,8 @@ def match_footprints(dcp_footprints, current_features):
             iou = inter / max(union, 1e-9)
             cover_dcp = inter / max(dcp["poly"].area, 1e-9)
             cover_cur = inter / max(cur["poly"].area, 1e-9)
-            centroid_dist = dcp["poly"].centroid.distance(cur["poly"].centroid)
+            centroid_dist_ft = dcp["poly"].centroid.distance(cur["poly"].centroid)
+            centroid_dist = centroid_dist_ft * FTUS_M
             score = min(cover_dcp, cover_cur) * iou
             pairs.append((score, iou, cover_dcp, cover_cur, centroid_dist, dcp["index"], cur["fid"]))
     pairs.sort(reverse=True)
@@ -249,13 +254,13 @@ def preview_png(meshes, path):
     center = (lo + hi) * 0.5
     span = max(float((hi-lo).max()), 1.0)
     ax.set_xlim(center[0]-span*.55, center[0]+span*.55)
-    ax.set_ylim(center[2]-span*.55, center[2]+span*.55)
-    ax.set_zlim(max(0, lo[1]-.5), hi[1]+2)
-    ax.set_box_aspect((1, 1, max(.22, (hi[1]-lo[1])/span)))
+    ax.set_ylim(max(0, lo[1]-.5), hi[1]+2)
+    ax.set_zlim(center[2]-span*.55, center[2]+span*.55)
+    ax.set_box_aspect((1, max(.22, (hi[1]-lo[1])/span), 1))
     ax.view_init(elev=34, azim=-58)
     ax.set_xlabel("East (m)")
-    ax.set_ylabel("South (m)")
-    ax.set_zlabel("Height (m)")
+    ax.set_ylabel("Height (m)")
+    ax.set_zlabel("South (m)")
     ax.set_title("NYC DCP 2014 — matched Times Square facade and roof surfaces")
     fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")
@@ -270,10 +275,14 @@ def extract(model_path, footprints_path, report_path, glb_path, preview_path):
     current_features = current_dataset["features"]
     center_e, center_n = current_center(current_features)
     query_wgs = BBOX_WGS84
-    corners = [WGS84_TO_SP.transform(query_wgs[0], query_wgs[1]),
-               WGS84_TO_SP.transform(query_wgs[2], query_wgs[3])]
-    query_sp = [min(corners[0][0], corners[1][0]), min(corners[0][1], corners[1][1]),
-                max(corners[0][0], corners[1][0]), max(corners[0][1], corners[1][1])]
+    corners = [
+        WGS84_TO_SP.transform(query_wgs[0], query_wgs[1]),
+        WGS84_TO_SP.transform(query_wgs[0], query_wgs[3]),
+        WGS84_TO_SP.transform(query_wgs[2], query_wgs[1]),
+        WGS84_TO_SP.transform(query_wgs[2], query_wgs[3]),
+    ]
+    query_sp = [min(p[0] for p in corners), min(p[1] for p in corners),
+                max(p[0] for p in corners), max(p[1] for p in corners)]
 
     dcp_footprints = []
     for obj in model.Objects:
@@ -309,7 +318,7 @@ def extract(model_path, footprints_path, report_path, glb_path, preview_path):
             match["currentCoverage"] >= 0.78 and match["centroidDistanceM"] <= 2.5):
             accepted.append(match)
     accepted_by_dcp = {m["dcpFootprintIndex"]: m for m in accepted}
-    current_by_fid = {int(r["fid"]): r for r in current_features}
+    current_by_fid = {int(r["fid"]): r for r in current}
     footprint_by_index = {fp["index"]: fp for fp in dcp_footprints}
 
     groups = {
