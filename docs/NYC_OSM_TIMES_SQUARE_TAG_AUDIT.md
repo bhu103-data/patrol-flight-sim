@@ -17,6 +17,7 @@ license and documented 3D-building tags.
 - Data repository: https://github.com/kjhealy/nycosm
 - Pinned commit: `75ec01ced7fdd85619493d59f4e7e9236e0990fd`
 - Extract date: 2026-10-18 (Geofabrik New York State extract)
+- Acquisition: pinned GeoParquet checkout; no live Overpass API request
 - Files read: `nyc_osm_buildings_manhattan.parquet` and
   `nyc_osm_areas.parquet`
 - CRS: EPSG:2263; transformed to WGS84 only for the bounded source-footprint
