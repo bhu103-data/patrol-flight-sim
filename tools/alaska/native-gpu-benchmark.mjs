@@ -123,8 +123,7 @@ try{
   // Headed on the actual user's GPU; no SwiftShader or fake hardware flags.
   browser=await chromium.launch({
     ...(channel==='chromium'?{}:{channel}),
-    headless:false,args:['--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding']});
+    headless:false});
   for(let i=0;i<order.length;i++){
     const label=order[i];
     const context=await browser.newContext({viewport:{width:1280,height:800},
@@ -135,6 +134,9 @@ try{
       if(new URL(r.url()).pathname.includes('alaska-fjord-'))
         moduleFetches.push({path:new URL(r.url()).pathname,status:r.status()});
     });
+    // A foreground, focused window is part of the measured configuration.
+    // Do not suppress browser background throttling to manufacture FPS.
+    await page.bringToFront();
     const started=Date.now();
     const response=await page.goto(baseUrl+'/alaska-native-'+label+
       '.html?alaskaView=harbor',{waitUntil:'domcontentloaded',timeout:30000});
@@ -175,12 +177,16 @@ try{
     const pose=await page.evaluate(()=>window.PatrolNativeGpuQA());
     await page.waitForTimeout(800);
     await page.screenshot({path:output+'/'+label+'-'+i+'.png'});
+    await page.bringToFront();
+    if(!await page.evaluate(()=>document.hasFocus()&&
+        document.visibilityState==='visible'))
+      throw Error('Physical GPU benchmark requires focused foreground tab');
     const intervals=await page.evaluate(()=>new Promise((yes,no)=>{
       const samples=[];let previous=null,count=0,start=null;
       const sample=t=>{
         if(start===null)start=t;
-        if(document.visibilityState!=='visible')
-          return no(Error('Tab hidden or benchmark window minimized'));
+        if(document.visibilityState!=='visible'||!document.hasFocus())
+          return no(Error('Tab lost foreground focus / benchmark window minimized'));
         if(t-start>30000)return no(Error('Native browser too slow for timed frames'));
         if(previous!==null&&count>=60)samples.push(t-previous);
         previous=t;count++;
@@ -193,10 +199,11 @@ try{
       state:window.PatrolSpaceBridge?.getState?.(),
       contextLost:document.getElementById('glCanvas')?.getContext('webgl2')?.isContextLost(),
       visible:document.visibilityState==='visible',
+      focused:document.hasFocus(),
       menuError:document.getElementById('menuError')?.hidden?null:
         document.getElementById('menuError')?.textContent
     }));
-    if(pageErrors.length||health.contextLost||!health.visible||health.menuError||
+    if(pageErrors.length||health.contextLost||!health.visible||!health.focused||health.menuError||
        !health.state?.playing||health.state.map!=='alaska')
       throw Error('Unhealthy native test scene '+JSON.stringify({health,pageErrors}));
     record.runs.push({label,renderer,hardwareProof:gpu.reason,
