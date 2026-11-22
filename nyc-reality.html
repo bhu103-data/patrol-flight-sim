@@ -121,7 +121,7 @@
     // Free placement avoids assuming a particular road centerline is known.
     let street = () => setView(-55,6,40,20,18,-100);
     document.getElementById('aerial').addEventListener('click', aerial);
-    document.getElementById('street').addEventListener('click', street);
+    document.getElementById('street').addEventListener('click', () => street());
     document.getElementById('grid').addEventListener('click', ev => {
       grid.visible = !grid.visible;
       ev.currentTarget.setAttribute('aria-pressed', String(grid.visible));
