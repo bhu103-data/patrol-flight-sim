@@ -146,7 +146,7 @@ async function capture(label,file){
     }
   });
   await page.waitForTimeout(1300);
-  await page.addStyleTag({content:
+  const cleanScreenshotStyle=await page.addStyleTag({content:
     '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
   await page.screenshot({path:'artifacts/alaska-cabin-port-'+label+'-harbor.png'});
   const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
@@ -189,6 +189,11 @@ async function capture(label,file){
     firstPlayableMs,softwareRafSamples:sorted.length,
     softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
   if(label==='updated'){
+    // The screenshot-only HUD concealment includes the Flight Menu button.
+    // Restore normal UI before exercising the real, clickable map selector.
+    await cleanScreenshotStyle.evaluate(el=>el.remove());
+    if(!await page.locator('#flightMenuBtn').isVisible())
+      throw Error('Flight Menu must be visible after QA HUD restoration');
     // Alaska -> Manhattan -> Alaska, within the SAME browser tab and GL context.
     records.mapSwitch=await verifySamePageMapSwitch(page);
   }
