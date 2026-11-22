@@ -41,6 +41,25 @@ assert.match(html,
   /route:connector,offset:connector\.total\*\(\.18-j\*\.02\),\s*pace:5\.0,livery:j/,
   'Production car offsets/speeds must match the pair-spacing acceptance test');
 
+// Conservative flat-ground swept-center check for the existing sculpted
+// taxi/sedan meshes (approx. 3.95 long x 2.07 wide, including mirrors).
+// Rotated enclosing rectangles are deliberately slightly larger; this is
+// not a simulation of chassis suspension or damage physics.
+function bodyRectanglesOverlap(a,b){
+  const af=[Math.sin(a.yaw),Math.cos(a.yaw)],
+    ar=[Math.cos(a.yaw),-Math.sin(a.yaw)],
+    bf=[Math.sin(b.yaw),Math.cos(b.yaw)],
+    br=[Math.cos(b.yaw),-Math.sin(b.yaw)];
+  const dot=(u,v)=>u[0]*v[0]+u[1]*v[1];
+  const delta=[b.x-a.x,b.z-a.z];
+  for(const axis of [af,ar,bf,br]){
+    const extent=2.05*(Math.abs(dot(axis,af))+Math.abs(dot(axis,bf)))+
+      1.05*(Math.abs(dot(axis,ar))+Math.abs(dot(axis,br)));
+    if(Math.abs(dot(axis,delta))>=extent)return false;
+  }
+  return true;
+}
+
 test('NYC two bridge connector cars keep a safe same-direction gap over 1 hour',()=>{
   const route=engine.route;
   const common={bridgehead:true,signalized:true,bridgeSegmentCount:streets[0].length-1,
@@ -56,6 +75,9 @@ test('NYC two bridge connector cars keep a safe same-direction gap over 1 hour',
     assert.ok(Number.isFinite(separation)&&[A.yaw,B.yaw].every(Number.isFinite),
       'Nonfinite bridgehead vehicle pose at '+time);
     const headingDot=Math.cos(A.yaw-B.yaw);
+    assert.equal(bodyRectanglesOverlap(A,B),false,
+      'Oriented vehicle bodies overlap in bridgehead runtime at '+time+
+      ', taxi='+JSON.stringify(A)+', sedan='+JSON.stringify(B));
     if(headingDot>.9){
       sameSamples++;
       minSame=Math.min(minSame,separation);
