@@ -20,10 +20,12 @@ try{
   if(!loaded?.ok())throw Error('Official-source flight HTML did not load');
   await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
     null,{timeout:90000});
-  const info=await page.evaluate(()=>({
-    ...window.geoPilotQA,
-    getFlight:undefined,setFlight:undefined,resetFlight:undefined
-  }));
+  const info=await page.evaluate(()=>{
+    const state=window.geoPilotQA;
+    return {...state,
+      historySource:{...state.historySource,visible:state.historySource?.visible?.()},
+      getFlight:undefined,setFlight:undefined,resetFlight:undefined};
+  });
   if(!info.ready||info.error||info.sourceBuildings<110||info.sourceRoads<25||
      !info.sourceRoadSpawn||!Number.isFinite(info.sourceRoadSpawn.position[0])||
      !info.streetWidthEnvelopes||
@@ -33,7 +35,7 @@ try{
      info.historySource?.actualPolygons!==17||
      info.historySource?.renderedPolygons<14||
      info.historySource?.crs!=='EPSG:32118'||
-     info.historySource?.visible()!==false||
+     info.historySource?.visible!==false||
      !/metres/.test(info.projection))throw Error('Invalid official-source view '+JSON.stringify(info));
   const shot=async name=>{
     await page.waitForTimeout(400);
