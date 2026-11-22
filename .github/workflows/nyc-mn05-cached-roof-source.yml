@@ -31,6 +31,9 @@ jobs:
       - name: Independently test source saved mesh faces, quad splitting and georeferenced FID match
         run: |
           python -m py_compile tools/nyc/extract-mn05-cached-roof-mesh.py
+          python -m py_compile tools/nyc/inspect_mn05_support.py
+          python -m py_compile tools/nyc/inspect_mn05_facade_support.py
+          python -m py_compile tools/nyc/extract-mn05-cached-facade-mesh.py
           python tests/nyc-mn05-cached-roof-source.test.py
           python tests/nyc-mn05-cached-facade-source.test.py
           python tests/nyc-official-mn05-coordinate-frame.test.py
