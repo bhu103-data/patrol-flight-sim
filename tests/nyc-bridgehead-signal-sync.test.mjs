@@ -8,11 +8,11 @@ const start=html.indexOf('  function bridgeheadSignalPhase(time){');
 const end=html.indexOf('  function bridgeheadTrafficPose(actor,time){',start);
 assert.ok(start>=0&&end>start,'Production signal controller not found');
 const js=html.slice(start,end);
-const {green,phase,travel}=new Function(js+
-  'return {green:bridgeheadSignalGreen,phase:bridgeheadSignalPhase,travel:bridgeheadSignalTravel};')();
+const {green,phase,travel,resolved}=new Function(js+
+  'return {green:bridgeheadSignalGreen,phase:bridgeheadSignalPhase,travel:bridgeheadSignalTravel,resolved:bridgeheadResolvedTravel};')();
 
 function actor(slot=0){
-  const stop=194.5-slot*5.5;
+  const stop=194.5-slot*9;
   return {signalized:true,signalQueueSlot:slot,kind:slot?'sedan':'taxi',
     bridgeSegmentCount:1,route:{lengths:[0,200,420],total:420},
     pace:7,offset:stop-35};
@@ -33,7 +33,7 @@ test('NYC red-green-amber control repeats on the same world clock as rendered le
   assert.match(html,/const green=bridgeheadSignalGreen\(sceneryTime\)/);
   assert.match(html,/const phase=bridgeheadSignalPhase\(sceneryTime\)/);
   assert.match(html,/nycBridgeheadSignalFaces\.amber/);
-  assert.match(html,/const traveled=actor\.signalized\?bridgeheadSignalTravel\(actor,time\)/);
+  assert.match(html,/const traveled=actor\.signalized\?bridgeheadResolvedTravel\(actor,time\)/);
   assert.match(html,/signalized:true,signalQueueSlot:j/);
   assert.match(html,/PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1/);
 });
@@ -84,7 +84,7 @@ test('yellow nominal arrival stops for next green; clear green crosses',()=>{
 
 test('queue slots stop at distinct physical points and never reverse travel',()=>{
   const taxi=actor(0),sedan=actor(1);
-  assert.ok(Math.abs(travel(taxi,7)-travel(sedan,7)-5.5)<1e-8);
+  assert.ok(Math.abs(travel(taxi,7)-travel(sedan,7)-9)<1e-8);
   for(const car of [taxi,sedan]){
     let prev=travel(car,0),stationary=0;
     for(let t=.25;t<1100;t+=.25){
@@ -99,6 +99,26 @@ test('queue slots stop at distinct physical points and never reverse travel',()=
   }
 });
 
+test('live follower cannot overtake the taxi around a multi-hour cyclic route',()=>{
+  const lead=actor(0),follow=actor(1);
+  lead.offset=73.4;follow.offset=lead.offset-12;
+  follow.pace=5.6;lead.pace=5;
+  follow.bridgeheadLeader=lead;
+  let prev=resolved(follow,0),clamped=0,minGap=Infinity;
+  for(let t=.25;t<=9000;t+=.25){
+    const a=resolved(lead,t),b=resolved(follow,t);
+    const gap=a-b;
+    minGap=Math.min(minGap,gap);
+    assert.ok(gap>=9-1e-8,'sedan crossed its safe following envelope at '+t);
+    assert.ok(b+1e-8>=prev,'following sedan reversed at '+t);
+    assert.ok(b-prev<=follow.pace*.25+1e-7,'sedan accelerated beyond cruise at '+t);
+    if(b<travel(follow,t)-1e-8)clamped++;
+    prev=b;
+  }
+  assert.ok(clamped>=200,'long-run follower never exercised safety throttle');
+  assert.ok(minGap>=9-1e-8);
+  assert.match(html,/bridgeheadLeader:j\?cityTraffic\.find/);
+});
 test('only NYC bridge connector actors opt in, original geometry remains intact',()=>{
   assert.match(html,/if\(actor\.bridgehead\)return bridgeheadTrafficPose\(actor,time\)/);
   assert.match(html,/const phase=\(\(traveled%period\)\+period\)%period;/);
