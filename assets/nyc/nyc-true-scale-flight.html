@@ -221,12 +221,22 @@ async function start(){
     camera=roadbedFocus();
   });
   const keySet=new Set();
+  const keyboardDiagnostics={down:[],up:[],blurCount:0};
   window.addEventListener('keydown',e=>{
     if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();
     keySet.add(e.key.toLowerCase());
+    if(keyboardDiagnostics.down.length<24)
+      keyboardDiagnostics.down.push(e.key.toLowerCase());
   });
-  window.addEventListener('keyup',e=>keySet.delete(e.key.toLowerCase()));
-  window.addEventListener('blur',()=>keySet.clear());
+  window.addEventListener('keyup',e=>{
+    keySet.delete(e.key.toLowerCase());
+    if(keyboardDiagnostics.up.length<24)
+      keyboardDiagnostics.up.push(e.key.toLowerCase());
+  });
+  window.addEventListener('blur',()=>{
+    keyboardDiagnostics.blurCount++;
+    keySet.clear();
+  });
   canvas.addEventListener('click',()=>canvas.requestPointerLock?.());
   document.addEventListener('mousemove',e=>{
     if(document.pointerLockElement===canvas){
@@ -261,7 +271,7 @@ async function start(){
     streetEyeMetres:sourceStreetCandidates.length?streetEyeMetres:null,
     streetClearanceRadiusMetres:streetClearanceMetres,
     safeStreetCandidateCount:sourceStreetCandidates.length,
-    frames:0,errors:[]};
+    frames:0,errors:[],keyboardDiagnostics};
   const bound=Math.max(420,span*.7);
   function frame(t){
     const dt=Math.min(.05,Math.max(0,(t-last)/1000||0));last=t;
