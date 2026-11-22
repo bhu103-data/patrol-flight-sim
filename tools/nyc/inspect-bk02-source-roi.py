@@ -10,6 +10,7 @@ sys.path.insert(0,str(HERE))
 from official_bk02_projection import (
     stateplane_to_dumbo_metres,dumbo_metres_to_stateplane,
     source_bounds_from_oti,US_SURVEY_FOOT_IN_METRES)
+from bk02_source_layers import classify_surface_layer
 
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 FOLDER=pathlib.Path("artifacts/nyc-official-bk02")
@@ -108,13 +109,13 @@ def inspect():
         layer_names={i:str(x.FullPath or x.Name) for i,x in enumerate(model.Layers)}
         layer_kind={}
         for i,name in layer_names.items():
-            if "RoofTop Surface" in name or "Surface_Roof Top" in name:
-                layer_kind[i]="roof"
-            elif "Facade Surface" in name or "Surface_Facade" in name:
-                layer_kind[i]="facade"
-            elif ("Foot Print Surface" in name or "FootPrint Surface" in name
-                  or "Surface_Foot Print" in name):
-                layer_kind[i]="footprint"
+            # BK02 uses Buildings::Surface_RoofTop / Surface_Facade /
+            # Surface_FootPrint. MN05 uses * Surface. Do not include the
+            # parallel Building_RoofTop/Facade/FootPrint inventory layers:
+            # those are separate catalog layers and would double-render.
+            kind=classify_surface_layer(name)
+            if kind:
+                layer_kind[i]=kind
         if not {"roof","facade"}.issubset(set(layer_kind.values())):
             raise ValueError("Official BK02 roof/facade surface layers are missing")
         report["surfaceLayers"]={k:[layer_names[i] for i,v in layer_kind.items() if v==k]
