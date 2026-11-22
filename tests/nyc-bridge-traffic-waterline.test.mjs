@@ -57,12 +57,17 @@ test('actual city renderer suppresses ordinary cars over water but preserves ele
   'railPose','sceneryTime','streetMeshes','nycDetailBand','trafficPose',
   'drawStreetWalker','worldUp','wreckedTaxiMesh','taxiLamps',
   'sampleTerrainHeight','WATER_H','cityLotAt',
+  'EAST_RIVER_BRIDGE','STREET_Y','bridgeheadSignalGreen','bridgeheadSignalPhase','nycBridgeheadSignalFaces',
   'return ('+sourceOf('drawCityTraffic')+')')(
   {city:true},null,vehicles,(p)=>p,[0,0,0],()=>null,0,mesh,
   ()=>3,actor=>actor.pose,()=>{},[0,1,0],null,null,
   (x,z)=>z<-200?12.2:30,12.2,
-  (x,z)=>[82,160,180].includes(x)?{occupied:true}:null);
+  (x,z)=>[82,160,180].includes(x)?{occupied:true}:null,
+  bridge,14.86,()=>false,()=> 'red',
+  {red:{id:'bridge signal red'},amber:{id:'bridge signal amber'},green:{id:'bridge signal green'}});
  render((id)=>drawn.push(id.id));
- assert.deepEqual(drawn,['Brooklyn Bridge SUV','dry downtown car',
-  'elevated expressway van']);
+ assert.equal(drawn.filter(x=>x==='bridge signal red').length,1,
+  'physical signal lens must render on the actual bridgehead approach');
+ assert.deepEqual(drawn.filter(x=>!x.startsWith('bridge signal ')),
+  ['Brooklyn Bridge SUV','dry downtown car','elevated expressway van']);
 });

@@ -1,0 +1,5 @@
+import fs from 'node:fs';
+const p=process.argv[2]; const b=fs.readFileSync(p); const dv=new DataView(b.buffer,b.byteOffset,b.byteLength); if(dv.getUint32(0,true)!==0x46546c67)throw Error('not GLB'); const jsonLen=dv.getUint32(12,true); const json=JSON.parse(b.subarray(20,20+jsonLen).toString('utf8').trim());
+let triangles=0, meshes=0, nodes=0; for(const m of json.meshes||[]){meshes++; for(const prim of m.primitives||[]){let n=0; const a=prim.attributes||{}; const acc=json.accessors[a.POSITION]; const idx=prim.indices!=null?json.accessors[prim.indices]:null; if(idx)n=idx.count; else n=acc.count; triangles+=Math.floor(n/3);}} nodes=(json.nodes||[]).length;
+const pos=[]; for(const m of json.meshes||[]) for(const prim of m.primitives||[]){const acc=json.accessors[prim.attributes.POSITION]; if(acc.min)for(let i=0;i<3;i++)pos[i]=pos[i]===undefined?acc.min[i]:Math.min(pos[i],acc.min[i]); if(acc.max)for(let i=0;i<3;i++)pos[i+3]=pos[i+3]===undefined?acc.max[i]:Math.max(pos[i+3],acc.max[i]);}
+console.log(JSON.stringify({file:p,bytes:b.length,meshes,nodes,triangles,bounds:pos,asset:json.asset},null,2));

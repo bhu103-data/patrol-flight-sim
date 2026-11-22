@@ -1,0 +1,150 @@
+// Real production bridgehead stop-line controller, not a separate mocked implementation.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+
+const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
+const start=html.indexOf('  function bridgeheadSignalPhase(time){');
+const end=html.indexOf('  function bridgeheadTrafficPose(actor,time){',start);
+assert.ok(start>=0&&end>start,'Production signal controller not found');
+const js=html.slice(start,end);
+const {green,phase,travel,resolved}=new Function(js+
+  'return {green:bridgeheadSignalGreen,phase:bridgeheadSignalPhase,travel:bridgeheadSignalTravel,resolved:bridgeheadResolvedTravel};')();
+
+function actor(slot=0){
+  const stop=194.5-slot*9;
+  return {signalized:true,signalQueueSlot:slot,kind:slot?'sedan':'taxi',
+    bridgeSegmentCount:1,route:{lengths:[0,200,420],total:420},
+    pace:7,offset:stop-35};
+}
+
+test('NYC red-green-amber control repeats on the same world clock as rendered lens',()=>{
+  for(let n=-2;n<5;n++){
+    assert.equal(green(n*32),false);
+    assert.equal(green(n*32+11.999),false);
+    assert.equal(green(n*32+12),true);
+    assert.equal(green(n*32+26.999),true);
+    assert.equal(green(n*32+27),false);
+    assert.equal(green(n*32+31.999),false);
+    assert.equal(phase(n*32+0),'red');
+    assert.equal(phase(n*32+12),'green');
+    assert.equal(phase(n*32+27),'amber');
+  }
+  assert.match(html,/const green=bridgeheadSignalGreen\(sceneryTime\)/);
+  assert.match(html,/const phase=bridgeheadSignalPhase\(sceneryTime\)/);
+  assert.match(html,/nycBridgeheadSignalFaces\.amber/);
+  assert.match(html,/const traveled=actor\.signalized\?bridgeheadResolvedTravel\(actor,time\)/);
+  assert.match(html,/signalized:true,signalQueueSlot:j/);
+  assert.match(html,/PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1/);
+});
+
+test('arriving on red stops before the crossing; green resumes without a jump',()=>{
+  const a=actor();
+  // With an 8-unit comfort-braking arc, nominal crossing is at t=5,
+  // while the actual smooth stop finishes 8/7 seconds later.
+  assert.ok(travel(a,5)<194.5,'the car must already be braking');
+  assert.ok(Math.abs(travel(a,5+8/7)-194.5)<1e-9);
+  for(const t of [5+8/7,7,8,10,11.999,12]){
+    assert.ok(Math.abs(travel(a,t)-194.5)<1e-7,'red must hold at '+t);
+  }
+  assert.ok(travel(a,12.1)>194.5,'car must depart on green');
+  assert.ok(travel(a,12.1)<195.5,'departure must not teleport');
+  assert.ok(travel(a,18)>travel(a,12.1));
+  assert.ok(Math.abs(travel(a,12+16/7)-202.5)<1e-6,
+    'green launch must accelerate back to normal cruise speed');
+});
+
+test('braking and acceleration preserve speed at phase boundaries',()=>{
+  const a=actor();
+  const stop=194.5,startBrake=5-8/7,endBrake=5+8/7;
+  const speed=(t,h=.0001)=>(travel(a,t+h)-travel(a,t-h))/(2*h);
+  assert.ok(Math.abs(travel(a,startBrake)-(stop-8))<1e-7);
+  assert.ok(Math.abs(speed(startBrake)-7)<.005,'brake-entry speed must be cruise');
+  assert.ok(Math.abs(speed(endBrake))<.005,'brake must finish with zero speed');
+  assert.ok(Math.abs(speed(12))<.005,'launch must start with zero speed');
+  assert.ok(Math.abs(speed(12+16/7)-7)<.005,
+    'launch must join cruise without speed discontinuity');
+});
+
+test('yellow nominal arrival stops for next green; clear green crosses',()=>{
+  const a=actor();
+  a.offset=194.5-7*29;
+  const stop=194.5;
+  assert.ok(travel(a,29)<stop,'yellow braking before physical stop line');
+  for(const t of [30.5,34,40,43.999,44])
+    assert.ok(Math.abs(travel(a,t)-stop)<1e-7,
+      'yellow arrival must wait through next red at '+t);
+  assert.ok(travel(a,44.2)>stop,'must leave on next-cycle green');
+  const passing=actor();
+  passing.offset=194.5-7*16;
+  assert.ok(Math.abs(travel(passing,16)-194.5)<1e-8,
+    'car that can clear on green must not unnecessarily stop');
+  assert.ok(Math.abs(travel(passing,16.2)-195.9)<1e-8);
+});
+
+test('queue slots stop at distinct physical points and never reverse travel',()=>{
+  const taxi=actor(0),sedan=actor(1);
+  assert.ok(Math.abs(travel(taxi,7)-travel(sedan,7)-9)<1e-8);
+  for(const car of [taxi,sedan]){
+    let prev=travel(car,0),stationary=0;
+    for(let t=.25;t<1100;t+=.25){
+      const now=travel(car,t);
+      assert.ok(Number.isFinite(now));
+      assert.ok(now+1e-8>=prev,'route progress cannot jump backward at '+t);
+      assert.ok(now-prev<=car.pace*.25+1e-7,'route progress cannot teleport');
+      if(now-prev<.00001)stationary++;
+      prev=now;
+    }
+    assert.ok(stationary>=25,'red-light waiting was never exercised');
+  }
+});
+
+test('live follower cannot overtake the taxi around a multi-hour cyclic route',()=>{
+  const lead=actor(0),follow=actor(1);
+  lead.offset=73.4;follow.offset=lead.offset-12;
+  follow.pace=5.6;lead.pace=5;
+  follow.bridgeheadLeader=lead;
+  let prev=resolved(follow,0),clamped=0,minGap=Infinity;
+  for(let t=.25;t<=9000;t+=.25){
+    const a=resolved(lead,t),b=resolved(follow,t);
+    const gap=a-b;
+    minGap=Math.min(minGap,gap);
+    assert.ok(gap>=9-1e-8,'sedan crossed its safe following envelope at '+t);
+    assert.ok(b+1e-8>=prev,'following sedan reversed at '+t);
+    assert.ok(b-prev<=follow.pace*.25+1e-7,'sedan accelerated beyond cruise at '+t);
+    if(b<travel(follow,t)-1e-8)clamped++;
+    prev=b;
+  }
+  assert.ok(clamped>=200,'long-run follower never exercised safety throttle');
+  assert.ok(minGap>=9-1e-8);
+  assert.match(html,/bridgeheadLeader:j\?cityTraffic\.find/);
+});
+test('NYC car-following eases from desired pace into lead pace without a speed snap',()=>{
+  const lead=actor(0),follow=actor(1);
+  lead.offset=73.4;follow.offset=lead.offset-12;
+  lead.pace=5;follow.pace=5.6;follow.bridgeheadLeader=lead;
+  const speed=(t,h=.0005)=>
+    (resolved(follow,t+h)-resolved(follow,t-h))/(2*h);
+  // A raw Math.min(desired, leader-9) jumps by .6 units/s exactly at t=5.
+  // The production smooth-min should join in and out of the 2.5-unit
+  // transition band without that discontinuity.
+  assert.ok(Math.abs(speed(.2)-5.6)<.001,'early free sedan speed changed');
+  assert.ok(Math.abs(speed(5)-5.3)<.003,
+    'leader/follower halfway transition speed must be interpolated');
+  assert.ok(Math.abs(speed(5-.025)-speed(5+.025))<.025,
+    'joining the leader cap must not create a velocity step');
+  assert.ok(Math.abs(speed(10)-5)<.001,
+    'sedan must match lead speed after the blend completes');
+  const headway=resolved(lead,5)-resolved(follow,5);
+  assert.ok(headway>=9&&headway<=10,
+    'soft clamping must preserve full physical following clearance');
+  assert.match(html,/blendWidth=2\.5/);
+});
+test('only NYC bridge connector actors opt in, original geometry remains intact',()=>{
+  assert.match(html,/if\(actor\.bridgehead\)return bridgeheadTrafficPose\(actor,time\)/);
+  assert.match(html,/const phase=\(\(traveled%period\)\+period\)%period;/);
+  assert.match(html,/if\(selectedMap\.city\)\{/);
+  // The deck-to-street path and water/parcel exclusions still exist.
+  assert.match(html,/function makeBrooklynBridgeheadCarRoute\(/);
+  assert.match(html,/if\(terrainAt\(x,z\)<=waterY\+\.68\|\|lotAt\(x,z\)\)return null;/);
+});

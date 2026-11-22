@@ -478,7 +478,10 @@
     name:'Brooklyn Waterfront Expressway',
     points:[[266,-409,0],[253,-403,1.4],[240,-386,6.2],[238,-355,7.7],
       [238,-341,7.7],[239,-330,5.4],[241,-316,1.4],[241,-313,0]],
-    ramp:[[238,-355,7.7],[239,-350,7.4],[245,-345,6.1],[256,-340,3.3],[265,-336,1.4],[273,-333,0]]
+    // Relocated BQE exit from reviewed PR #161: branch south of the bridge
+    // signal/near-camera corridor. PATROL compressed game coordinates only.
+    ramp:[[240,-386,6.2],[244,-380,6.0],[250,-379,4.8],
+      [260,-377,3.2],[270,-375,1.4],[281,-373,0]]
   };
   const VEGAS_EXPRESSWAY={
     name:'Airport Expressway',
@@ -1505,6 +1508,36 @@ const CENTRAL_PARK_SITES=[
       return [k*Math.cos(a),k*Math.sin(a),Math.sqrt(9.81*k*1.18),j*2.37+scale*0.17,k,h];
     });
   });
+  // Same spectrum, phase, coast attenuation and clock as WORLD_FS.
+  // Render-only: the buoyancy pose never changes collision or takeoff logic.
+  function floatOceanHeight(x,z,t,depth,map){
+    if(map.vegas||map.dc||map.airfield||depth<=.12)return 0;
+    const ease=(a,b,v)=>{
+      const q=Math.max(0,Math.min(1,(v-a)/(b-a)));
+      return q*q*(3-2*q);
+    };
+    let height=0;
+    for(let i=0;i<oceanModes.length;i++){
+      const [kx,kz,omega,phase,,amp]=oceanModes[i];
+      height+=Math.sin(kx*x+kz*z-omega*t+phase)*amp*
+        (i<6?ease(0,3.2,depth):ease(.06,.72,depth));
+    }
+    const exposure=map.city?1-.62*ease(-560,-300,z):1;
+    return height*exposure*(map.alaska?.30:1);
+  }
+  function floatOceanPose(x,z,yaw,t,map,water,terrain){
+    const fx=Math.sin(yaw),fz=Math.cos(yaw),rx=fz,rz=-fx;
+    const sample=(along,side)=>{
+      const px=x+fx*along+rx*side,pz=z+fz*along+rz*side;
+      return floatOceanHeight(px,pz,t,water-terrain(px,pz),map);
+    };
+    const fl=sample(2.35,-1.27),fr=sample(2.35,1.27);
+    const al=sample(-2.35,-1.27),ar=sample(-2.35,1.27);
+    const left=(fl+al)*.5,right=(fr+ar)*.5;
+    const pitch=Math.atan2((fl+fr-al-ar)*.5,4.7);
+    const bank=Math.atan2(right-left,2.54);
+    return {height:(left+right)*.5,left,right,pitch,bank};
+  }
   const oceanVec4 = mode => 'vec4('+mode.slice(0,4).map(x=>x.toFixed(8)).join(',')+')';
   const oceanVec2 = mode => 'vec2('+mode.slice(4).map(x=>x.toFixed(8)).join(',')+')';
   const WORLD_FS = `#version 300 es
@@ -2606,8 +2639,17 @@ const CENTRAL_PARK_SITES=[
     vec3 nyStreetReflection(vec3 worldPos,vec3 normal,vec3 toEye,
                             float road,float puddle) {
       float wet=clamp(uNyStreetWetness,0.0,1.0);
-      if (road<0.01 || wet<0.025 || uAtmosphere.x>0.86) return vec3(0.0);
       vec2 p=worldPos.xz;
+      // PATROL_NYC_BRIDGEHEAD_WET_REFLECTION_V1: daylight wet-surface
+      // soft glint in the existing Brooklyn Bridge -> DUMBO road envelope.
+      // No extra draw pass, no new atlas, no other-map or dry-road effect.
+      float bridgeWetZone=smoothstep(231.0,256.0,p.x)*
+        (1.0-smoothstep(330.0,365.0,p.x))*
+        smoothstep(-407.0,-378.0,p.y)*
+        (1.0-smoothstep(-305.0,-278.0,p.y));
+      float bridgeDetail=bridgeWetZone*step(1.5,uNyStreetQuality);
+      if(road<0.01 || wet<0.025 ||
+          (uAtmosphere.x>0.86 && bridgeDetail<0.001))return vec3(0.0);
       float view=pow(1.0-clamp(dot(normal,normalize(toEye)),0.0,1.0),2.0);
       float square=exp(-length((p-vec2(15.0,3.0))*vec2(0.025,0.013)));
       float win=exp(-length((p-vec2(-7.0,-117.0))*vec2(0.023,0.013)));
@@ -2620,7 +2662,41 @@ const CENTRAL_PARK_SITES=[
       vec3 amber=vec3(0.93,0.52,0.17)*line*win*0.58;
       vec3 lamp=manhattanSpill(worldPos,normal)*(0.3+0.7*view);
       float intensity=wet*(0.07+0.23*puddle+0.10*view)*broken*rip*road;
-      return (magenta+blue+amber+lamp)*intensity*(1.0-uAtmosphere.x*0.82);
+      vec3 oldNight=(magenta+blue+amber+lamp)*intensity*(1.0-uAtmosphere.x*0.82);
+      // Pixel-stable surface-scatter, not a fabricated building/traffic
+      // signal reflection. Broad mottling and distance fade avoid tiling
+      // sparkle in low-altitude flights; the existing night pass remains.
+      float daylight=smoothstep(0.58,0.94,uAtmosphere.x);
+      float grain=nyStreetNoise(p*0.20+vec2(13.7,51.2));
+      float nearFade=1.0-smoothstep(95.0,295.0,distance(worldPos,uEye));
+      float wetGlint=bridgeDetail*wet*road*daylight*nearFade*
+        (0.024+0.065*puddle+0.060*view)*(0.66+0.34*grain);
+      // Ported from Petalwake's MIT sun-glitter microfacet reflection.
+      // Original scene uses sea waves; PATROL constrains it to wet asphalt.
+      vec3 halfSun=normalize(uSun+normalize(toEye));
+      float ndh=clamp(dot(normal,halfSun),0.0,1.0);
+      float microR=mix(0.10,0.20,view);
+      float a2=microR*microR;
+      float microfacet=a2/(3.14159*pow(ndh*ndh*(a2-1.0)+1.0,2.0));
+      float sunGlint=bridgeDetail*wet*road*daylight*nearFade*
+        clamp(dot(normal,uSun),0.0,1.0)*
+        clamp(microfacet*0.007,0.0,0.085)*(0.65+0.35*puddle);
+      // Petalwake-style short-lived surface spray, cheap analytic particles
+      // localized to already-wet ground; no new emitter/renderer/mesh.
+      vec2 rainTile=p*1.65;
+      vec2 rainCell=floor(rainTile);
+      float tick=floor(uSceneTime*3.5);
+      float impactSeed=nyStreetHash(rainCell+vec2(tick*11.0,17.0));
+      float lifetime=fract(uSceneTime*3.5+nyStreetHash(rainCell+3.1));
+      float waveRadius=lifetime*0.36;
+      float impactRing=1.0-smoothstep(0.014,0.046,
+        abs(length(fract(rainTile)-0.5)-waveRadius));
+      float impact=step(0.986,impactSeed)*impactRing*
+        (1.0-lifetime)*bridgeDetail*wet*road*nearFade*
+        step(0.40,wet)*step(1.5,uNyStreetQuality)*0.033;
+      vec3 skyGlint=vec3(0.56,0.64,0.70)*(wetGlint+impact)+
+        vec3(0.88,0.85,0.77)*sunGlint;
+      return oldNight+skyGlint;
     }
     void nyFacadeRainStreaks(inout vec3 albedo, vec3 normal) {
       if (uNyStreetQuality<1.5 || uCityFacade==false ||
@@ -4553,10 +4629,18 @@ const CENTRAL_PARK_SITES=[
         }
       }
       const index=Math.round((a-x+reach)/3);
-      if(index%3===0){
-        pushRoadStrip(addQuad,[a,ya,z],[b,yb,z],0.12,[0.94,0.77,0.42],0.037);
+      // Separate the two painted traffic lanes on each side of the existing
+      // deck. Markings use the same slope samples as the asphalt.
+      if(Math.abs((a+b)*.5-x)>halfLength &&
+         Math.min(a-(x-reach),x+reach-b)>4){
+        for(const offset of [-.09,.09])
+          pushRoadStrip(addQuad,[a,ya,z+offset],[b,yb,z+offset],
+            .066,[.88,.74,.41],.041);
       }
       for(const side of [-1,1]){
+        const laneZ=z+side*1.94;
+        if(index%3!==2 && Math.min(a-(x-reach),x+reach-b)>4)
+          pushRoadStrip(addQuad,[a,ya,laneZ],[b,yb,laneZ],.076,[.86,.86,.80],.040);
         const zz=z+side*(halfWidth-0.61);
         pushRoadStrip(addQuad,[a,ya,zz],[b,yb,zz],0.09,[0.81,0.80,0.75],0.030);
       }
@@ -4788,7 +4872,18 @@ const CENTRAL_PARK_SITES=[
             }
           }
         }
-        for (let j=4;j+2<distance-2;j+=8) {
+        const bridgeFeeder=street===CITY_STREETS[2]||street===CITY_STREETS[6];
+        if(bridgeFeeder&&distance>10){
+          const dx=b[0]-a[0],dz=b[1]-a[1];
+          const at=(along,offset)=>[a[0]+(dx*along+dz*offset)/distance,
+            STREET_Y,a[1]+(dz*along-dx*offset)/distance];
+          for(const offset of [-.09,.09])
+            pushRoadStrip(addQuad,at(3,offset),at(distance-3,offset),.07,paint,.055);
+          for(let pos=4;pos+2.4<distance-3;pos+=5.8)
+            for(const offset of [-1.94,1.94])
+              pushRoadStrip(addQuad,at(pos,offset),at(pos+2.4,offset),
+                .08,[.86,.86,.80],.055);
+        }else for (let j=4;j+2<distance-2;j+=8) {
           const point=t=>[lerp(a[0],b[0],t),STREET_Y,lerp(a[1],b[1],t)];
           pushRoadStrip(addQuad,point(j/distance),point((j+2)/distance),0.15,paint,0.055);
         }
@@ -4799,15 +4894,33 @@ const CENTRAL_PARK_SITES=[
     const left=bridge.x-bridge.halfLength, right=bridge.x+bridge.halfLength;
     buildBridgeDeck(addQuad,box);
     buildBridgeRiverfront(addQuad,box);
-    for (const x of [left-bridge.ramp-1,right+bridge.ramp+1]) {
-      for (let stripe=-3;stripe<=3;stripe++) {
-        box(x,STREET_Y+0.067,bridge.z+stripe*0.91,0.65,0.025,0.46,[0.82,0.83,0.77]);
+    // Keep the bridgehead crossing on the existing deck, not beyond a
+    // clipped feeder. Signals face the incoming ramp traffic from land.
+    for (const side of [-1,1]) {
+      const end=side<0?left-bridge.ramp:right+bridge.ramp;
+      const x=end-side*2.2;
+      for (let stripe=-4;stripe<=4;stripe++) {
+        const zz=bridge.z+stripe*.76;
+        pushRoadStrip(addQuad,[x-.38,bridgeRoadHeight(x-.38),zz],
+          [x+.38,bridgeRoadHeight(x+.38),zz],.42,[.83,.84,.79],.053);
       }
-      for (const side of [-1,1]) {
-        const z=bridge.z+side*5.1;
-        box(x,STREET_Y+2,z,0.14,4,0.14,[0.30,0.33,0.33]);
-        box(x,STREET_Y+3.72,z,0.33,0.77,0.27,[0.21,0.25,0.24]);
-        box(x,STREET_Y+3.53,z-side*0.15,0.17,0.15,0.06,[0.30,0.66,0.39]);
+      const stop=x-side*1.65;
+      pushRoadStrip(addQuad,[stop,bridgeRoadHeight(stop),bridge.z-side*3.50],
+        [stop,bridgeRoadHeight(stop),bridge.z-side*.26],.14,[.84,.85,.80],.051);
+      const poleZ=bridge.z-side*(bridge.halfWidth+.36);
+      if(sampleTerrainHeight(end,poleZ)<WATER_H+1.58 || cityLotAt(end,poleZ))continue;
+      const headZ=poleZ+side*1.05, y=STREET_Y+3.83;
+      const shell=[.79,.59,.20],iron=[.20,.23,.24];
+      box(end,STREET_Y+2.08,poleZ,.14,4.16,.14,iron);
+      addRideBeam(addQuad,[end,y+.25,poleZ],[end,y+.25,headZ],.09,iron);
+      box(end,y,headZ,.26,.88,.33,shell);
+      box(end-side*.145,y,headZ,.04,.78,.28,iron);
+      for(const [dy,color] of [[.25,[.28,.08,.06]],[0,[.31,.22,.07]],[-.25,[.19,.75,.33]]]){
+        // Darken the east-side fixed lenses; the live color is drawn
+        // per frame over this housing so green never stays lit on red.
+        const lens=side>0?(dy>0?[.26,.07,.06]:dy<0?[.06,.23,.12]:color):color;
+        box(end-side*.174,y+dy,headZ,.026,.13,.15,lens);
+        box(end-side*.20,y+dy+.083,headZ,.13,.033,.22,iron);
       }
     }
     // The old elevated loop is fictional in present-day DUMBO. Preserve it
@@ -4889,8 +5002,192 @@ const CENTRAL_PARK_SITES=[
       yaw:Math.atan2(b[0]-a[0],b[1]-a[1])};
   }
 
+  // Bridgehead connector uses authored street anchors; never a shortcut.
+  // Road topology stays the authored CITY_STREETS geometry. The only
+  // modifications are safe, inset terminal turning points for these cars.
+  function makeBrooklynBridgeheadCarRoute(streets,bridge,terrainAt,lotAt,waterY){
+    const bridgeLine=streets[0],head=bridgeLine?.at(-1);
+    const reach=bridge.halfLength+bridge.ramp;
+    if(!head||Math.abs(head[0]-(bridge.x+reach))>.01||
+       Math.abs(head[1]-bridge.z)>.01)return null;
+    const branch=streets.find(path=>path!==bridgeLine&&path.length>2&&
+      path[0][0]===head[0]&&path[0][1]===head[1]&&
+      path[1][0]>head[0]);
+    if(!branch)return null;
+    const points=bridgeLine.map(p=>[p[0],p[1]]);
+    // Keep the same authored-road full-width shore and lot clipping rule.
+    for(let i=1;i<branch.length&&i<=3;i++){
+      const a=branch[i-1],b=branch[i];
+      const segments=clipAuthoredNycStreet(a,b,terrainAt,lotAt,waterY);
+      if(segments.length!==1)break;
+      const [start,end]=segments[0];
+      if(Math.hypot(start[0]-a[0],start[1]-a[1])>.1||
+         Math.hypot(end[0]-b[0],end[1]-b[1])>.1)break;
+      points.push([b[0],b[1]]);
+    }
+    if(points.length<=bridgeLine.length)return null;
+    const inset=8,first=points[0],second=points[1];
+    const firstLength=Math.hypot(second[0]-first[0],second[1]-first[1]);
+    const end=points.at(-1),before=points.at(-2);
+    const lastLength=Math.hypot(end[0]-before[0],end[1]-before[1]);
+    if(firstLength<inset*2||lastLength<inset*2)return null;
+    points[0]=first.map((v,i)=>v+(second[i]-v)*inset/firstLength);
+    const turnCenter=end.map((v,i)=>v+(before[i]-v)*inset/lastLength);
+    points[points.length-1]=turnCenter;
+    // A continuous U-turn has radius 1.07 and stays inside the tested
+    // 12.1-unit street corridor. Test its entire swept vehicle footprint,
+    // not merely the center point, before enabling the connector.
+    const radius=1.07,vehicleEnvelope=2.45;
+    for(const sampleRadius of [0,radius,radius+vehicleEnvelope])
+      for(let k=0;k<24;k++){
+        const angle=k*Math.PI/12;
+        const x=turnCenter[0]+sampleRadius*Math.cos(angle);
+        const z=turnCenter[1]+sampleRadius*Math.sin(angle);
+        if(terrainAt(x,z)<=waterY+.68||lotAt(x,z))return null;
+      }
+    return makeTrafficRoute(points);
+  }
+
+  // PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1. Eastbound bridge-to-DUMBO
+  // signal uses the same scene clock as its physically illuminated lens.
+  // Red 12s, green 20s. Only the two dedicated bridge connector cars
+  // obey this stop line; no change to other city traffic or maps.
+  // PATROL_NYC_BRIDGEHEAD_SIGNAL_AMBER_EASE_V2:
+  // Red 0..12s, green 12..27s, amber 27..32s. Shared by real lamp
+  // and only the two bridge-to-DUMBO connector vehicles.
+  function bridgeheadSignalPhase(time){
+    const phase=((time%32)+32)%32;
+    return phase<12?'red':phase<27?'green':'amber';
+  }
+  function bridgeheadSignalGreen(time){
+    return bridgeheadSignalPhase(time)==='green';
+  }
+
+  // Analytic speed-continuous stopping and starting, unaffected by
+  // frame rate / rendering cull. A red/amber nominal arrival triggers
+  // a braking arc over the last 8 route units. After the next green,
+  // accelerate over 8 more units; neither leg exceeds normal speed.
+  function bridgeheadSignalTravel(actor,time){
+    if(time<=0 || !Number.isFinite(time))return actor.offset+time*actor.pace;
+    const radius=actor.laneOffset??1.07;
+    const period=2*(actor.route.total+Math.PI*radius);
+    const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
+      (actor.signalQueueSlot??0)*9.0;
+    const speed=actor.pace;
+    let now=0,distance=actor.offset;
+    for(let count=0;count<256 && now<time;count++){
+      const laps=Math.floor((distance-stopAt)/period)+1;
+      const nextStop=stopAt+laps*period;
+      const remaining=nextStop-distance;
+      const nominalArrival=now+remaining/speed;
+      if(bridgeheadSignalGreen(nominalArrival)){
+        if(time<=nominalArrival)return distance+(time-now)*speed;
+        distance=nextStop;now=nominalArrival;
+        continue;
+      }
+      const brakeDistance=Math.min(8,remaining);
+      const start=now+(remaining-brakeDistance)/speed;
+      const duration=2*brakeDistance/speed;
+      if(time<=start)return distance+(time-now)*speed;
+      if(time<start+duration){
+        const u=(time-start)/duration;
+        return nextStop-brakeDistance+brakeDistance*(2*u-u*u);
+      }
+      now=start+duration;distance=nextStop;
+      if(!bridgeheadSignalGreen(now)){
+        const phase=((now%32)+32)%32;
+        // On amber, wait through the following red until next green.
+        now+=phase<12?12-phase:44-phase;
+      }
+      if(time<=now)return distance;
+      // Acceleration: x=x0+D*u², derivative grows 0 -> cruise speed.
+      const accelDuration=2*brakeDistance/speed;
+      if(time<now+accelDuration){
+        const u=(time-now)/accelDuration;
+        return distance+brakeDistance*u*u;
+      }
+      distance+=brakeDistance;
+      now+=accelDuration;
+    }
+    // Fail closed if the scene time jumps across >256 signal cycles.
+    return distance;
+  }
+
+  function bridgeheadResolvedTravel(actor,time){
+    const desired=bridgeheadSignalTravel(actor,time);
+    if(!actor.bridgeheadLeader)return desired;
+    const leader=bridgeheadSignalTravel(actor.bridgeheadLeader,time);
+    // The two monotone progress curves are blended before the sedan
+    // reaches its 9-unit hard limit. This C1 smooth minimum removes the
+    // instantaneous 5.6 -> 5.0 speed change from a plain Math.min while
+    // staying <= BOTH desired travel and the leader's safety cap.
+    // Only this one leader-linked NYC connector car uses the extra math.
+    const cap=leader-9.0,blendWidth=2.5;
+    const h=Math.max(0,blendWidth-Math.abs(desired-cap))/blendWidth;
+    return Math.min(desired,cap)-blendWidth*h*h*.25;
+  }
+
+  function bridgeheadTrafficPose(actor,time){
+    const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
+    const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
+    // Analytic car-following shares the SAME resolved travel as browser QA.
+    // Min of monotone progress clocks prevents backward motion or overtaking.
+    const traveled=actor.signalized?bridgeheadResolvedTravel(actor,time):time*pace+offset;
+    const phase=((traveled%period)+period)%period;
+    const first=route.points[0],last=route.points.at(-1);
+    const tangent=(a,b)=>{
+      const dx=b[0]-a[0],dz=b[1]-a[1],m=Math.hypot(dx,dz)||1;
+      return [dx/m,dz/m];
+    };
+    const onArc=(center,u,theta,atStart)=>{
+      const normal=[u[1],-u[0]],c=Math.cos(theta),si=Math.sin(theta);
+      const sign=atStart?-1:1;
+      const x=center[0]+sign*rad*(normal[0]*c+u[0]*si);
+      const z=center[1]+sign*rad*(normal[1]*c+u[1]*si);
+      const vx=sign*(u[0]*c-normal[0]*si);
+      const vz=sign*(u[1]*c-normal[1]*si);
+      const onBridge=atStart;
+      return {x,z,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+        yaw:Math.atan2(vx,vz),onBridge,turning:true};
+    };
+    if(phase>=route.total&&phase<route.total+turnLength)
+      return onArc(last,tangent(route.points.at(-2),last),
+        (phase-route.total)/rad,false);
+    if(phase>=2*route.total+turnLength)
+      return onArc(first,tangent(first,route.points[1]),
+        (phase-2*route.total-turnLength)/rad,true);
+    const forward=phase<route.total;
+    const distance=forward?phase:2*route.total+turnLength-phase;
+    const direction=forward?1:-1;
+    const i=Math.max(1,route.lengths.findIndex((at,index)=>
+      index>0&&at>=distance));
+    const a=route.points[i-1],b=route.points[i];
+    const fraction=(distance-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
+    let [ux,uz]=tangent(a,b);
+    // Smooth bridgehead bends' heading and lane offset across a 4-unit
+    // approach on either side; preserve the original centerline geometry.
+    for(let j=Math.max(1,i-1);j<=Math.min(route.points.length-2,i);j++){
+      const delta=distance-route.lengths[j],blend=4;
+      if(Math.abs(delta)>blend)continue;
+      const before=tangent(route.points[j-1],route.points[j]);
+      const after=tangent(route.points[j],route.points[j+1]);
+      const t=(delta+blend)/(2*blend),weight=t*t*(3-2*t);
+      const bx=before[0]*(1-weight)+after[0]*weight;
+      const bz=before[1]*(1-weight)+after[1]*weight;
+      const len=Math.hypot(bx,bz)||1;
+      ux=bx/len;uz=bz/len;break;
+    }
+    const yaw=Math.atan2(ux*direction,uz*direction);
+    const x=a[0]+(b[0]-a[0])*fraction+Math.cos(yaw)*rad;
+    const z=a[1]+(b[1]-a[1])*fraction-Math.sin(yaw)*rad;
+    const onBridge=i<=actor.bridgeSegmentCount;
+    return {x,y:(onBridge?bridgeRoadHeight(x)+.055:STREET_Y+.07),
+      z,yaw,onBridge};
+  }
+
   function trafficPose(actor,time) {
     if(actor.parked)return actor.parked;
+    if(actor.bridgehead)return bridgeheadTrafficPose(actor,time);
     const {route,pace,offset,kind}=actor;
     const cycle=(time*pace+offset)%(actor.vegas||actor.oneWay?route.total:2*route.total);
     const direction=cycle<route.total?1:-1;
@@ -4899,15 +5196,18 @@ const CENTRAL_PARK_SITES=[
     const a=route.points[i-1],b=route.points[i];
     const fraction=(distance-route.lengths[i-1])/(route.lengths[i]-route.lengths[i-1]);
     const yaw=Math.atan2((b[0]-a[0])*direction,(b[1]-a[1])*direction);
+    // Only the bridge segment has elevated deck height.
+    const onBridge=!!actor.bridgehead&&i<=actor.bridgeSegmentCount;
     const lateral=kind==='walker'?(actor.laneOffset??4.60):
-      actor.expressway?(actor.laneOffset??1.65):actor.vegas?VEGAS_FAST_LANE:actor.bridge?1.07:1.76;
+      actor.expressway?(actor.laneOffset??1.65):actor.vegas?VEGAS_FAST_LANE:
+      (actor.bridge||actor.bridgehead)?1.07:1.76;
     const x=lerp(a[0],b[0],fraction)+Math.cos(yaw)*lateral;
     const z=lerp(a[1],b[1],fraction)-Math.sin(yaw)*lateral;
     const y=actor.expressway?lerp(a[2],b[2],fraction)+0.055:
       actor.vegas?sampleTerrainHeight(x,z)+0.30:
       actor.dc?WATER_H+2.56:
-      actor.bridge?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
-    return {x,y,z,yaw};
+      (actor.bridge||onBridge)?bridgeRoadHeight(x)+0.055:STREET_Y+0.07;
+    return {x,y,z,yaw,onBridge};
   }
 
   function prepareCityTraffic() {
@@ -4928,6 +5228,20 @@ const CENTRAL_PARK_SITES=[
       const reach=bridge.halfLength+bridge.ramp;
       for(const side of [-1,1]) for(let x=bridge.x-reach;x<bridge.x+reach;x+=12) {
         railSections.push({start:x,end:Math.min(x+12,bridge.x+reach),side,broken:false});
+      }
+      const connector=makeBrooklynBridgeheadCarRoute(CITY_STREETS,bridge,
+        sampleTerrainHeight,cityLotAt,WATER_H);
+      // Existing bidirectional route movement provides a safe turnaround.
+      if(connector)for(let j=0;j<2;j++){
+        cityTraffic.push({kind:j?'sedan':'taxi',bridgehead:true,
+          bridgeSegmentCount:CITY_STREETS[0].length-1,
+          signalized:true,signalQueueSlot:j,
+          // The second car starts behind the first on the same route.
+          // Keep a 9-unit longitudinal envelope and a separate red queue.
+          bridgeheadLeader:j?cityTraffic.find(a=>a.bridgehead&&
+            a.route===connector&&a.signalQueueSlot===0):null,
+          route:connector,offset:connector.total*.18-(j?12:0),
+          pace:5.0+j*.6,livery:j});
       }
       for (const [i,street] of CITY_STREETS.slice(0,3).entries()) {
         const route=makeTrafficRoute(street);
@@ -5392,6 +5706,16 @@ const CENTRAL_PARK_SITES=[
     buildStreetVehicle('officer',[0.18,0.25,0.35],[0.73,0.54,0.40]),
     buildStreetVehicle('officer',[0.19,0.26,0.36],[0.51,0.36,0.29])
   ];
+  // Single tiny dynamic lens for the existing NYC bridgehead signal.
+  const nycBridgeheadSignalFaces=(()=>{
+    const make=color=>{
+      const mesh=createTriangleMesh();
+      addModelBox(mesh.addQuad,0,0,0,.034,.135,.158,color);
+      return mesh.upload();
+    };
+    return {red:make([.99,.115,.065]),amber:make([.99,.76,.12]),
+      green:make([.14,.98,.28])};
+  })();
   const taxiLamps=(()=>{
     const mesh=createTriangleMesh();
     for(const side of [-1,1]){
@@ -5445,6 +5769,18 @@ const CENTRAL_PARK_SITES=[
     if (!selectedMap.city && !selectedMap.vegas && !selectedMap.dc) return;
     const origin = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if (bridgeRails) drawMesh(bridgeRails,origin);
+    if(selectedMap.city){
+      const bridge=EAST_RIVER_BRIDGE;
+      const end=bridge.x+bridge.halfLength+bridge.ramp;
+      const headZ=bridge.z-(bridge.halfWidth+.36)+1.05;
+      const phase=bridgeheadSignalPhase(sceneryTime);
+      const green=bridgeheadSignalGreen(sceneryTime);
+      const lamp=phase==='amber'?nycBridgeheadSignalFaces.amber:
+        green?nycBridgeheadSignalFaces.green:nycBridgeheadSignalFaces.red;
+      const lampPos=[end-.202,STREET_Y+3.83+
+        (phase==='red'?.25:phase==='amber'?0:-.25),headZ];
+      drawMesh(lamp,mat4FromBasis(lampPos,[1,0,0],worldUp,[0,0,1],1),true);
+    }
     for (const actor of cityTraffic) {
       if(actor.kind==='train'){
         for(let car=0;car<4;car++){
@@ -5456,7 +5792,8 @@ const CENTRAL_PARK_SITES=[
         }
         continue;
       }
-      const {x,y,z,yaw}=actor.wreck || trafficPose(actor,sceneryTime);
+      const pose=actor.wreck || trafficPose(actor,sceneryTime);
+      const {x,y,z,yaw}=pose;
       const dx=x-camPos[0],dz=z-camPos[2],distanceSq=dx*dx+dz*dz;
       if (distanceSq>455*455) continue;
       // PATROL_NYC_TRAFFIC_WATERLINE_V2: traffic must obey the same
@@ -5465,7 +5802,8 @@ const CENTRAL_PARK_SITES=[
       // a car through a warehouse. The raised bridge and expressway are
       // intentional exceptions (the terrain/parcel below is not their deck).
       // Wrecks remain governed by crash physics.
-      if(selectedMap.city && !actor.bridge && !actor.expressway &&
+      if(selectedMap.city && !actor.bridge &&
+         !(actor.bridgehead&&pose.onBridge) && !actor.expressway &&
          !actor.wreck &&
          (sampleTerrainHeight(x,z)<=WATER_H+.08 || cityLotAt(x,z)))continue;
       if(selectedMap.city && nycDetailBand(x,z)===0)continue;
@@ -5956,6 +6294,295 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
+// PATROL_DUMBO_OTI_SOURCE_OUTLINE_PILOT_V1
+  // Real, source-preserved NYC OTI BUILDING_view exterior rings and roof
+  // heights; see assets/nyc/DUMBO_OTI_SOURCE_NOTES.md. Game targets are
+  // explicitly *not* georeferenced: shape is uniformly fitted INSIDE each
+  // existing procedurally cleared/collidable building proxy.
+  const DUMBO_OTI_PILOT=[
+    {target:[366.89,-346.09],fid:1080628,bin:3389054,roofHeightFt:121,
+      ring:[[-73.9893464,40.7022776],[-73.9893399,40.702386],
+        [-73.9893364,40.7024432],[-73.988964,40.7024303],
+        [-73.9889665,40.7023891],[-73.9889738,40.7022675],
+        [-73.9889739,40.7022648],[-73.9889734,40.7022646],
+        [-73.9889792,40.7021668],[-73.9891526,40.7021728],
+        [-73.9892997,40.7021779],[-73.9893522,40.7021798]]},
+    {target:[390.63,-346.49],fid:1031082,bin:3000135,roofHeightFt:83.41,
+      ring:[[-73.9872874,40.7021037],[-73.9872875,40.702103],
+        [-73.9872918,40.7021032],[-73.9874341,40.702108],
+        [-73.9874708,40.7021713],[-73.9875086,40.7022365],
+        [-73.9875489,40.7023059],[-73.9875534,40.7023136],
+        [-73.9875494,40.7023824],[-73.9872716,40.702373],
+        [-73.9872716,40.7023729],[-73.9872778,40.7022679],
+        [-73.9872821,40.7021937]]},
+    {target:[358.67,-280.37],fid:1051309,bin:3344163,roofHeightFt:86.5,
+      ring:[[-73.9896642,40.7036985],[-73.9896741,40.7034704],
+        [-73.9896827,40.7032695],[-73.9897988,40.7032724],
+        [-73.9899908,40.7032772],[-73.9899856,40.7033972],
+        [-73.9899464,40.7033962],[-73.9899337,40.7036921],
+        [-73.9899331,40.7037052],[-73.9899261,40.703705]]}
+  ];
+  function matchingDumboOtiPilot(lot,detailBand){
+    if(detailBand!==3||graphicsCompat||!smoothScenery()||
+      !selectedMap.city||lot[6]||lot[7])return null;
+    const [x,z,w,d,h]=lot;
+    if(w<8||d<9||h<10)return null;
+    return DUMBO_OTI_PILOT.find(rec=>
+      Math.abs(x-rec.target[0])<.19&&
+      Math.abs(z-rec.target[1])<.19)||null;
+  }
+  function buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,source,y){
+    const [x,z,w,d,h]=lot,roofY=y+h;
+    // WGS84 lon/lat -> local meters, then a UNIFORM miniature scale
+    // into the already road-cleared PATROL proxy. Source orientation and
+    // concave corners remain, but PATROL placement is not a real map.
+    const ms=source.ring.map(([lon,lat])=>[
+      (lon+73.99)*84300,(lat-40.70)*110900]);
+    const xs=ms.map(p=>p[0]),zs=ms.map(p=>p[1]);
+    const xmin=Math.min(...xs),xmax=Math.max(...xs);
+    const zmin=Math.min(...zs),zmax=Math.max(...zs);
+    const factor=Math.min((w-.66)/(xmax-xmin),(d-.66)/(zmax-zmin));
+    if(!Number.isFinite(factor)||factor<=0)return null;
+    const cx=(xmin+xmax)*.5,cz=(zmin+zmax)*.5;
+    const raw=ms.map(([u,v])=>[x+(u-cx)*factor,z+(v-cz)*factor]);
+    const ring=[];
+    for(const p of raw)
+      if(!ring.length||Math.hypot(p[0]-ring.at(-1)[0],
+        p[1]-ring.at(-1)[1])>.07)ring.push(p);
+    if(ring.length>2&&Math.hypot(ring[0][0]-ring.at(-1)[0],
+      ring[0][1]-ring.at(-1)[1])<.07)ring.pop();
+    if(ring.length<3)return null;
+    const signed=poly=>poly.reduce((sum,a,i)=>{
+      const b=poly[(i+1)%poly.length];
+      return sum+a[0]*b[1]-a[1]*b[0];
+    },0)*.5;
+    if(signed(ring)>0)ring.reverse();
+    // Ring winds clockwise in game X/Z: wall faces outward, roof +Y.
+    const cross=(a,b,c)=>
+      (b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    // 84 Front Street / the Nexus / source BIN 3389054: a 12-story
+    // 2006-built condominium, NOT a generic historic warehouse. The
+    // architect describes yellow brick and green/blue/silver metal panels.
+    // Source building type/materials are verified; individual panel
+    // positions and shades below are original lightweight interpretation.
+    const nexus=source.fid===1080628;
+    const brickPalette=[
+      [.57,.37,.31],[.47,.30,.29],[.56,.40,.34]];
+    const brick=nexus?[.73,.66,.48]:brickPalette[source.fid%3],
+      stone=nexus?[.77,.78,.76]:[.67,.64,.59],
+      glass=nexus?[.12,.23,.31]:[.13,.24,.31],
+      frame=nexus?[.57,.63,.65]:[.33,.35,.36];
+    const nexusPanels=[[.24,.43,.46],[.34,.48,.42],[.65,.70,.71]];
+    let walls=0,windows=0,roofTriangles=0,parapets=0,roofStepFaces=0,
+      facadeBands=0,metalPanels=0;
+    // FID1080628's 12 stories come from architect documentation, not
+    // interpolated from HEIGHT_ROOF; keep original conservative roof/collider.
+    const floors=nexus?12:Math.max(2,Math.min(6,
+      Math.floor(source.roofHeightFt/22)));
+    // PATROL_DUMBO_OTI_RECESSED_BAYS_V2 — real wall voids, not overlaid
+    // flat glass. Every new face stays inside the old road-cleared proxy.
+    const edges=ring.map((a,i)=>{
+      const b=ring[(i+1)%ring.length];
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      return {len,outZ:len>0?(b[0]-a[0])/len:0};
+    });
+    let doorEdge=-1,bestDoorLength=0;
+    for(let i=0;i<edges.length;i++)
+      if(edges[i].len>3.2&&edges[i].outZ<-.35&&
+        edges[i].len>bestDoorLength){
+        bestDoorLength=edges[i].len;doorEdge=i;
+      }
+    if(doorEdge<0){
+      for(let i=0;i<edges.length;i++)
+        if(edges[i].len>4&&edges[i].len>bestDoorLength){
+          bestDoorLength=edges[i].len;doorEdge=i;
+        }
+    }
+    let doors=0,windowReveals=0;
+    for(let k=0;k<ring.length;k++){
+      const a=ring[k],b=ring[(k+1)%ring.length];
+      const len=edges[k].len;
+      if(len<.075)continue;
+      walls++;
+      const bays=Math.min(4,Math.floor(len/2.15));
+      const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+      const at=(t,yy,out=0)=>[
+        a[0]+(b[0]-a[0])*t+nx*out,yy,
+        a[1]+(b[1]-a[1])*t+nz*out
+      ];
+      const strip=(l,r,y0,y1,tone=brick,id=12,out=0)=>{
+        if(r-l<=.0001||y1-y0<=.0001)return;
+        addQuad(at(l,y0,out),at(r,y0,out),
+          at(r,y1,out),at(l,y1,out),tone,id);
+      };
+      const rows=[];
+      if(bays>0){
+        for(let row=0;row<floors;row++){
+          const floorStep=(h-3.6)/floors;
+          const low=y+2.75+floorStep*row+.21;
+          const high=Math.min(roofY-.40,
+            low+Math.min(1.58,floorStep*.65));
+          if(high>low+.30)rows.push([row,low,high]);
+        }
+      }
+      // Only one broad south-facing side receives an original, clearly
+      // authored ground entrance; no sourced doorway position is implied.
+      const baseTop=rows[0]?.[1]??roofY;
+      if(k===doorEdge&&baseTop>y+2.62&&len>3.2){
+        const half=Math.min(.86/len,.17);
+        const left=.5-half,right=.5+half;
+        const top=y+2.4,doorInset=-.18;
+        strip(0,left,y,top);
+        strip(right,1,y,top);
+        strip(0,1,top,baseTop);
+        addQuad(at(left,y,doorInset),at(right,y,doorInset),
+          at(right,top,doorInset),at(left,top,doorInset),
+          [.12,.20,.22],13);
+        addQuad(at(left,y,0),at(left,y,doorInset),
+          at(left,top,doorInset),at(left,top,0),stone,12);
+        addQuad(at(right,y,doorInset),at(right,y,0),
+          at(right,top,0),at(right,top,doorInset),stone,12);
+        addQuad(at(left,top,doorInset),at(right,top,doorInset),
+          at(right,top,0),at(left,top,0),brick,12);
+        strip(left-.025,right+.025,top+.02,top+.16,stone,12,.065);
+        strip(.495,.505,y+.1,top-.1,frame,12,doorInset+.012);
+        doors++;
+      }else strip(0,1,y,baseTop);
+      let previous=baseTop;
+      for(const [row,low,high] of rows){
+        strip(0,1,previous,low);
+        let cursor=0;
+        for(let j=0;j<bays;j++){
+          const left=(j+.22)/bays,right=(j+.78)/bays;
+          if(nexus && len>3.4 && left-cursor>.05 && (j+row+k)%3!==0){
+            // Raised panel sits in a real polygon-edge spandrel; no box.
+            strip(cursor,left,low,high);
+            strip(cursor+.016,left-.016,low+.035,high-.035,
+              nexusPanels[(j+row+k)%3],4,.046);
+            metalPanels++;
+          }else strip(cursor,left,low,high);
+          const glassInset=-.18;
+          const tone=((source.fid+k*11+row*7+j*13)%7===0)
+            ?[.36,.35,.32]:glass;
+          addQuad(at(left,low,glassInset),at(right,low,glassInset),
+            at(right,high,glassInset),at(left,high,glassInset),
+            tone,13);
+          // Four real, solid reveals enclose the cut opening.
+          addQuad(at(left,low,0),at(left,low,glassInset),
+            at(left,high,glassInset),at(left,high,0),brick,12);
+          addQuad(at(right,low,glassInset),at(right,low,0),
+            at(right,high,0),at(right,high,glassInset),brick,12);
+          addQuad(at(left,low,0),at(right,low,0),
+            at(right,low,glassInset),at(left,low,glassInset),stone,12);
+          addQuad(at(left,high,glassInset),at(right,high,glassInset),
+            at(right,high,0),at(left,high,0),brick,12);
+          // Reuse existing physically shaded metal paint tag 4, NOT
+          // Brooklyn surface 12 whose brick/mortar shader is incorrect
+          // for glass-adjacent aluminum cladding on 84 Front Street.
+          strip(left-.013,right+.013,high+.015,high+.13,
+            nexus?nexusPanels[(row+k)%3]:stone,nexus?4:12,.055);
+          if((row+j)%2===0){
+            const mid=(left+right)*.5;
+            strip(mid-.007,mid+.007,low,high,frame,12,glassInset+.012);
+          }
+          windows++;windowReveals+=4;
+          cursor=right;
+        }
+        strip(cursor,1,low,high);
+        previous=high;
+      }
+      strip(0,1,previous,roofY);
+      // Two actual projecting masonry stringcourse faces follow each official
+      // WGS84-derived edge, not a synthetic rectangular building envelope.
+      if(source.fid===1080628 && len>3.4){
+        const base=roofY-1.18,cap=base+.14,out=.075;
+        addQuad(at(0,base,out),at(1,base,out),
+          at(1,cap,out),at(0,cap,out),stone,12);
+        addQuad(at(0,cap,out),at(1,cap,out),
+          at(1,cap,0),at(0,cap,0),stone,12);
+        facadeBands+=2;
+      }
+      // Retain the original measured-budget roof silhouette.
+      addQuad([a[0],roofY-.12,a[1]],[b[0],roofY-.12,b[1]],
+        [b[0],roofY+.12,b[1]],[a[0],roofY+.12,a[1]],stone,12);
+      parapets++;
+    }
+    const inside=(p,a,b,c)=>
+      cross(a,b,p)<=.000001&&cross(b,c,p)<=.000001&&
+      cross(c,a,p)<=.000001;
+    // PATROL_DUMBO_FID1080628_SOURCE_ROOF_CONTOUR_V1
+    // Official OTI exterior polygon remains unaltered in outline and area.
+    // The internal two-tier partition is a new authored interpretation;
+    // OTI BUILDING provides an outer polygon + HEIGHT_ROOF, NOT measured ridges.
+    const roofFaces=(polygon,yRoof,tint)=>{
+      const ids=polygon.map((_,i)=>i);
+      let guard=0;
+      while(ids.length>=3 && guard++<polygon.length*polygon.length){
+        let clipped=false;
+        for(let i=0;i<ids.length;i++){
+          const ai=ids[(i+ids.length-1)%ids.length],
+            bi=ids[i],ci=ids[(i+1)%ids.length];
+          const a=polygon[ai],b=polygon[bi],c=polygon[ci];
+          if(cross(a,b,c)>=-.000001)continue;
+          if(ids.some(j=>j!==ai&&j!==bi&&j!==ci&&
+            inside(polygon[j],a,b,c)))continue;
+          addTri([a[0],yRoof,a[1]],[b[0],yRoof,b[1]],
+            [c[0],yRoof,c[1]],tint,14);
+          roofTriangles++;
+          ids.splice(i,1);clipped=true;break;
+        }
+        if(!clipped)break;
+      }
+    };
+    const clipHalf=(poly,cut,north)=>{
+      const out=[];
+      for(let i=0;i<poly.length;i++){
+        const a=poly[i],b=poly[(i+1)%poly.length];
+        const aIn=north?a[1]>=cut:a[1]<=cut,
+          bIn=north?b[1]>=cut:b[1]<=cut;
+        if(aIn)out.push(a);
+        if(aIn!==bIn){
+          const t=(cut-a[1])/(b[1]-a[1]);
+          out.push([a[0]+(b[0]-a[0])*t,cut]);
+        }
+      }
+      return out.filter((p,i)=>i===0||
+        Math.hypot(p[0]-out[i-1][0],p[1]-out[i-1][1])>.0001);
+    };
+    let roofStepDrop=0,roofAreas=1;
+    if(source.fid===1080628){
+      // Source ring is approximately one long polygon, so a plan clipping
+      // gives TWO watertight polygonal areas rather than a floating cuboid.
+      const cut=source.target[1],
+        north=clipHalf(ring,cut,true),
+        south=clipHalf(ring,cut,false);
+      const total=Math.abs(signed(north))+Math.abs(signed(south));
+      if(north.length>=3&&south.length>=3&&
+         Math.abs(total-Math.abs(signed(ring)))<.00001){
+        roofStepDrop=.64;roofAreas=2;
+        roofFaces(north,roofY,[.34,.36,.35]);
+        roofFaces(south,roofY-roofStepDrop,[.24,.27,.28]);
+        const seam=north.filter(p=>Math.abs(p[1]-cut)<.0001);
+        const lo=Math.min(...seam.map(p=>p[0])),
+          hi=Math.max(...seam.map(p=>p[0]));
+        if(Number.isFinite(lo)&&Number.isFinite(hi)&&hi-lo>2){
+          addQuad([lo,roofY-roofStepDrop,cut],
+            [hi,roofY-roofStepDrop,cut],[hi,roofY,cut],
+            [lo,roofY,cut],brick,12);
+          addQuad([lo,roofY+.015,cut-.065],
+            [hi,roofY+.015,cut-.065],[hi,roofY+.015,cut+.065],
+            [lo,roofY+.015,cut+.065],stone,12);
+          roofStepFaces=2;
+        }
+      }else roofFaces(ring,roofY,[.33,.35,.34]);
+    }else roofFaces(ring,roofY,[.33,.35,.34]);
+    return {fid:source.fid,ring,roofY,floors,
+      walls,windows,doors,windowReveals,roofTriangles,parapets,
+      roofStepDrop,roofStepFaces,roofAreas,facadeBands,metalPanels,
+      originalArea:Math.abs(signed(ring))};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6038,6 +6665,14 @@ const CENTRAL_PARK_SITES=[
           addModelBox(addQuad,x+Math.sin(a)*w*0.32,y+height/2,z+Math.cos(a)*d*0.30,
             w*(0.13+i%3*0.037),height,d*(0.14+i%4*0.034),i%3===0?trim:material);
         }
+        continue;
+      }
+      // Three municipal OTI source silhouettes; existing worker lot and collision proxy remain unchanged.
+      const dumbOtiPilot=!local&&bridgeheadBrooklyn &&
+        typeof matchingDumboOtiPilot==='function'
+        ?matchingDumboOtiPilot(lot,detailBand):null;
+      if(dumbOtiPilot){
+        buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,dumbOtiPilot,y);
         continue;
       }
       if(heroDowntown && h>=9.2){
@@ -7394,6 +8029,9 @@ const CENTRAL_PARK_SITES=[
       .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
   }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
+  // MIT Petalwake-style near/mid/far bridgehead detail chunks. Unlike the
+  // base road mesh these small visual-only draws change with camera distance.
+  let nycRoadDetailChunks=[],nycRoadChunkLevel=null;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -7485,6 +8123,13 @@ const CENTRAL_PARK_SITES=[
     alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
+    for(const chunk of nycRoadDetailChunks){
+      disposeSceneMesh(chunk.mid);
+      disposeSceneMesh(chunk.near);
+    }
+    nycRoadDetailChunks=[];
+    nycRoadChunkLevel=null;
+    if(window.__patrolNycRoadLodQa)delete window.__patrolNycRoadLodQa;
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
@@ -7547,6 +8192,7 @@ const CENTRAL_PARK_SITES=[
       import('./assets/nyc/nyc-street-network.js').then(({buildNycStreetNetwork})=>{
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
+        const parkedCars=[];
         const stats=buildNycStreetNetwork({
           addQuad:detail.addQuad,addTri:detail.addTri,
           box:(...args)=>addModelBox(detail.addQuad,...args),
@@ -7559,6 +8205,7 @@ const CENTRAL_PARK_SITES=[
           isClear:(x,z,r=.5)=>[[0,0],[-r,-r],[-r,r],[r,-r],[r,r]]
             .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
           detailBand:nycDetailBand,grid:MANHATTAN_GRID,
+          addParkedCar:actor=>parkedCars.push(actor),
           streetY:STREET_Y,waterY:WATER_H,
           timesBounds:TIMES_SQUARE.bounds,
           existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],
@@ -7571,7 +8218,66 @@ const CENTRAL_PARK_SITES=[
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
-        else{nycStreetMesh=uploaded;console.info('[PATROL] NYC streets',stats);}
+        else{
+          nycStreetMesh=uploaded;
+          // Optional detail import deliberately follows the successful base
+          // street upload; failure must never hide roads or parked vehicles.
+          import('./assets/nyc/petalwake-road-chunks.js').then(({
+            buildNycBridgeheadDetailChunks,selectNycRoadChunkLod
+          })=>{
+            if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
+            const pieces=buildNycBridgeheadDetailChunks({
+              makeMesh:()=>createTriangleMesh(),
+              terrainAt:(x,z)=>sampleTerrainHeight(x,z),
+              isClear:(x,z,r=.5)=>[[0,0],[-r,-r],[-r,r],[r,-r],[r,r]]
+                .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
+              detailBand:nycDetailBand,grid:MANHATTAN_GRID,
+              streetY:STREET_Y,waterY:WATER_H,
+              existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,
+                CITY_EXPRESSWAY.ramp]
+            });
+            const chunks=pieces.map(piece=>({
+              bounds:piece.bounds,id:piece.id,
+              mid:piece.mid.upload(),near:piece.near.upload()
+            }));
+            if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost()){
+              for(const chunk of chunks){
+                disposeSceneMesh(chunk.mid);disposeSceneMesh(chunk.near);
+              }
+              return;
+            }
+            nycRoadDetailChunks=chunks;
+            nycRoadChunkLevel=selectNycRoadChunkLod;
+            // Read-only live camera/LOD telemetry is exposed ONLY on the
+            // opt-in QA URL. It is not a control and cannot alter physics.
+            if(new URLSearchParams(location.search).has('nycRoadQa')){
+              window.__patrolNycRoadLodQa=()=>({
+                camera:[...camPos],
+                // Read-only live PR #88 vehicle states. Only available
+                // on the opted-in ?nycRoadQa=1 route; no time mutation.
+                bridgeCars:cityTraffic.filter(actor=>actor.bridgehead).map(actor=>{
+                  const pose=trafficPose(actor,sceneryTime);
+                  return {kind:actor.kind,pace:actor.pace,routePoints:actor.route.points.length,
+                    pose:{x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,
+                      onBridge:!!pose.onBridge,turning:!!pose.turning},
+                    terrain:sampleTerrainHeight(pose.x,pose.z),
+                    lot:!pose.onBridge&&!!cityLotAt(pose.x,pose.z)};
+                }),
+                wetness:nyStreetWetness,
+                chunks:nycRoadDetailChunks.map(chunk=>({
+                  id:chunk.id,
+                  lod:nycRoadChunkLevel(chunk.bounds,camPos),
+                  midTriangles:chunk.mid.count/3,
+                  nearTriangles:chunk.near.count/3
+                }))
+              });
+            }
+            console.info('[PATROL] NYC Petalwake MIT road LOD chunks',chunks.length);
+          }).catch(error=>console.warn('[PATROL] NYC road chunk LOD fallback:',error));
+          cityTraffic=cityTraffic.filter(actor=>!actor.nycCurbside);
+          cityTraffic.push(...parkedCars.map(actor=>({...actor,nycCurbside:true})));
+          console.info('[PATROL] NYC streets',stats);
+        }
       }).catch(error=>console.warn('[PATROL] NYC road fallback:',error));
     }
     // Separate single-batch harbor geometry; no extra renderer/scene graph.
@@ -10349,6 +11055,13 @@ const CENTRAL_PARK_SITES=[
     }
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
+    if(selectedMap.city && nycRoadChunkLevel){
+      for(const chunk of nycRoadDetailChunks){
+        const level=nycRoadChunkLevel(chunk.bounds,camPos);
+        if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
+        if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+      }
+    }
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
@@ -11117,6 +11830,21 @@ const CENTRAL_PARK_SITES=[
     // and block infill, rather than only the suspension bridge foreground.
     {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
       detail:'Inspect industrial brick facades, rooflines, road grid and street fixtures'},
+    // Opt-in QA only: compare identical 290/-363 street target at three
+    // camera distances without altering aircraft controls or collision.
+    // The original 170° camera retreated into harbor water at Mid/Far,
+    // making the LOD screenshots poor street-surface evidence. 45° looks
+    // from the confirmed dry northeast DUMBO blocks: at zoom 42 the
+    // camera XZ sites are ~[302,-351], [353,-300], [438,-215], with no
+    // official footprint collision and all terrain heights ~14.6.
+    ...(new URLSearchParams(location.search).has('nycRoadQa')?[
+      {name:'DUMBO Road QA · Near',x:290,z:-363,height:1.4,bearing:45,
+        radius:18,rise:3.1,detail:'Near road surface, utility grate and curb'},
+      {name:'DUMBO Road QA · Mid',x:290,z:-363,height:1.4,bearing:45,
+        radius:93,rise:10,detail:'Middle LOD at same target'},
+      {name:'DUMBO Road QA · Far',x:290,z:-363,height:1.4,bearing:45,
+        radius:220,rise:26,detail:'Far LOD at same target'}
+    ]:[]),
     {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,
       detail:'Different working piers, ferry dock, handrails and shoreline masonry'},
     // A dedicated view looks north toward the OTI financial-district
@@ -11672,15 +12400,15 @@ const CENTRAL_PARK_SITES=[
   btnBoost.addEventListener('touchstart', (e) => { e.preventDefault(); if (!flying) return; plane.afterburner = true; btnBoost.classList.add('active'); }, { passive: false });
   btnBoost.addEventListener('touchend', (e) => { e.preventDefault(); plane.afterburner = false; btnBoost.classList.remove('active'); }, { passive: false });
 
-  function getPlaneBasis() {
+  function getPlaneBasis(pitch=plane.pitch,bank=plane.bank,rollAnim=plane.rollAnim) {
     const cy = Math.cos(plane.yaw), sy = Math.sin(plane.yaw);
-    const cp = Math.cos(plane.pitch), sp = Math.sin(plane.pitch);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const fwd = [sy * cp, sp, cy * cp];
     const worldUp = [0, 1, 0];
     let right = v3Norm(v3Cross(worldUp, fwd));
     let up = v3Cross(fwd, right);
 
-    const totalRoll = plane.bank + (plane.rollAnim > 0 ? plane.rollAnim * Math.PI * 2 * plane.rollDir : 0);
+    const totalRoll = bank + (rollAnim > 0 ? rollAnim * Math.PI * 2 * plane.rollDir : 0);
     const cr = Math.cos(totalRoll), sr = Math.sin(totalRoll);
     const rRolled = [
       right[0] * cr + up[0] * sr,
@@ -12993,10 +13721,16 @@ const CENTRAL_PARK_SITES=[
     ];
   }
 
+  // 64 samples keep the route arc-length approximation smooth while cutting
+  // per-boat setup work by one third from the previous 96-sample path.
+  const BOAT_ROUTE_SAMPLES=64;
+  const BOAT_WAKE_FULL_DISTANCE=150;
+  const BOAT_WAKE_FOAM_DISTANCE=226;
+
   function setBoatPace(boat, phase, speed) {
     const lengths = [0];
     let prev = routePose(boat,0);
-    const divisions = 96;
+    const divisions = BOAT_ROUTE_SAMPLES;
     for (let i=1;i<=divisions;i++) {
       const next = routePose(boat,i * Math.PI * 2 / divisions);
       lengths.push(lengths[i-1]+Math.hypot(next[0]-prev[0],next[1]-prev[1]));
@@ -13180,20 +13914,25 @@ const CENTRAL_PARK_SITES=[
   })();
 
   function drawHullWash(drawMesh,boat,x,z,front,right){
-    if(Math.hypot(x-camPos[0],z-camPos[2])>226)return;
+    const distance=Math.hypot(x-camPos[0],z-camPos[2]);
+    if(distance>BOAT_WAKE_FOAM_DISTANCE)return;
     const width=boat.halfWidth,length=boat.halfLength;
-    const lift=(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
-    const transform=mat4FromBasis([x,WATER_H+0.027,z],right.map(v=>v*width),
+    const lift=(boat.washScale??1)*(0.62+Math.min(1.1,width*0.13))*(1.0+0.12*Math.sin(2.0*sceneryTime+boat.phase));
+    const washLevel=WATER_H+(boat.waveHeight??0);
+    const transform=mat4FromBasis([x,washLevel+0.027,z],right.map(v=>v*width),
       [0,lift,0],front.map(v=>v*length));
     drawMesh(bowWaveMeshes.water,transform);
     drawMesh(bowWaveMeshes.foam,transform);
-    for(const side of [-1,1])for(let i=0;i<4;i++){
+    // Keep the broad wake visible at medium range, but avoid sixteen spray
+    // uploads per frame when the boat is too far away for that detail to read.
+    const sprayPieces=distance<BOAT_WAKE_FULL_DISTANCE?4:distance<190?2:0;
+    for(const side of [-1,1])for(let i=0;i<sprayPieces;i++){
       const t=(sceneryTime*(0.72+0.14*i)+boat.phase+i*0.27)%1;
       const across=side*width*(0.67+t*0.70);
       const along=length*(0.83-i*0.16-t*0.30);
-      const p=[x+right[0]*across+front[0]*along,WATER_H+0.24+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
+      const p=[x+right[0]*across+front[0]*along,washLevel+0.24*(boat.washScale??1)+Math.sin(Math.PI*t)*lift*(0.70+i*0.11),
         z+right[2]*across+front[2]*along];
-      if(t>0.075&&t<0.87)drawMesh(bowWaveMeshes.spray,mat4FromBasis(p,right,worldUp,front,1.0-t*0.58));
+      if(t>0.075&&t<0.87)drawMesh(bowWaveMeshes.spray,mat4FromBasis(p,right,worldUp,front,(boat.washScale??1)*(1.0-t*0.58)));
     }
   }
 
@@ -13659,27 +14398,46 @@ const CENTRAL_PARK_SITES=[
     const floor=sampleGroundHeight(x,z);
     if(floatplane && !crash){
       if(waterborne){
-        if(!usableFloatWater(x,z,plane.yaw)){
-          waterborne=false;
-          finishFlight([x,WATER_H+.20,z],'Float hit shoreline',false);
-        }else{
-          // Simulated pontoon buoyancy: stable center height and small heave.
+        if(usableFloatWater(x,z,plane.yaw)){
+          // Small load-dependent heave; the hull remains buoyant.
           plane.pos[1]=WATER_H+FLOAT_CLEARANCE+
             .024*Math.sin(sceneryTime*2.3+plane.speed*.28);
-          plane.pitch=plane.bank=plane.rollAnim=0;
+        }else if(usableFloatWater(prevPos[0],prevPos[2],prevYaw)){
+          // Last clear footprint is still safe: stop before the obstruction.
+          plane.pos=[prevPos[0],WATER_H+FLOAT_CLEARANCE,prevPos[2]];
+          plane.yaw=prevYaw;
+          plane.speed=0;
+          plane.afterburner=false;
+          brakes=true;
+        }else{
+          // A moving vessel can occupy both the new and previous footprint.
+          // Keep genuine collisions; do not roll back into a ship or dock.
+          waterborne=false;
+          finishFlight([x,WATER_H+FLOAT_CLEARANCE,z],'Float hit shoreline or obstruction',false);
         }
+        plane.pitch=plane.bank=plane.rollAnim=0;
       }else if(!floatRotate && y<=WATER_H+FLOAT_CLEARANCE &&
                 floor<=WATER_H+.06){
         const sink=(y-prevPos[1])/Math.max(dt,1e-4);
-        const smooth=usableFloatWater(x,z,plane.yaw) &&
-          sink>=-7.8 && plane.speed<=24.5 &&
-          plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
-        if(smooth){
+        if(usableFloatWater(x,z,plane.yaw)){
+          const smooth=sink>=-7.8 && plane.speed<=24.5 &&
+            plane.pitch>=-.18 && plane.pitch<=.23 && Math.abs(plane.bank)<.18;
           waterborne=true;
           plane.pos[1]=WATER_H+FLOAT_CLEARANCE;
           plane.pitch=plane.bank=plane.rollAnim=0;
+          plane.afterburner=false;
+          if(!smooth){
+            // Assisted touchdown: the floats shed speed and throw spray,
+            // instead of replacing the airplane with a submerged wreck.
+            plane.speed=Math.min(9,plane.speed*.55);
+            explosions.push({pos:[x,WATER_H+.03,z],age:0,maxAge:.65,isWater:true});
+          }
         }else{
-          finishFlight([x,WATER_H+.2,z],'Hard water landing',true);
+          // Not a valid landing footprint: skim above the water and keep
+          // the swept solid-object collision tests active on the same path.
+          plane.pos[1]=WATER_H+FLOAT_CLEARANCE+.16;
+          plane.pitch=Math.max(0,plane.pitch);
+          plane.bank*=.55;
         }
       }
     }
@@ -14278,10 +15036,20 @@ const CENTRAL_PARK_SITES=[
     drawMapScenery(drawMeshWithOutline);
     drawSphereShow(drawMeshWithOutline);
     drawCoastalTraffic(drawMeshWithOutline);
-    if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5)
-      drawHullWash(drawMeshWithOutline,
-        {halfWidth:1.27,halfLength:3.05,phase:0},
-        plane.pos[0],plane.pos[2],basis.fwd,basis.right);
+    const floatWave=selectedAircraft==='seaplane'&&waterborne&&!crash
+      ?floatOceanPose(plane.pos[0],plane.pos[2],plane.yaw,Math.fround(time),
+        selectedMap,WATER_H,sampleTerrainHeight):null;
+    if(selectedAircraft==='seaplane'&&waterborne&&plane.speed>1.5){
+      // Both float chines generate wash. A boat-sized wake at the fuselage
+      // center hid the two contact points and produced oversized spray.
+      const washScale=clamp(plane.speed/16,.18,.74);
+      for(const side of [-1,1]){
+        const offset=side*1.27;
+        drawHullWash(drawMeshWithOutline,{halfWidth:.42,halfLength:2.65,
+          phase:side<0?.37:0,washScale,waveHeight:side<0?floatWave?.left:floatWave?.right},plane.pos[0]+basis.right[0]*offset,
+          plane.pos[2]+basis.right[2]*offset,basis.fwd,basis.right);
+      }
+    }
     drawCivilAirTraffic(drawMeshWithOutline);
     drawSkylineRescue(drawMeshWithOutline);
     drawSeagulls(drawMeshWithOutline);
@@ -14290,8 +15058,14 @@ const CENTRAL_PARK_SITES=[
 
     if (!scenicViewActive && !crash && viewIdx !== 1 &&
         !(harborArtInspection&&selectedMap.alaska)) {
-      const planeScale = viewIdx === 2 ? 1.45 : 1.0;
-      const planeModel = mat4FromBasis(plane.pos, basis.right, basis.up, basis.fwd, planeScale);
+      // Camera zoom must not enlarge the floats below their physics waterline.
+      const planeScale = viewIdx === 2 && selectedAircraft!=='seaplane' ? 1.45 : 1.0;
+      let modelPos=plane.pos, modelBasis=basis;
+      if(floatWave){
+        modelPos=[plane.pos[0],WATER_H+FLOAT_CLEARANCE+floatWave.height,plane.pos[2]];
+        modelBasis=getPlaneBasis(floatWave.pitch,floatWave.bank,0);
+      }
+      const planeModel=mat4FromBasis(modelPos,modelBasis.right,modelBasis.up,modelBasis.fwd,planeScale);
       drawMeshWithOutline(aircraftMeshes[selectedAircraft], planeModel, false);
 
       if (selectedAircraft === "fighter") {

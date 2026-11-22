@@ -1,0 +1,52 @@
+name: PATROL NYC centralized 3D reality evidence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/nyc-reality-central-3d-qa.mjs"
+      - ".github/workflows/nyc-reality-central-3d.yml"
+      - "docs/NYC_REALITY_CENTRAL_QA_20261122.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixed-real-game-cameras:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify QA script and existing targeted bridge-road regression
+        run: |
+          node --check scripts/nyc-reality-central-3d-qa.mjs
+          node --test tests/nyc-bqe-ramp-bridgehead-clearance.test.mjs
+      - name: Install free Chromium SwiftShader and PNG decoder for QA only
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Host actual integrated PATROL flight game
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-central-3d-http.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture seven game cameras, mean and P95 cadence, GLBs, flight control, map switching
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        timeout-minutes: 20
+        run: node scripts/nyc-reality-central-3d-qa.mjs
+      - name: Upload exact-head screenshots and JSON even if QA fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-reality-central-real-game-evidence
+          path: artifacts/nyc-reality-central-3d/
+          if-no-files-found: warn
+          retention-days: 10

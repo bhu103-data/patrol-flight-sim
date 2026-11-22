@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PATROL shared asset comparison — Kenney traffic light</title>
+<style>html,body{margin:0;background:#08111b;color:#dce8f5;font:14px system-ui}main{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px}section{background:#101d2a;border:1px solid #294055;border-radius:8px;overflow:hidden}h1{font-size:18px;margin:12px}h2{font-size:14px;margin:10px}canvas{display:block;width:100%;height:420px;background:linear-gradient(#152c48,#080d14)}p{margin:8px 12px;color:#9fb4c8}#status{margin:10px 12px;color:#9fdfb5}</style>
+<h1>同一镜头：现有程序化信号灯 vs Blender 导出的 Kenney City Kit (Roads)</h1>
+<p id="status">loading…</p>
+<main><section><h2>现有 PATROL 风格程序化候选</h2><canvas id="procedural"></canvas></section><section><h2>Kenney traffic-light.glb（CC0）</h2><canvas id="kenney"></canvas></section></main>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
+const status=document.querySelector('#status');
+function makeRenderer(canvas){const r=new THREE.WebGLRenderer({canvas,antialias:true});r.setPixelRatio(Math.min(devicePixelRatio,2));r.setSize(canvas.clientWidth,canvas.clientHeight,false);r.outputColorSpace=THREE.SRGBColorSpace;return r}
+function setup(id){const canvas=document.getElementById(id),r=makeRenderer(canvas),s=new THREE.Scene();s.background=new THREE.Color(0x0a1420);const c=new THREE.PerspectiveCamera(32,canvas.clientWidth/canvas.clientHeight,.01,100);c.position.set(3.2,2.5,4.8);const ctl=new OrbitControls(c,canvas);ctl.target.set(0,1.4,0);ctl.enableDamping=true; s.add(new THREE.HemisphereLight(0xa8c7e8,0x16202c,2.4));const key=new THREE.DirectionalLight(0xffe6b3,3);key.position.set(2,4,3);s.add(key);return {r,s,c,ctl}}
+function box(s,x,y,z,w,h,d,color){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.12}));m.position.set(x,y,z);s.add(m);return m}
+const left=setup('procedural'); box(left.s,0,.04,0,4,.08,4,0x202a32); box(left.s,0,1.35,0,.16,2.7,.16,0x3b4148); box(left.s,0,2.72,0,.75,.48,.24,0x20242a); for(const [y,c] of [[2.84,0x22c878],[2.72,0xe7b33e],[2.60,0xe14335]]){const m=new THREE.Mesh(new THREE.SphereGeometry(.11,16,10),new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:.32}));m.position.set(0,y,.15);left.s.add(m)}
+const right=setup('kenney'); new GLTFLoader().load('../assets/shared/kenney-traffic-light-blender.glb',g=>{const root=g.scene;root.position.y=.04;right.s.add(root);status.textContent='PASS — both panels share the same camera framing; Blender GLB loaded with embedded texture.'},e=>{},e=>{status.textContent='FAIL — '+e.message});
+function frame(v){requestAnimationFrame(()=>frame(v));v.ctl.update();v.r.render(v.s,v.c)} frame(left);frame(right);
+</script>

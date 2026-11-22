@@ -238,6 +238,21 @@ try{
   await capture('03e-signalized-street-high-detail');
   await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
+  // Combined-main conflict gate: Digit6 must remain the traffic signal
+  // viewpoint, while the older Hongyadong riverside view moves to Digit7.
+  const beforePromenade=await page.evaluate(()=>
+    window.PatrolSpaceBridge.getState().position);
+  check((await page.locator('#controls').innerText()).includes('7'),
+    'Digit7 riverside scenic shortcut is missing from the visible help');
+  await page.keyboard.press('7');
+  await page.waitForTimeout(1100);
+  const promenade=await page.evaluate(()=>
+    window.PatrolSpaceBridge.getState().position);
+  check(Array.isArray(promenade)&&promenade.length===3&&
+    promenade.every(Number.isFinite)&&
+    Math.hypot(...promenade.map((v,i)=>v-beforePromenade[i]))>15,
+    'Digit7 did not select an independent Hongyadong promenade viewpoint');
+  await capture('03f-hongyadong-promenade-digit7');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
