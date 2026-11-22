@@ -85,3 +85,50 @@ presented as a current 2026 scan.
 Data rights: NYC OTI BUILDING_view (City of New York, Open Data Terms,
 https://opendata.cityofnewyork.us/overview/), reviewed in PR #189/#192.
 New roof split/stone detail authored in PATROL; not copied from third-party photos.
+
+## Identity correction for FID 1080628 / BIN 3389054 — **Nexus**, not a warehouse (2026-11-22)
+
+The earlier pilot and the first roof PR version incorrectly described this
+specific FID as a historic **brick warehouse**. The official BIN resolves to
+**84 Front Street, DUMBO, Brooklyn** (BBL 3000517501). Its original designer,
+Meltzer/Mandl Architects, documents the project **The Nexus** as completed
+2006, **12 stories**, with yellow brick and green/blue/silver panelized
+cladding, not uniform nineteenth-century masonry.
+
+Independent references (facts/style only, **no photos or proprietary
+models copied into this game**):
+- NYC BIN lookup / address: https://buildnyc.ai/building/84-front-street-3389054
+- Architect's first-party project: https://archinect.com/meltzermandl/project/the-nexus
+- Contemporary architecture documentation:
+  https://www.archpaper.com/2005/07/all-rise-2/
+- Official city roof/footprint fields and license remain the existing NYC OTI
+  BUILDING_view https://data.cityofnewyork.us/d/5zhs-2jue
+- **Official 2014 3D model limitations:** NYC OTI metadata documents mostly
+  LoD1 prismatic geometries and about 100 iconic LoD2 structures; it does
+  not certify an actual rooftop sub-facet for BIN 3389054. See
+  https://github.com/CityOfNewYork/nyc-geo-metadata/blob/main/Metadata/Metadata_3DBuildingModel.md
+
+### Corrected actual in-game mesh (still non-georeferenced)
+The same 11-corner polygon game-fit shell now renders **12 authored
+storey-level glazing rows** / 108 physically inset window panes with
+four return faces per pane, plus **40 distinct shallow metal cladding
+panels** raised over existing polygon-edge spandrels. The alternating
+colors are restrained stylization of documented blue, green and silver
+metal panel families plus yellow brick; exact panel coordinates, window
+openings, rooftop centerline, floor levels and materials are *not*
+licensed architectural plans or 2014 photogrammetric geometry.
+
+At the preserved site geometry: **1,056 original game mesh quads
++ 11 roof triangles**, still one city mesh batch, no new texture/GLB.
+Other two official FIDs remain 336/455 quads and 9/8 roof triangles.
+Before this identity correction the same FID was 449 quads and 11
+roof triangles (5 display floors, 45 windows). The increase is
+**+607 quads = +1,214 renderer triangles** in this one LOD3-only lot.
+Compared to original parent #204 (441 quads, 9 roof triangles) the
+total is **+1,232 triangles**. No native GPU frame savings claimed.
+
+**Not yet copied from measured plans:** architect describes an upper-floor
+setback, but source OTI polygon + HEIGHT_ROOF do not give that inset
+boundary. The earlier clipped two-plane roof is still an **authored
+placeholder**, not an accurate eighth-floor setback. Never call the
+building a historical warehouse in the merged scene.
