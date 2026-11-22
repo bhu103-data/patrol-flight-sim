@@ -94,7 +94,7 @@ jobs:
           node scripts/nyc-true-scale-flight-browser-smoke.mjs
           test -s artifacts/nyc-true-scale-flight/report.json
           test -s artifacts/nyc-true-scale-flight/01-true-scale-flythrough.png
-          test -s artifacts/nyc-true-scale-flight/02-true-scale-without-2014-mesh.png
+          test -s artifacts/nyc-true-scale-flight/04-2014-matched-building-model-off.png
       - name: Commit generated official source mesh only after extraction and live QA pass
         if: success() && github.event_name != 'pull_request'
         env:

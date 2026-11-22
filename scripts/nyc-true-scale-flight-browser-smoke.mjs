@@ -87,11 +87,23 @@ try{
     null,{timeout:60000})));
   const onCamera=await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
   const offCamera=await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
+  const focusQA=await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historicalFocus);
+  const focusOffQA=await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.historicalFocus);
   const cameraPositionError=Math.hypot(...onCamera.eyeENUmeters.map(
     (v,i)=>v-offCamera.eyeENUmeters[i]));
   const cameraAngleError=Math.max(
     Math.abs(onCamera.yawRadians-offCamera.yawRadians),
     Math.abs(onCamera.pitchRadians-offCamera.pitchRadians));
+  check(focusQA?.accepted===true&&focusQA.fid===212747,
+    'No accepted source-street camera for the selected historical building: '+JSON.stringify(focusQA));
+  check(focusQA.eyeInsideBuildingFid===null&&focusQA.firstHit?.fid===212747,
+    'Historical focus camera is inside/occluded by a building instead of seeing the target facade: '+JSON.stringify(focusQA));
+  check(focusQA.horizontalDistanceMetres>=20&&focusQA.horizontalDistanceMetres<=180&&
+    focusQA.firstHit.distanceMetres>3&&focusQA.firstHit.distanceMetres<focusQA.horizontalDistanceMetres-1,
+    'Historical facade camera is not outside the building with a valid street sightline');
+  check(focusQA.sourceRoofTriangles>0&&focusQA.sourceFacadeTriangles>0&&
+    JSON.stringify(focusQA)===JSON.stringify(focusOffQA),
+    'Historical source focus diagnostics differ between model ON/OFF views');
   await Promise.all([focusOnPage,focusOffPage].map(p=>p.addStyleTag({
     content:'aside,footer{display:none!important}'
   })));
@@ -120,14 +132,18 @@ try{
     changedCanvasPixelsOver6:historicalChangedPixels,
     sameCanvasViewport:true,cameraPositionErrorMetres:cameraPositionError,
     cameraAngleErrorRadians:cameraAngleError,
+    focusCamera:focusQA.cameraPosition,target:focusQA.targetPosition,
+    focusDistanceMetres:focusQA.horizontalDistanceMetres,
+    focusFirstHit:focusQA.firstHit,focusEyeInsideBuildingFid:focusQA.eyeInsideBuildingFid,
+    sourceFacadeTrianglesForFocus:focusQA.sourceFacadeTriangles,
     offModelImported:await focusOffPage.evaluate(()=>
       window.PatrolMetricFlightQA.historical2014ModelImported)
   };
   check(report.historical2014VisualAB.offModelImported===false&&
     report.historical2014VisualAB.onRoofTriangles===1974&&
     report.historical2014VisualAB.onFacadeTriangles===540&&
-    historicalChangedPixels>=100,
-    'Imported 2014 geometry is not visible in the same-camera canvas-only WebGL2 A/B');
+    historicalChangedPixels>=5000,
+    'Imported 2014 geometry is not visibly contributing to the same-camera canvas-only WebGL2 A/B');
   await Promise.all([focusOnPage.close(),focusOffPage.close()]);
   const png=PNG.sync.read(initial);
   let pixels=0;

@@ -183,11 +183,18 @@ async function start(){
     position:[...sourceStreetSpawn.position],
     yaw:sourceStreetSpawn.yaw,pitch:sourceStreetSpawn.pitch
   });
+  let historicalFocusQA={accepted:false,reason:'not-requested'};
   const historicalFocus=()=>{
     const fid=Number(params.get('focus2014')||212747);
     const rows=historicalSourceMesh.roofTriangles.filter(
       t=>Number(t.matched2022BuildingFid)===fid);
-    if(!rows.length)return reset();
+    const facadeRows=historicalSourceMesh.facadeTriangles.filter(
+      t=>Number(t.matched2022BuildingFid)===fid);
+    const building=massing.buildings.find(b=>Number(b.fid)===fid);
+    if(!rows.length||!building){
+      historicalFocusQA={accepted:false,fid,reason:'missing-matched-roof-or-current-footprint'};
+      return reset();
+    }
     const points=rows.flatMap(t=>t.vertices);
     const east=points.reduce((s,p)=>s+p[0],0)/points.length;
     const north=points.reduce((s,p)=>s+p[1],0)/points.length;
@@ -195,9 +202,56 @@ async function start(){
       historicalSourceMesh.localOriginLonLat,massing.origin);
     const targetX=east+sourceOffsetE-geometry.center.east;
     const targetZ=geometry.center.north-(north+sourceOffsetN);
-    const eyeX=targetX-20,eyeZ=targetZ+12;
-    return {position:[eyeX,3.2,eyeZ],
-      yaw:Math.atan2(targetX-eyeX,eyeZ-targetZ),pitch:.12};
+    // Aim at a real lower/mid facade point, not the roof centroid. The
+    // previous fixed offset placed the camera INSIDE FID 212747.
+    const targetHeight=Math.max(8,Math.min(36,building.roofHeightMeters*.22));
+    const target=[targetX,targetHeight,targetZ];
+    const firstBuildingHit=(eye)=>{
+      const distance=Math.hypot(targetX-eye[0],targetZ-eye[2]);
+      const steps=Math.max(1,Math.ceil(distance/.5));
+      for(let step=1;step<steps;step++){
+        const t=step/steps;
+        const x=eye[0]+(targetX-eye[0])*t;
+        const y=eye[1]+(targetHeight-eye[1])*t;
+        const z=eye[2]+(targetZ-eye[2])*t;
+        const hit=buildingContains(massing,x+geometry.center.east,
+          geometry.center.north-z,y);
+        if(hit!==null)return {fid:hit,distanceMetres:distance*t,heightMetres:y};
+      }
+      return null;
+    };
+    const views=sourceStreetCandidates.map(candidate=>{
+      const eye=[...candidate.position];
+      const horizontalDistance=Math.hypot(targetX-eye[0],targetZ-eye[2]);
+      const eyeInsideBuildingFid=buildingContains(massing,
+        eye[0]+geometry.center.east,geometry.center.north-eye[2],eye[1]);
+      return {candidate,eye,horizontalDistance,eyeInsideBuildingFid,
+        firstHit:firstBuildingHit(eye)};
+    }).filter(view=>view.horizontalDistance>=20&&view.horizontalDistance<=180&&
+      view.eyeInsideBuildingFid===null&&view.firstHit?.fid===fid&&
+      view.firstHit.distanceMetres>3&&
+      view.firstHit.distanceMetres<view.horizontalDistance-1)
+      .sort((a,b)=>a.horizontalDistance-b.horizontalDistance);
+    const view=views[0];
+    if(!view){
+      historicalFocusQA={accepted:false,fid,reason:'no-clear-official-street-sightline-to-matched-building',
+        candidateCount:sourceStreetCandidates.length};
+      return reset();
+    }
+    const eye=view.eye;
+    const yaw=Math.atan2(targetX-eye[0],eye[2]-targetZ);
+    const pitch=Math.atan2(targetHeight-eye[1],view.horizontalDistance);
+    historicalFocusQA={
+      accepted:true,fid,sourceRoofTriangles:rows.length,
+      sourceFacadeTriangles:facadeRows.length,
+      cameraPosition:eye.slice(),targetPosition:target,
+      horizontalDistanceMetres:view.horizontalDistance,
+      targetHeightMetres:targetHeight,
+      eyeInsideBuildingFid:view.eyeInsideBuildingFid,
+      firstHit:view.firstHit,
+      street:'7 Avenue',clearanceRadiusMetres:streetClearanceMetres
+    };
+    return {position:eye,yaw,pitch};
   };
   let camera=params.has('focus2014')?historicalFocus():reset(),last=0,frames=0;
   // A deliberately restricted PATROL airborne-only aircraft-control slice.
@@ -292,6 +346,7 @@ async function start(){
     historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,
     historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,
     historicalFocusFid:params.has('focus2014')?Number(params.get('focus2014')):null,
+    historicalFocus:historicalFocusQA,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
