@@ -52,3 +52,18 @@ test('shading-only patch retains existing C185 water, ship wakes and map toggles
   assert.match(game,/gl\.uniform3fv\(uWorld\.sun,environment\.sun\)/);
   assert.match(game,/gl\.uniform3fv\(uWorld\.moon,environment\.moon\)/);
 });
+
+test('Manhattan removes only nonphysical camera-facing cyan crest emission, not real sun glint',()=>{
+  // The old term is tied to the 2D view/sun azimuth (not N dot L or a BRDF).
+  // Component-isolation WebGL2 A/B: removing it eliminates the broad teal
+  // patch while the independently computed white solar glint remains.
+  assert.match(game,/float back=pow\(max\(dot\(normalize\(uSun\.xz\+vec2\(0\.0001\)\),normalize\(rd\.xz\+vec2\(0\.0001\)\)\),0\.0\),4\.0\);/);
+  assert.match(game,/if\(!uManhattan\)\s*waterCol\+=vec3\(0\.025,0\.24,0\.18\)\*crest\*back\*sunAbove\*clearSky\*litFactor;/);
+  assert.equal((game.match(/waterCol\+=vec3\(0\.025,0\.24,0\.18\)\*crest\*back/g)||[]).length,1);
+  // Do not silently replace the residual physical sun glitter with a
+  // palette edit, normal flattening or missing light contribution.
+  assert.match(game,/vec3 wn = normalize\(vec3\(-slope\.x, 1\.0, -slope\.y\)\);/);
+  assert.match(game,/float ggx = waterDGGX\(ndh,alpha2\) \* waterVSmith\(ndl,ndv,alpha2\) \* waterFresnel\(vdh\) \* ndl;/);
+  assert.match(game,/waterCol \+= sunTint \* glitter \* clearSky \* sunAbove \* litFactor;/);
+  assert.match(game,/vec3 transmitted=refract\(rd,wn,1\.0\/1\.333\);/);
+});
