@@ -60,6 +60,11 @@ try{
     return createHash('sha256').update(pixels).digest('hex');
   };
   const aerial=await screenshot('current-2014-facade-aerial');
+  await page.screenshot({
+    path:'artifacts/nyc-official-mn05/current-2014-facade-full.png',
+    fullPage:false,animations:'allow',timeout:90000
+  });
+  report.shots.push('current-2014-facade-full');
   await page.mouse.move(620,360);
   await page.mouse.down();
   await page.mouse.move(865,535,{steps:14});
