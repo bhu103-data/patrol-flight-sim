@@ -202,13 +202,12 @@ async function start(){
     if(keySet.has('arrowright'))camera.yaw+=spin;
     if(keySet.has('arrowup'))camera.pitch=Math.min(1.4,camera.pitch+spin);
     if(keySet.has('arrowdown'))camera.pitch=Math.max(-1.4,camera.pitch-spin);
-    const forward=(keySet.has('w')?1:0)-(keySet.has('s')?1:0);
-    const strafe=(keySet.has('d')?1:0)-(keySet.has('a')?1:0);
-    // Use explicit orthonormal X/Z vectors: no incremental dz mutation.
-    // Equivalent to sin/cos(yaw) without dependent state across frames.
-    const sin=Math.sin(camera.yaw),cos=Math.sin(camera.y+Math.PI/2);
-    const dx=forward*sin+strafe*cos,
-      dz=-forward*cos+strafe*sin;
+    const longitudinal=(keySet.has('w')?1:0)-(keySet.has('s')?1:0);
+    const lateral=(keySet.has('d')?1:0)-(keySet.has('a')?1:0);
+    // Explicit orthonormal X/Z vectors, no duplicate frame-scope 'forward'.
+    const sinYaw=Math.sin(camera.yaw),cosYaw=Math.cos(camera.yaw);
+    const dx=longitudinal*sinYaw+lateral*cosYaw,
+      dz=-longitudinal*cosYaw+lateral*sinYaw;
     let dy=0;
     if(keySet.has('e')||keySet.has(' '))dy++;
     if(keySet.has('q'))dy--;
