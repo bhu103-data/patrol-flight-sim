@@ -5869,7 +5869,13 @@ const CENTRAL_PARK_SITES=[
         }
       }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
-      const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
+      // PATROL_NYC_TIMES_UPPER_FENESTRATION_V1: compressed, officially
+      // sourced Times Square towers may exceed nine visual floors. The former
+      // generic LOD3 cap left 30-50% of their upper street-facing walls as
+      // featureless masonry; only detailBand=4 receives the bounded extension.
+      // Existing municipal FID outline, site/collider and roof are unchanged.
+      const floors=Math.min(detailBand===4?18:detailBand>=3?9:6,
+        Math.floor((h-2.4)/3.15));
       for(let floor=0;floor<floors;floor++){
         const bottom=y+2.9+floor*3.15,top=Math.min(roofY-.54,bottom+1.80);
         if(top<=bottom)continue;
