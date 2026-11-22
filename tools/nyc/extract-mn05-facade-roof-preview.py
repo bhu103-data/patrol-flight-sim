@@ -213,7 +213,7 @@ def main():
         "sourceAbsoluteZUsed": False,
         "heightRatioGate": {"min": 0.50, "max": 1.75,
             "meaning": "conservative source-Z-span / modern HEIGHTROOF plausibility filter; not vertical datum proof"},
-        "verticalDisplayRule: "per-FID relative raw 2014 source Z normalized to current HEIGHTROOF; no absolute source elevation",
+        "verticalDisplayRule": "per-FID relative raw 2014 source Z normalized to current HEIGHTROOF; no absolute source elevation",
         "assetRole": "RESEARCH_PREVIEW_ONLY_NOT_PATROL_RUNTIME_OR_COLLISION",
         "meshAccepted": False,
         "errors": [],
