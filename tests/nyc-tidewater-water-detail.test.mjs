@@ -50,7 +50,11 @@ test('graphics compat and NYC Basic bypass extra visual noise without touching w
 test('NYC far-water long-wave optical filter preserves original physical wave',()=>{
   assert.match(shader,/const bool NYC_HORIZON_SLOPE_FILTER = true;/);
   assert.match(shader,/nycLongSlopeVisibility/);
-  assert.match(shader,/1\.0-0\.72\*smoothstep\(0\.80,4\.40,pixel\)/);
+  assert.match(shader,/const bool NYC_HORIZON_FOOTPRINT_EARLY = true;/);
+  assert.match(shader,/smoothstep\(0\.26,1\.90,pixel\)/);
+  assert.match(shader,/smoothstep\(0\.80,4\.40,pixel\)/);
+  assert.match(shader,/NYC_HORIZON_FOOTPRINT_EARLY\?0\.90:0\.72/);
+  assert.match(shader,/nycLongSlopeVisibility=1\.0-strength\*footprint/);
   assert.match(shader,/swell\.yz\*nycLongSlopeVisibility\+chop\.yz/);
   assert.match(shader,/swell\.x \* 0\.045 \*/);
   assert.match(shader,/nycLongSlopeVisibility \+ chop\.x \* 0\.19/);
@@ -97,4 +101,13 @@ test('fixed-camera water QA reports ROI stripe gradients without gating visual a
   assert.match(qa,/report\.farWaterComparison=\{/);
   assert.match(qa,/stripeDirectionRatioChangePct:pctChange\(/);
   assert.match(qa,/not GPU time, sea-state measurement, or an automated visual pass/);
+});
+
+test('early NYC horizon footprint can be A/B reverted without modifying physical waves',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(qa,/PATROL_COMPARE_MODE==='footprint'/);
+  assert.match(qa,/const bool NYC_HORIZON_FOOTPRINT_EARLY = false;/);
+  assert.match(qa,/src\.replace\(earlyEnabled,earlyDisabled\)/);
+  assert.match(shader,/if\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL &&/);
+  assert.doesNotMatch(html,/NYC_CREST_BEND/);
 });

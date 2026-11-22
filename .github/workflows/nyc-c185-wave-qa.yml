@@ -46,6 +46,10 @@ jobs:
         env:
           PATROL_COMPARE_MODE: band-filter
         run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: NYC early horizon-footprint A/B versus accepted baseline (shading only)
+        env:
+          PATROL_COMPARE_MODE: footprint
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
         uses: actions/upload-artifact@v4

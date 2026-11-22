@@ -1920,13 +1920,18 @@ const CENTRAL_PARK_SITES=[
           // Only optical shading is filtered; physically sampled ocean height
           // and C185 pontoon motion still use their original 18 wave modes.
           const bool NYC_HORIZON_SLOPE_FILTER = true;
+          // Reversible near-horizon footprint experiment: the old threshold
+          // leaves unresolved swells between the distant horizon and pier.
+          // CPU and shader water HEIGHT, C185 buoyancy and other maps stay fixed.
+          const bool NYC_HORIZON_FOOTPRINT_EARLY = true;
           float nycLongSlopeVisibility=1.0;
           if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL &&
              NYC_HORIZON_SLOPE_FILTER){
-            // Integrate unresolved long-wave normals into roughness near
-            // grazing angles; preserve full crest detail near the camera.
-            nycLongSlopeVisibility=
-              1.0-0.72*smoothstep(0.80,4.40,pixel);
+            // Filter only long-wave shading; retain some normal variance.
+            float footprint=NYC_HORIZON_FOOTPRINT_EARLY?
+              smoothstep(0.26,1.90,pixel):smoothstep(0.80,4.40,pixel);
+            float strength=NYC_HORIZON_FOOTPRINT_EARLY?0.90:0.72;
+            nycLongSlopeVisibility=1.0-strength*footprint;
           }
           // Lower New York Harbor has more swell than the sheltered rivers.
           float harborExposure = uManhattan ? 1.0 - smoothstep(-560.0, -300.0, p.z) : 1.0;
