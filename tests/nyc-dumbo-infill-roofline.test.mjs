@@ -69,6 +69,16 @@ test('three adjacent DUMBO infill roofs have distinct actual parapet profiles',(
     assert.equal(a.meta.triangles,2,'rooflight has physical triangular endcaps');
     assert.equal(a.meta.beams,5,'rooflight has two pairs of rafters and a ridge');
     assert.equal(a.quads.length,2);
+    // The roof endcaps have to face OUT, or WebGL backface culling
+    // makes the physical gable wedges disappear from the aerial camera.
+    for(const [i,tri] of a.triangles.entries()){
+      const [v0,v1,v2]=tri;
+      const dy1=v1[1]-v0[1],dz1=v1[2]-v0[2];
+      const dy2=v2[1]-v0[1],dz2=v2[2]-v0[2];
+      const normalX=dy1*dz2-dz1*dy2;
+      assert.ok((i===0?-normalX:normalX)>0.15,
+        'roof gable triangle must have outward-facing X normal');
+    }
     for(const pane of a.quads){
       assert.equal(pane.at(-1),13,'rooflight needs glass material, not masonry');
       assert.ok(new Set(pane.slice(0,4).map(p=>p[1].toFixed(4))).size===2,
