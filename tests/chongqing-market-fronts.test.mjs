@@ -277,6 +277,32 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   }
 });
 
+test('Digit8 free inspection camera remains clear on right-hand terrace',async()=>{
+  const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  assert.ok(game.includes('eye:new THREE.Vector3(site.x+8,site.base+8.5,site.z+17)'));
+  assert.ok(game.includes('aim:new THREE.Vector3(site.x+3.5,site.base+5.7,site.z+2.78)'));
+  assert.ok(game.includes('cameraDesired.copy(marketInspect.eye)'));
+  assert.ok(game.includes('marketInspectorActive:Boolean(marketInspect)'));
+  assert.ok(game.includes("canvas.addEventListener('pointerdown',e=>{marketInspect=null"));
+  assert.ok(game.includes("canvas.addEventListener('wheel',e=>{marketInspect=null"));
+  const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
+    game.indexOf('const worldGeometry='));
+  const real=new Function('clamp',terrain+';return {ground};')(
+    (n,min,max)=>Math.max(min,Math.min(max,n)));
+  const site=CHONGQING_MARKET_SITES[1],y=real.ground(site.x,site.z);
+  const eye=[site.x+8,y+8.5,site.z+17],
+    target=[site.x+3.5,y+5.7,site.z+2.78];
+  for(let i=0;i<=50;i++){
+    const t=i/50,x=eye[0]+(target[0]-eye[0])*t,
+      z=eye[2]+(target[2]-eye[2])*t,
+      sightY=eye[1]+(target[1]-eye[1])*t;
+    assert.ok(sightY>real.ground(x,z)+7.5,
+      'Digit8 facade view ray clips city terrain');
+  }
+  assert.ok(eye[0]>site.x+6&&eye[0]<site.x+9,
+    'camera must offset away from left hillside while facing windows');
+});
+
 test('main game builds galleries BEFORE shared collisions and has a QA shortcut',async()=>{
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');

@@ -135,6 +135,8 @@ try{
   await page.keyboard.press('8');
   await page.waitForTimeout(1100);
   const closeState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(closeState.marketInspectorActive===true,
+    'Digit8 did not activate the actual front-facing render camera');
   check(closeState.marketOpenFacades===3 &&
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
@@ -144,6 +146,8 @@ try{
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(starting.marketInspectorActive===false,
+    'Digit2 failed to restore normal third-person flight camera');
   check(starting.avatarFlying,'Scenic shortcut 2 must enable flying');
   const before=starting.altitude;
   // Software SwiftShader may render at only a few FPS; the game's fixed

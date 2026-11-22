@@ -874,6 +874,8 @@ joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)upd
 joystick.addEventListener('pointerup',stopJoystick);
 joystick.addEventListener('pointercancel',stopJoystick);
 let viewYaw=-.72,viewPitch=.25,camDistance=14,dragging=false,mouseX=0,mouseY=0,toastUntil=0;
+// Only Digit8 uses a real site-facing inspection eye; ordinary flying stays third person.
+let marketInspect=null;
 const temp=new THREE.Vector3();
 const cameraAim=new THREE.Vector3();
 function message(value,seconds=2.6){
@@ -903,6 +905,7 @@ function toggleFlight(){
 // without waiting for a long flyover; they do not alter the world or quest progress.
 function scenicView(key){
   if(seaplaneMode)return false; // No teleporting aircraft into terrain.
+  marketInspect=null;
   const destinations={
     Digit1:{name:'洪崖洞临江夜景',pos:[155,132,-72],target:[155,112,168]},
     Digit2:{name:'朝天门来福士与水晶连廊',pos:[-355,302,-50],target:[-355,294,176]},
@@ -945,6 +948,15 @@ function scenicView(key){
       // A second, closer angle reveals the physical window jamb depth;
       // Digit7 stays unchanged for baseline before/after comparisons.
       const eyeX=site.x+3,eyeZ=site.z+18;
+      // The chase camera aims at the pilot, not the site's `target` below.
+      // A separate front-facing, street-height eye makes physical jambs visible
+      // without placing the player or a giant cliff in the inspection frame.
+      // An offset to the clear right terrace leaves >7.5 units of terrain gap,
+      // frames center/right window apertures and reduces cliff foreground.
+      marketInspect={
+        eye:new THREE.Vector3(site.x+8,site.base+8.5,site.z+17),
+        aim:new THREE.Vector3(site.x+3.5,site.base+5.7,site.z+2.78)
+      };
       destinations.Digit8={
         name:'山城商铺 · 实体窗洞近景',
         pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
@@ -976,6 +988,9 @@ function press(key,once=false){
 window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if(!e.repeat&&scenicView(e.code))return;
+  if(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','Space',
+      'ControlLeft','ControlRight','ArrowUp','ArrowDown','ArrowLeft',
+      'ArrowRight','KeyF'].includes(e.code))marketInspect=null;
   if(!e.repeat&&e.code==='KeyH'){document.body.classList.toggle('cinematic');return;}
   if(!e.repeat&&e.code==='KeyT'){
     cqTimeSelect.value=cqTimeOptions[(cqTimeOptions.indexOf(cqTimeSelect.value)+1)%cqTimeOptions.length];
@@ -989,7 +1004,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{keys.clear();touchForward=touchSideways=0;joystickPointer=null;joystickKnob.style.transform='translate(0,0)';});
-canvas.addEventListener('pointerdown',e=>{dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{marketInspect=null;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',()=>dragging=false);
 canvas.addEventListener('pointercancel',()=>dragging=false);
 canvas.addEventListener('pointermove',e=>{
@@ -998,7 +1013,7 @@ canvas.addEventListener('pointermove',e=>{
   viewPitch=clamp(viewPitch+(e.clientY-mouseY)*.004,-.3,1.05);
   mouseX=e.clientX;mouseY=e.clientY;
 });
-canvas.addEventListener('wheel',e=>{camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
+canvas.addEventListener('wheel',e=>{marketInspect=null;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
 document.querySelectorAll('#mobile button').forEach(b=>{
   const key=b.dataset.key;
   b.addEventListener('pointerdown',e=>{e.preventDefault();press(key,true);b.setPointerCapture(e.pointerId);});
@@ -1297,6 +1312,15 @@ const cameraFocus=new THREE.Vector3();
 const cameraRay=new THREE.Vector3();
 const cameraSample=new THREE.Vector3();
 function updateCamera(dt){
+  if(marketInspect){
+    cameraDesired.copy(marketInspect.eye);
+    cameraFocus.copy(marketInspect.aim);
+    cameraPos.copy(cameraDesired);
+    camera.position.copy(cameraPos);
+    camera.lookAt(cameraFocus);
+    if(Math.abs(camera.fov-48)>.015){camera.fov=48;camera.updateProjectionMatrix();}
+    return;
+  }
   const speed=Math.hypot(state.vel.x,state.vel.z);
   const distance=camDistance*(1+clamp((speed-28)/160,0,.35));
   const cp=Math.cos(viewPitch),sp=Math.sin(viewPitch);
@@ -1404,7 +1428,8 @@ window.PatrolSpaceBridge={getState:()=>({
   marketGalleryRoofs:marketFronts.stats.curvedRoofs,
   marketGalleryInstances:marketFronts.stats.instances,
   marketOpenFacades:marketFronts.stats.openFacades,
-  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles
+  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles,
+  marketInspectorActive:Boolean(marketInspect)
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
