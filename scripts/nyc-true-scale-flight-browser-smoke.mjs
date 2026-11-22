@@ -74,34 +74,37 @@ try{
   const initial=await page.locator('#scene').screenshot({
     path:out+'/01-true-scale-flythrough.png',timeout:90000});
   const initialCapturedUTC=new Date().toISOString();
-  const historicalOffPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
-  historicalOffPage.on('pageerror',e=>report.errors.push('historical-off JS '+e.message));
-  await historicalOffPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?historical=off',
+  const focusOnPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  const focusOffPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  focusOnPage.on('pageerror',e=>report.errors.push('historical-focus-on JS '+e.message));
+  focusOffPage.on('pageerror',e=>report.errors.push('historical-focus-off JS '+e.message));
+  await focusOnPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?focus2014=212747',
     {waitUntil:'domcontentloaded',timeout:60000});
-  await historicalOffPage.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
-    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
-  const historicalOff=await historicalOffPage.locator('#scene').screenshot({
-    path:out+'/02-true-scale-without-2014-mesh.png',timeout:90000});
-  const offCamera=await historicalOffPage.evaluate(()=>{
-    const c=window.PatrolMetricFlightQA.cameraRegistration;
-    return {eyeENUmeters:c.eyeENUmeters,eyeWGS84LonLat:c.eyeWGS84LonLat,
-      yawRadians:c.yawRadians,pitchRadians:c.pitchRadians,
-      viewportPixels:c.viewportPixels};
-  });
-  const onCamera=report.initial.cameraRegistration;
+  await focusOffPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?focus2014=212747&historical=off',
+    {waitUntil:'domcontentloaded',timeout:60000});
+  await Promise.all([focusOnPage,focusOffPage].map(p=>p.waitForFunction(()=>
+    window.PatrolMetricFlightQA?.ready&&window.PatrolMetricFlightQA.frames>12,
+    null,{timeout:60000})));
+  const onCamera=await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
+  const offCamera=await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
   const cameraPositionError=Math.hypot(...onCamera.eyeENUmeters.map(
     (v,i)=>v-offCamera.eyeENUmeters[i]));
   const cameraAngleError=Math.max(
     Math.abs(onCamera.yawRadians-offCamera.yawRadians),
     Math.abs(onCamera.pitchRadians-offCamera.pitchRadians));
-  report.historical2014VisualAB={sameViewport:true,cameraPositionErrorMetres:cameraPositionError,
-    cameraAngleErrorRadians:cameraAngleError};
+  const onPngData=await focusOnPage.evaluate(()=>
+    document.querySelector('#scene').toDataURL('image/png').split(',')[1]);
+  const offPngData=await focusOffPage.evaluate(()=>
+    document.querySelector('#scene').toDataURL('image/png').split(',')[1]);
+  await writeFile(out+'/03-2014-matched-building-model-on.png',Buffer.from(onPngData,'base64'));
+  await writeFile(out+'/04-2014-matched-building-model-off.png',Buffer.from(offPngData,'base64'));
+  const meshOnPng=PNG.sync.read(Buffer.from(onPngData,'base64'));
+  const meshOffPng=PNG.sync.read(Buffer.from(offPngData,'base64'));
+  check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
+    '2014 mesh A/B canvas frames do not share the same viewport');
   check(cameraPositionError<1e-6&&cameraAngleError<1e-9&&
     onCamera.viewportPixels.join(',')===offCamera.viewportPixels.join(','),
     'Historical model ON/OFF captures did not use the exact same camera pose');
-  const meshOnPng=PNG.sync.read(initial),meshOffPng=PNG.sync.read(historicalOff);
-  check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
-    '2014 mesh A/B frames do not share the same viewport');
   let historicalChangedPixels=0;
   for(let i=0;i<meshOnPng.data.length;i+=4){
     const delta=(Math.abs(meshOnPng.data[i]-meshOffPng.data[i])+
@@ -110,19 +113,22 @@ try{
     if(delta>6)historicalChangedPixels++;
   }
   report.historical2014VisualAB={
-    onTriangles:report.initial.historical2014RoofTriangles+
-      report.initial.historical2014FacadeTriangles,
-    offTriangles:(await historicalOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles)),
-    changedPixelsOver6:historicalChangedPixels,
-    sameViewport:true,cameraPositionErrorMetres:cameraPositionError,
+    focusFID:212747,onTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.triangles),
+    offTriangles:await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles),
+    onRoofTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014RoofTriangles),
+    onFacadeTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014FacadeTriangles),
+    changedCanvasPixelsOver6:historicalChangedPixels,
+    sameCanvasViewport:true,cameraPositionErrorMetres:cameraPositionError,
     cameraAngleErrorRadians:cameraAngleError,
-    offModelImported:await historicalOffPage.evaluate(()=>
+    offModelImported:await focusOffPage.evaluate(()=>
       window.PatrolMetricFlightQA.historical2014ModelImported)
   };
   check(report.historical2014VisualAB.offModelImported===false&&
+    report.historical2014VisualAB.onRoofTriangles===1974&&
+    report.historical2014VisualAB.onFacadeTriangles===540&&
     historicalChangedPixels>=100,
-    'Imported 2014 roof/facade meshes do not visibly change the same-camera WebGL2 frame');
-  await historicalOffPage.close();
+    'Imported 2014 geometry is not visible in the same-camera canvas-only WebGL2 A/B');
+  await Promise.all([focusOnPage.close(),focusOffPage.close()]);
   const png=PNG.sync.read(initial);
   let pixels=0;
   for(let y=45;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
