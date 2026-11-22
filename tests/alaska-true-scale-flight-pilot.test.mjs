@@ -176,5 +176,8 @@ test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15
   assert.ok(smoke.includes('sourceCellCount===1536*2880'));
   assert.ok(smoke.includes('sourceCollectionStart===1278720000000'));
   assert.ok(smoke.includes("sourceVerticalDatumEvidence?.includes('EPSG:5703 / GEOID09')"));
+  assert.ok(smoke.includes('tileSeamP95Metres<=10'));
+  assert.ok(smoke.includes('tileOverlapRmseMetres<=.5'));
+  assert.ok(smoke.includes("sourceLicense==='USGS 3DEP public domain'"));
   assert.ok(smoke.includes('meshSpacingMeters'));
 });
