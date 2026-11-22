@@ -81,6 +81,33 @@ try{
     .querySelector('#scene').getContext('webgl2')
     .getParameter(document.querySelector('#scene').getContext('webgl2').RENDERER)),
     webgl:glStatus,first:q1,second:q2,differenceFraction};
+  // The source-only CSCL API has a separate GitHub QA report. In Chromium,
+  // actively inspect its CORS fetch, shared ENU coordinates and real lines.
+  await page.locator('#roads').click();
+  await page.waitForFunction(()=>document.querySelector('#road-status')
+    ?.textContent?.includes('official CSCL physical IDs'),null,{timeout:60000});
+  const roadStatus=await page.locator('#road-status').innerText();
+  const match=roadStatus.match(/(\d+) official CSCL physical IDs \/ (\d+) line segments/);
+  fail(match&&Number(match[1])>10&&Number(match[2])>=Number(match[1]),
+    'Official centerlines never loaded: '+roadStatus);
+  const roadCapture=await page.locator('#scene').screenshot(
+    {path:out+'/03-truegeo-official-street-centers.png'});
+  const q3=quality(roadCapture),c=PNG.sync.read(roadCapture).data;
+  let roadChanged=0;
+  for(let i=0;i<b.length;i+=4)
+    if(Math.max(Math.abs(b[i]-c[i]),Math.abs(b[i+1]-c[i+1]),
+      Math.abs(b[i+2]-c[i+2]))>24)roadChanged++;
+  const roadChangeFraction=roadChanged/(1280*720);
+  fail(roadChangeFraction>.00005,
+    'Real road geometry did not visibly draw in same meter frame');
+  const streetGl=await page.evaluate(()=>document.querySelector('#scene')
+    ?.getContext('webgl2')?.getError());
+  fail(streetGl===0,'Real CSCL overlay WebGL error '+streetGl);
+  report.screenshots.push('03-truegeo-official-street-centers.png');
+  report.metrics.officialCSCL={roadStatus,
+    physicalIDs:Number(match[1]),segments:Number(match[2]),
+    quality:q3,roadChangeFraction,webglError:streetGl,
+    disclaimer:'1:1 official centerlines ONLY: no asphalt roadbed width'};
   fail(report.errors.length===0,'Browser exceptions: '+report.errors.join('; '));
   report.passed=true;
 }catch(error){
