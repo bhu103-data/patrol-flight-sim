@@ -125,6 +125,15 @@ const injection=String.raw`
       const period=2*(actor.route.total+Math.PI*radius);
       const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
         (actor.signalQueueSlot??0)*5.5;
+      // Construct an actor whose next crossing would nominally be amber.
+      // Reuse real route, pace and signal controller; no mock clock.
+      const amberActor={...actor,offset:stopAt-actor.pace*29};
+      const amberStops={
+        approach:bridgeheadSignalTravel(amberActor,29),
+        amberEnd:bridgeheadSignalTravel(amberActor,32),
+        redEnd:bridgeheadSignalTravel(amberActor,44),
+        greenAfter:bridgeheadSignalTravel(amberActor,44.5)
+      };
       let prev=bridgeheadSignalTravel(actor,0);
       let previousHeld=false,redHoldSamples=0,greenResumeSamples=0,
         movingSamples=0,misplacedStops=0,invalidDistance=0;
@@ -146,7 +155,7 @@ const injection=String.raw`
       return {kind:actor.kind,signalized:actor.signalized,
         signalQueueSlot:actor.signalQueueSlot,stopAt,
         redHoldSamples,greenResumeSamples,movingSamples,
-        misplacedStops,invalidDistance};
+        misplacedStops,invalidDistance,amberStops};
     });
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
@@ -156,7 +165,8 @@ const injection=String.raw`
   // Test-only snapshot clock: drive the production signal's actual scene
   // time to known red/green windows for a stable physical-lens comparison.
   window.__patrolBridgeheadLightState = () => ({
-    time:sceneryTime,green:bridgeheadSignalGreen(sceneryTime)
+    time:sceneryTime,green:bridgeheadSignalGreen(sceneryTime),
+    phase:bridgeheadSignalPhase(sceneryTime)
   });
   window.__patrolBridgeheadVisualClock = time => {
     sceneryTime=time;
@@ -234,7 +244,11 @@ try{
   for(const sig of traffic.signalRows){
     assert(sig.signalized===true&&sig.redHoldSamples>=8&&
       sig.greenResumeSamples>0&&sig.movingSamples>0&&
-      sig.misplacedStops===0&&sig.invalidDistance===0,
+      sig.misplacedStops===0&&sig.invalidDistance===0&&
+      sig.amberStops.approach<sig.stopAt&&
+      Math.abs(sig.amberStops.amberEnd-sig.stopAt)<.00001&&
+      Math.abs(sig.amberStops.redEnd-sig.stopAt)<.00001&&
+      sig.amberStops.greenAfter>sig.stopAt,
       'Red stop/green restart failed in real NYC runtime: '+JSON.stringify(sig));
   }
   for(const car of traffic.rows){
@@ -293,11 +307,13 @@ try{
     });
     await page.waitForTimeout(1700);
     result.signalVisual={camera:'Bridge Signal QA · Close',captures:[],
-      roi:{upperRed:[633,344,648,361],lowerGreen:[633,380,648,393]},
+      roi:{upperRed:[633,344,648,361],middleAmber:[633,362,648,375],
+        lowerGreen:[633,380,648,393]},
       colorContrast:null};
-    for(const [want,time,name] of [
-      [false,1,'03-bridge-signal-close-red.png'],
-      [true,18,'04-bridge-signal-close-green.png']
+    for(const [phase,time,name] of [
+      ['red',1,'03-bridge-signal-close-red.png'],
+      ['green',18,'04-bridge-signal-close-green.png'],
+      ['amber',27.1,'05-bridge-signal-close-amber.png']
     ]){
       // Force *real* signal clock only in intercepted test HTML; render
       // the actual existing 3D housing and selected red/green mesh.
@@ -306,11 +322,11 @@ try{
       for(let attempt=0;attempt<3;attempt++){
         const set=await page.evaluate(t=>
           window.__patrolBridgeheadVisualClock?.(t),time);
-        assert(set?.green===want,'Test-only clock failed to select light color');
+        assert(set?.phase===phase,'Test-only clock failed to select light phase');
         await page.waitForTimeout(500);
         const before=await page.evaluate(()=>
           window.__patrolBridgeheadLightState?.());
-        assert(before?.green===want,'Scene signal phase already drifted');
+        assert(before?.phase===phase,'Scene signal phase already drifted');
         await page.evaluate(()=>
           document.body.classList.add('patrol-bridge-qa'));
         let pngBytes=null;
@@ -324,26 +340,31 @@ try{
         }
         const after=await page.evaluate(()=>
           window.__patrolBridgeheadLightState?.());
-        snapshot={name,want,before,after,attempt:attempt+1,
+        snapshot={name,phase,before,after,attempt:attempt+1,
           topRedRgb:lampMeanRgb(pngBytes,[633,344,648,361]),
+          midAmberRgb:lampMeanRgb(pngBytes,[633,362,648,375]),
           bottomGreenRgb:lampMeanRgb(pngBytes,[633,380,648,393])};
-        if(after?.green===want)break;
+        if(after?.phase===phase)break;
       }
-      assert(snapshot?.after?.green===want,
+      assert(snapshot?.after?.phase===phase,
         'Screenshot drifted into wrong signal phase: '+JSON.stringify(snapshot));
       const gl=await page.evaluate(()=>document.getElementById('glCanvas')
         ?.getContext('webgl2')?.getError());
       assert(gl===0,'Signal close-up WebGL error: '+gl);
       result.signalVisual.captures.push(snapshot);
       screenshots.push({name,label:'Bridge Signal QA · Close',
-        phase:want?'green':'red'});
+        phase});
     }
     const red=result.signalVisual.captures[0],
-      green=result.signalVisual.captures[1];
+      green=result.signalVisual.captures[1],
+      amber=result.signalVisual.captures[2];
     const upperRedGain=Number((red.topRedRgb[0]-green.topRedRgb[0]).toFixed(1));
     const lowerGreenGain=Number((green.bottomGreenRgb[1]-red.bottomGreenRgb[1]).toFixed(1));
-    result.signalVisual.colorContrast={upperRedGain,lowerGreenGain};
-    assert(upperRedGain>=25&&lowerGreenGain>=40,
+    const amberMiddleGain=Number((amber.midAmberRgb[0]-
+      Math.max(red.midAmberRgb[0],green.midAmberRgb[0])).toFixed(1));
+    result.signalVisual.colorContrast={
+      upperRedGain,lowerGreenGain,amberMiddleGain};
+    assert(upperRedGain>=25&&lowerGreenGain>=40&&amberMiddleGain>=25,
       'Physical bridge signal is not visually distinguishable red vs green: '+
       JSON.stringify(result.signalVisual));
   }
