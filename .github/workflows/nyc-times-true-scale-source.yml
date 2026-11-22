@@ -2,7 +2,7 @@ name: NYC Times Square true-metre street/building source pilot
 
 on:
   pull_request:
-    branches: [qa/nyc-main-merged-candidate-20261122-chat]
+    branches: [qa/nyc-main-merged-candidate-20261122-chat, feat/nyc-tsq-meter-crs-road-source-20261122-chat]
     paths:
       - 'scripts/nyc-times-true-scale-pilot.mjs'
       - 'tests/nyc-times-true-scale-pilot.test.mjs'
@@ -10,6 +10,13 @@ on:
       - 'tools/nyc/true-scale-browser-smoke.mjs'
       - '.github/workflows/nyc-times-true-scale-source.yml'
       - 'assets/nyc/times-square-footprints.json'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'scripts/nyc-metre-lowflight-roadbed-build.mjs'
+      - 'scripts/nyc-times-pedestrian-plaza-source.mjs'
+      - 'scripts/nyc-times-pedestrian-topology-audit.mjs'
+      - 'scripts/nyc-times-sidewalk-curb-source.mjs'
+      - 'scripts/nyc-metre-pedestrian-lowflight-build.mjs'
+      - 'tests/nyc-times-source-workflow-completeness.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +25,7 @@ permissions:
 jobs:
   source-pilot:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 22
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,13 +34,26 @@ jobs:
       - name: Verify unit consistency, municipal source FIDs and roads
         run: |
           node --check scripts/nyc-times-true-scale-pilot.mjs
-          node --test tests/nyc-times-true-scale-pilot.test.mjs
-      - name: Acquire authoritative NYC DCM road centerlines and measured building outlines
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-source-workflow-completeness.test.mjs
+      - name: Install official 2022 polygon triangulator (build-time only)
+        run: npm install --no-save --no-audit --no-fund earcut@3.0.2
+      - name: Acquire all municipal geometry required by current source-preview WebGL2
         run: |
           node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          node scripts/nyc-metre-lowflight-roadbed-build.mjs
+          node scripts/nyc-times-pedestrian-plaza-source.mjs
+          node scripts/nyc-times-pedestrian-topology-audit.mjs
+          node scripts/nyc-times-sidewalk-curb-source.mjs
+          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
           test -s artifacts/nyc-true-scale/source.json
           test -s artifacts/nyc-true-scale/plan.svg
+          test -s artifacts/nyc-true-scale/roadbed-mesh.json
+          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
+          test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
+          cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
+          cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
       - name: Install browser for real measured-source WebGL2 acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
