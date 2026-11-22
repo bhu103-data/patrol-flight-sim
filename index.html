@@ -12863,24 +12863,33 @@ const CENTRAL_PARK_SITES=[
     vegasMeasuredStrip=null;
     vegasMeasuredStripX=z=>VEGAS_BOULEVARD;
     if(selectedMap.vegas){
-      try{
-        const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
-        vegasMeasuredRidges=await loadVegasRidgeDEM();
-        console.info('[PATROL] Vegas USGS measured ridge profile loaded',
-          vegasMeasuredRidges.source.rawGeoTiffSHA256);
-      }catch(error){
-        console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
-      }
-      try{
-        const {loadVegasTIGERCenterline,vegasMeasuredRoadX}=
-          await import('./assets/vegas/tiger-strip.js');
-        vegasMeasuredStrip=await loadVegasTIGERCenterline();
-        vegasMeasuredStripX=z=>vegasMeasuredRoadX(vegasMeasuredStrip,z);
-        console.info('[PATROL] Vegas Census TIGER measured Strip loaded',
-          vegasMeasuredStrip.source.archiveSHA256);
-      }catch(error){
-        console.warn('[PATROL] Vegas TIGER road visual fallback:',error);
-      }
+      // Independent, validated public-domain assets load concurrently.
+      // Each source has its own fallback; a TIGER failure must not suppress
+      // USGS mountains, and a DEM failure must not suppress road details.
+      await Promise.all([
+        (async()=>{
+          try{
+            const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
+            vegasMeasuredRidges=await loadVegasRidgeDEM();
+            console.info('[PATROL] Vegas USGS measured ridge profile loaded',
+              vegasMeasuredRidges.source.rawGeoTiffSHA256);
+          }catch(error){
+            console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
+          }
+        })(),
+        (async()=>{
+          try{
+            const {loadVegasTIGERCenterline,vegasMeasuredRoadX}=
+              await import('./assets/vegas/tiger-strip.js');
+            vegasMeasuredStrip=await loadVegasTIGERCenterline();
+            vegasMeasuredStripX=z=>vegasMeasuredRoadX(vegasMeasuredStrip,z);
+            console.info('[PATROL] Vegas Census TIGER measured Strip loaded',
+              vegasMeasuredStrip.source.archiveSHA256);
+          }catch(error){
+            console.warn('[PATROL] Vegas TIGER road visual fallback:',error);
+          }
+        })()
+      ]);
     }
     const terrainOptions={
       size:MAP_SIZE,span:MAP_SPAN,landmarks:selectedMap.landmarks,
