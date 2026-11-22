@@ -108,6 +108,8 @@ def source_roof_patches(buildings):
             "sourceUuid": patch["sourceObjectUUID"],
             "matchedFid": match["building"]["fid"],
             "coverage": float(match["coverage"]),
+            "secondBestCoverage": float(match["secondBestCoverage"]),
+            "coverageMargin": float(match["coverageMargin"]),
             "triangles": triangles,
         })
         total_triangles += len(triangles)
@@ -211,6 +213,7 @@ def main():
         "modernHeightSource": "NYC Building Footprints HEIGHTROOF snapshot retrieved 2026-11-20",
         "sourceVerticalDatumVerified": False,
         "sourceAbsoluteZUsed": False,
+        "roofMatchUniquenessGate": {"minimumCoverage": 0.60, "minimumCoverageMargin": 0.08, "appliesTo": "roof patches only"},
         "heightRatioGate": {"min": 0.50, "max": 1.75,
             "meaning": "conservative source-Z-span / modern HEIGHTROOF plausibility filter; not vertical datum proof"},
         "verticalDisplayRule": "per-FID relative raw 2014 source Z normalized to current HEIGHTROOF; no absolute source elevation",
@@ -301,13 +304,17 @@ def main():
                         else:
                             y = relative_height_metres(raw_z, low, high, height)
                         vertices.append([round(east, 4), round(y, 4), round(north, 4)])
-                    output.append({
+                    item = {
                         "sourceUuid": patch["sourceUuid"],
                         "matchedFid": fid,
                         "vertices": vertices,
                         "matchCoverage": patch.get("coverage",
                             patch.get("boundaryCoverage", 0.0)),
-                    })
+                    }
+                    if kind == "roof":
+                        item["secondBestCoverage"] = patch["secondBestCoverage"]
+                        item["matchMargin"] = patch["coverageMargin"]
+                    output.append(item)
             return output
 
         roof_triangles = display_triangles(roofs, "roof")

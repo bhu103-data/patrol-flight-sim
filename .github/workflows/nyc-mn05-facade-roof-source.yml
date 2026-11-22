@@ -1,5 +1,7 @@
 name: NYC 2014 MN05 authentic roof + facade cached-mesh pilot
 on:
+  push:
+    branches: [qa/nyc-mn05-roof-match-uniqueness-20261122-chat]
   pull_request:
     branches: [qa/nyc-mn05-roof-surface-true-metre-bounds-20261122-chat]
     paths:
@@ -58,8 +60,14 @@ jobs:
           assert d['counts']['matchedBuildingFids'] >= 5
           assert d['counts']['roofTriangles'] >= 100
           assert d['counts']['facadeTriangles'] >= 100
+          assert d['sourceVerticalUnitVerified'] is True
           assert d['sourceVerticalDatumVerified'] is False
           assert d['sourceAbsoluteZUsed'] is False
+          gate = d['roofMatchUniquenessGate']
+          assert gate['minimumCoverage'] == 0.60
+          assert gate['minimumCoverageMargin'] == 0.08
+          assert all(t['matchMargin'] >= 0.08 for t in d['roofTriangles'])
+          assert all('matchMargin' not in t for t in d['facadeTriangles'])
           PY
           test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
       - uses: actions/setup-node@v4
