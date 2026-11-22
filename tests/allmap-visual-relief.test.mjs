@@ -46,7 +46,7 @@ test('USGS 3DEP ridge generator is real-data guarded, with a complete flyable fa
 
 test('Lower Manhattan LOD relief and surveyed footprint path remain disjoint',()=>{
   const city=sourceBetween('  function buildCityBuildings(parcels,local=false) {',
-    '  function buildCityTraffic(');
+    '  function tintSeed(');
   assert.match(city,/if\(!local&&lot\[7\]\)\{[\s\S]*?buildOfficialFootprintMesh/);
   assert.match(city,/Selectively relieve distant Lower Manhattan silhouettes/);
   assert.match(city,/east>-185&&east<175&&north>-526&&north<-155/);
