@@ -1,0 +1,45 @@
+name: NYC metric WGS84 footprint pilot WebGL2 acceptance
+on:
+  pull_request:
+    paths:
+      - "assets/nyc/nyc-metric-footprints.mjs"
+      - "assets/nyc/times-square-footprints.json"
+      - "nyc-metric-pilot.html"
+      - "scripts/nyc-metric-pilot-browser.mjs"
+      - "tests/nyc-metric-footprint-pilot.test.mjs"
+      - ".github/workflows/nyc-metric-pilot.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metric-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify geospatial metre geometry without overlays
+        run: node --test tests/nyc-metric-footprint-pilot.test.mjs
+      - name: Install open-source WebGL2 test browser
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve the candidate scene
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/nyc-metric-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/nyc-metric-pilot.html >/dev/null
+      - name: Render source-exact 1:1 WGS84 massing oblique and north-up
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-metric-pilot-browser.mjs
+      - name: Preserve actual WebGL images and metric evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-metric-wgs84-geometry
+          path: artifacts/nyc-metric-pilot/
+          retention-days: 7
+          if-no-files-found: ignore
