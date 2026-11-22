@@ -4699,8 +4699,162 @@ const CENTRAL_PARK_SITES=[
     return runs;
   }
 
+  // PATROL_NYC_TIMES_SIGNAL_V1 — original model informed by NYC DOT, NOT
+  // actual W 44 St signal timing or a mapped cabinet/pole location.
+  // Seventh Avenue is southbound in the authored Times Square route.
+  const NYC_TIMES_SEVENTH={
+    intersection:'7 Av / W 44 St (game-space approximation)',
+    stopDistance:47.8,cycleSeconds:90,lpiSeconds:7,
+    greenEnds:40,amberEnds:44,walkEnds:16
+  };
+  function timesSeventhSignalPhase(seconds){
+    const cycle=NYC_TIMES_SEVENTH.cycleSeconds;
+    const t=((seconds%cycle)+cycle)%cycle;
+    return {vehicle:t<NYC_TIMES_SEVENTH.lpiSeconds?'red':
+      t<NYC_TIMES_SEVENTH.greenEnds?'green':
+      t<NYC_TIMES_SEVENTH.amberEnds?'amber':'red',
+      pedestrian:t<NYC_TIMES_SEVENTH.walkEnds?'walk':'hand',
+      leadingPedestrian:t<NYC_TIMES_SEVENTH.lpiSeconds,
+      rightOnRed:false,phaseSeconds:t};
+  }
+  function timesSeventhNextGreen(seconds){
+    const cycle=NYC_TIMES_SEVENTH.cycleSeconds;
+    const phase=((seconds%cycle)+cycle)%cycle;
+    if(phase>=NYC_TIMES_SEVENTH.lpiSeconds &&
+       phase<NYC_TIMES_SEVENTH.greenEnds)return seconds;
+    return seconds+(phase<NYC_TIMES_SEVENTH.lpiSeconds
+      ?NYC_TIMES_SEVENTH.lpiSeconds-phase:
+      cycle-phase+NYC_TIMES_SEVENTH.lpiSeconds);
+  }
+  // Piecewise analytic route clock: clamp each southbound W 44 St approach
+  // at a real model stop bar and resume only on green. Unlike teleporting
+  // a nominal offset after red, this preserves continuous actor movement.
+  function timesSeventhControlledDistance(actor,seconds){
+    const L=actor.route.total,pace=actor.pace;
+    if(!Number.isFinite(seconds)||seconds<=0||!(pace>0)||!(L>0))
+      return ((actor.offset%L)+L)%L;
+    let distance=((actor.offset%L)+L)%L;
+    let elapsed=0;
+    let stop=NYC_TIMES_SEVENTH.stopDistance+
+      Math.ceil((distance-NYC_TIMES_SEVENTH.stopDistance-1e-8)/L)*L;
+    for(let pass=0;pass<2048;pass++){
+      const arrive=elapsed+Math.max(0,stop-distance)/pace;
+      if(seconds<arrive)return distance+(seconds-elapsed)*pace;
+      const release=timesSeventhNextGreen(arrive);
+      if(seconds<=release)return stop;
+      elapsed=release;
+      distance=stop;
+      stop+=L;
+    }
+    // Long-session limit: never jump across a red light after exhausting
+    // event bounds; remain held at the last safe stop instead.
+    return distance;
+  }
+
+  // PATROL_NYC_TIMES_SIGNAL_GEOMETRY_V1
+  // Small phase-dependent mesh; five pre-baked heads and exactly one extra
+  // draw call at runtime. No per-frame GPU uploads or live DOM textures.
+  function buildTimesSeventhSignalMeshes(){
+    const variants={};
+    for(const t of [1,10,24,42,60]){
+      const phase=timesSeventhSignalPhase(t);
+      const key=phase.vehicle+'-'+phase.pedestrian;
+      const detail=createTriangleMesh();
+      const quad=detail.addQuad;
+      const box=(...args)=>addModelBox(quad,...args);
+      const dark=[.11,.13,.14],shell=[.87,.67,.19],steel=[.31,.35,.35];
+      const poleX=7.05,poleZ=6.45;
+      // M-2A-inspired metal pole and mast arm, not an official surveyed pole.
+      box(poleX,STREET_Y+2.69,poleZ,.20,5.38,.20,steel);
+      box((poleX+12)/2,STREET_Y+4.78,poleZ,12-poleX,.12,.16,steel);
+      box(12,STREET_Y+4.10,poleZ,.58,1.48,.49,shell);
+      box(12,STREET_Y+4.10,poleZ+.264,.48,1.37,.035,dark);
+      for(const [offset,lamp] of [[.44,'red'],[0,'amber'],[-.44,'green']]){
+        const live=phase.vehicle===lamp;
+        const color=lamp==='red'?[.94,.12,.09]:
+          lamp==='amber'?[.98,.69,.12]:[.12,.90,.31];
+        const shade=live?color:color.map(v=>v*.13);
+        // Physical 12-sided lenses and protruding sun visors.
+        const front=poleZ+.303,centerY=STREET_Y+4.10+offset;
+        const pt=(angle,r,depth)=>[
+          12+Math.cos(angle)*r,centerY+Math.sin(angle)*r,depth
+        ];
+        for(let k=0;k<12;k++){
+          const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+          quad(pt(a,.178,front),pt(b,.178,front),
+            pt(b,.123,front+.023),pt(a,.123,front+.023),dark);
+          quad(pt(a,.117,front+.030),pt(b,.117,front+.030),
+            pt(b,.020,front+.042),pt(a,.020,front+.042),shade);
+        }
+        box(12,centerY+.20,poleZ+.340,.42,.065,.26,shell);
+      }
+      // Walk/don't-walk box faces north along the actual one-way approach.
+      box(poleX,STREET_Y+2.94,poleZ+.12,.74,.80,.34,shell);
+      box(poleX,STREET_Y+2.94,poleZ+.30,.63,.69,.04,dark);
+      if(phase.pedestrian==='walk'){
+        const white=[.84,.94,.92];
+        box(poleX,STREET_Y+3.06,poleZ+.348,.095,.12,.045,white);
+        box(poleX,STREET_Y+2.87,poleZ+.348,.083,.24,.045,white);
+        // Right arm and two stride-separated feet.
+        for(const d of [-1,1]){
+          box(poleX+d*.12,STREET_Y+2.75,poleZ+.347,
+            .065,.22,.043,white);
+          box(poleX+d*.13,STREET_Y+2.93,poleZ+.347,
+            .15,.053,.044,white);
+        }
+      }else{
+        const orange=[.95,.34,.13];
+        box(poleX,STREET_Y+2.91,poleZ+.351,.30,.31,.043,orange);
+        for(let k=0;k<4;k++)
+          box(poleX-.145+k*.092,STREET_Y+3.13,
+            poleZ+.351,.058,.15,.041,orange);
+      }
+      variants[key]=detail.upload();
+    }
+    return variants;
+  }
+
   function buildStreetScene(addQuad, box) {
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
+    // PATROL_NYC_TIMES_SIGNAL_MARKINGS_V1: marked southbound approach to
+    // modeled 7th Av at W 44 St. This is NOT a GIS-fitted intersection.
+    if(typeof selectedMap!=='undefined' && selectedMap.city && !graphicsCompat){
+      const white=[.91,.91,.86],green=[.075,.35,.27],black=[.07,.09,.10];
+      const safe=(x,z)=>sampleTerrainHeight(x,z)>WATER_H+1.58 &&
+        !cityLotAt(x,z);
+      if(safe(12,6)&&safe(12,1)&&safe(7.05,6.45)){
+        // Stop bar is down-road from the vehicle center stop by 1.75 units.
+        box(12,STREET_Y+.094,4.45,7.0,.021,.17,white);
+        for(let x=8.7;x<=15.4;x+=.88){
+          if(safe(x,-2))
+            box(x,STREET_Y+.086,-2,.59,.015,2.55,white);
+        }
+        // White straight-ahead arrow points in actual permitted -Z travel.
+        box(12,STREET_Y+.089,13.0,.10,.018,2.13,white);
+        const tip=[12,STREET_Y+.099,11.25];
+        addQuad([11.64,STREET_Y+.099,12.04],tip,
+          [12.36,STREET_Y+.099,12.04],
+          [12.36,STREET_Y+.099,12.20],white);
+        // DOT-style green intersecting street blades and regulatory plaques.
+        const name=(label,x,y,z,w,color=white)=>{
+          addVegasLettering(addQuad,label,(u,v)=>[x+u,y+v,z],w,.23,color);
+        };
+        box(7.05,STREET_Y+4.55,6.70,2.04,.42,.11,green);
+        name('W 44 ST',6.12,STREET_Y+4.55,6.773,1.85);
+        box(7.05,STREET_Y+4.12,6.71,1.66,.32,.105,green);
+        name('7 AV',6.32,STREET_Y+4.12,6.779,1.46);
+        box(7.05,STREET_Y+3.70,6.73,1.76,.35,.11,black);
+        name('ONE WAY',6.24,STREET_Y+3.70,6.806,1.58);
+        // Regulatory reminder: NYC generally does NOT permit turning on
+        // red. This is the correct policy even while other approaches are
+        // not modeled, with no invented exception sign.
+        box(7.05,STREET_Y+3.27,6.76,1.84,.35,.10,[.87,.87,.83]);
+        name('NO TURN ON RED',6.22,STREET_Y+3.27,6.833,1.67,
+          [.28,.11,.10]);
+        nycTimesSignalMeshes=buildTimesSeventhSignalMeshes();
+      }
+    }
+
     for (const street of CITY_STREETS.slice(1)) {
       for (let i=1;i<street.length;i++) {
         const originalA=street[i-1], originalB=street[i];
@@ -4892,7 +5046,8 @@ const CENTRAL_PARK_SITES=[
   function trafficPose(actor,time) {
     if(actor.parked)return actor.parked;
     const {route,pace,offset,kind}=actor;
-    const cycle=(time*pace+offset)%(actor.vegas||actor.oneWay?route.total:2*route.total);
+    const motion=actor.timesSeventh?timesSeventhControlledDistance(actor,time):time*pace+offset;
+    const cycle=motion%(actor.vegas||actor.oneWay?route.total:2*route.total);
     const direction=cycle<route.total?1:-1;
     const distance=direction===1?cycle:2*route.total-cycle;
     const i=route.lengths.findIndex((at,index)=>index>0 && at>=distance);
@@ -4944,11 +5099,11 @@ const CENTRAL_PARK_SITES=[
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
-      for(let i=0;i<8;i++)cityTraffic.push({kind:'taxi',oneWay:true,route:seventh,
+      for(let i=0;i<8;i++)cityTraffic.push({kind:'taxi',oneWay:true,timesSeventh:true,route:seventh,
         offset:seventh.total*i/8,pace:5.7});
-      cityTraffic.push({kind:'police',oneWay:true,route:seventh,offset:seventh.total/16,pace:5.7});
+      cityTraffic.push({kind:'police',oneWay:true,timesSeventh:true,route:seventh,offset:seventh.total/16,pace:5.7});
       for(let j=0;j<9;j++)
-        cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,
+        cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,timesSeventh:true,
           route:seventh,offset:11+seventh.total*(j+.34)/10.3,
           pace:5.2+(j%4)*.45,livery:(j+Math.floor(j/3))%3});
       if(BROOKLYN_RAIL.enabled)
@@ -7394,6 +7549,7 @@ const CENTRAL_PARK_SITES=[
       .finally(()=>{if(epoch===alaskaPhotoGeneration)alaskaPhotoLoading=false;});
   }
   let nycHeroScenery=null,nycStreetMesh=null,nycGisMesh=null,nycParkMesh=null,nycHeroEpoch=0;
+  let nycTimesSignalMeshes=null;
   let dcSurfaceMeshes=[];
   let dcTextureArray=null;
   let dcTexturesLoading=false;
@@ -7485,6 +7641,7 @@ const CENTRAL_PARK_SITES=[
     alaskaIcePose=null;
     disposeSceneMesh(nycHeroScenery);
     disposeSceneMesh(nycStreetMesh);
+
     disposeSceneMesh(nycGisMesh);
     disposeSceneMesh(nycParkMesh);
     nycHeroScenery=nycStreetMesh=nycGisMesh=nycParkMesh=null;
@@ -10349,6 +10506,11 @@ const CENTRAL_PARK_SITES=[
     }
     if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
+    if(selectedMap.city && nycTimesSignalMeshes){
+      const state=timesSeventhSignalPhase(sceneryTime);
+      const mesh=nycTimesSignalMeshes[state.vehicle+'-'+state.pedestrian];
+      if(mesh?.count)drawMesh(mesh,identity);
+    }
     if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
     if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
@@ -12559,6 +12721,9 @@ const CENTRAL_PARK_SITES=[
       disposeSceneMesh(landscapeDetails);
       backgroundBuildings = selectedMap.city ? buildCityBuildings(cityLots) : null;
       if(selectedMap.city && smoothScenery())prepareNycRealismAssets();
+    if(nycTimesSignalMeshes)for(const m of Object.values(nycTimesSignalMeshes))
+      disposeSceneMesh(m);
+    nycTimesSignalMeshes=null;
       landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
       prepareAlaskaLandmarks();
       prepareCoastalTraffic();

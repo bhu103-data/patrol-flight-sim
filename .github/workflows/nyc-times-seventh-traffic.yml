@@ -1,0 +1,55 @@
+name: NYC Times 7th Avenue DOT-style traffic signal WebGL2 QA
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "scripts/nyc-times-seventh-traffic-browser-qa.mjs"
+      - "tests/nyc-times-seventh-traffic-signal.test.mjs"
+      - ".github/workflows/nyc-times-seventh-traffic.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: nyc-times-7av-traffic-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live-seventh-signal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check real controller and browser probe syntax
+        run: |
+          node --check scripts/nyc-times-seventh-traffic-browser-qa.mjs
+          node --test tests/nyc-times-seventh-traffic-signal.test.mjs tests/nyc-authored-road-shoreline.test.mjs
+      - name: Install Chromium and software WebGL2
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Serve actual PATROL game
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-7av-http.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8765/index.html -o /dev/null
+      - name: Validate native live NYC game traffic signals and capture phases
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-times-seventh-traffic-browser-qa.mjs
+      - name: Retain exact red green amber and pedestrian signal WebGL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-seventh-signal-webgl2
+          path: artifacts/nyc-times-seventh-qa/
+          retention-days: 7
+          if-no-files-found: ignore
