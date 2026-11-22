@@ -24,7 +24,7 @@ permissions:
 jobs:
   alaska-webgl-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 23
+    timeout-minutes: 26
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +53,11 @@ jobs:
       - name: Render LF2025 Alaska shoreline preview vs default and compat modes
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/alaska-landfire-shore-preview-20261122'
         run: node tools/alaska/smoke_landfire_shore_preview.mjs
+      - name: Capture matched WebGL2 shoreline detail at a changed low-coast site
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/alaska-landfire-shore-preview-20261122'
+        run: |
+          node --check tools/alaska/smoke_landfire_changed_coast_camera.mjs
+          node tools/alaska/smoke_landfire_changed_coast_camera.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
