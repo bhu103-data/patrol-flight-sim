@@ -85,3 +85,22 @@ test('Chongqing street textures/physical details are licensed and in existing po
   assert.match(cq,/Narrow curb seams at a known upper-market terrace/);
   assert.doesNotMatch(cq,/googleapis\.com\/maps|google\.com\/maps\/api/);
 });
+
+
+test('Times Square surveyed tall towers populate upper wall floors, not blank slabs',()=>{
+  const source=sourceBetween('  function buildOfficialFootprintMesh(',
+    '  function buildCityBuildings(');
+  const build=new Function(source+'; return buildOfficialFootprintMesh;')();
+  const quads=[];
+  const result=build(()=>{},(...args)=>quads.push(args),
+    [0,0,10,12,58,.61,false,[[0,0],[10,0],[10,12],[0,12]],212747],15,4);
+  const glazing=quads.filter(q=>q[5]===10);
+  const upper=glazing.filter(q=>q.slice(0,4).some(p=>p[1]>15+34));
+  assert.equal(result.walls,4);
+  assert.ok(result.windows>=180,'all tall-building floor bays retained');
+  assert.ok(upper.length>=50,'upper floors must have real facing glass quads');
+  assert.ok(upper.every(q=>q.slice(0,4).every(p=>p.every(Number.isFinite))));
+  const oldLod=build(()=>{},()=>{},
+    [0,0,10,12,58,.61,false,[[0,0],[10,0],[10,12],[0,12]],212747],15,3);
+  assert.ok(result.windows>oldLod.windows,'only focused Times Square band gains upper detail');
+});
