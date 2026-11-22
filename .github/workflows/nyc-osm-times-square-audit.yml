@@ -7,7 +7,6 @@ on:
       - "scripts/nyc-osm-times-square-audit.mjs"
       - "tests/nyc-osm-times-square-audit.test.mjs"
       - "docs/NYC_OSM_TIMES_SQUARE_TAG_AUDIT.md"
-      - ".github/workflows/nyc-osm-times-square-audit.yml"
 
 permissions:
   contents: read
