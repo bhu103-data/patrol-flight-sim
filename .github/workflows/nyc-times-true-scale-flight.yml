@@ -91,5 +91,7 @@ jobs:
           path: |
             artifacts/nyc-true-scale/
             artifacts/nyc-curb-sidewalk-source/topology-audit.json
+            artifacts/nyc-curb-sidewalk-source/edges.json
+            artifacts/nyc-roadbed-source/roadbed.json
           retention-days: 7
           if-no-files-found: ignore
