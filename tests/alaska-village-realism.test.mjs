@@ -80,6 +80,8 @@ test('actual geometry includes distinct siding, metal gables, windows and anchor
   assert.ok(counts.undergrowth>=100 && counts.undergrowth<=270,
     'live native harbor must retain many short bushes without flooding foundations');
   assert.ok(counts.roofSeams>=45);
+  assert.equal(counts.walkwayJoins,12,
+    'four safe near-pier ramp spans carry 3 slope-following timber joints each');
   assert.ok(scene.boxes.length>400,'not six single giant rectangular blocks');
   assert.ok(scene.bridges.length>50,'physically traced roof seams and railings');
   assert.ok(scene.surfaces.length>1000,
