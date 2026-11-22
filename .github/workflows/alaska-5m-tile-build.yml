@@ -11,6 +11,11 @@ on:
       - assets/alaska/tracy-arm-3dep-actual-extent.json
       - .github/workflows/alaska-5m-tile-build.yml
       - assets/alaska/tracy-arm-3dep.json
+      - assets/alaska/usgs-ifsar5m.js
+      - assets/alaska/ifsar-lod.js
+      - tracy-arm-true-scale.html
+      - tests/alaska-true-scale-flight-pilot.test.mjs
+      - tools/alaska/smoke_true_scale_flight.mjs
 
 permissions:
   contents: read
@@ -35,6 +40,10 @@ jobs:
         run: python -m py_compile tools/alaska/build_native_ifsar_tracyarm.py
       - name: Build full-area native 5m IfSAR mosaic from adjacent OPR tiles
         run: python tools/alaska/build_native_ifsar_tracyarm.py
+      - name: Stage native IfSAR source files only in this disposable QA checkout
+        run: |
+          cp artifacts/alaska-tracyarm-ifsar5m-manifest.json assets/alaska/tracy-arm-ifsar5m-manifest.json
+          cp artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz.b64 assets/alaska/tracy-arm-ifsar5m-delta2-int16.bin.gz.b64
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -60,6 +69,8 @@ jobs:
         run: node tools/alaska/smoke_true_scale_flight.mjs
       - name: Screenshot source-extracted ~5m local terrain plus moving camera
         run: PATROL_ALASKA_5M=1 node tools/alaska/smoke_true_scale_flight.mjs
+      - name: Screenshot full native IfSAR 5m terrain with 15m browser-budget LOD and moving camera
+        run: PATROL_ALASKA_IFSAR5M=1 node tools/alaska/smoke_true_scale_flight.mjs
       - name: Preserve exact GeoTIFF SHA, project vertical datum and tile
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,5 +88,6 @@ jobs:
             artifacts/alaska-tracyarm-registration-audit.json
             artifacts/alaska-true-scale-five-metre-*
             artifacts/alaska-true-scale-source-flight-*
+            artifacts/alaska-true-scale-ifsar5m-*
           if-no-files-found: ignore
           retention-days: 14
