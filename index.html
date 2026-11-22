@@ -6710,7 +6710,8 @@ const CENTRAL_PARK_SITES=[
     enabled:Boolean(selectedMap.city&&!graphicsCompat),
     ready:nycFerryLods?.stats.ready||[],
     failed:nycFerryLods?.stats.failed||[],
-    requested:nycFerryLods?.stats.requested||[]
+    requested:nycFerryLods?.stats.requested||[],
+    selections:nycFerryLods?.stats.selections||{near:0,mid:0,far:0,fallback:0}
   });
 
   const mooseMesh = buildMooseMesh();
