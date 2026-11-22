@@ -3,7 +3,7 @@
 // Rendering switches are debug-gated and never change game city geometry.
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
-import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const dir='artifacts/nyc-visual-provenance';
 await mkdir(dir,{recursive:true});
