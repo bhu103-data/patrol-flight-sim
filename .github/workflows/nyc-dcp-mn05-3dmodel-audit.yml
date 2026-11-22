@@ -1,0 +1,54 @@
+name: NYC DCP Manhattan CD5 2014 3D model source audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - research/nyc-dcp-mn05-3dmodel-source-audit-20261122-chat
+    paths:
+      - "scripts/nyc-dcp-mn05-3dmodel-audit.py"
+      - "docs/NYC_DCP_3D_MODEL_SOURCE_AUDIT_20261122.md"
+      - ".github/workflows/nyc-dcp-mn05-3dmodel-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-official-mn05-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install open Rhino3dm reader and CRS transform
+        run: python -m pip install --disable-pip-version-check rhino3dm==8.32.0 pyproj==3.7.0
+      - name: Download official NYC DCP Manhattan Community District 5 3D model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nyc-dcp-mn05-3dmodel-audit /tmp/nyc-mn05
+          URL="https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_mn05.zip"
+          curl --head --location --silent --show-error --fail "$URL" | tee artifacts/nyc-dcp-mn05-3dmodel-audit/http-headers.txt
+          curl --location --fail --retry 3 --retry-all-errors --connect-timeout 30 --max-time 2400 \
+            -H "User-Agent: PATROL-NYC-DCP-3D-Model-Source-Audit/1.0" \
+            --output /tmp/nyc-mn05/nyc_3dmodel_mn05.zip "$URL"
+          sha256sum /tmp/nyc-mn05/nyc_3dmodel_mn05.zip | tee artifacts/nyc-dcp-mn05-3dmodel-audit/archive.sha256
+          du -h /tmp/nyc-mn05/nyc_3dmodel_mn05.zip | tee artifacts/nyc-dcp-mn05-3dmodel-audit/archive-size.txt
+          unzip -Z1 /tmp/nyc-mn05/nyc_3dmodel_mn05.zip | tee artifacts/nyc-dcp-mn05-3dmodel-audit/archive-contents.txt
+          unzip -q /tmp/nyc-mn05/nyc_3dmodel_mn05.zip -d /tmp/nyc-mn05/unpacked
+          MODEL="$(find /tmp/nyc-mn05/unpacked -type f -iname '*.3dm' -print -quit)"
+          test -n "$MODEL"
+          printf '%s\n' "$MODEL" | tee artifacts/nyc-dcp-mn05-3dmodel-audit/model-path.txt
+          python scripts/nyc-dcp-mn05-3dmodel-audit.py \
+            --model "$MODEL" \
+            --report artifacts/nyc-dcp-mn05-3dmodel-audit/report.json
+      - name: Upload source manifest and model-layer audit only (not the raw 3D source archive)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dcp-mn05-2014-3dmodel-source-audit
+          path: artifacts/nyc-dcp-mn05-3dmodel-audit/
+          retention-days: 14
+          if-no-files-found: ignore
