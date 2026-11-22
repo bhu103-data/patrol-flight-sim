@@ -38,6 +38,59 @@ export function makeChongqingMarketTileRoof(THREE){
   return g;
 }
 
+// Real segmented wall geometry with EMPTY door and window apertures.
+// Front and inner jamb surfaces are 0.43 world-units apart, with the
+// original shop shell remaining deeper behind as a reversible fallback.
+export function makeChongqingMarketOpenFacade(THREE,{doorSide=-1,variant=0}={}){
+  const vertices=[],uvs=[],indices=[],front=0,back=-.43,edge=9.38;
+  let frontQuads=0;
+  const quad=(a,b,c,d,face='side')=>{
+    const start=vertices.length/3;
+    for(const p of [a,b,c,d]){vertices.push(...p);uvs.push(p[0]/3.4,p[1]/3.4);}
+    indices.push(start,start+1,start+2,start,start+2,start+3);
+    if(face==='front')frontQuads++;
+  };
+  const block=(x0,x1,y0,y1)=>{
+    quad([x0,y0,front],[x1,y0,front],[x1,y1,front],[x0,y1,front],'front');
+    quad([x1,y0,back],[x0,y0,back],[x0,y1,back],[x1,y1,back]);
+    quad([x0,y0,back],[x0,y0,front],[x0,y1,front],[x0,y1,back]);
+    quad([x1,y0,front],[x1,y0,back],[x1,y1,back],[x1,y1,front]);
+    quad([x0,y1,front],[x1,y1,front],[x1,y1,back],[x0,y1,back]);
+    quad([x0,y0,back],[x1,y0,back],[x1,y0,front],[x0,y0,front]);
+  };
+  const doorX=doorSide*5.2;
+  const openings=[{left:doorX-1.60,right:doorX+1.60,bottom:.75,top:6.25}];
+  for(const x of [-7.1,0,7.1]){
+    if(Math.abs(x-doorX)<3)continue;
+    openings.push({left:x-2.25,right:x+2.25,bottom:3.35,top:7.90});
+  }
+  const upper=variant===0?[-6.4,-2.15,2.2,6.35]:
+    variant===1?[-6.6,-2.35,2.3,6.6]:[-6.15,-2,2,6.15];
+  for(let i=0;i<upper.length;i++){
+    const x=upper[i],half=variant===2&&i===1?1.20:1.28;
+    openings.push({left:x-half,right:x+half,bottom:12.10,top:14.72});
+  }
+  const cuts=(list,min,max)=>[min,max,...list].filter(v=>v>=min&&v<=max)
+    .sort((a,b)=>a-b).filter((v,i,a)=>i===0||Math.abs(v-a[i-1])>1e-6);
+  for(const [low,high] of [[.65,10.30],[11.02,15.72]]){
+    const active=openings.filter(o=>o.top>low&&o.bottom<high);
+    const ys=cuts(active.flatMap(o=>[o.bottom,o.top]),low,high);
+    const xs=cuts(active.flatMap(o=>[o.left,o.right]),-edge,edge);
+    for(let j=0;j<ys.length-1;j++)for(let i=0;i<xs.length-1;i++){
+      const [x0,x1,y0,y1]=[xs[i],xs[i+1],ys[j],ys[j+1]];
+      const cx=(x0+x1)/2,cy=(y0+y1)/2;
+      if(active.some(o=>cx>o.left&&cx<o.right&&cy>o.bottom&&cy<o.top))continue;
+      if(x1-x0>1e-6&&y1-y0>1e-6)block(x0,x1,y0,y1);
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geo.setIndex(indices);geo.computeVertexNormals();
+  geo.userData={marketOpenings:openings,frontQuads,wallThickness:-back};
+  return geo;
+}
+
 export function buildChongqingMarketFronts({
   THREE,scene,ground,riverDist=()=>Infinity,obstacles=[],pbr=null
 }){
@@ -62,7 +115,7 @@ export function buildChongqingMarketFronts({
   const beams=batch(unit,timberMat,160),
     braces=batch(unit,timberMat,30),
     stone=batch(unit,stoneMat,40),
-    glass=batch(unit,glassMat,24),
+    glass=batch(unit,glassMat,32),
     lattice=batch(unit,trimMat,144),
     roof=batch(makeChongqingMarketTileRoof(THREE),tileMat,3);
   const position=(mesh,x,y,z,w,h,d,rotX=0,rotZ=0)=>{
@@ -73,7 +126,7 @@ export function buildChongqingMarketFronts({
     marker.updateMatrix();
     mesh.setMatrixAt(mesh.count++,marker.matrix);
   };
-  const sites=[];
+  const sites=[],facades=[];
   let stairTreads=0;
   for(const site of CHONGQING_MARKET_SITES){
     const {x,z,roofRise,doorSide}=site,
@@ -87,6 +140,15 @@ export function buildChongqingMarketFronts({
       frontZ:z+5.35,facadeZ:z+2.4
     };
     sites.push(accepted);
+    // Front wall is extruded around genuine apertures, not an opaque box
+    // under painted windows; each building has distinct opening coordinates.
+    const geometry=makeChongqingMarketOpenFacade(THREE,{
+      doorSide,variant:site.id==='tea-lane'?0:site.id==='stone-stair'?1:2
+    });
+    const frontWall=new THREE.Mesh(geometry,timberMat);
+    frontWall.position.set(x,earth,z+2.78);
+    frontWall.castShadow=true;frontWall.receiveShadow=true;
+    scene.add(frontWall);facades.push(frontWall);
     // Existing 15.7-high shop shell is kept. New deck has true depth,
     // two driven timber posts, an overhanging railing and angled supports.
     position(stone,x,earth+10.55,z+3.63,18.7,.28,4.2);
@@ -122,6 +184,12 @@ export function buildChongqingMarketFronts({
       position(glass,x+dx,earth+5.6,z+2.53,4.2,4.3,.1);
       position(beams,x+dx,earth+5.6,z+2.65,.11,4.65,.18);
     }
+    // Upper windows sit behind the 3D jambs, ahead of the old box wall.
+    const upper=site.id==='tea-lane'?[-6.4,-2.15,2.2,6.35]:
+      site.id==='stone-stair'?[-6.6,-2.35,2.3,6.6]:[-6.15,-2,2,6.15];
+    for(let i=0;i<upper.length;i++)
+      position(glass,x+upper[i],earth+13.41,z+2.55,
+        site.id==='river-market'&&i===1?2.24:2.40,2.38,.1);
     for(const dx of [-8.4,-4.2,0,4.2,8.4]){
       // Two-storey dark timber window rhythm varies by archetype and does
       // not cover the original shop sign immediately below the roof.
@@ -179,7 +247,9 @@ export function buildChongqingMarketFronts({
     sites:sites.length,posts:sites.length*2,
     galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
-    meshes:6,instances:[beams,braces,stone,glass,lattice,roof]
+    meshes:9,batchDraws:6,openFacades:facades.length,
+    openFacadeTriangles:facades.reduce((v,m)=>v+m.geometry.index.length/3,0),
+    instances:[beams,braces,stone,glass,lattice,roof]
       .reduce((sum,m)=>sum+m.count,0)
   };
   return {
@@ -189,6 +259,7 @@ export function buildChongqingMarketFronts({
       lattice.visible=mode!=='low';
       glass.visible=true;beams.visible=true;
       stone.visible=true;braces.visible=true;roof.visible=true;
+      for(const facade of facades)facade.visible=true;
     }
   };
 }
