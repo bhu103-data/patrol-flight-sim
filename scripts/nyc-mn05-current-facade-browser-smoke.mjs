@@ -65,13 +65,23 @@ try{
     fullPage:false,animations:'allow',timeout:90000
   });
   report.shots.push('current-2014-facade-full');
-  await page.mouse.move(620,360);
-  await page.mouse.down();
-  await page.mouse.move(865,535,{steps:14});
-  await page.mouse.up();
+  await page.evaluate(()=>{
+    const q=window.patrolCurrentFacadePreviewQA;
+    const center=q.buildingCenters[948897];
+    if(!center)throw Error('FID 948897 close-up target missing');
+    q.setCamera({target:center,distance:300,yaw:-0.72,pitch:0.48});
+    document.getElementById('viewLabel').textContent='低空近景 · OTI FID 948897';
+  });
+  await page.waitForTimeout(500);
+  const close=await screenshot('current-2014-facade-close');
+  await page.evaluate(()=>{
+    window.patrolCurrentFacadePreviewQA.setCamera({yaw:0.42,pitch:0.56,distance:300});
+    document.getElementById('viewLabel').textContent='低空旋转视角 · OTI FID 948897';
+  });
   await page.waitForTimeout(450);
   const rotated=await screenshot('current-2014-facade-rotated');
-  if(aerial===rotated)throw Error('Camera rotation did not change rendered facade/roof pixels');
+  if(aerial===rotated||close===rotated)throw Error('Fixed-camera close-up/rotation did not change rendered facade/roof pixels');
+  report.closeHash=close;
   if(report.errors.length)throw Error(report.errors.join('; '));
   report.aerialHash=aerial;
   report.rotatedHash=rotated;
