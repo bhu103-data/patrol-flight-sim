@@ -131,8 +131,14 @@ async function start(){
   if(roadbedResponse&&!roadbedResponse.ok)
     throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
+  const historicalOff=params.get('historical')==='off';
+  const historicalResponse=historicalOff?null:
+    await fetch('./nyc-mn05-2014-source-mesh.json',{cache:'no-cache'});
+  if(historicalResponse&&!historicalResponse.ok)
+    throw Error('Official NYC 2014 MN05 model asset HTTP '+historicalResponse.status);
+  const historicalMesh=historicalResponse?await historicalResponse.json():null;
   const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
+    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed,historicalMesh});
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -245,18 +251,13 @@ async function start(){
     }
   });
   const stats=geometry.counts;
-  status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
-    ' municipal streets / '+stats.streetSegments+' source line segments · '+
-    stats.officialRoadbedPolygons+' OTI 2022 true roadbed polygons · free flight camera';
-  metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
-    ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
-    massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' official source pavement triangles';
+  status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+\n    ' municipal streets / '+stats.streetSegments+' source line segments · '+\n    stats.officialRoadbedPolygons+' OTI 2022 roadbed polygons · '+\n    stats.historicalRoofTriangles+' original 2014 roof triangles / '+\n    stats.historicalFacadeTriangles+' original 2014 facade triangles';
+  metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+\n    ' illustrative windows · '+stats.historicalRoofFids+' 2014 roof FIDs / '+\n    stats.historicalFacadeFids+' 2014 facade FIDs · '+stats.triangles+' triangles · '+\n    '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
-    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
+    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,\n    historical2014ModelImported:!!historicalMesh,\n    historical2014SourceYear:historicalMesh?.sourceVintage??null,\n    historical2014RoofTriangles:stats.historicalRoofTriangles,\n    historical2014FacadeTriangles:stats.historicalFacadeTriangles,\n    historical2014RoofFids:stats.historicalRoofFids,\n    historical2014FacadeFids:stats.historicalFacadeFids,\n    historical2014CollisionEnabled:false,\n    historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,\n    historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
