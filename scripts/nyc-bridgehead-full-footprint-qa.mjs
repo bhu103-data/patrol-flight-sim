@@ -23,6 +23,7 @@ const injection=String.raw`
     if(!Number.isFinite(time)||time<0||time>=32)
       throw Error('Invalid test-only signal phase time');
     window.__patrolBridgeheadQaHoldTime=time;
+    sceneryTime=time;
     // Disable scheduled scenic-camera rotation while capturing matched frames.
     nextDcView=Number.POSITIVE_INFINITY;
   };
@@ -304,7 +305,14 @@ try{
       ['amber',30.5,'05-bridgehead-signal-amber-close.png']
     ]){
       await page.evaluate(value=>window.__patrolBridgeheadQaSetHold(value),time);
-      await page.waitForTimeout(250);
+      // SwiftShader frames can take longer than a fixed 250ms delay.
+      // Require TWO actual rAF callbacks so the live draw consumes the hold.
+      await page.evaluate(()=>new Promise(resolve=>
+        requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await page.waitForFunction(expected=>{
+        const phase=window.__patrolBridgeheadQaSignal();
+        return Math.abs(phase.time-expected)<1e-6;
+      },time,{timeout:30000,polling:100});
       const actual=await page.evaluate(()=>{
         const canvas=document.getElementById('glCanvas');
         const gl=canvas?.getContext('webgl2');
