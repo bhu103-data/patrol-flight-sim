@@ -254,19 +254,21 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');
   assert.match(game,/if\(key==='Digit8'\)/);
-  assert.match(game,/eyeX=site\.x\+16,eyeZ=site\.z\+10/);
+  assert.match(game,/eyeX=site\.x\+3,eyeZ=site\.z\+18/);
   assert.match(game,/viewPitch=key==='Digit8'\?-.22/);
   assert.match(html,/<kbd>8<\/kbd> 窗洞特写/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
   const real=new Function('clamp',terrain+';return {ground};')(
     (n,min,max)=>Math.max(min,Math.min(max,n)));
-  const site=CHONGQING_MARKET_SITES[1],px=site.x+16,pz=site.z+10,
+  const site=CHONGQING_MARKET_SITES[1],px=site.x+3,pz=site.z+18,
     tx=site.x,tz=site.z+2.6,ty=real.ground(site.x,site.z)+9.6,
     yaw=Math.atan2(tx-px,pz-tz),pitch=-.22,dist=14;
   const ax=px-Math.sin(yaw)*Math.cos(pitch)*dist,
     az=pz+Math.cos(yaw)*Math.cos(pitch)*dist,
     ay=real.ground(px,pz)+18+4.7+Math.sin(pitch)*dist;
+  assert.ok(Math.abs(Math.atan2(ax-site.x,az-site.z))<Math.PI/12,
+    'close inspector must face the windowed FRONT, not the blank sidewall');
   for(let i=0;i<=36;i++){
     const t=i/36,x=ax+(tx-ax)*t,z=az+(tz-az)*t,
       y=ay+(ty-ay)*t;
