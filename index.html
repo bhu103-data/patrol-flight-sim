@@ -6728,7 +6728,7 @@ const CENTRAL_PARK_SITES=[
     const wood=[0.43,0.32,0.24], roof=[0.24,0.29,0.32], glass=[0.28,0.47,0.52];
     const ivory=[0.89,0.88,0.81], red=[0.66,0.26,0.19];
     const harbor=ALASKA_PLACES.harbor;
-    const alaskaVillageAudit={cabins:0,sidingRows:0,roofSeams:0};
+    const alaskaVillageAudit={cabins:0,sidingRows:0,roofSeams:0,walkwayJoins:0};
     const cape=ALASKA_PLACES.beacon;
     const waterline=WATER_H;
     const deck=waterline+1.60;
@@ -6762,7 +6762,7 @@ const CENTRAL_PARK_SITES=[
       }
       return null;
     }
-    function hut(x,z,w,l,color) {
+    function hut(x,z,w,l,color,closeDetail=false) {
       const pad=dryPad(x,z,w,l,126,3.9);
       if(!pad)return;
       x=pad.x;z=pad.z;
@@ -6823,6 +6823,23 @@ const CENTRAL_PARK_SITES=[
       }
       addRideBeam(addQuad,[x,ridge+.075,c],[x,ridge+.075,d],
         .068,[.30,.34,.36]);
+      // Original near-pier detailing informed by Alaska coastal cabins; the
+      // authored Tracy Arm village does not represent an actual surveyed port.
+      // Only two cabins receive this extra geometry in the existing mesh.
+      if(closeDetail){
+        const edgeTrim=[.33,.29,.23],vent=[.14,.19,.19];
+        for(const zz of [c-.045,d+.045]){
+          addRideBeam(addQuad,[a,wallTop+.045,zz],
+            [x,ridge+.045,zz],.10,edgeTrim);
+          addRideBeam(addQuad,[x,ridge+.045,zz],
+            [b,wallTop+.045,zz],.10,edgeTrim);
+        }
+        // Small slatted vent under the south roof peak, not a flat decal.
+        for(let n=0;n<4;n++){
+          box(x,wallTop+.26+n*.18,c-.050,
+            .84-n*.11,.055,.070,vent);
+        }
+      }
       // Paneled east wall, north gable and doors replace blank solid facades.
       // Each pane sits outside the cladding; window trim is framed explicitly.
       function glazedEast(cz){
@@ -6852,6 +6869,26 @@ const CENTRAL_PARK_SITES=[
         box(doorX+ox,floor+1.13,south-.08,.09,2.31,.075,ivory);
       box(doorX,floor+2.30,south-.09,1.39,.105,.092,ivory);
       box(doorX+.39,floor+1.05,south-.085,.083,.075,.083,[.74,.66,.44]);
+      // The two near-pier lodges have a largely blank entry-facing wall
+      // at low flight distance. Add original weathered timber sash and deep
+      // shadow reveals, not downloaded window decals. Keep panes separated
+      // from the doorway and fully beneath the established wall-top.
+      // These are surface details, not structural wall cut-outs.
+      if(closeDetail){
+        const sash=[.70,.69,.61],reveal=[.10,.15,.16],pane=[.17,.31,.33];
+        for(const fraction of [-.31,.35]){
+          const wx=x+w*fraction,wy=floor+2.18;
+          // Rebate sits behind the external frame, but outside cladding.
+          box(wx,wy,south+.012,1.27,1.14,.035,reveal);
+          box(wx,wy,south-.015,1.10,1.01,.025,pane);
+          for(const side of [-1,1]){
+            box(wx+side*.655,wy,south-.085,.105,1.32,.12,sash);
+            box(wx,wy+side*.645,south-.085,1.41,.095,.12,sash);
+          }
+          box(wx,wy,south-.077,.055,1.13,.085,sash);
+          box(wx,wy-.68,south-.15,1.48,.105,.24,[.46,.39,.29]);
+        }
+      }
       // A porch may extend from the house only where its OWN footprint has
       // surveyed dry ground; support posts terminate at terrain height.
       const porchZ=z-l/2-1.10;
@@ -6874,6 +6911,25 @@ const CENTRAL_PARK_SITES=[
           const px=doorX+dx,ground=sampleTerrainHeight(px,porchZ);
           const postHeight=Math.max(.25,porch-ground);
           box(px,ground+postHeight*.5,porchZ,.20,postHeight,.20,[.33,.27,.21]);
+        }
+        // Extra timber joinery appears only on an already terrain-cleared
+        // porch. All rail footprints remain within the original deck outline.
+        if(closeDetail){
+          const rail=[.37,.30,.23];
+          for(const sx of [-1,1]){
+            const railX=doorX+sx*1.20;
+            for(const zz of [porchZ-.70,porchZ+.67]){
+              const base=sampleTerrainHeight(railX,zz);
+              if(base<=WATER_H+.95)continue;
+              box(railX,porch+.43,zz,.095,.86,.095,rail);
+            }
+            box(railX,porch+.84,porchZ,.105,.095,1.54,rail);
+          }
+          for(let n=0;n<5;n++){
+            const zz=porchZ-.76+n*.38;
+            box(doorX,porch+.012,zz,2.64,.027,.055,
+              n%2?[.37,.29,.21]:[.46,.36,.26]);
+          }
         }
         // Offset treads follow the downhill elevation, never hang over water.
         const stepZ=porchZ-1.02,stepGround=sampleTerrainHeight(doorX,stepZ);
@@ -6904,8 +6960,8 @@ const CENTRAL_PARK_SITES=[
       alaskaObstacles.push({x,z,y:floor,halfX:w/2,halfZ:l/2,top:ridge,name:'harbor building'});
     }
 
-    hut(harbor.x-19,harbor.z-13,10,16,red);
-    hut(harbor.x-5,harbor.z+7,11,14,[0.36,0.48,0.45]);
+    hut(harbor.x-19,harbor.z-13,10,16,red,true);
+    hut(harbor.x-5,harbor.z+7,11,14,[0.36,0.48,0.45],true);
     hut(harbor.x+13,harbor.z-6,12,12,[0.69,0.54,0.33]);
     hut(harbor.x-16,harbor.z+26,9,12,[0.57,0.42,0.28]);
     hut(harbor.x+15,harbor.z+23,8,12,red);
@@ -6989,6 +7045,19 @@ const CENTRAL_PARK_SITES=[
         const top=walkwayY(x),topNext=walkwayY(next);
         box((x+next)*.5,(top+topNext)*.5-.13,pierZ,
           next-x+.05,.24,3.42,deckColor);
+        // 12 original close-range deck joints across the four first spans.
+        // Slope-following only; no new colliders or changes to shore clearance.
+        if(x<100){
+          addRideBeam(addQuad,
+            [next-.08,topNext+.034,pierZ-1.52],
+            [next-.08,topNext+.034,pierZ+1.52],
+            .035,[.31,.25,.19]);
+          for(const zz of [pierZ-.60,pierZ+.60])
+            addRideBeam(addQuad,
+              [x+.08,top+.034,zz],[next-.08,topNext+.034,zz],
+              .025,[.38,.31,.23]);
+          alaskaVillageAudit.walkwayJoins+=3;
+        }
         for(const side of [-1,1]){
           const z=pierZ+side*1.44;
           const base=Math.min(top-.28,
