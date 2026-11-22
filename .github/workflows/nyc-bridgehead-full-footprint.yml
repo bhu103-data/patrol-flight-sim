@@ -13,6 +13,7 @@ on:
       - .github/workflows/nyc-bridgehead-full-footprint.yml
       - index.html
       - tests/nyc-bridgehead-vehicle-connector.test.mjs
+      - tests/nyc-bridgehead-mesh-3d-clearance.test.mjs
 
 concurrency:
   group: nyc-bridgehead-full-footprint-qa-${{ github.ref }}
@@ -33,7 +34,7 @@ jobs:
       - name: Check bridgehead QA syntax and targeted connector tests
         run: |
           node --check scripts/nyc-bridgehead-full-footprint-qa.mjs
-          node --test tests/nyc-bridgehead-vehicle-connector.test.mjs tests/nyc-petalwake-road-chunks.test.mjs tests/nyc-bridgehead-signal-sync.test.mjs
+          node --test tests/nyc-bridgehead-vehicle-connector.test.mjs tests/nyc-petalwake-road-chunks.test.mjs tests/nyc-bridgehead-signal-sync.test.mjs tests/nyc-bridgehead-mesh-3d-clearance.test.mjs
       - name: Install free headless WebGL2 Chromium
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
