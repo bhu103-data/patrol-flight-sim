@@ -13,6 +13,7 @@ on:
       - 'index.html'
       - 'assets/alaska/**'
       - 'tools/alaska/smoke_browser.mjs'
+      - 'tools/alaska/compare_realtime_material.mjs'
       - '.github/workflows/alaska-browser-smoke.yml'
   workflow_dispatch:
 
@@ -22,9 +23,11 @@ permissions:
 jobs:
   alaska-webgl-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -42,6 +45,10 @@ jobs:
           exit 1
       - name: Launch Alaska and test photographic materials
         run: node tools/alaska/smoke_browser.mjs
+      - name: Compare terrain photo scale in same-camera WebGL2
+        run: |
+          git show b94564895e9c18311bd485ae814c645ab7c8668b:index.html > alaska-material-base.html
+          node tools/alaska/compare_realtime_material.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
