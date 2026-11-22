@@ -67,6 +67,7 @@ test('deck projects north from the existing actual landmark, not across other ma
     .includes('buildOneTimesSkywalk(addTri,addQuad)'),
   'Not inserted into production landmark mesh');
   assert(src.includes("new URLSearchParams(location.search).get('nycSkywalk')==='on'"));
+  assert(src.includes('const skywalkEnabled=selectedMap.city && !graphicsCompat'));
   assert(src.includes('if (kind === \'liberty\')'));
 });
 test('no external images, fake measured window counts or new controls',()=>{
