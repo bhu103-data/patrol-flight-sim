@@ -45,4 +45,5 @@ test('source QA fails fast instead of hanging on missing assets or empty scene',
   assert.match(lowflight,/derive_sidewalk_display_mask\.py/);
   assert.match(lowflight,/nyc-sidewalk-display-mask\.test\.py/);
   assert.match(source,/feat\/nyc-tsq-meter-crs-road-source-20261122-chat/);
+  assert.match(source,/qa\/nyc-pedestrian-topology-audit-current-20261122-chat/);
 });
