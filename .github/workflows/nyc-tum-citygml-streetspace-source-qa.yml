@@ -46,7 +46,7 @@ jobs:
             "https://www.3dcitydb.net/3dcitydb/fileadmin/public/datasets/NYC/NYC_street_space_CityGML_LoD2/NYC_CityGML_LoD2_Median_Painted.zip" \
             --output /tmp/nyc-tum-source/NYC_CityGML_LoD2_Median_Painted.zip
           curl --fail --location --retry 4 --retry-delay 5 --connect-timeout 30 --max-time 1800 --get \
-            --data-urlencode '$where=within_box(the_geom,40.753539,-73.991040,40.761460,-73.981483)' \
+            --data-urlencode '$where=within_box(the_geom,40.748539,-73.996040,40.766460,-73.976483)' \
             --data-urlencode '$limit=5000' \
             "https://data.cityofnewyork.us/resource/inkn-q76z.geojson" \
             --output /tmp/nyc-tum-source/current-cscl-2026.geojson
@@ -58,7 +58,7 @@ jobs:
             --input-dir /tmp/nyc-tum-source \
             --current-cscl /tmp/nyc-tum-source/current-cscl-2026.geojson \
             --output-dir artifacts/nyc-tum-streetspace \
-            --bbox -73.991040 40.753539 -73.981483 40.761460
+            --bbox -73.991040 40.753539 -73.981483 40.761460 --cscl-buffer-degrees 0.005
 
       - name: Upload source QA report and clipped GeoJSON
         if: always()
