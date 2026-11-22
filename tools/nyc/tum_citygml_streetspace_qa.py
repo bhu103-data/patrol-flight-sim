@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from pyproj import Transformer
-from shapely.geometry import shape
+from shapely.geometry import box, shape
 from shapely.ops import transform as transform_geometry
 
 DATASETS = {
@@ -100,8 +100,18 @@ def geometry_positions(node: Any):
 def normalize_name(value: Any) -> str:
     if value is None:
         return ""
-    return re.sub(r"\s+", " ", re.sub(r"[^A-Z0-9 ]+", " ", str(value).upper())).strip()
-
+    tokens = re.sub(r"[^A-Z0-9 ]+", " ", str(value).upper()).split()
+    direction = {"W": "WEST", "E": "EAST", "N": "NORTH", "S": "SOUTH"}
+    suffix = {
+        "ST": "STREET", "AVE": "AVENUE", "AV": "AVENUE",
+        "BLVD": "BOULEVARD", "RD": "ROAD", "DR": "DRIVE",
+        "PL": "PLACE", "PKWY": "PARKWAY", "EXPY": "EXPRESSWAY",
+        "TPKE": "TURNPIKE", "HWY": "HIGHWAY",
+    }
+    if tokens and tokens[0] in direction:
+        tokens[0] = direction[tokens[0]]
+    tokens = [suffix.get(token, token) for token in tokens]
+    return " ".join(tokens)
 
 def normalize_direction_code(value: Any) -> str | None:
     if value is None:
@@ -297,27 +307,41 @@ def process_dataset(
     return dataset_result
 
 
-def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Path) -> dict[str, Any]:
+def current_cscl_comparison(
+    roadbed_path: Path,
+    cscl_path: Path,
+    output_dir: Path,
+    roi_bbox: tuple[float, float, float, float],
+    buffer_degrees: float,
+) -> dict[str, Any]:
     roadbed = json.loads(roadbed_path.read_text(encoding="utf-8")).get("features", [])
     cscl_data = json.loads(cscl_path.read_text(encoding="utf-8"))
     cscl = cscl_data.get("features", [])
     if not cscl:
         raise RuntimeError("Current NYC CSCL query returned no Times Square features")
 
+    roi = box(*roi_bbox)
     lines = []
     cscl_codes: dict[str, int] = {}
     road_type_codes: dict[str, int] = {}
-    cscl_names: dict[str, int] = {}
-    cscl_by_physical_id: dict[str, dict[str, Any]] = {}
+    speed_codes: dict[str, int] = {}
+    roi_feature_count = 0
+    cscl_by_physical_id: dict[str, list[dict[str, Any]]] = {}
     for feature in cscl:
         geometry_data = feature.get("geometry")
         if not geometry_data:
             continue
-        geometry = transform_geometry(WGS84_TO_NYLI.transform, shape(geometry_data))
-        if geometry.is_empty:
+        geometry_wgs84 = shape(geometry_data)
+        if geometry_wgs84.is_empty:
             continue
+        if geometry_wgs84.intersects(roi):
+            roi_feature_count += 1
+        geometry = transform_geometry(WGS84_TO_NYLI.transform, geometry_wgs84)
         properties = feature.get("properties") or {}
-        name = get_property(properties, "street", "street_name", "streetname", "stname", "st_name", "full_street_name", "name")
+        name = get_property(
+            properties, "stname_label", "full_street_name", "street_name",
+            "street", "streetname", "stname", "st_name", "name",
+        )
         direction = get_property(properties, "trafdir", "traffic_direction")
         road_type = get_property(properties, "rw_type", "rwtype", "roadway_type")
         physical_id = get_property(properties, "physicalid", "physical_id")
@@ -327,29 +351,35 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
         if road_type is not None:
             key = str(road_type)
             road_type_codes[key] = road_type_codes.get(key, 0) + 1
-        normalized_name = normalize_name(name)
-        if normalized_name:
-            cscl_names[normalized_name] = cscl_names.get(normalized_name, 0) + 1
-        if physical_id is not None:
-            cscl_by_physical_id[str(physical_id)] = {
-                "name": name, "direction": direction, "roadType": road_type,
-                "properties": properties, "geometry": geometry,
-            }
-        lines.append({
+        speed = get_property(properties, "posted_speed", "speed_limit", "speedlimit")
+        if speed is not None:
+            key = str(speed)
+            speed_codes[key] = speed_codes.get(key, 0) + 1
+        line = {
             "name": name,
-            "normalizedName": normalized_name,
+            "normalizedName": normalize_name(name),
             "direction": direction,
             "roadType": road_type,
             "physicalId": physical_id,
+            "totalLanes": get_property(properties, "number_total_lanes"),
+            "travelLanes": get_property(properties, "number_travel_lanes"),
+            "parkingLanes": get_property(properties, "number_park_lanes", "number_parking_lanes"),
+            "streetWidthFt": get_property(properties, "streetwidth", "street_width"),
+            "postedSpeedMph": speed,
             "properties": properties,
             "geometry": geometry,
-        })
+        }
+        lines.append(line)
+        if physical_id is not None:
+            cscl_by_physical_id.setdefault(str(physical_id), []).append(line)
     if not lines:
         raise RuntimeError("Current NYC CSCL query contained no usable line geometries")
 
     distances: list[float] = []
+    width_deltas: list[float] = []
     matches: list[dict[str, Any]] = []
     same_name_count = physical_id_match_count = direction_agreement_count = 0
+    lane_count_compared = lane_count_agreement = 0
     for feature in roadbed:
         geometry_data = feature.get("geometry")
         if not geometry_data:
@@ -364,16 +394,26 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
         source_direction = get_property(properties, "traffic_direction")
         expected_direction = normalize_direction_code(source_direction)
         centroid = polygon.centroid
-        same_name = [line for line in lines if normalized_source_name and line["normalizedName"] == normalized_source_name]
-        candidates = same_name if same_name else lines
+
+        physical_candidates = cscl_by_physical_id.get(str(source_physical_id), []) if source_physical_id is not None else []
+        same_name = [
+            line for line in lines
+            if normalized_source_name and line["normalizedName"] == normalized_source_name
+        ]
+        if physical_candidates:
+            candidates = physical_candidates
+            match_method = "physical_id"
+        elif same_name:
+            candidates = same_name
+            match_method = "normalized_street_name"
+        else:
+            candidates = lines
+            match_method = "nearest_fallback"
         nearest = min(candidates, key=lambda line: centroid.distance(line["geometry"]))
         distance_m = centroid.distance(nearest["geometry"])
         distances.append(distance_m)
         name_match = bool(same_name)
-        physical_match = (
-            source_physical_id is not None
-            and str(source_physical_id) in cscl_by_physical_id
-        )
+        physical_match = bool(physical_candidates)
         direction_match = (
             expected_direction is not None
             and str(nearest["direction"]).strip().upper() == expected_direction
@@ -381,7 +421,30 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
         same_name_count += int(name_match)
         physical_id_match_count += int(physical_match)
         direction_agreement_count += int(direction_match)
+
+        tum_lanes = get_property(properties, "number_total_lanes")
+        current_lanes = nearest["totalLanes"]
+        lane_match = None
+        try:
+            if tum_lanes is not None and current_lanes is not None:
+                lane_count_compared += 1
+                lane_match = int(float(tum_lanes)) == int(float(current_lanes))
+                lane_count_agreement += int(lane_match)
+        except (TypeError, ValueError):
+            lane_match = None
+
+        tum_width_m = get_property(properties, "street_width_meter")
+        current_width_ft = nearest["streetWidthFt"]
+        width_delta_m = None
+        try:
+            if tum_width_m is not None and current_width_ft is not None:
+                width_delta_m = float(tum_width_m) - float(current_width_ft) * 0.3048
+                width_deltas.append(abs(width_delta_m))
+        except (TypeError, ValueError):
+            width_delta_m = None
+
         matches.append({
+            "tumGmlId": properties.get("gml_id"),
             "tumName": source_name,
             "tumSegmentId": get_property(properties, "segment_id"),
             "tumPhysicalId": source_physical_id,
@@ -391,7 +454,17 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
             "currentCsclPhysicalId": nearest["physicalId"],
             "currentCsclTrafficDirection": nearest["direction"],
             "currentCsclRoadType": nearest["roadType"],
+            "currentCsclTotalLanes": nearest["totalLanes"],
+            "currentCsclTravelLanes": nearest["travelLanes"],
+            "currentCsclParkingLanes": nearest["parkingLanes"],
+            "currentCsclStreetWidthFt": nearest["streetWidthFt"],
+            "currentCsclPostedSpeedMph": nearest["postedSpeedMph"],
+            "tumStreetWidthM": tum_width_m,
+            "streetWidthDeltaTumMinusCurrentM": round(width_delta_m, 3) if width_delta_m is not None else None,
+            "tumTotalLanes2016": tum_lanes,
+            "totalLaneCountAgrees": lane_match,
             "centroidToCurrentCsclDistanceM": round(distance_m, 3),
+            "matchMethod": match_method,
             "sameStreetName": name_match,
             "physicalIdExistsInCurrentCscl": physical_match,
             "trafficDirectionCodeAgrees": direction_match,
@@ -404,26 +477,44 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
         index = min(len(values) - 1, max(0, round((len(values) - 1) * fraction)))
         return round(values[index], 3)
 
-    copied_cscl = output_dir / "geojson" / "current-cscl-2026-times-square.geojson"
+    sorted_width_deltas = sorted(width_deltas)
+    copied_cscl = output_dir / "geojson" / "current-cscl-2026-times-square-buffer.geojson"
     copied_cscl.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(cscl_path, copied_cscl)
+    buffered_bbox = [
+        roi_bbox[0] - buffer_degrees, roi_bbox[1] - buffer_degrees,
+        roi_bbox[2] + buffer_degrees, roi_bbox[3] + buffer_degrees,
+    ]
     return {
         "source": "NYC Open Data CSCL / Centerline",
         "url": "https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/inkn-q76z",
         "apiUrl": "https://data.cityofnewyork.us/resource/inkn-q76z.geojson",
         "retrievedAtUtc": datetime.now(timezone.utc).isoformat(),
-        "featureCount": len(cscl),
+        "featureCountInMatchBuffer": len(cscl),
+        "featureCountIntersectingExactRoi": roi_feature_count,
+        "matchBufferDegrees": buffer_degrees,
+        "matchBboxWgs84": buffered_bbox,
         "geometryTypes": sorted({feature.get("geometry", {}).get("type") for feature in cscl if feature.get("geometry")}),
         "propertyKeys": sorted({key for feature in cscl for key in (feature.get("properties") or {}).keys()}),
         "trafficDirectionCodes": cscl_codes,
         "roadTypeCodes": road_type_codes,
-        "streetNameCount": len(cscl_names),
+        "postedSpeedMphCodes": speed_codes,
         "tumRoadbedToCurrentCscl": {
             "comparedRoadbedCount": len(matches),
             "sameStreetNameCount": same_name_count,
-            "physicalIdExistsCount": physical_id_match_count,
+            "physicalIdMatchCount": physical_id_match_count,
+            "trafficDirectionComparedCount": len([m for m in matches if m["expectedCurrentTrafficDirectionCode"] is not None]),
             "trafficDirectionAgreementCount": direction_agreement_count,
-            "centroidToNearestCurrentCsclDistanceM": {
+            "totalLaneCountComparedCount": lane_count_compared,
+            "totalLaneCountAgreementCount": lane_count_agreement,
+            "streetWidthComparedCount": len(width_deltas),
+            "streetWidthAbsDeltaM": {
+                "median": percentile(sorted_width_deltas, 0.50),
+                "p95": percentile(sorted_width_deltas, 0.95),
+                "max": round(max(width_deltas), 3) if width_deltas else None,
+                "within2m": sum(delta <= 2 for delta in width_deltas),
+            },
+            "centroidToCurrentCsclDistanceM": {
                 "p50": percentile(sorted_distances, 0.50),
                 "p95": percentile(sorted_distances, 0.95),
                 "max": round(max(sorted_distances), 3) if sorted_distances else None,
@@ -438,7 +529,6 @@ def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Pat
         "bytes": copied_cscl.stat().st_size,
     }
 
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, required=True)
@@ -449,7 +539,7 @@ def main() -> int:
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
         help="Times Square ROI in WGS84, EPSG:4326",
     )
-    args = parser.parse_args()
+    parser.add_argument("--cscl-buffer-degrees", type=float, default=0.005)\n    args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     bbox = tuple(args.bbox)
     if bbox[0] >= bbox[2] or bbox[1] >= bbox[3]:
@@ -527,7 +617,7 @@ def main() -> int:
         )
         if not args.current_cscl.exists():
             raise RuntimeError(f"Missing current CSCL GeoJSON: {args.current_cscl}")
-        report["currentCscl"] = current_cscl_comparison(roadbed_path, args.current_cscl, args.output_dir)
+        report["currentCscl"] = current_cscl_comparison(roadbed_path, args.current_cscl, args.output_dir, bbox, args.cscl_buffer_degrees)
         if report["currentCscl"]["featureCount"] == 0:
             report["errors"].append("Current CSCL query returned zero ROI features")
     except Exception as error:
