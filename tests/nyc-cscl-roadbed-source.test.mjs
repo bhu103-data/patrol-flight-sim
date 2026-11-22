@@ -39,7 +39,7 @@ test('construct only source-code candidate roadways without making up unknown la
     f(8,{STATUS:'4'})
   ];
   const x=checkFeatureCollection({type:'FeatureCollection',features});
-  assert.equal(x.rejected.length,0);
+  assert.equal(x.rejects.length,0);
   const s=summarize(x,features.length);
   assert.equal(s.constructedVehicleCandidates,3);
   assert.equal(s.widthKnown,2);
@@ -59,7 +59,7 @@ test('invalid, duplicate or implausible coordinates are flagged, not silently dr
     f(1),duplicate,bad,f(3,{STREETWIDTH:-1,NUMBER_TRAVEL_LANES:99})
   ]});
   assert.equal(x.accepted.length,2);
-  assert.equal(x.rejected.length,2);
+  assert.equal(x.rejects.length,2);
   assert.equal(x.accepted[1].widthMeters,null);
   assert.equal(x.accepted[1].travelLanes,null);
   assert.throws(()=>checkFeatureCollection({features:[]}),/FeatureCollection/);
