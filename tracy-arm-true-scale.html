@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL · Tracy Arm source-scale terrain flight pilot</title>
+<style>
+  :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+  *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#172a39;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}
+  .hud{position:fixed;top:15px;left:15px;max-width:min(480px,calc(100vw - 30px));background:#0d1b26dd;
+    backdrop-filter:blur(8px);border:1px solid #9ab3bb55;border-radius:12px;padding:14px 16px;color:#f1f8fa}
+  h1{font-size:18px;margin:0 0 7px;letter-spacing:.02em}
+  p{margin:7px 0;line-height:1.4;font-size:13px}
+  .hint{color:#c6e1e8}.small{font-size:11px;color:#a8c1ca}
+  #status{font-variant-numeric:tabular-nums;white-space:pre-wrap}
+  .action{color:#b8f0e6}
+  a{color:#aee5e6}
+  .footer{position:fixed;right:16px;bottom:12px;color:#eaf2f4;background:#0d1b26d6;border-radius:7px;
+    font-size:11px;padding:8px 10px;max-width:min(570px,calc(100vw - 32px))}
+  @media(max-width:700px){.hud{padding:10px;top:8px;left:8px}.footer{right:8px;bottom:8px}h1{font-size:15px}}
+</style>
+</head>
+<body>
+<canvas id="scene" tabindex="0" aria-label="Flightable real-coordinate Tracy Arm USGS terrain"></canvas>
+<div class="hud">
+  <h1>TRACY ARM · real-coordinate terrain pilot</h1>
+  <p class="hint">256² USGS source elevation · real east/north metres · original mountain relief · licensed CC0 photographic rock/snow/forest</p>
+  <p id="status" role="status">Loading the original source DEM and building terrain…</p>
+  <p class="small">W/S forward/back · A/D strafe · Q/E descend/climb · arrows or drag to look · Shift fast · R reset</p>
+  <p><a href="./index.html">Return to PATROL</a> · <a href="./tracy-arm-true-scale.html?alaskaDetail=5m">Experimental local ~5m DEM</a> · <a href="./tracy-arm-true-scale.html">Corrected full USGS source grid</a></p>
+</div>
+<div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed shoreline, orthoimagery or verified vertical datum. Local Poly Haven CC0 PBR atlas is photographic but not an on-site scan.</div>
+<script type="module">
+import {decodeAlaskaDEM} from './assets/alaska/usgs-dem.js';
+import {decodeAlaskaFiveMetreTile} from './assets/alaska/usgs-5m-tile.js';
+import {loadAlaskaIfsar5m} from './assets/alaska/usgs-ifsar5m.js';
+import {decimateIfsarRaster} from './assets/alaska/ifsar-lod.js';
+import {rasterCellToLocalEnu,rasterCellWgs84,wgs84ToLocalEnu,
+  sourceTileOrigin,localEnuToWgs84,sampleSourceElevationMetres,
+  validateTracyArmRaster} from './assets/alaska/tracy-arm-geodesy.js';
+
+const canvas=document.getElementById('scene'),status=document.getElementById('status');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false,depth:true,powerPreference:'high-performance'});
+if(!gl){status.textContent='WebGL2 is required for the source-coordinate terrain pilot.';throw Error('WebGL2 unavailable')}
+const VERT=`#version 300 es
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in float aWater;
+uniform mat4 uViewProj;
+out vec3 vPos;
+out vec3 vNormal;
+out float vWater;
+void main(){
+  vPos=aPosition;vNormal=aNormal;vWater=aWater;
+  gl_Position=uViewProj*vec4(aPosition,1.0);
+}
+`;
+const FRAG=`#version 300 es
+precision highp float;
+in vec3 vPos;
+in vec3 vNormal;
+in float vWater;
+uniform vec3 uCamera;
+uniform float uTime;
+uniform highp sampler2DArray uAlbedo;
+uniform bool uPhoto;
+out vec4 fragColor;
+vec3 atlasColor(float tile,vec3 n){
+  // Choose a locally planar projection on steep cliffs: no stretched
+  // bird's-eye UV on vertical rock. Tiling in real-world metres.
+  vec3 a=abs(n);
+  // Explicit gradients of UNWRAPPED world UVs: derivative of fract(UV)
+  // incorrectly selects extreme mip levels near every tile repetition,
+  // causing bright regular grids on source-derived fjord cliffs.
+  vec2 px=vPos.zy/26.0,py=vPos.xz/26.0,pz=vPos.xy/26.0;
+  vec2 ddxX=dFdx(px),ddyX=dFdy(px);
+  vec2 ddxY=dFdx(py),ddyY=dFdy(py);
+  vec2 ddxZ=dFdx(pz),ddyZ=dFdy(pz);
+  vec2 uv,du,dv;
+  if(a.y>=a.x&&a.y>=a.z){uv=py;du=ddxY;dv=ddyY;}
+  else if(a.x>=a.z){uv=px;du=ddxX;dv=ddyX;}
+  else{uv=pz;du=ddxZ;dv=ddyZ;}
+  // Each source tile is a SEPARATE 256² array layer, with its own mip chain.
+  // The former 1024×256 packed atlas bled snow/rock colors across adjacent
+  // tile mip levels, producing the regularly spaced white cliff grid.
+  return textureGrad(uAlbedo,vec3(uv,tile),du,dv).rgb;
+}
+void main(){
+  vec3 n=normalize(vNormal);
+  // Side-lit granite walls, with enough ambient to avoid solid black cliffs.
+  vec3 sun=normalize(vec3(-.52,.76,-.31));
+  float brightness=.49+.51*max(dot(n,sun),0.0);
+  vec3 color;
+  if(vWater>0.5){
+    float wave=sin(vPos.x*.027+vPos.z*.042+uTime*.58)*.5+
+               sin(vPos.z*.036-vPos.x*.018-uTime*.43)*.5;
+    color=mix(vec3(.024,.14,.19),vec3(.062,.28,.32),.46+wave*.17);
+    brightness=.91;
+  }else{
+    float cliff=1.0-clamp(n.y,0.0,1.0);
+    float treeline=1.0-smoothstep(390.0,710.0,vPos.y);
+    vec3 vegetation=mix(vec3(.14,.27,.18),vec3(.25,.36,.26),
+      smoothstep(80.0,390.0,vPos.y));
+    vec3 stone=mix(vec3(.35,.36,.36),vec3(.52,.51,.49),
+      smoothstep(180.0,1400.0,vPos.y));
+    float forestMix=treeline*(1.0-smoothstep(.13,.46,cliff));
+    color=mix(stone,vegetation,forestMix);
+    float snow=smoothstep(650.0,1000.0,vPos.y)*(.90-.28*cliff);
+    color=mix(color,vec3(.79,.86,.91),snow);
+    if(uPhoto){
+      // Existing, bundled Poly Haven CC0 atlas: rock / snow / forest floor.
+      // NOT captured on-site; only photographic surface detail.
+      vec3 rock=atlasColor(0.0,n);
+      vec3 forest=atlasColor(2.0,n);
+      vec3 ice=atlasColor(1.0,n);
+      vec3 photos=mix(rock,forest,forestMix);
+      photos=mix(photos,ice,snow);
+      color=mix(color,photos,.78);
+    }
+  }
+  color*=brightness;
+  float distanceToCamera=length(vPos-uCamera);
+  float haze=clamp((distanceToCamera-1700.0)/7800.0,0.0,.72);
+  color=mix(color,vec3(.57,.69,.76),haze);
+  color=pow(max(color,vec3(0.0)),vec3(.90));
+  fragColor=vec4(color,1.0);
+}`;
+function compile(type,src){
+  const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))
+    throw Error(gl.getShaderInfoLog(s)||'Shader compilation failed');
+  return s;
+}
+const program=gl.createProgram();
+gl.attachShader(program,compile(gl.VERTEX_SHADER,VERT));
+gl.attachShader(program,compile(gl.FRAGMENT_SHADER,FRAG));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+  throw Error(gl.getProgramInfoLog(program)||'GPU program link failed');
+const uViewProj=gl.getUniformLocation(program,'uViewProj');
+const uCamera=gl.getUniformLocation(program,'uCamera');
+const uTime=gl.getUniformLocation(program,'uTime');
+const uAlbedo=gl.getUniformLocation(program,'uAlbedo');
+const uPhoto=gl.getUniformLocation(program,'uPhoto');
+let photoTexture=null,photoReady=false;
+async function loadLocalCC0Atlas(){
+  try{
+    const photo=new Image();
+    photo.src='./assets/alaska/alaska-photo-albedo.webp';
+    await photo.decode();
+    if(photo.naturalWidth!==1024||photo.naturalHeight!==256)
+      throw Error('Unexpected photographic atlas dimensions');
+    // Reuse one bundled 1024×256 Poly Haven CC0 atlas, but isolate its four
+    // 256×256 material swatches into independently mipmapped texture-array
+    // layers. GPU bytes stay ~1MB before mips; there are no external fetches.
+    const t=gl.createTexture();
+    if(!t)throw Error('WebGL2 photo-array texture allocation failed');
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA8,256,256,4,0,
+      gl.RGBA,gl.UNSIGNED_BYTE,null);
+    const tile=document.createElement('canvas');
+    tile.width=256;tile.height=256;
+    const ctx=tile.getContext('2d',{willReadFrequently:false});
+    if(!ctx)throw Error('Photo tile canvas unavailable');
+    for(let layer=0;layer<4;layer++){
+      ctx.clearRect(0,0,256,256);
+      ctx.drawImage(photo,layer*256,0,256,256,0,0,256,256);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,layer,256,256,1,
+        gl.RGBA,gl.UNSIGNED_BYTE,tile);
+    }
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+    const uploadError=gl.getError();
+    if(uploadError!==gl.NO_ERROR)
+      throw Error('Photo-array GL upload failure '+uploadError);
+    photoTexture=t;photoReady=true;
+  }catch(error){
+    console.warn('Tracy Arm source-scale CC0 photographic fallback',error);
+    photoReady=false;
+  }
+}
+gl.enable(gl.DEPTH_TEST);
+gl.disable(gl.CULL_FACE);
+
+function mesh(vertexArray,indexArray){
+  const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+  const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+  gl.bufferData(gl.ARRAY_BUFFER,vertexArray instanceof Float32Array?vertexArray:new Float32Array(vertexArray),gl.STATIC_DRAW);
+  const ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indexArray instanceof Uint32Array?indexArray:new Uint32Array(indexArray),gl.STATIC_DRAW);
+  for(const [location,size,offset] of [[0,3,0],[1,3,12],[2,1,24]]){
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location,size,gl.FLOAT,false,28,offset);
+  }
+  gl.bindVertexArray(null);
+  return {vao,count:indexArray.length};
+}
+function normalize(v){
+  const d=Math.hypot(...v)||1;
+  return v.map(x=>x/d);
+}
+function cross(a,b){
+  return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function perspective(fov,aspect,near,far){
+  const f=1/Math.tan(fov/2),nf=1/(near-far);
+  return [f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0];
+}
+function lookAt(eye,target,up){
+  const f=normalize(target.map((v,i)=>v-eye[i]));
+  const s=normalize(cross(f,up)),u=cross(s,f);
+  return [s[0],u[0],-f[0],0,s[1],u[1],-f[1],0,s[2],u[2],-f[2],0,
+    -dot(s,eye),-dot(u,eye),dot(f,eye),1];
+}
+function multiply(a,b){
+  const o=new Array(16).fill(0);
+  for(let col=0;col<4;col++)for(let row=0;row<4;row++)
+    for(let k=0;k<4;k++)o[col*4+row]+=a[k*4+row]*b[col*4+k];
+  return o;
+}
+const keys=new Set(),pose={xyz:[0,240,0],yaw:0,pitch:-.12};
+let bounds,dem,land,sea,origin,frameCount=0,previous=0,elapsed=0,active=false;
+let detailMode='coarse-30m',detailWarning=null,sourceAudit=null;
+let lastFrameSeconds=0,glErrors=[];
+const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=-.48;pose.pitch=-.09};
+let spawn=[0,240,0];
+document.addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))
+    e.preventDefault();
+  keys.add(e.code);
+  if(e.code==='KeyR'&&active)initial();
+});
+document.addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('blur',()=>keys.clear());
+let dragging=false,lastMouse=[0,0];
+canvas.addEventListener('pointerdown',e=>{dragging=true;lastMouse=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointerup',()=>dragging=false);
+canvas.addEventListener('pointercancel',()=>dragging=false);
+canvas.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  pose.yaw+=(e.clientX-lastMouse[0])*.003;
+  pose.pitch=Math.max(-1.36,Math.min(1.36,pose.pitch-(e.clientY-lastMouse[1])*.003));
+  lastMouse=[e.clientX,e.clientY];
+});
+function update(dt){
+  const turn=1.13*dt;
+  if(keys.has('ArrowLeft'))pose.yaw+=turn;
+  if(keys.has('ArrowRight'))pose.yaw-=turn;
+  if(keys.has('ArrowUp'))pose.pitch=Math.min(1.25,pose.pitch+turn*.6);
+  if(keys.has('ArrowDown'))pose.pitch=Math.max(-1.25,pose.pitch-turn*.6);
+  const speed=(keys.has('ShiftLeft')||keys.has('ShiftRight')?270:82)*dt;
+  const forward=[Math.cos(pose.yaw),Math.sin(pose.yaw)];
+  const side=[-forward[1],forward[0]];
+  if(keys.has('KeyW')){pose.xyz[0]+=forward[0]*speed;pose.xyz[2]+=forward[1]*speed}
+  if(keys.has('KeyS')){pose.xyz[0]-=forward[0]*speed;pose.xyz[2]-=forward[1]*speed}
+  if(keys.has('KeyA')){pose.xyz[0]-=side[0]*speed;pose.xyz[2]-=side[1]*speed}
+  if(keys.has('KeyD')){pose.xyz[0]+=side[0]*speed;pose.xyz[2]+=side[1]*speed}
+  if(keys.has('KeyE'))pose.xyz[1]+=speed;
+  if(keys.has('KeyQ'))pose.xyz[1]-=speed;
+  pose.xyz[0]=Math.max(bounds.minE+60,Math.min(bounds.maxE-60,pose.xyz[0]));
+  pose.xyz[2]=Math.max(bounds.minN+60,Math.min(bounds.maxN-60,pose.xyz[2]));
+  let surface=0;
+  try{
+    const [lon,lat]=localEnuToWgs84(pose.xyz[0],pose.xyz[2],0,...origin);
+    surface=sampleSourceElevationMetres(dem,lon,lat);
+  }catch{surface=0;}
+  pose.xyz[1]=Math.max(Math.max(0,surface)+18,Math.min(3800,pose.xyz[1]));
+}
+function draw(frameTime){
+  if(!active)return;
+  const dt=Math.min(.05,(frameTime-previous)/1000||0);
+  previous=frameTime;elapsed+=dt;frameCount++;lastFrameSeconds=dt;
+  update(dt);
+  const dpr=Math.min(window.devicePixelRatio||1,1.5);
+  const w=Math.max(1,Math.floor(canvas.clientWidth*dpr));
+  const h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+  gl.viewport(0,0,w,h);
+  gl.clearColor(.57,.69,.76,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const f=[Math.cos(pose.pitch)*Math.cos(pose.yaw),Math.sin(pose.pitch),
+    Math.cos(pose.pitch)*Math.sin(pose.yaw)];
+  const target=pose.xyz.map((v,i)=>v+f[i]*100);
+  const vp=multiply(perspective(77*Math.PI/180,w/h,.5,14500),
+    lookAt(pose.xyz,target,[0,1,0]));
+  gl.useProgram(program);
+  gl.uniformMatrix4fv(uViewProj,false,new Float32Array(vp));
+  gl.uniform3fv(uCamera,new Float32Array(pose.xyz));
+  gl.uniform1f(uTime,elapsed);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY,photoTexture);
+  gl.uniform1i(uAlbedo,0);
+  gl.uniform1i(uPhoto,photoReady);
+  for(const m of [land,sea]){
+    gl.bindVertexArray(m.vao);
+    gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
+  }
+  gl.bindVertexArray(null);
+  if(frameCount%25===0){
+    const err=gl.getError();if(err!==gl.NO_ERROR)glErrors.push(err);
+    const [lon,lat]=localEnuToWgs84(pose.xyz[0],pose.xyz[2],0,...origin);
+    status.textContent='LAT '+lat.toFixed(5)+'° N · LON '+Math.abs(lon).toFixed(5)+'° W\n'
+      +'X east '+pose.xyz[0].toFixed(0)+' m · Z north '+pose.xyz[2].toFixed(0)+' m\n'
+      +'Altitude '+pose.xyz[1].toFixed(0)+' m (source height datum unverified)\n'
+      +'True DEM extent '+(bounds.maxE-bounds.minE).toFixed(0)+' × '
+      +(bounds.maxN-bounds.minN).toFixed(0)+' m · '+frameCount+' frames';
+  }
+  requestAnimationFrame(draw);
+}
+async function boot(){
+  const response=await fetch('./assets/alaska/tracy-arm-3dep.json',{cache:'force-cache'});
+  if(!response.ok)throw Error('Bundled USGS DEM unavailable: HTTP '+response.status);
+  const payload=await response.json();
+  validateTracyArmRaster(payload);
+  const coarseRaw={...payload,...decodeAlaskaDEM(payload)};
+  // The historic 256² ArcGIS request omitted adjustAspectRatio=false.
+  // USGS f=json ACTUALLY returned a latitude-EXPANDED WGS84 extent:
+  // [-133.265,57.822,-133.135,57.952], NOT the requested metadata bbox.
+  // Keep the old bytes intact, apply the separately verified pixel extent
+  // only to this isolated true-coordinate terrain renderer.
+  const extentResponse=await fetch('./assets/alaska/tracy-arm-3dep-actual-extent.json',
+    {cache:'force-cache'});
+  if(!extentResponse.ok)throw Error('Missing USGS actual raster georeference');
+  const extent=await extentResponse.json();
+  if(extent.format!=='patrol-usgs-arcgis-export-actual-extent-v1'||
+     extent.outputCrs!=='EPSG:4326'||
+     !Array.isArray(extent.requestedBboxWgs84)||
+     !Array.isArray(extent.actualPixelBboxWgs84)||
+     extent.requestedBboxWgs84.length!==4||
+     extent.actualPixelBboxWgs84.length!==4||
+     !extent.requestedBboxWgs84.every((v,i)=>v===payload.bbox[i])||
+     !extent.actualPixelBboxWgs84.every(Number.isFinite)||
+     !extent.serverDefaultAdjustAspectRatio)
+    throw Error('Unverified original USGS raster true pixel coordinates');
+  const correctedBbox=extent.actualPixelBboxWgs84;
+  const nativeLatCellMetres=(correctedBbox[3]-correctedBbox[1])*111320/256;
+  const coarse={...coarseRaw,bbox:correctedBbox,
+    sampleSpacingApproxMeters:[payload.sampleSpacingApproxMeters[0],
+      +nativeLatCellMetres.toFixed(3)]};
+  validateTracyArmRaster(coarse);
+  dem=coarse;
+  // Both 30m and 5m scenes have the same GPS-based ENU world origin;
+  // the fine tile never silently re-centers local XY to its own bbox.
+  origin=sourceTileOrigin(coarse);
+  const params=new URLSearchParams(location.search);
+  let nativeSource=null;
+  if(params.get('alaskaSource')==='ifsar5m'){
+    try{
+      nativeSource=await loadAlaskaIfsar5m('./assets/alaska/tracy-arm-ifsar5m-manifest.json');
+      if(nativeSource.width!==1536||nativeSource.height!==2880||
+         nativeSource.bbox.some((v,i)=>Math.abs(v-correctedBbox[i])>1e-8)||
+         nativeSource.sourceVerticalCrs!=='EPSG:5703'||
+         nativeSource.geoid!=='GEOID09'||
+         nativeSource.sourceTileSha256?.length!==2||
+         nativeSource.coverageValidFraction!==1||
+         !(nativeSource.tileSeamP95Metres>0&&nativeSource.tileSeamP95Metres<=10)||
+         !(nativeSource.tileOverlapRmseMetres>=0&&nativeSource.tileOverlapRmseMetres<=.5)||
+         !(nativeSource.tileOverlapP95AbsMetres>=0&&nativeSource.tileOverlapP95AbsMetres<=1)||
+         nativeSource.sourceLicense!=='USGS 3DEP public domain')
+        throw Error('Native IfSAR source metadata does not match the verified full AOI');
+      sourceAudit={
+        sourceCellCount:nativeSource.width*nativeSource.height,
+        sourceResolutionMeters:[...nativeSource.sampleSpacingApproxMeters],
+        sourceHeightRangeMeters:[...nativeSource.sourceElevationRangeMeters],
+        sourceVerticalDatum:nativeSource.verticalDatum,
+        sourceVerticalCrs:nativeSource.sourceVerticalCrs,
+        sourceProject:nativeSource.sourceProject,
+        workunit:nativeSource.workunit,
+        sourceCollectionStart:nativeSource.collectionStart,
+        sourceCollectionEnd:nativeSource.collectionEnd,
+        sourceVerticalDatumEvidence:nativeSource.verticalDatumEvidence,
+        sourceTileSha256:[...nativeSource.sourceTileSha256],
+        sourceCoverageValidFraction:nativeSource.coverageValidFraction,
+        tileSeamP95Metres:nativeSource.tileSeamP95Metres,
+        withinTileGradientP95Metres:nativeSource.withinTileGradientP95Metres,
+        tileOverlapRmseMetres:nativeSource.tileOverlapRmseMetres,
+        tileOverlapP95AbsMetres:nativeSource.tileOverlapP95AbsMetres,
+        sourceLicense:nativeSource.sourceLicense,
+        verticalDatumEvidence:nativeSource.verticalDatumEvidence
+      };
+      dem=decimateIfsarRaster(nativeSource,3);
+      detailMode='source-native-ifsar5m-lod15m';
+    }catch(error){
+      nativeSource=null;sourceAudit=null;
+      detailWarning='Native IfSAR 5m bundle unavailable/invalid; showing georeferenced 30m source: '+error.message;
+      console.warn('[PATROL] '+detailWarning);
+      dem=coarse;
+    }
+  }
+  if(!nativeSource&&params.get('alaskaDetail')==='5m'){
+    try{
+      const response=await fetch('./assets/alaska/tracy-arm-five-metre-tile.json',
+        {cache:'force-cache'});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      dem=decodeAlaskaFiveMetreTile(await response.json(),coarse);
+      detailMode='source-5m-local';
+    }catch(error){
+      detailWarning='5m source tile is unavailable/invalid; showing georeferenced original USGS source: '+error.message;
+      console.warn('[PATROL] '+detailWarning);
+      dem=coarse;
+    }
+  }
+  const count=dem.width*dem.height,n=dem.width,m=dem.height;
+  const points=new Float32Array(count*3);
+  let minE=Infinity,maxE=-Infinity,minN=Infinity,maxN=-Infinity,highest=0;
+  for(let row=0;row<m;row++)for(let col=0;col<n;col++){
+    const i=row*n+col;
+    const [east,north]=dem.highRes
+      ? wgs84ToLocalEnu(...rasterCellWgs84(dem,col,row),0,...origin)
+      : rasterCellToLocalEnu(dem,col,row,0);
+    const elev=dem.heights[i];
+    points[i*3]=east;points[i*3+1]=elev<=1?-4:elev;points[i*3+2]=north;
+    minE=Math.min(minE,east);maxE=Math.max(maxE,east);
+    minN=Math.min(minN,north);maxN=Math.max(maxN,north);
+    highest=Math.max(highest,elev);
+  }
+  bounds={minE,maxE,minN,maxN};
+  const vertices=new Float32Array(count*7),indices=new Uint32Array((n-1)*(m-1)*6);
+  for(let row=0;row<m;row++)for(let col=0;col<n;col++){
+    const i=row*n+col,left=row*n+Math.max(0,col-1),right=row*n+Math.min(n-1,col+1),
+      south=Math.max(0,row-1)*n+col,north=Math.min(m-1,row+1)*n+col;
+    const dx=(points[right*3+1]-points[left*3+1])/
+      Math.max(1,points[right*3]-points[left*3]);
+    const dz=(points[north*3+1]-points[south*3+1])/
+      Math.max(1,points[north*3+2]-points[south*3+2]);
+    const normal=normalize([-dx,1,-dz]);
+    vertices.set([points[i*3],points[i*3+1],points[i*3+2],
+      ...normal,0],i*7);
+  }
+  let indexOffset=0;
+  for(let row=0;row<m-1;row++)for(let col=0;col<n-1;col++){
+    const a=row*n+col,b=a+1,c=a+n,d=c+1;
+    indices[indexOffset++]=a;indices[indexOffset++]=c;indices[indexOffset++]=b;
+    indices[indexOffset++]=b;indices[indexOffset++]=c;indices[indexOffset++]=d;
+  }
+  land=mesh(vertices,indices);
+  const waterY=.15,sx=minE-4,ex=maxE+4,sz=minN-4,nz=maxN+4;
+  sea=mesh([
+    sx,waterY,sz, 0,1,0, 1,
+    ex,waterY,sz, 0,1,0, 1,
+    sx,waterY,nz, 0,1,0, 1,
+    ex,waterY,nz, 0,1,0, 1
+  ],[0,2,1,1,2,3]);
+  // A wider measured fjord channel in the original south-first USGS raster.
+  // Cell (170,105) is water; starting in the old route's narrow edge channel
+  // blocked the camera with a nearly full-screen rock face.
+  // GPS anchor from the old REQUESTED cell-centre at (170,105), which is
+  // near the interior of our optional fine rectangle. The original TIFF
+  // data are now sampled with the CORRECTED effective server bbox.
+  const [spawnLon,spawnLat]=rasterCellWgs84(coarse,170,105);
+  const launchElevation=nativeSource
+    ? sampleSourceElevationMetres(nativeSource,spawnLon,spawnLat)
+    : sampleSourceElevationMetres(coarse,spawnLon,spawnLat);
+  if(launchElevation>3)
+    throw Error('Verified USGS source launch anchor unexpectedly on land: '+launchElevation.toFixed(2)+'m');
+  const [e,north]=wgs84ToLocalEnu(spawnLon,spawnLat,0,...origin);
+  spawn=[e,320,north];
+  await loadLocalCC0Atlas();
+  initial();
+  active=true;
+  status.textContent='Source terrain loaded: '+count.toLocaleString()+
+    ' mesh vertices · '+indices.length/3+' terrain triangles · peak '+highest.toFixed(1)+' m'
+    +' · '+detailMode+
+    (sourceAudit?'\nUSGS IfSAR source: '+sourceAudit.sourceCellCount.toLocaleString()+
+      ' cells at '+sourceAudit.sourceResolutionMeters.map(x=>x.toFixed(1)).join('×')+
+      'm · rendered at '+dem.sampleSpacingApproxMeters.map(x=>x.toFixed(1)).join('×')+'m LOD · NAVD88/GEOID09 (USGS index) · 2010–2012 collection':'')+
+    (detailWarning?'\n'+detailWarning:'');
+  requestAnimationFrame(draw);
+}
+window.PatrolTrueScaleQA=()=>({
+  active,frames:frameCount,webgl2:true,contextLost:gl.isContextLost(),
+  size:[canvas.width,canvas.height],
+  cells:dem?.width*dem?.height||0,triangles:land?.count/3||0,
+  terrainPeak:dem?.heights.reduce((h,y)=>Math.max(h,y),0)||0,
+  bounds:bounds?{...bounds}:null,origin:origin?[...origin]:null,
+  camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
+  gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array',
+  detailMode,detailWarning,bbox:dem?.bbox?[...dem.bbox]:null,
+  officialSourceExtentCorrected:true,
+  sourceSpacingMeters:sourceAudit?[...sourceAudit.sourceResolutionMeters]:
+    (dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null),
+  meshSpacingMeters:dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null,
+  sourceCellCount:sourceAudit?.sourceCellCount||dem?.width*dem?.height||0,
+  sourceHeightRangeMeters:sourceAudit?[...sourceAudit.sourceHeightRangeMeters]:null,
+  sourcePeak:sourceAudit?.sourceHeightRangeMeters?.[1]??null,
+  sourceVerticalDatum:sourceAudit?.sourceVerticalDatum||null,
+  sourceVerticalCrs:sourceAudit?.sourceVerticalCrs||null,
+  sourceProject:sourceAudit?.sourceProject||null,
+  workunit:sourceAudit?.workunit||null,
+  sourceCollectionStart:sourceAudit?.sourceCollectionStart||null,
+  sourceCollectionEnd:sourceAudit?.sourceCollectionEnd||null,
+  sourceVerticalDatumEvidence:sourceAudit?.sourceVerticalDatumEvidence||null,
+  sourceTileSha256:sourceAudit?[...sourceAudit.sourceTileSha256]:null,
+  sourceCoverageValidFraction:sourceAudit?.sourceCoverageValidFraction??null,
+  tileSeamP95Metres:sourceAudit?.tileSeamP95Metres??null,
+  withinTileGradientP95Metres:sourceAudit?.withinTileGradientP95Metres??null,
+  tileOverlapRmseMetres:sourceAudit?.tileOverlapRmseMetres??null,
+  tileOverlapP95AbsMetres:sourceAudit?.tileOverlapP95AbsMetres??null,
+  sourceLicense:sourceAudit?.sourceLicense||null,
+  meshLodStride:dem?.meshLodStride||1
+});
+boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+name: Alaska source-exact 5m Tracy Arm sample build
+
+on:
+  pull_request:
+    branches: [feat/alaska-wgs84-metre-frame-20261122-chat]
+    paths:
+      - tools/alaska/build_usgs5m_tracyarm_pilot.py
+      - tools/alaska/probe_usgs5m_native_source.mjs
+      - tools/alaska/build_native_ifsar_tracyarm.py
+      - tools/alaska/audit_usgs_dem_source_consistency.py
+      - assets/alaska/tracy-arm-3dep-actual-extent.json
+      - .github/workflows/alaska-5m-tile-build.yml
+      - assets/alaska/tracy-arm-3dep.json
+      - assets/alaska/usgs-ifsar5m.js
+      - assets/alaska/ifsar-lod.js
+      - tracy-arm-true-scale.html
+      - tests/alaska-true-scale-flight-pilot.test.mjs
+      - tools/alaska/smoke_true_scale_flight.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  extract-real-usgs-elevation:
+    if: github.head_ref == 'feat/alaska-true-scale-terrain-flight-pilot-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install open-source USGS raster decoding dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'tifffile>=2025.3' 'rasterio>=1.4,<2'
+      - name: Verify native USGS 5m IfSAR source coverage and download links
+        run: node tools/alaska/probe_usgs5m_native_source.mjs
+      - name: Fetch 256 square at measured ~5m spacing from official source
+        run: python tools/alaska/build_usgs5m_tracyarm_pilot.py
+      - name: Syntax-check native IfSAR builder
+        run: python -m py_compile tools/alaska/build_native_ifsar_tracyarm.py
+      - name: Build full-area native 5m IfSAR mosaic from adjacent OPR tiles
+        run: python tools/alaska/build_native_ifsar_tracyarm.py
+      - name: Stage native IfSAR source files only in this disposable QA checkout
+        run: |
+          cp artifacts/alaska-tracyarm-ifsar5m-manifest.json assets/alaska/tracy-arm-ifsar5m-manifest.json
+          cp artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz.b64 assets/alaska/tracy-arm-ifsar5m-delta2-int16.bin.gz.b64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-consistency diagnostic on 5m and original 30m USGS exact query
+        run: python tools/alaska/audit_usgs_dem_source_consistency.py
+      - name: Verify source tile decoder contracts
+        run: node --test tests/alaska-true-scale-flight-pilot.test.mjs tests/alaska-wgs84-metre-frame.test.mjs
+      - name: Install pinned software WebGL2 test browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Stage extracted 5m pilot tile only in this disposable QA checkout
+        run: cp artifacts/alaska-tracyarm-five-metre-tile.json assets/alaska/tracy-arm-five-metre-tile.json
+      - name: Serve USGS source and both terrain profiles locally
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-5m-fine-qa.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/tracy-arm-true-scale.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Screenshot original 30m full Tracy Arm scene
+        run: node tools/alaska/smoke_true_scale_flight.mjs
+      - name: Screenshot source-extracted ~5m local terrain plus moving camera
+        run: PATROL_ALASKA_5M=1 node tools/alaska/smoke_true_scale_flight.mjs
+      - name: Screenshot full native IfSAR 5m terrain with 15m browser-budget LOD and moving camera
+        run: PATROL_ALASKA_IFSAR5M=1 node tools/alaska/smoke_true_scale_flight.mjs
+      - name: Preserve exact GeoTIFF SHA, project vertical datum and tile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-tracyarm-5m-source-sample
+          path: |
+            artifacts/alaska-tracyarm-ifsar5m-report.json
+            artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz
+            artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz.b64
+            artifacts/alaska-tracyarm-ifsar5m-manifest.json
+            artifacts/alaska-tracyarm-ifsar5m/*.xml
+            artifacts/alaska-tracyarm-five-metre-tile.json
+            artifacts/alaska-tracyarm-five-metre-report.json
+            artifacts/alaska-usgs5m-native-source.json
+            artifacts/alaska-tracyarm-registration-audit.json
+            artifacts/alaska-true-scale-five-metre-*
+            artifacts/alaska-true-scale-source-flight-*
+            artifacts/alaska-true-scale-ifsar5m-*
+          if-no-files-found: ignore
+          retention-days: 14
