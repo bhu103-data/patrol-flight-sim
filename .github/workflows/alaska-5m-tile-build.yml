@@ -5,6 +5,7 @@ on:
     branches: [feat/alaska-wgs84-metre-frame-20261122-chat]
     paths:
       - tools/alaska/build_usgs5m_tracyarm_pilot.py
+      - tools/alaska/audit_usgs_dem_source_consistency.py
       - .github/workflows/alaska-5m-tile-build.yml
       - assets/alaska/tracy-arm-3dep.json
 
