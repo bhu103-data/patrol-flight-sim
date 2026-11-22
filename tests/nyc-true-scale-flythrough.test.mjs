@@ -156,3 +156,30 @@ test('source street view has upstream 3.2m eye and 1.2m footprint clearance, not
   assert.doesNotMatch(html,/buildingContains\(massing,east,north,65\)/);
   assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/);
 });
+
+test('full official OTI 2022 surfaces replace guessed asphalt bands in the same one-metre viewer',async()=>{
+  const html=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  const mesh=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-neighborhood.mjs',import.meta.url),'utf8');
+  assert.match(html,/fetchAndCompileOfficialOti2022Surfaces/);
+  assert.match(html,/drawIllustrativeStreetBands:!fullSurfaces/);
+  assert.match(html,/gl\.drawArrays\(gl\.TRIANGLES,0,roadbedMesh\.count\)/);
+  assert.match(html,/gl\.drawArrays\(gl\.TRIANGLES,0,pedestrianMesh\.count\)/);
+  assert.match(html,/gl\.drawArrays\(gl\.LINES,0,curbMesh\.count\)/);
+  assert.match(html,/fullOfficialSurfacesLoaded/);
+  assert.match(html,/roadbedFullNYCCoverage:false/);
+  assert.match(html,/noSurveyedVerticalDatum/);
+  assert.match(mesh,/drawIllustrativeStreetBands=true/);
+  assert.match(mesh,/if\(drawIllustrativeStreetBands\)/);
+});
+test('full source mode suppresses only guessed asphalt, preserving DCM centreline records',()=>{
+  const g=buildNeighborhoodMesh(massing,roads,{
+    detail:false,officialRoadbed:null,drawIllustrativeStreetBands:false
+  });
+  assert.equal(g.illustrativeStreetBands,false);
+  assert.equal(g.counts.illustrativeStreetBandTriangles,0);
+  assert.equal(g.counts.streetFeatures,38);
+  assert.equal(g.counts.streetSegments,89);
+  assert.ok(g.counts.triangles>0);
+});
