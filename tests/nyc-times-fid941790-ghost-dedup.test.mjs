@@ -68,10 +68,10 @@ test('duplicate GIS remnant is removed only if its named site exists',()=>{
 
 test('all other source polygons, glass and roof faces are retained in original order',()=>{
   const old=run(before,asset.features),updated=run(after,asset.features);
-  assert.equal(old.stats.sourceBuildings,35);
-  assert.equal(updated.stats.sourceBuildings,34);
-  assert.equal(old.stats.infillPieces,76);
-  assert.equal(updated.stats.infillPieces,75);
+  assert.equal(old.stats.sourceBuildings,34);
+  assert.equal(updated.stats.sourceBuildings,33);
+  assert.equal(old.stats.infillPieces,75);
+  assert.equal(updated.stats.infillPieces,74);
   assert.equal(old.stats.windowQuads,updated.stats.windowQuads+18);
   assert.equal(old.stats.storefrontQuads,updated.stats.storefrontQuads);
   assert.equal(old.quads.length-updated.quads.length,26);

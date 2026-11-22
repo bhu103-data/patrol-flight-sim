@@ -1,0 +1,53 @@
+name: NYC FID 958605 actual browser before-after camera QA
+
+on:
+  pull_request:
+    paths:
+      - 'assets/nyc/nyc-gis-infill.js'
+      - 'tests/nyc-times-fid958605-ghost-dedup.test.mjs'
+      - 'scripts/nyc-fid958605-visual-ab.mjs'
+      - '.github/workflows/nyc-fid958605-ab.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare-nyc-gis-fid:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate merged with current PR base
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout exact PR base for untouched before view
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install single shared browser and image decoder
+        working-directory: candidate
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve both checked-out source trees
+        run: |
+          (cd candidate && python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-958605-after.log 2>&1) &
+          (cd baseline && python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/patrol-958605-before.log 2>&1) &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8766/index.html >/dev/null
+      - name: Capture matching real WebGL2 aerial Times Square angles
+        working-directory: candidate
+        run: node scripts/nyc-fid958605-visual-ab.mjs
+      - name: Archive browser evidence for review
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nyc-fid958605-base-vs-candidate-webgl
+          path: candidate/artifacts/nyc-fid958605/
+          if-no-files-found: warn
+          retention-days: 7

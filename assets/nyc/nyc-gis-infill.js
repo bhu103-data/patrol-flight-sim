@@ -91,6 +91,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0;
+  let skipped1552DecorationSlots=0;
   const sourceFids=new Set();
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
@@ -109,6 +110,19 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     // camera-facing 44th Street facade, and bulk removal would erase it.
     if(rec.fid===941790 && protectedSites.some(
       site=>site.name==='2 Times Square'))continue;
+    // PATROL_NYC_FID958605_GHOST_DUPLICATE_V1:
+    // The named 1552 Broadway polygon already uses municipal FID 958605,
+    // authored sign and collision. A second, *very short* GIS projection
+    // appears at x~18,z~43 instead of that site's x=-16,z=22.
+    // Canonical bundled asset yields exactly one clipped GIS piece for 958605.
+    // Preserve its former decorative-roof-box ordinal when culling it,
+    // preventing unrelated vents from moving as later pieces get renumbered.
+    // Other FIDs, source-only mode and the FID 1000156 44th St wall remain.
+    if(rec.fid===958605 && protectedSites.some(
+      site=>site.name==='1552 Broadway')){
+      skipped1552DecorationSlots++;
+      continue;
+    }
     if(pieces>=MAX_PIECES)break;
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
         !(rec.heightFt>0&&rec.heightFt<2500)||!Array.isArray(rec.rings?.[0])||
@@ -316,7 +330,8 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
       if(tris===0)continue;
       roofTriangles+=tris;
       pieces++;used=true;
-      if(pieces<66&&pieces%3===0){
+      const boxOrdinal=pieces+skipped1552DecorationSlots;
+      if(boxOrdinal<66&&boxOrdinal%3===0){
         const cx=ring.reduce((n,p)=>n+p[0],0)/ring.length,
           cz=ring.reduce((n,p)=>n+p[1],0)/ring.length;
         box(cx,top+.27,cz,.32,.54,.33,[.35,.38,.40]);
