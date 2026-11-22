@@ -99,3 +99,23 @@ test('ABBA rejects invalid raw frame intervals even with a full sample count',()
   samples[1].intervals.length=219;
   assert.throws(()=>assessNativeGpuRuns(samples,budgets),/Insufficient/);
 });
+
+test('hardware proof must come from GPU renderer, not vendor string alone',()=>{
+  const opaque={
+    unmaskedRenderer:'ANGLE (Unknown renderer)',
+    unmaskedVendor:'Intel'
+  };
+  assert.equal(classifyHardwareRenderer(opaque).accepted,false);
+  assert.equal(classifyHardwareRenderer(hardware).accepted,true);
+});
+
+test('incomplete browser health evidence cannot be considered a GPU pass',()=>{
+  const missingErrors=abba();
+  delete missingErrors[1].pageErrors;
+  assert.throws(()=>assessNativeGpuRuns(missingErrors,budgets),/Invalid first-load/);
+  const missingContext=abba();
+  delete missingContext[1].contextLost;
+  assert.throws(()=>assessNativeGpuRuns(missingContext,budgets),/Invalid first-load/);
+  const badContext=abba();badContext[1].contextLost=true;
+  assert.throws(()=>assessNativeGpuRuns(badContext,budgets),/Invalid first-load/);
+});
