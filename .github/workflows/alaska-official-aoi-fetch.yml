@@ -6,6 +6,7 @@ on:
       - '.github/workflows/alaska-official-aoi-fetch.yml'
       - 'tools/alaska/audit_landfire_aoi.py'
       - 'tools/alaska/probe_noaa_shoreline.py'
+      - 'tools/alaska/clip_noaa_cusp.py'
   workflow_dispatch:
 
 permissions:
@@ -15,11 +16,11 @@ jobs:
   fetch-official-gis:
     if: github.repository == 'bhu103-data/patrol-flight-sim'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - name: Install GIS audit library
-        run: python3 -m pip install --disable-pip-version-check numpy rasterio
+        run: python3 -m pip install --disable-pip-version-check numpy rasterio fiona pyproj shapely
       - name: Fetch only bounded official USGS/NOAA samples (no repository changes)
         shell: bash
         run: |
@@ -125,6 +126,8 @@ jobs:
             --output alaska-official-aoi-results/qa
       - name: Discover current NOAA NGS shoreline service and Alaska CUSP headers
         run: python3 tools/alaska/probe_noaa_shoreline.py
+      - name: Download NOAA Alaska CUSP ZIP and clip Tracy Arm shoreline (QA only)
+        run: python3 tools/alaska/clip_noaa_cusp.py
       - name: Preserve downloaded samples and failure logs
         if: always()
         uses: actions/upload-artifact@v4
