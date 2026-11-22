@@ -28,7 +28,7 @@ NORTH_PER_DEGREE = (111132.92 - 559.82 * math.cos(2 * lat0) +
                     1.175 * math.cos(4 * lat0))
 CRS = "EPSG:32118"
 MAX_RINGS = 20_000
-MAX_VERTICES_PER_RING = 2_048
+MAX_VERTICES_PER_RING = 50_000
 
 
 def local_name(tag: str) -> str:
@@ -91,8 +91,8 @@ def extract():
                 if local_name(el.tag) != "Polygon":
                     continue
                 polygons_seen += 1
-                rings = extract_polygon_rings(el)
                 try:
+                    rings = extract_polygon_rings(el)
                     outer = next(r for role,r in rings if role == "exterior")
                     holes = [r for role,r in rings if role == "interior"]
                     def project(vertices):
@@ -126,7 +126,7 @@ def extract():
                         results.append({"sourcePolygonNumber":polygons_seen,
                                         "rings":rings_local,
                                         "areaSquareMeters":round(part.area,3)})
-                except (ValueError, StopIteration) as exc:
+                except (ValueError, StopIteration, OverflowError) as exc:
                     invalid += 1
                     if len(examples) < 5:
                         examples.append(str(exc))
