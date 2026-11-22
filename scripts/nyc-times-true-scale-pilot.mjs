@@ -47,7 +47,7 @@ export function buildingsInMeters(snapshot){
     if(!Array.isArray(f.rings)||f.rings.length!==1)continue;
     const ring=f.rings[0];
     if(!Array.isArray(ring)||ring.length<4||ring.length>100)continue;
-    const open=ring.slice(0,-1),coords=open.map(toLocalMeters);
+    const open=ring.slice(0,-1),coords=open.map(p=>toLocalMeters(p));
     if(coords.length<3||area(coords)<2)continue;
     ids.add(f.fid);
     out.push({fid:f.fid,heightMeters:round(f.heightFt*.3048,2),
@@ -134,7 +134,7 @@ export function makeSvg(buildings,roads){
     p[0]+','+(-p[1])).join(' ')+'" fill="#b0b5bc" fill-opacity=".78" stroke="#606a72" stroke-width=".55"/>').join('\n');
   const lines=roads.flatMap(r=>r.lines.map(line=>
     '<polyline points="'+line.map(p=>p[0]+','+(-p[1])).join(' ')+
-    '" stroke="'+(r.paperStreet?'#d98a57':'#55c8f5')+
+    '" stroke="'+(/^(y|yes|true|1)$/i.test(r.paperStreet)?'#d98a57':'#55c8f5')+
     '" stroke-width="2" stroke-linejoin="round" fill="none"/>')).join('\n');
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+
     [round(left-pad),round(-top-pad),round(width),round(height)].join(' ')+
