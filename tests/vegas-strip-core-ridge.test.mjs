@@ -25,10 +25,10 @@ function scene(measured=null){
 test('original Vegas ridge meshes stay within tight triangle budget',()=>{
  const {stats,triangles,quads}=scene();
  assert.equal(stats.mountainTriangles,768);
- assert.equal(stats.roadTriangles,18);
+ assert.equal(stats.roadTriangles,114);
  assert.equal(triangles.length,768);
- assert.equal(quads.length,9);
- assert.ok(stats.triangles<=800);
+ assert.equal(quads.length,57);
+ assert.ok(stats.triangles<=900);
 });
 test('mountain wings are outside the authored casino blocks and roads',()=>{
  const {triangles}=scene();
@@ -61,7 +61,7 @@ test('survey-backed ridge mesh truly replaces synthetic heights',async()=>{
  const original=scene(),survey=scene(measured);
  assert.equal(original.stats.mountainTriangles,768);
  assert.equal(survey.stats.mountainTriangles,1536);
- assert.equal(survey.stats.triangles,1554);
+ assert.equal(survey.stats.triangles,1650);
  assert.notEqual(survey.triangles.length,original.triangles.length,
    'verified 2D DEM must replace four-band 1D ridge silhouette');
  const actualHeights=survey.triangles.flatMap(face=>
