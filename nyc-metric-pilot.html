@@ -23,16 +23,18 @@ a{color:#9ac8ff}strong{color:#ffe3aa}
 <h1>Times Square · 1:1 米制建筑样板</h1>
 <p>纽约官方建筑足迹 + HEIGHTROOF 屋顶高度，统一 WGS84 → 本地 ENU 米制坐标。无游戏原有的 0.32× 压缩。</p>
 <p id="status" role="status">正在加载本地官方数据快照……</p>
+<p id="streetstatus" role="status">官方 CSCL 道路中心线数据：加载中……</p>
 <button id="oblique">斜视视角</button><button id="top">正俯视（北朝上）</button>
 <button id="reset">重置视角</button>
-<p><small>鼠标拖拽旋转 · 滚轮缩放 · 每条灰线间隔 50 米（仅标尺，不代表真实道路）</small></p>
+<p><small>鼠标拖拽旋转 · 滚轮缩放 · 灰色 50 米标尺格网 · <b style="color:#efab50">橙色线 = 纽约市官方道路中心线，不代表道路宽度或路缘</b></small></p>
 <p><strong>注意：这是可核查的建筑几何试验视图，不是纽约地图正式替换。</strong></p>
-<p><small>未接入官方道路宽度/路缘石、建筑入口和真实立面、地面高程、地铁、灯光广告、真实 GPU 帧耗或飞控碰撞。平坦零高度基座为示意。</small></p>
+<p><small>尚无经核准的路面及路缘几何、建筑入口和真实立面、地面高程、地铁、广告安装结构、真实 GPU 帧耗或飞控碰撞。CSCL 并非路缘测绘图。平坦零高度基座为示意。</small></p>
 <p><small>数据：<a href="https://data.cityofnewyork.us/d/3g6p-4u5s" target="_blank" rel="noopener">NYC Open Data Building Footprints</a> · 源快照 2026-11-20。</small></p>
 </aside>
 <footer>坐标基准：One Times Square 约 WGS84 (−73.9864883, 40.756421) · x=东 / −z=北 / y=高度米。墙体为中性占位色，不是实测材质。</footer>
 <script type="module">
 import {buildMetricFootprints} from './assets/nyc/nyc-metric-footprints.mjs';
+import {buildMetricCenterlines} from './assets/nyc/nyc-metric-centerlines.mjs';
 const canvas=document.getElementById('scene'),status=document.getElementById('status');
 const gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){status.textContent='WebGL2 不可用：不能渲染米制试验场景。';
@@ -92,7 +94,8 @@ function perspective(fov,aspect,near,far){
  return new Float32Array([t/aspect,0,0,0,0,t,0,0,0,0,(far+near)*n,-1,
    0,0,2*far*near*n,0]);
 }
-let mesh=null,grid=null,cam={yaw:.65,pitch:.72,distance:740,target:[0,75,-190]};
+let mesh=null,grid=null,roads=null,streetStats=null,
+  cam={yaw:.65,pitch:.72,distance:740,target:[0,75,-190]};
 const gridSize=50;
 function makeGrid(bounds){
  const [xmin,zmin,xmax,zmax]=bounds,pad=60;
@@ -123,6 +126,10 @@ function render(){
  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
  gl.bufferData(gl.ARRAY_BUFFER,grid,gl.STATIC_DRAW);
  gl.drawArrays(gl.LINES,0,grid.length/9);
+ if(roads){
+   gl.bufferData(gl.ARRAY_BUFFER,roads,gl.STATIC_DRAW);
+   gl.drawArrays(gl.LINES,0,roads.length/9);
+ }
  gl.bufferData(gl.ARRAY_BUFFER,mesh,gl.STATIC_DRAW);
  gl.drawArrays(gl.TRIANGLES,0,mesh.length/9);
  requestAnimationFrame(render);
@@ -134,11 +141,31 @@ try{
  const scene=buildMetricFootprints(asset);
  if(scene.stats.builtFeatures<100)throw Error('Unexpectedly low source footprint count');
  mesh=scene.vertexBuffer;grid=makeGrid(scene.stats.bounds);
+ // This file is created only by the explicit, bounded official CSCL fetch.
+ // No invented roads or live hidden Google/OSM network call from the viewer.
+ try{
+   const streetsResponse=await fetch('./artifacts/nyc-metric-pilot/cscl-centerlines.json',
+     {cache:'no-store'});
+   if(!streetsResponse.ok)throw Error('missing official centerline snapshot');
+   const officialStreets=await streetsResponse.json();
+   const layer=buildMetricCenterlines(officialStreets);
+   roads=layer.vertexBuffer;streetStats=layer.stats;
+   document.getElementById('streetstatus').textContent=
+     'NYC CSCL 实际道路中心线 '+streetStats.records+
+     ' 条 · '+streetStats.uniqueStreetNames+
+     ' 种街名 · 长度 '+streetStats.totalLengthMetres.toFixed(1)+
+     ' 米（不是测绘路缘）';
+ }catch(error){
+   document.getElementById('streetstatus').textContent=
+     '官方道路中心线尚未验证：'+error.message+
+     '。请先运行 node tools/nyc/fetch-times-square-cscl.mjs';
+   console.warn('NYC pilot roadway layer unavailable; do not claim road fidelity:',error.message);
+ }
  const [minX,minZ,maxX,maxZ]=scene.stats.bounds;
  cam.target=[(minX+maxX)/2,75,(minZ+maxZ)/2];
  cam.distance=Math.max(maxX-minX,maxZ-minZ,400)*1.25;
  window.PatrolNycMetricQA=()=>({
-   stats:scene.stats,rejections:scene.rejections,
+   stats:scene.stats,rejections:scene.rejections,streetStats,
    origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
    webglLost:gl.isContextLost(),camera:cam
  });
