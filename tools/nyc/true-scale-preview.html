@@ -26,7 +26,7 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
 <h1>时代广场 · 官方测绘形体预览</h1>
 <p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
 <p id="status">正在读取官方建筑与道路数据...</p>
-<p>灰色：官方建筑足迹按原始米制屋顶高度挤出；蓝色：官方道路中心线；无伪造车道和立面。</p>
+<p>灰色：官方建筑体量；蓝线：官方道路中心线；灰绿色带：仅根据有记录的官方街道用地宽度绘制的范围提示，<strong>不是实际铺装路面或车道</strong>。无真实外立面。</p>
 <small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
 </aside>
 <section id="flightPanel">
@@ -41,6 +41,7 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
 <script type="module">
 import {spawnOnVerifiedStreet,advanceMetricFlight,metricFlightTarget,
   hitsBuilding} from './flight.mjs';
+import {buildOfficialStreetWidthEnvelopes} from './street-envelope.mjs';
 const status=document.querySelector('#status');
 const canvas=document.querySelector('#scene');
 const gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
@@ -219,6 +220,8 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
+  const envelopes=buildOfficialStreetWidthEnvelopes(source);
+  const rowSurface=meshBuffer(envelopes.positions,envelopes.colors,envelopes.normals);
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
   gl.enable(gl.DEPTH_TEST);
@@ -250,6 +253,7 @@ try{
     const cameraTarget=flyMode?
       metricFlightTarget(flyState.position,flyState.yaw,flyState.pitch):target;
     gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,cameraTarget)));
+    gl.bindVertexArray(rowSurface.vao);gl.drawArrays(gl.TRIANGLES,0,rowSurface.count);
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
     gl.bindVertexArray(null);
@@ -258,6 +262,7 @@ try{
   window.geoPilotQA={ready:true,projection:'WGS84-local-east-north-metres',
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
     buildingTriangles:triCount,streetVertices:streets.count,
+    streetWidthEnvelopes:envelopes.stats,
     sourceRoadSpawn:flyOrigin,
     metricBounds:metreBounds.slice(),
     getFlight:()=>({mode:flyMode,position:flyState?.position.slice(),
