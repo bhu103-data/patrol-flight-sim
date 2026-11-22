@@ -1,0 +1,40 @@
+name: Alaska NOAA CUSP indexed shoreline QA
+
+on:
+  push:
+    branches:
+      - codex/alaska-official-gis-aoi-fetch-20261122
+    paths:
+      - '.github/workflows/alaska-noaa-cusp-index.yml'
+      - 'tools/alaska/fetch_noaa_cusp_index.py'
+  pull_request:
+    paths:
+      - '.github/workflows/alaska-noaa-cusp-index.yml'
+      - 'tools/alaska/fetch_noaa_cusp_index.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-cusp-index:
+    if: github.repository == 'bhu103-data/patrol-flight-sim'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install small MVT decoder
+        run: python -m pip install --only-binary=:all: mapbox-vector-tile==2.2.0
+      - name: Request NOAA index tiles around Tracy Arm and bounded official ZIPs
+        run: python tools/alaska/fetch_noaa_cusp_index.py
+      - name: Preserve official index responses and download report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-noaa-cusp-index-qa
+          path: alaska-official-aoi-results/noaa-cusp-index/
+          if-no-files-found: warn
+          retention-days: 7

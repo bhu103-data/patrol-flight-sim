@@ -1,0 +1,142 @@
+name: Alaska Tracy Arm official GIS sample fetch (isolated)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/alaska-official-aoi-fetch.yml'
+      - 'tools/alaska/audit_landfire_aoi.py'
+      - 'tools/alaska/probe_noaa_shoreline.py'
+      - 'tools/alaska/clip_noaa_cusp.py'
+      - 'tools/alaska/fetch_noaa_cusp_index.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-official-gis:
+    if: github.repository == 'bhu103-data/patrol-flight-sim'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install GIS audit library
+        run: python3 -m pip install --disable-pip-version-check --only-binary=:all: numpy rasterio pyproj shapely mapbox-vector-tile
+      - name: Fetch only bounded official USGS/NOAA samples (no repository changes)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import hashlib
+          import json
+          import pathlib
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          out = pathlib.Path('alaska-official-aoi-results')
+          out.mkdir(exist_ok=True)
+          bbox = '1205323.15,1062176.43,1215116.00,1072196.72'
+          report = {
+              'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'aoi_wgs84': [-133.265, 57.851, -133.135, 57.923],
+              'bbox_alaska_albers_epsg3338': [float(x) for x in bbox.split(',')],
+              'license': {'LANDFIRE': 'U.S. public domain', 'NOAA H13007': 'CC0-1.0'},
+              'results': {}, 'errors': {},
+              'warning': 'NOAA H13007 backscatter TIFF is NOT a bathymetric elevation grid.',
+          }
+          allowed_hosts = {'lfps.usgs.gov', 'edcintl.cr.usgs.gov',
+                           'geodesy.noaa.gov', 'data.ngdc.noaa.gov'}
+
+          def fetch(label, url, max_bytes, kind):
+              try:
+                  req = urllib.request.Request(url, headers={
+                      'User-Agent': 'PATROL-Alaska-public-GIS-audit/1.0',
+                      'Accept': 'application/octet-stream,application/json,application/xml,*/*'})
+                  with urllib.request.urlopen(req, timeout=32) as response:
+                      host = urllib.parse.urlsplit(response.geturl()).hostname
+                      if host not in allowed_hosts or not response.geturl().startswith('https://'):
+                          raise ValueError('Disallowed redirect host: ' + str(host))
+                      n = response.headers.get('Content-Length')
+                      if n and int(n) > max_bytes:
+                          raise ValueError('Reported response too large: ' + str(n))
+                      data = response.read(max_bytes + 1)
+                      if len(data) > max_bytes:
+                          raise ValueError('Response exceeds size cap')
+                  if kind == 'tiff' and data[:4] not in (b'II*\x00', b'MM\x00*', b'II+\x00', b'MM\x00+'):
+                      raise ValueError('Not a TIFF: ' + repr(data[:100]))
+                  if kind == 'json':
+                      payload = json.loads(data)
+                      if 'error' in payload:
+                          raise ValueError('ArcGIS error: ' + repr(payload['error'])[:200])
+                  if kind == 'xml' and b'xml' not in data[:150].lower() and b'Capabilities' not in data[:500]:
+                      raise ValueError('Unexpected capabilities header: ' + repr(data[:100]))
+                  if kind == 'ascii' and (b'<html' in data[:200].lower() or not data.strip()):
+                      raise ValueError('Unexpected empty/HTML sample')
+                  ext = {'tiff': '.tif', 'json': '.json', 'xml': '.xml', 'ascii': '.txt'}[kind]
+                  (out / (label + ext)).write_bytes(data)
+                  report['results'][label] = {
+                      'url': url, 'final_bytes': len(data),
+                      'sha256': hashlib.sha256(data).hexdigest(),
+                      'kind': kind, 'header_hex': data[:8].hex(),
+                  }
+                  print('OK', label, len(data), 'bytes')
+              except Exception as exc:
+                  report['errors'][label] = type(exc).__name__ + ': ' + str(exc)[:400]
+                  print('FAIL', label, report['errors'][label])
+
+          for layer in ('EVT', 'EVC', 'EVH'):
+              base = ('https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2025/'
+                      'LF2025_' + layer + '_AK/ImageServer')
+              fetch('LANDFIRE_' + layer + '_metadata', base + '?f=pjson', 500_000, 'json')
+              params = {
+                  'f': 'image', 'bbox': bbox, 'bboxSR': '3338', 'imageSR': '3338',
+                  'size': '256,256', 'format': 'tiff', 'pixelType': 'S16',
+                  'interpolation': 'RSP_NearestNeighbor',
+              }
+              fetch('LANDFIRE_' + layer + '_AOI', base + '/exportImage?'
+                    + urllib.parse.urlencode(params), 8_000_000, 'tiff')
+
+          fetch('NOAA_H13007_bottom_samples',
+                'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
+                'H12001-H14000/H13007/Bottom_Samples/H13007_BottomSamples.ascii',
+                30_000, 'ascii')
+          fetch('NOAA_H13007_backscatter_3m',
+                'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
+                'H12001-H14000/H13007/MBAB/H13007_MBAB_3m_2807_200kHz_6of7.tiff',
+                3_000_000, 'tiff')
+          fetch('LANDFIRE_WCS_capabilities',
+                'https://edcintl.cr.usgs.gov/geoserver/landfire_wcs/'
+                'ak_2025/wcs?service=WCS&version=1.0.0&request=GetCapabilities',
+                4_000_000, 'xml')
+          fetch('NOAA_WFS_capabilities',
+                'https://geodesy.noaa.gov/GeoServer/NSDE/ows?'
+                'service=WFS&version=2.0.0&request=GetCapabilities',
+                4_000_000, 'xml')
+          (out / 'fetch-report.json').write_text(json.dumps(report, indent=2) + '\n')
+          real_tiffs = [key for key in report['results'] if key.endswith('_AOI') or key == 'NOAA_H13007_backscatter_3m']
+          print('Real TIFF count:', len(real_tiffs))
+          if not real_tiffs:
+              raise SystemExit('No real official TIFF could be fetched; inspect artifact report')
+          PY
+      - name: Reconcile real LANDFIRE vegetation with PATROL USGS DEM
+        run: |
+          python3 tools/alaska/audit_landfire_aoi.py \
+            --input alaska-official-aoi-results \
+            --dem assets/alaska/tracy-arm-3dep.json \
+            --output alaska-official-aoi-results/qa
+      - name: Discover current NOAA NGS shoreline service and Alaska CUSP headers
+        run: python3 tools/alaska/probe_noaa_shoreline.py
+      - name: Probe NOAA CUSP local vector-tile index and download verified small ZIPs
+        run: python3 tools/alaska/fetch_noaa_cusp_index.py
+      - name: Preserve downloaded samples and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-tracy-arm-official-gis-samples
+          path: alaska-official-aoi-results/
+          if-no-files-found: warn
+          retention-days: 7
