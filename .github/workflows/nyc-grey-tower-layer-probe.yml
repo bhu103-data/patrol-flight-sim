@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "assets/nyc/nyc-gis-infill.js"
+      - "assets/nyc/times-square-footprints.json"
       - "scripts/nyc-grey-tower-layer-probe.mjs"
       - "tests/nyc-grey-tower-layer-probe.test.mjs"
       - ".github/workflows/nyc-grey-tower-layer-probe.yml"

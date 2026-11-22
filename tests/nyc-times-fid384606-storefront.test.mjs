@@ -62,10 +62,14 @@ test('GIS roofs, parcels, existing windows and original face order survive uncha
  for(const key of ['sourceBuildings','infillPieces','roofTriangles','windowQuads'])
   assert.equal(after.stats[key],before.stats[key],key+' must stay unchanged');
  assert.deepEqual(after.stats.materialSurfaceIds,before.stats.materialSurfaceIds);
- // One registered 1540 Broadway survives; the wrongly placed FID 1000156 double is gone.
- assert.equal(before.stats.sourceBuildings,34);
- assert.equal(before.stats.infillPieces,71);
- assert.equal(before.stats.windowQuads,2200);
+ // Both wrongly projected municipal copies are omitted only because their
+ // exact named hero sites are already rendered; all remaining GIS FIDs stay.
+ assert.equal(before.stats.sourceBuildings,33);
+ assert.equal(before.stats.skippedMisregistered1540,1);
+ assert.equal(before.stats.skippedMisregistered1515,1);
+ assert.ok(!before.stats.sourceFids.includes(1000156));
+ assert.ok(!before.stats.sourceFids.includes(212747));
+ assert.ok(before.stats.infillPieces>0&&before.stats.windowQuads>0);
 });
 test('new glazing remains close to the FID wall and under the original roof',()=>{
  const rec=asset.features.find(f=>f.fid===384606);

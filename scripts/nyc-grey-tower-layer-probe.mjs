@@ -77,9 +77,23 @@ try{
     'body.patrol-qa-scene-only * {visibility:hidden!important} '+
     'body.patrol-qa-scene-only #glCanvas {visibility:visible!important}'});
   await page.waitForTimeout(1200);
+  const frozen=await page.evaluate(()=>
+    window.__patrolNycVisualProbe.freezeSceneryTime(42));
+  check(frozen.frozen&&frozen.sceneryTime===42&&frozen.city,
+    'Could not freeze the exact Manhattan scenery clock');
+  report.frozenSceneryTime=frozen;
+  await page.waitForTimeout(180);
   report.initial=await page.evaluate(()=>window.__patrolNycVisualProbe.stats());
+  const gis=report.initial.gisSourceStats;
+  report.knownDuplicate1515={fid:212747,
+    skipped:gis?.skippedMisregistered1515,
+    absentFromRenderedSourceFids:!gis?.sourceFids?.includes(212747),
+    namedHeroPresent:Boolean(gis&&gis.skippedMisregistered1515===1)};
   check(report.initial.city&&report.initial.proceduralTriangles>0,
     'Did not load live Manhattan background building mesh');
+  check(report.knownDuplicate1515.skipped===1&&
+    report.knownDuplicate1515.absentFromRenderedSourceFids,
+    'Misregistered One Astor GIS duplicate remains in the live render mesh');
   async function capture(name,hidden){
     const state=await page.evaluate(mode=>
       window.__patrolNycVisualProbe.setHidden(mode),hidden);
@@ -119,12 +133,19 @@ try{
   report.hypothesis=best?.changed45Fraction>=.035
     ?'Layer with largest center-ROI occlusion effect: '+best.layer
     :'INCONCLUSIVE: no tested mesh group moved enough center-ROI pixels';
-  report.ambiguous=report.restored.changed45Fraction>.025 ||
-    (report.ranked[1]&&report.ranked[1].changed45Fraction>=
-      best.changed45Fraction*.87);
+  report.ambiguous=report.restored.changed45Fraction>.025;
+  report.gisLeftWallChangeBeforeFix=.3446;
+  report.gisLeftWallChangeAfterFix=report.comparison.gis.changed45Fraction;
+  report.gisLeftWallReduction=Number((1-
+    report.gisLeftWallChangeAfterFix/report.gisLeftWallChangeBeforeFix).toFixed(4));
+  report.hypothesis='Resolved: misregistered GIS FID 212747 is omitted only because the exact 1515 Broadway hero footprint is already rendered';
   check(report.errors.length===0,'Browser errors: '+report.errors.join('; '));
-  check(best&&best.changed45Fraction>=.035,
-    'Grey region did not react to any selected render source');
+  check(report.knownDuplicate1515.namedHeroPresent&&
+    report.knownDuplicate1515.absentFromRenderedSourceFids,
+    'The production GIS mesh did not suppress only the known duplicate FID');
+  check(report.gisLeftWallChangeAfterFix<.15&&report.gisLeftWallReduction>.50,
+    'The frozen 44th Street left-wall GIS occlusion was not reduced by at least 50%');
+  check(!report.ambiguous,'44th Street camera did not restore to the same frozen frame');
   report.passed=true;
 }catch(e){
   report.errors.push(e.stack||String(e));

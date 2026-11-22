@@ -94,16 +94,26 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
     shopfrontFaces=0,shopfrontQuads=0;
   const sourceFids=new Set();
-  // FID 1000156 is already 1540 Broadway in the authored landmark layer.
-  // The separate GIS projection places the same municipal building at
-  // x≈16..33/z≈17..28 instead of its protected hand-authored x=-15/z=6.
-  // That duplicate is the large grey occluder in the 44th Street camera.
-  // Do not suppress the official GIS footprint in source-only mode.
+  // Two exact municipal FIDs are already drawn by the named Times Square
+  // hero layer. The independent geoToGame transform misregisters them:
+  // 1540 Broadway FID 1000156 -> x≈14.55..36.89 / z≈15.33..37.13,
+  // instead of its authored site x=-15/z=6.
+  // 1515 Broadway / One Astor Plaza FID 212747 -> x≈-21.76..9.50 /
+  // z≈-13.03..8.29, instead of its authored site x=39/z=6.
+  // The latter was confirmed by frozen 44th Street framebuffer A/B:
+  // removing only FID 212747 changes 24.56% of the left-wall ROI; the next
+  // candidate changes 2.35%. Omit only the misplaced GIS duplicate when the
+  // exact matching hero building is present; never delete its source record.
+  // Source-only mode and scenes without the named hero building are unchanged.
   const named1540AlreadyRendered=protectedSites.some(site=>
     site.name==='1540 Broadway' && Math.abs(site.x+15)<.01 &&
     Math.abs(site.z-6)<.01 && Math.abs(site.w-13)<.01 &&
     Math.abs(site.d-10)<.01);
-  let skippedMisregistered1540=0;
+  const named1515AlreadyRendered=protectedSites.some(site=>
+    site.name==='1515 Broadway' && Math.abs(site.x-39)<.01 &&
+    Math.abs(site.z-6)<.01 && Math.abs(site.w-15)<.01 &&
+    Math.abs(site.d-10)<.01);
+  let skippedMisregistered1540=0,skippedMisregistered1515=0;
   // Opt-in geometry-only architectural QA. Defaults to the previous scene.
   const pilotFids=new Set();
   let pilotFacades=0,pilotWindows=0,pilotQuads=0;
@@ -117,6 +127,10 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     if(pieces>=MAX_PIECES)break;
     if(rec.fid===1000156 && named1540AlreadyRendered){
       skippedMisregistered1540++;
+      continue;
+    }
+    if(rec.fid===212747 && named1515AlreadyRendered){
+      skippedMisregistered1515++;
       continue;
     }
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
@@ -361,7 +375,8 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
-    skippedMisregistered1540,
+    skippedMisregistered1540,skippedMisregistered1515,
+    sourceFids:[...sourceFids],
     recessedPilot:{active:typeof recessedFacade==='function',
       facades:pilotFacades,windows:pilotWindows,quads:pilotQuads,
       sourceFids:[...pilotFids],maximumFacades:28,maximumWindows:280,

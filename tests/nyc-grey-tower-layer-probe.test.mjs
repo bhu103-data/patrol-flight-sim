@@ -11,6 +11,9 @@ test('debug draw omission is explicitly opt-in and NYC-only',()=>{
   assert.match(html,/if\(nycVisualProbeEnabled\)\{\s*const groups=/);
   assert.match(html,/if\(!groups\.includes\(group\)\)throw Error/);
   assert.match(html,/window\.__patrolNycVisualProbe=\{/);
+  assert.match(html,/freezeSceneryTime\(value\)/);
+  assert.match(html,/nycGisSourceStats=stats/);
+  assert.match(html,/gisSourceStats:nycGisSourceStats/);
   assert.doesNotMatch(html,/new URLSearchParams\(location\.search\)\.get\('nycVisualProbe'\)!=='0'/);
 });
 test('each actual NYC mesh draw path has exactly one diagnostic layer gate',()=>{
@@ -32,6 +35,10 @@ test('probe collects true camera PNGs at a fixed viewport and restores draw stat
   assert.match(probe,/for\(const group of groups\)await capture/);
   assert.match(probe,/await capture\('44th-restored','none'\)/);
   assert.match(probe,/getContext\('webgl2'\)/);
+  assert.match(probe,/freezeSceneryTime\(42\)/);
+  assert.match(probe,/gisSourceStats/);
+  assert.match(probe,/skippedMisregistered1515/);
+  assert.match(probe,/gisLeftWallChangeAfterFix/);
   assert.match(probe,/report\.ambiguous=/);
   assert.match(probe,/report\.passed=true/);
 });
