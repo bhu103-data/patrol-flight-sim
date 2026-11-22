@@ -52,13 +52,27 @@ export async function loadAlaskaIfsar5m(manifestUrl='./assets/alaska/tracy-arm-i
     manifest.metresPerInteger!==.1||manifest.noDataInt16!==-32768||
     manifest.sourceVerticalCrs!=='EPSG:5703'||
     manifest.geoid!=='GEOID09'||
+    manifest.sourceHorizontalCrs!=='ESRI:102247'||
+    manifest.workunit!=='AK_IFSAR_Sum_L4_C353_2010'||
+    manifest.project!=='Alaska_Mid_Accuracy_DEM_Summer_2015'||
+    !Number.isFinite(manifest.collectionStart)||!Number.isFinite(manifest.collectionEnd)||
+    manifest.collectionEnd<=manifest.collectionStart||
+    manifest.coverageValidFraction!==1||
+    !(manifest.tileSeamP95Metres>0&&manifest.tileSeamP95Metres<=10)||
+    !(manifest.tileOverlapRmseMetres>=0&&manifest.tileOverlapRmseMetres<=.5)||
+    !(manifest.tileOverlapP95AbsMetres>=0&&manifest.tileOverlapP95AbsMetres<=1)||
+    manifest.sourceLicense!=='USGS 3DEP public domain'||
+    !Array.isArray(manifest.sourceTileSha256)||manifest.sourceTileSha256.length!==2||
+    !manifest.sourceTileSha256.every(x=>/^[a-f0-9]{64}$/.test(x))||
     !Array.isArray(manifest.bboxWgs84)||manifest.bboxWgs84.length!==4||
     !manifest.bboxWgs84.every(Number.isFinite)||
     !/^[a-f0-9]{64}$/.test(manifest.gzipSha256||'')||
     !/^[a-f0-9]{64}$/.test(manifest.absoluteRawSha256||''))
-  throw Error('Native IfSAR manifest failed source/datum/shape validation');
+  throw Error('Native IfSAR manifest failed source/datum/shape/coverage/seam validation');
  const manifestAbsolute=new URL(manifestUrl,document.baseURI);
  const assetUrl=new URL(manifest.assetPath,manifestAbsolute);
+ if(assetUrl.origin!==manifestAbsolute.origin)
+  throw Error('Native IfSAR asset path must remain same-origin');
  const assetResponse=await fetch(assetUrl,{cache:'force-cache'});
  if(!assetResponse.ok)throw Error('Native IfSAR compressed asset HTTP '+assetResponse.status);
  const base64=await assetResponse.text();
@@ -105,7 +119,14 @@ export async function loadAlaskaIfsar5m(manifestUrl='./assets/alaska/tracy-arm-i
   ],
   sourceElevationRangeMeters:[min,max],
   sourceTileSha256:manifest.sourceTileSha256,
-  sourceAbsoluteGridSha256:manifest.absoluteRawSha256
+  sourceAbsoluteGridSha256:manifest.absoluteRawSha256,
+  coverageValidFraction:manifest.coverageValidFraction,
+  tileSeamP95Metres:manifest.tileSeamP95Metres,
+  withinTileGradientP95Metres:manifest.withinTileGradientP95Metres,
+  tileOverlapRmseMetres:manifest.tileOverlapRmseMetres,
+  tileOverlapP95AbsMetres:manifest.tileOverlapP95AbsMetres,
+  sourceLicense:manifest.sourceLicense,
+  verticalDatumEvidence:manifest.verticalDatumEvidence
  };
  validateTracyArmRaster(dem);
  return dem;
