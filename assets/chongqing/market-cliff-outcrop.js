@@ -34,9 +34,9 @@ export function buildChongqingMarketRockOutcrop({THREE,scene,ground,pbr}){
       const bedding=Math.sin((x-268)*2.2+(z-334)*.39+
         .63*Math.sin((z-334)*.33));
       const fractured=Math.sin(x*1.73-z*.69)*Math.cos(z*.91+x*.43);
-      // 0.055 baseline clears z-fighting; at most ~0.67 m of visual relief.
+      // 0.055 baseline clears z-fighting; at most ~0.62 m of visual relief.
       // The main collision heightfield is neither edited nor displaced.
-      const lift=.055+taper*(.24+.22*bedding+.16*fractured);
+      const lift=.06+taper*(.32+.14*bedding+.10*fractured);
       const height=sampleChongqingRenderedTerrain(x,z,ground)+lift;
       vertices.push(x,height,z);
       uvs.push(x/12,z/12);offsets.push(lift);
