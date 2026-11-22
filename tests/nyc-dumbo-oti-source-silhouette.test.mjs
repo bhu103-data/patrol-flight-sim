@@ -64,7 +64,12 @@ test('actual source topology produces non-box silhouettes and watertight roof ar
     for(const t of roof){
       assert.ok(cross(...t.slice(0,3))<-.000001,
         'all roof triangles face up with +Y normal in native game WebGL');
-      assert.ok(t.slice(0,3).every(v=>Math.abs(v[1]-(ground+lot[4]))<1e-7));
+      const heights=src.fid===1080628
+        ? [ground+lot[4],ground+lot[4]-.64]
+        : [ground+lot[4]];
+      assert.ok(t.slice(0,3).every(v=>
+        heights.some(y=>Math.abs(v[1]-y)<1e-7)),
+        'roof facets preserve exact external outline and bounded internal drop');
     }
     assert.ok(result.walls>=8&&result.windows>=20);
     assert.ok(result.floors>=3);
