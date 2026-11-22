@@ -77,7 +77,7 @@ test('actual LF2025 opt-in affects exactly the expected 1024² low-coast cells',
     assert.ok(staging[i]<baseline[i],'the preview may only lower wet-class coastal terrain');
     if(baseline[i]*scale>waterY&&staging[i]*scale<=waterY)addedWet++;
   }
-  assert.equal(changed,7088,'only the public-domain LF2025 1–12m class-11 coast samples change');
+  assert.equal(changed,6428,'protect 660 low-coast pixels near C185 runway and authored harbor');
   assert.equal(addedWet,changed,'all changed samples become visibly submerged');
 });
 
