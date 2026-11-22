@@ -17,7 +17,9 @@ const newRay='reflDir.y = uManhattan ? max(reflDir.y, 0.002) : abs(reflDir.y);';
 const oldRay='reflDir.y = abs(reflDir.y);';
 const newMoon='float moonAngularRadius=uManhattan?0.00455:0.026;\n      float moonMinDot=uManhattan?0.9999895:0.99958;';
 const oldMoon='float moonAngularRadius=0.026;\n      float moonMinDot=0.99958;';
-for(const a of [newRay,newMoon,'const aspect = fboW / fboH;',
+const newCrest='if(!uManhattan)\n              waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
+const oldCrest='waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
+for(const a of [newRay,newMoon,newCrest,'const aspect = fboW / fboH;',
   '  window.PatrolSpaceBridge = {','gl.uniform1f(uWorld.time, time);'])
   ensure(prod.split(a).length===2,'Nonunique source QA anchor: '+a.slice(0,65));
 const origin=new URL(base).origin;
@@ -66,7 +68,12 @@ function instrument(src){
  '      state.sun=[...environment.sun];state.moon=[...environment.moon];',
  '      state.sunClock=skyTime.value;state.skyWeather=skyWeather.value;',
  '      state.skySeason=skySeason.value;',
- '      camPos=[...eye];camUp=[0,1,0];',
+ '      // Fixed internal FBO resolution for scientifically paired water images.
+      // The production adaptive-resolution controller is not changed.
+      if(Math.abs(resScale-0.55)>0.00001){
+        resScale=0.55;scaleCeiling=0.55;resizeTargets();
+      }
+      camPos=[...eye];camUp=[0,1,0];',
  '      // Moon close-frame looks slightly above horizon; sun/anti both use',
  '      // precisely the same 11.0-m downward angle and camera elevation.',
  '      camLook=state.facing==="moon"?',
@@ -94,8 +101,20 @@ function stats(bytes,facing){
  ensure(im.width===1280&&im.height===720&&bins.size>minBins&&
    colored>n*minVisible,
    'Empty 3D WebGL canvas '+JSON.stringify({facing,bins:bins.size,colored,n}));
+ // This camera-local ROI covers the actual water ahead of the C185;
+ // independent component ablation proved the chromatic crest contribution
+ // rather than using a subjective "more blue" or auto exposure judgment.
+ let cyan=0,whiteGlint=0,waterPixels=0;
+ for(let y=410;y<685;y++)for(let x=320;x<900;x++){
+   const p=(y*im.width+x)*4,r=im.data[p],g=im.data[p+1],b=im.data[p+2];
+   cyan+=Number(g-r>16 && b-r>16 && g>64 && b>75);
+   whiteGlint+=Number(r>200&&g>200&&b>185);
+   waterPixels++;
+ }
  return {width:im.width,height:im.height,colors:bins.size,
-   visibleFraction:colored/n,sha256:createHash('sha256').update(bytes).digest('hex')};
+   visibleFraction:colored/n,cyanWaterShare:cyan/waterPixels,
+   whiteGlintPixels:whiteGlint,waterPixels,
+   sha256:createHash('sha256').update(bytes).digest('hex')};
 }
 async function launch(mode,map='manhattan'){
  const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -106,7 +125,10 @@ async function launch(mode,map='manhattan'){
    if(res.url().includes('cessna185-floats.glb'))models.push(res.status());
  });
  const legacy=mode==='before';
- const src=legacy?prod.replace(newRay,oldRay).replace(newMoon,oldMoon):prod;
+ // Reconstruct the exact prior NYC ocean optical path only within test HTML.
+ // No color swap and no changes to the deployed source assets.
+ const src=legacy?prod.replace(newRay,oldRay).replace(newMoon,oldMoon)
+   .replace(newCrest,oldCrest):prod;
  ensure(legacy?src!==prod:true,'No legacy source for A/B');
  const html=instrument(src);
  await page.route('**/*',async route=>{
@@ -227,6 +249,9 @@ try{
    ensure(a.sameEye.every((x,i)=>Math.abs(x-b.sameEye[i])<1e-5),
      'Camera height/position differs for '+f);
    ensure(a.face===b.face,'Facing mismatch '+f);
+   ensure(a.rendererWidth===b.rendererWidth &&
+     a.rendererHeight===b.rendererHeight,
+     'Internal WebGL render resolution must match in identical cameras');
    ensure(Math.abs(a.sun[0]-b.sun[0])<1e-4 &&
      Math.abs(a.sun[1]-b.sun[1])<1e-4,'Solar vector mismatch '+f);
  }
@@ -243,6 +268,20 @@ try{
      httpErrors:scene.httpErrors});
    await scene.page.close();
  }
+ const oldSun=before.views.find(v=>v.facing==='sun').shot;
+ const newSun=after.views.find(v=>v.facing==='sun').shot;
+ report.sunwardWater={
+   beforeCyanShare:oldSun.cyanWaterShare,
+   afterCyanShare:newSun.cyanWaterShare,
+   cyanShareDropPercent:100*(1-newSun.cyanWaterShare/oldSun.cyanWaterShare),
+   oldWhiteGlintPixels:oldSun.whiteGlintPixels,
+   newWhiteGlintPixels:newSun.whiteGlintPixels,
+   note:'Source-isolated cyan crest emission removed; real GGX glint retained; fixed camera/exposure/FBO in software WebGL2'
+ };
+ ensure(oldSun.cyanWaterShare>.20&&newSun.cyanWaterShare<oldSun.cyanWaterShare*.45,
+   'Nonphysical sunward cyan emission not visibly removed '+JSON.stringify(report.sunwardWater));
+ ensure(oldSun.whiteGlintPixels>100&&newSun.whiteGlintPixels>=oldSun.whiteGlintPixels*.65,
+   'Real GGX sun glint disappeared unexpectedly '+JSON.stringify(report.sunwardWater));
  report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
 finally{
