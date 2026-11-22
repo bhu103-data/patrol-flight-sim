@@ -13,8 +13,16 @@ for lod in 0 1 2; do
   test -s "$src"
   # CLI must remove Meshopt geometry extension on write; KTX2 becomes PNG.
   gltf-transform ktxdecompress "$src" "$png_step"
-  gltf-transform dequantize "$png_step" "$output"
-  rm "$png_step"
+  mid_step="$output_dir/.ferry-lod$lod-dequantized.glb"
+  gltf-transform dequantize "$png_step" "$mid_step"
+  # Keep GPU uploads and first-load costs bounded per LOD. Textures stay
+  # embedded base-color PNG, never KTX2 because native PATROL decoder lacks it.
+  if [ "$lod" = 0 ]; then texsize=2048
+  elif [ "$lod" = 1 ]; then texsize=1024
+  else texsize=512
+  fi
+  gltf-transform resize "$mid_step" "$output" --width "$texsize" --height "$texsize"
+  rm "$png_step" "$mid_step"
   test -s "$output"
   echo "COMPLETED ferry LOD$lod: $(wc -c <"$output") bytes"
 done
