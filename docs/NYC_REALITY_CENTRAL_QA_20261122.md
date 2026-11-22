@@ -119,7 +119,7 @@ Times Square pilot; prohibit adding generic extra tower boxes as a fix.
 **No videos or rendered animations.** Browser screenshot files are static.
 
 
-## 6. Exact-head follow-up acceptance — 2026-11-22 17:xx UTC
+## 6. Exact-head follow-up acceptance — 2026-11-22
 
 ### Functional evidence is green; visual/geographic acceptance remains red
 
