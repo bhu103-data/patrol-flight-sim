@@ -53,7 +53,7 @@ permissions:
 jobs:
   brooklyn-bridgehead:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 29
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,6 +75,11 @@ jobs:
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-road-browser-smoke.mjs
+      - name: Verify actual CC0 ferry LOD near/mid/far and across maps (PR 258 only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: |
+          node --check tools/nyc/smoke_cc0_ferry_webgl.mjs
+          node tools/nyc/smoke_cc0_ferry_webgl.mjs
       - name: Upload New York WebGL screenshots and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
