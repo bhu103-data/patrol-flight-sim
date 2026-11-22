@@ -15,6 +15,7 @@ import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurf
 import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 import { buildChongqingHotpotDisplay } from './hotpot-display.js';
+import { gradeChongqingHotpotTerrain } from './hotpot-terrace-grade.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -123,7 +124,7 @@ function riverDist(x,z){
   const branch=z<18&&z>-620?Math.abs(x-branchCenter(z))-47:Infinity;
   return Math.min(main,branch);
 }
-function ground(x,z) {
+function ungradedGround(x,z) {
   const d=riverDist(x,z);
   if(d<0) return -13;
   // Rounded ledges form a stepped mountain city without abrupt discontinuous ground jumps.
@@ -139,6 +140,14 @@ function ground(x,z) {
   const cliffRamp=cliffT*cliffT*(3-2*cliffT);
   const hillside=cliffX*cliffRamp*86;
   return Math.max(8, 9+d*0.172+terraces+relief+hillside);
+}
+// Ground, roads, player collision and the GPU terrain mesh all read THIS
+// same graded surface. Do not overlay a visual-only platform that would make
+// the avatar, cars or collision disagree with the visible shop terrace.
+const HOTPOT_TERRACE_FLOOR=ungradedGround(285,253);
+function ground(x,z){
+  return gradeChongqingHotpotTerrain(
+    ungradedGround(x,z),HOTPOT_TERRACE_FLOOR,x,z);
 }
 
 const worldGeometry=new THREE.BufferGeometry();
@@ -329,6 +338,14 @@ const shopY=ground(hotpot.x,hotpot.z+28);
 const hotpotDoor={x:hotpot.x,z:hotpot.z+34,y:shopY+2.7};
 // Photo-grained dark wooden facade, not a plain terracotta cube.
 box(hotpot.x,shopY+10,hotpot.z,72,20,50,pbr.wood);
+// PATROL_CQ_HOTPOT_TERRACE_V1: thin stone skirt at the genuine building
+// footprint. Leave the uphill entrance clear; keep all lips within a small
+// external margin and entirely above the newly shared graded ground.
+box(hotpot.x,shopY+.24,hotpot.z-25.13,72.1,.48,.26,pbr.cutStone);
+for(const side of [-1,1]){
+  box(hotpot.x+side*36.08,shopY+.24,hotpot.z,.18,.48,49.8,pbr.cutStone);
+}
+
 // A physically curved dark-tile roof replaces the floating, flat 80x3x57 slab.
 // Its top remains at/below the original collision top (shopY+23.3).
 {
@@ -1378,6 +1395,14 @@ window.PatrolSpaceBridge={getState:()=>({
   signalAspect:streetBuild.snapshot().signalAspect,
   hotpotDisplayParts:hotpotDisplay.partCount,
   hotpotDisplayHeight:hotpotDisplay.topY-hotpotDisplay.groundY,
+  // Live visual QA: corner spread must agree with the actual collision
+  // heightmap and not just with a screenshot-only foundation mesh.
+  hotpotTerraceCornerSpread:(()=>{
+    const ys=[-36,36].flatMap(dx=>[-25,25].map(dz=>
+      ground(hotpot.x+dx,hotpot.z+dz)));
+    return Math.max(...ys)-Math.min(...ys);
+  })(),
+  hotpotTerraceFloor:shopY,
   renderMetrics:{
     fps:Number.isFinite(measuredFPS)?Math.round(measuredFPS*10)/10:null,
     drawCalls:renderer.info.render.calls,
