@@ -29,7 +29,7 @@
   <p class="hint">256² USGS source elevation · real east/north metres · original mountain relief · licensed CC0 photographic rock/snow/forest</p>
   <p id="status" role="status">Loading the original source DEM and building terrain…</p>
   <p class="small">W/S forward/back · A/D strafe · Q/E descend/climb · arrows or drag to look · Shift fast · R reset</p>
-  <p><a href="./index.html">Return to PATROL</a> · <a href="./tracy-arm-true-scale.html?alaskaDetail=5m">Experimental local ~5m DEM</a> · <a href="./tracy-arm-true-scale.html">Original full ~30m DEM</a></p>
+  <p><a href="./index.html">Return to PATROL</a> · <a href="./tracy-arm-true-scale.html?alaskaDetail=5m">Experimental local ~5m DEM</a> · <a href="./tracy-arm-true-scale.html">Corrected full USGS source grid</a></p>
 </div>
 <div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed shoreline, orthoimagery or verified vertical datum. Local Poly Haven CC0 PBR atlas is photographic but not an on-site scan.</div>
 <script type="module">
@@ -318,20 +318,45 @@ async function boot(){
   if(!response.ok)throw Error('Bundled USGS DEM unavailable: HTTP '+response.status);
   const payload=await response.json();
   validateTracyArmRaster(payload);
-  const coarse={...payload,...decodeAlaskaDEM(payload)};
+  const coarseRaw={...payload,...decodeAlaskaDEM(payload)};
+  // The historic 256² ArcGIS request omitted adjustAspectRatio=false.
+  // USGS f=json ACTUALLY returned a latitude-EXPANDED WGS84 extent:
+  // [-133.265,57.822,-133.135,57.952], NOT the requested metadata bbox.
+  // Keep the old bytes intact, apply the separately verified pixel extent
+  // only to this isolated true-coordinate terrain renderer.
+  const extentResponse=await fetch('./assets/alaska/tracy-arm-3dep-actual-extent.json',
+    {cache:'force-cache'});
+  if(!extentResponse.ok)throw Error('Missing USGS actual raster georeference');
+  const extent=await extentResponse.json();
+  if(extent.format!=='patrol-usgs-arcgis-export-actual-extent-v1'||
+     extent.outputCrs!=='EPSG:4326'||
+     !Array.isArray(extent.requestedBboxWgs84)||
+     !Array.isArray(extent.actualPixelBboxWgs84)||
+     extent.requestedBboxWgs84.length!==4||
+     extent.actualPixelBboxWgs84.length!==4||
+     !extent.requestedBboxWgs84.every((v,i)=>v===payload.bbox[i])||
+     !extent.actualPixelBboxWgs84.every(Number.isFinite)||
+     !extent.serverDefaultAdjustAspectRatio)
+    throw Error('Unverified original USGS raster true pixel coordinates');
+  const correctedBbox=extent.actualPixelBboxWgs84;
+  const nativeLatCellMetres=(correctedBbox[3]-correctedBbox[1])*111320/256;
+  const coarse={...coarseRaw,bbox:correctedBbox,
+    sampleSpacingApproxMeters:[payload.sampleSpacingApproxMeters[0],
+      +nativeLatCellMetres.toFixed(3)]};
+  validateTracyArmRaster(coarse);
   dem=coarse;
-  // Both 30m and 5m modes share the SAME world origin. The 5m tile must NOT
-  // silently re-center its east/north coordinates to its own small subregion.
+  // Both 30m and 5m scenes have the same GPS-based ENU world origin;
+  // the fine tile never silently re-centers local XY to its own bbox.
   origin=sourceTileOrigin(coarse);
   if(new URLSearchParams(location.search).get('alaskaDetail')==='5m'){
     try{
       const response=await fetch('./assets/alaska/tracy-arm-five-metre-tile.json',
         {cache:'force-cache'});
       if(!response.ok)throw Error('HTTP '+response.status);
-      dem=decodeAlaskaFiveMetreTile(await response.json(),coarse);
+      dem=decodeAlaskaFiveMetreTile(await response.json(),coarseRaw);
       detailMode='source-5m-local';
     }catch(error){
-      detailWarning='5m source tile is unavailable/invalid; showing verified ~30m landscape: '+error.message;
+      detailWarning='5m source tile is unavailable/invalid; showing georeferenced original USGS source: '+error.message;
       console.warn('[PATROL] '+detailWarning);
       dem=coarse;
     }
@@ -378,9 +403,13 @@ async function boot(){
   // A wider measured fjord channel in the original south-first USGS raster.
   // Cell (170,105) is water; starting in the old route's narrow edge channel
   // blocked the camera with a nearly full-screen rock face.
-  if(coarse.heights[105*coarse.width+170]>1)
-    throw Error('Survey-source launch channel unexpectedly dry');
-  const [e,north]=rasterCellToLocalEnu(coarse,170,105,0);
+  // GPS anchor from the old REQUESTED cell-centre at (170,105), which is
+  // near the interior of our optional fine rectangle. The original TIFF
+  // data are now sampled with the CORRECTED effective server bbox.
+  const [spawnLon,spawnLat]=rasterCellWgs84(coarseRaw,170,105);
+  if(sampleSourceElevationMetres(coarse,spawnLon,spawnLat)>3)
+    throw Error('Corrected USGS source anchor unexpectedly on land');
+  const [e,north]=wgs84ToLocalEnu(spawnLon,spawnLat,0,...origin);
   spawn=[e,320,north];
   await loadLocalCC0Atlas();
   initial();
@@ -399,6 +428,7 @@ window.PatrolTrueScaleQA=()=>({
   camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
   gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array',
   detailMode,detailWarning,bbox:dem?.bbox?[...dem.bbox]:null,
+  officialSourceExtentCorrected:true,
   sourceSpacingMeters:dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
