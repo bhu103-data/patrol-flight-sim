@@ -136,3 +136,24 @@ test('top-left live FPS meter uses real rAF intervals and reports internal resol
  assert.match(script,/displayedWidth:Math\.round/);
  assert.match(script,/fpsShown:document\.getElementById\('fpsCounter'\)\?\.hidden===false/);
 });
+
+test('adaptive cloud ray budget retains high-quality 7 steps and lowers only under load',()=>{
+ const snippet=between('  function cloudStepsForScale(scale,direct){','  function resizeTargets() {');
+ const cloudStepsForScale=new Function(snippet+'return cloudStepsForScale;')();
+ assert.equal(cloudStepsForScale(1,false),7);
+ assert.equal(cloudStepsForScale(.84,false),7);
+ assert.equal(cloudStepsForScale(.76,false),5);
+ assert.equal(cloudStepsForScale(.55,false),4);
+ assert.equal(cloudStepsForScale(.9,true),4);
+ const cloud=between('      // Cumulus cloud layer below cruise altitude',
+   '      gl_FragDepth = 1.0;');
+ assert.match(source,/uniform float uCloudSteps;/);
+ assert.match(source,/gl\.uniform1f\(uWorld\.cloudSteps,cloudStepsForScale\(resScale,directRendering\)\)/);
+ assert.match(source,/cloudSteps:gl\.getUniformLocation\(worldProg,'uCloudSteps'\)/);
+ assert.match(cloud,/float steps = clamp\(uCloudSteps,4\.0,7\.0\)/);
+ assert.match(cloud,/float opticalWeight=7\.0\/steps/);
+ assert.match(cloud,/if\(float\(c\)>=steps\)break/);
+ assert.match(cloud,/opticalWeight\) \* \(1\.0 - accum\)/);
+ assert.match(cloud,/for \(int c = 0; c < 7; c\+\+\)/,
+   'keep shader static loop bound for WebGL2 portability');
+});

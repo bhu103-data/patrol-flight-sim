@@ -1584,6 +1584,7 @@ const CENTRAL_PARK_SITES=[
     uniform vec3 uMoon;
     uniform vec4 uAtmosphere;
     uniform vec4 uClimate;
+    uniform float uCloudSteps;
     vec3 sunDirection() { return uSun; }
     const float WATER_H = 12.2;
     uniform float uTerrainScale;
@@ -2442,11 +2443,15 @@ const CENTRAL_PARK_SITES=[
           tEnter = max(0.5, tEnter);
           tExit = min(hitDist, min(tExit, 440.0));
           if (tExit > tEnter) {
-            float steps = 7.0;
+            // Under a low render-resolution budget skip redundant ray samples.
+            // Optical depth is renormalized for 4/5/7 step modes.
+            float steps = clamp(uCloudSteps,4.0,7.0);
             float dt = (tExit - tEnter) / steps;
+            float opticalWeight=7.0/steps;
             float accum = 0.0;
             vec3 cloudColAccum = vec3(0.0);
             for (int c = 0; c < 7; c++) {
+              if(float(c)>=steps)break;
               float tc = tEnter + (float(c) + 0.5) * dt;
               vec3 cp = ro + rd * tc;
               float d = cloudDensity(cp.xz);
@@ -2489,7 +2494,8 @@ const CENTRAL_PARK_SITES=[
                 }
 
                 cCol = applyFog(mix(cCol*vec3(0.26,0.31,0.44),cCol,uAtmosphere.x), rd, tc);
-                float alpha = d * mix(0.25,0.72,uAtmosphere.z) * (1.0 - accum);
+                float alpha = min(0.88,d*mix(0.25,0.72,uAtmosphere.z)*
+                  opticalWeight) * (1.0 - accum);
                 cloudColAccum += cCol * alpha;
                 accum += alpha;
                 if (accum > 0.94) break;
@@ -10977,6 +10983,14 @@ const CENTRAL_PARK_SITES=[
 
   const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc || selectedMap.chongqing);
 
+  // Only simplify the volumetric cloud ray integration once resolution has
+  // already dropped; normal full-resolution flights keep all seven samples.
+  function cloudStepsForScale(scale,direct){
+    if(direct||scale<0.68)return 4;
+    if(scale<0.82)return 5;
+    return 7;
+  }
+
   function resizeTargets() {
     if(gl.isContextLost())return;
     const viewWidth = Math.max(1, window.innerWidth);
@@ -13162,6 +13176,7 @@ const CENTRAL_PARK_SITES=[
     uWorld = {
     sun:gl.getUniformLocation(worldProg,'uSun'), moon:gl.getUniformLocation(worldProg,'uMoon'),
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
+    cloudSteps:gl.getUniformLocation(worldProg,'uCloudSteps'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
@@ -14415,6 +14430,7 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
     gl.uniform4fv(uWorld.climate,environment.climate);
+    gl.uniform1f(uWorld.cloudSteps,cloudStepsForScale(resScale,directRendering));
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
