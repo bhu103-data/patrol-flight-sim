@@ -137,7 +137,44 @@ try{
         throw Error('GLB/console failure: '+JSON.stringify({responses,errors}));
       await page.evaluate(()=>document.body.classList.add('crest-only'));
       const file=root+'/nyc-water-'+report.mode+'-'+version+'.png';
-      await page.locator('#glCanvas').screenshot({path:file,animations:'disabled',timeout:90000});
+      const screenshot=await page.locator('#glCanvas').screenshot({
+        path:file,animations:'disabled',timeout:90000
+      });
+      // Quantify the same unoccluded far-left water rectangle for both images.
+      // This is a diagnostic, not a visual acceptance gate or GPU benchmark.
+      const farWater=await page.evaluate(async pngBase64=>{
+        const picture=new Image();
+        picture.src='data:image/png;base64,'+pngBase64;
+        await picture.decode();
+        const roi={x:20,y:205,width:600,height:90};
+        if(picture.naturalWidth<roi.x+roi.width ||
+           picture.naturalHeight<roi.y+roi.height)
+          throw Error('A/B screenshot too small for fixed water ROI');
+        const canvas=document.createElement('canvas');
+        canvas.width=picture.naturalWidth;canvas.height=picture.naturalHeight;
+        const ctx=canvas.getContext('2d',{willReadFrequently:true});
+        if(!ctx)throw Error('Missing 2D context for A/B image metrics');
+        ctx.drawImage(picture,0,0);
+        const pixels=ctx.getImageData(roi.x,roi.y,roi.width,roi.height).data;
+        const gray=new Float32Array(roi.width*roi.height);
+        for(let i=0;i<gray.length;i++){
+          const j=i*4;
+          gray[i]=(0.2126*pixels[j]+0.7152*pixels[j+1]+
+            0.0722*pixels[j+2])/255;
+        }
+        let vertical=0,horizontal=0,count=0;
+        for(let y=1;y<roi.height;y++)for(let x=1;x<roi.width;x++){
+          const pos=y*roi.width+x;
+          const dy=gray[pos]-gray[pos-roi.width];
+          const dx=gray[pos]-gray[pos-1];
+          vertical+=dy*dy;horizontal+=dx*dx;count++;
+        }
+        const verticalRms=Math.sqrt(vertical/count);
+        const horizontalRms=Math.sqrt(horizontal/count);
+        return {roi,verticalRms,horizontalRms,
+          stripeDirectionRatio:verticalRms/Math.max(horizontalRms,1e-9),
+          pixelsCompared:count};
+      },screenshot.toString('base64'));
       // Actual RAF pacing, not elapsed screenshot time and not GPU timestamp.
       const intervals=await page.evaluate(async()=>{
         const out=[];let previous;
@@ -149,7 +186,7 @@ try{
         return out;
       });
       const sorted=[...intervals].sort((a,b)=>a-b);
-      report.frames.push({version,file,stage,state,modelHttp:responses,
+      report.frames.push({version,file,stage,state,modelHttp:responses,farWater,
         rafP50ms:sorted[Math.floor(sorted.length*.5)],
         rafP95ms:sorted[Math.floor(sorted.length*.95)],
         rafSamples:intervals.length,gpuFrameMs:null});
@@ -162,6 +199,17 @@ try{
      Math.abs(a.stage.z-b.stage.z)>.0001 ||
      Math.abs(a.stage.yaw-b.stage.yaw)>.0001)
     throw Error('Water-start state differs between paired scenes');
+  // Independent scene loads can alter unpinned geometry/LOD; report these
+  // pixel metrics as an audit aid, never as proof of physical ocean quality.
+  const pctChange=(before,after)=>
+    before>1e-9?Number((100*(after-before)/before).toFixed(2)):null;
+  report.farWaterComparison={
+    roi:a.farWater.roi,
+    verticalRmsChangePct:pctChange(a.farWater.verticalRms,b.farWater.verticalRms),
+    stripeDirectionRatioChangePct:pctChange(
+      a.farWater.stripeDirectionRatio,b.farWater.stripeDirectionRatio),
+    note:'Diagnostic only: relative luminance gradients in fixed water pixels; not GPU time, sea-state measurement, or an automated visual pass'
+  };
   report.passed=true;
 }catch(e){report.passed=false;report.failure=String(e.stack||e);process.exitCode=1;}
 finally{
