@@ -12,6 +12,9 @@ if(baseline.status!=='passed'||candidate.status!=='passed')
 if(baseline.graphicsProfile!==candidate.graphicsProfile||
   baseline.browserChannel!==candidate.browserChannel)
   throw new Error('Baseline and candidate graphics profiles differ');
+// PNG sizes alone do not prove equivalent WebGL framebuffer resolution.
+if(baseline.qaFixedSceneScale!==0.55||candidate.qaFixedSceneScale!==0.55)
+  throw new Error('Vegas A/B must use the same QA-only 55% scene scale');
 
 const pairing=JSON.parse(await readFile(root+'/qa-camera-pairing.json','utf8'));
 if(pairing.status!=='passed'||!pairing.qaOnlyBaselineCameraOverride)
@@ -31,6 +34,12 @@ for(const name of names){
   if(!bShot||!cShot||bShot.target!==cShot.target||
     bShot.zoom!==cShot.zoom||bShot.angle!==cShot.angle)
     throw new Error('Camera mismatch: '+name);
+  if(!Array.isArray(bShot.canvasSize)||!Array.isArray(cShot.canvasSize)||
+    bShot.canvasSize.join(',')!=='704,396'||
+    cShot.canvasSize.join(',')!=='704,396')
+    throw new Error('Internal WebGL framebuffer mismatch for '+name+
+      ': baseline='+JSON.stringify(bShot.canvasSize)+
+      ' candidate='+JSON.stringify(cShot.canvasSize));
   const [ab,ac]=await Promise.all([
     readFile(root+'/baseline/'+name),readFile(root+'/candidate/'+name)
   ]);
@@ -56,6 +65,7 @@ for(const name of names){
   const diffName=name.replace(/\.png$/, '-difference.png');
   await writeFile(root+'/'+diffName,PNG.sync.write(diff));
   matches.push({name,camera:cShot.target,zoom:cShot.zoom??null,
+    pairedCanvasSize:cShot.canvasSize,
     meanRgbDelta255:Math.round(delta/samples*100)/100,
     fractionChangedAbove12:Math.round(changed/samples*10000)/10000,
     diffName});
@@ -66,6 +76,8 @@ const report={
   scope:'Vegas fixed-camera software-WebGL2 visual comparison; NOT a photorealism/GPU FPS grade',
   baselineSha:process.env.PATROL_VEGAS_BASELINE_SHA||'unknown',
   cameraWorldSpaceVerified:true,
+  rendererCanvasSizeVerified:true,
+  qaFixedSceneScale:0.55,
   scenicPosePairing:pairing.after,
   candidateSha:process.env.GITHUB_SHA||'unknown',
   graphicsProfile:candidate.graphicsProfile,
@@ -73,7 +85,7 @@ const report={
   baselineLoadMs:baseline.loadMs,candidateLoadMs:candidate.loadMs,
   baselineMeanFrameIntervalMs:baseMs,candidateMeanFrameIntervalMs:candidateMs,
   candidateOverBaselineFrameIntervalRatio:baseMs>0?candidateMs/baseMs:null,
-  confounds:'Sequential browser loads; traffic, clouds, LOD, GPU/software warmup and clock phase can differ. Delta images establish pixel change only. Run on native GPU for hardware FPS.',
+  confounds:'QA-only fixed 55% internal scene framebuffer bypasses production adaptive resolution for both captures. Sequential browser loads, traffic, clouds, LOD, software warmup and clock phase still differ. Pixel deltas establish change, not visual fidelity or native GPU FPS.',
   captures:matches
 };
 await mkdir(root,{recursive:true});
