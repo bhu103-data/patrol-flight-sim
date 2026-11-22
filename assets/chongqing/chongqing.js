@@ -867,7 +867,7 @@ function stopJoystick(e){
 }
 joystick.addEventListener('pointerdown',e=>{
   if(joystickPointer!==null)return;
-  e.preventDefault();marketDetailTarget=marketDetailCamera=null;joystickPointer=e.pointerId;
+  e.preventDefault();marketDetailTarget=marketDetailCamera=null;avatar.visible=true;joystickPointer=e.pointerId;
   joystick.setPointerCapture(e.pointerId);updateJoystick(e);
 });
 joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
@@ -964,6 +964,9 @@ function scenicView(key){
   if(!next)return false;
   marketDetailTarget=next.inspectTarget??null;
   marketDetailCamera=next.inspectCamera??null;
+  // Keep visibility in sync with the shortcut itself, even before the
+  // next low-FPS SwiftShader frame; collision/flight state is unchanged.
+  avatar.visible=!marketDetailCamera;
   state.pos.set(...next.pos);
   state.vel.set(0,0,0);
   state.flying=key!=='Digit4';
@@ -983,7 +986,7 @@ function press(key,once=false){
   if(marketDetailTarget&&['KeyW','KeyA','KeyS','KeyD','Space',
     'ControlLeft','ControlRight','ShiftLeft','ShiftRight','KeyF',
     'ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){
-    marketDetailTarget=null;marketDetailCamera=null;
+    marketDetailTarget=null;marketDetailCamera=null;avatar.visible=true;
   }
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
@@ -1006,7 +1009,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{keys.clear();touchForward=touchSideways=0;joystickPointer=null;joystickKnob.style.transform='translate(0,0)';});
-canvas.addEventListener('pointerdown',e=>{marketDetailTarget=marketDetailCamera=null;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{marketDetailTarget=marketDetailCamera=null;avatar.visible=true;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',()=>dragging=false);
 canvas.addEventListener('pointercancel',()=>dragging=false);
 canvas.addEventListener('pointermove',e=>{
@@ -1015,7 +1018,7 @@ canvas.addEventListener('pointermove',e=>{
   viewPitch=clamp(viewPitch+(e.clientY-mouseY)*.004,-.3,1.05);
   mouseX=e.clientX;mouseY=e.clientY;
 });
-canvas.addEventListener('wheel',e=>{marketDetailTarget=marketDetailCamera=null;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
+canvas.addEventListener('wheel',e=>{marketDetailTarget=marketDetailCamera=null;avatar.visible=true;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
 document.querySelectorAll('#mobile button').forEach(b=>{
   const key=b.dataset.key;
   b.addEventListener('pointerdown',e=>{e.preventDefault();press(key,true);b.setPointerCapture(e.pointerId);});
