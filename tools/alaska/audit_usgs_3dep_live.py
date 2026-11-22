@@ -79,6 +79,15 @@ def audit(dem_path: pathlib.Path, noaa_geojson: pathlib.Path, out: pathlib.Path)
         "baked_versus_live_different_pixels":int(np.count_nonzero(difference)),
         "baked_versus_live_max_absolute_delta_m":int(difference.max()),
         "baked_versus_live_mean_absolute_delta_m":round(float(difference.mean()),3),
+        # The actual PATROL worker uses measuredHeight(u,v) > 1m as the
+        # dry-land switch. This raw-cell metric is only a conservative
+        # approximation; 1024-grid bilinear interpolation may differ.
+        "runtime_water_rule": "interpolated DEM metres <= 1; NOT <=3m",
+        "runtime_dem_proxy_water_le1m_cells":int((baked<=1).sum()),
+        "runtime_dem_proxy_land_above1m_cells":int((baked>1).sum()),
+        "gis_proxy_water_1m_to_3m_difference_cells":int(((baked>1)&(baked<=3)).sum()),
+        "noaa_line_on_baked_terrain_above1m_cells":int(((baked>1)&line_mask).sum()),
+        "noaa_line_on_live_terrain_above1m_cells":int(((quantized>1)&line_mask).sum()),
         "baked_water_le3m_cells":int((baked<=3).sum()),
         "live_source_water_le3m_cells":int((quantized<=3).sum()),
         "noaa_cusp_rasterized_line_cells":int(line_mask.sum()),
@@ -86,7 +95,9 @@ def audit(dem_path: pathlib.Path, noaa_geojson: pathlib.Path, out: pathlib.Path)
         "noaa_line_on_live_terrain_above3m_cells":int(((quantized>3)&line_mask).sum()),
         "caveats":[
             "NOAA CUSP is mean high water and has 1991/2015/2017 source lines; this is NOT a 2026 real-time shore.",
-            "DEM low altitude <=3m is only a diagnostic proxy for water, not proof of actual game physics.",
+            "The actual runtime measured DEM uses >1m, plus bilinear sampling, 1024-grid resampling and RGBA8 terrain quantization.",
+            "DEM low altitude <=3m is only the earlier GIS diagnostic proxy, not the physics water threshold.",
+            "Even DEM <=1m at 256 raw-cell resolution is not an exact land/water collision map; runtime samples 1024 cells and a 25-point float envelope.",
             "Source service can update over time; pixel comparison is to the current live USGS 3DEP response.",
             "No world, shoreline or collision changes are authorized by these QA metrics."
         ]
