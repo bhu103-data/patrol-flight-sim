@@ -52,6 +52,11 @@ test('Lower Manhattan LOD relief and surveyed footprint path remain disjoint',()
   assert.match(city,/east>-185&&east<175&&north>-526&&north<-155/);
   assert.match(city,/\(\(parcelSeed>>>4\)&3\)===0/);
   assert.match(city,/addModelBox\(addQuad,x,rowY,facadeZ/);
+  // Rooftop coping is already created for all towers: do not create a
+  // second coplanar cap in the LOD1 relief path.
+  assert.doesNotMatch(city,/addModelBox\(addQuad,x,y\+h-\.16,z,capW/);
+  assert.match(city,/const setbackY=y\+h\*k/);
+  assert.match(city,/addModelBox\(addQuad,x\+offset\*w,setbackY-\.14,facadeZ/);
 });
 
 test('named Times Square facades keep one ad set, survey geometry and batched mounting quads',()=>{
