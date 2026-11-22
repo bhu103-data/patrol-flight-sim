@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: nyc-empire-cc0-import-\${{ github.event.pull_request.number }}
+  group: nyc-empire-cc0-import-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -27,9 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: \${{ github.event.pull_request.head.repo.full_name }}
-          ref: \${{ github.event.pull_request.head.ref }}
-          token: \${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -79,7 +79,7 @@ jobs:
       - name: Commit only the audited model and provenance to this draft branch
         if: success()
         env:
-          PR_HEAD_REF: \${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -92,4 +92,4 @@ jobs:
             exit 0
           fi
           git commit -m "Import audited CC0 Empire State GLB"
-          git push origin "HEAD:\${PR_HEAD_REF}"
+          git push origin "HEAD:${PR_HEAD_REF}"
