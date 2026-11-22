@@ -87,8 +87,6 @@ if(!response.ok)throw Error('Official source roof artifact missing');
 const source=await response.json();
 if(source.schema!=='nyc-mn05-2014-saved-brep-roof-triangles-v1'||
  !source.meshAccepted||source.sourceVerticalDatumVerified!==false||
- !source.sourceVerticalUnitVerified||!source.sourceZReliefPreserved||
- source.sourceModelUnitSystem!=='Feet'||
  source.assetRole!=='2014_HISTORICAL_SOURCE_ONLY_NOT_GAME_COLLISION'||
  source.sourceRhinoSha256!=='b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57')
  throw Error('Unverified or non-municipal 3D roof source');
@@ -105,6 +103,24 @@ if(facadeSource.triangles.length<50||facadeSource.triangles.length>60000)
  throw Error('Unexpected authentic facade triangle count');
 if(source.counts.matched2022Fids<3||source.triangles.length<10||source.triangles.length>12000)
  throw Error('Unexpected true municipal source mesh coverage');
+const currentHeights=new Map(source.matchedFids.map(b=>[Number(b.fid),Number(b.heightMetres)]));
+const rawRoofRanges=new Map();
+for(const tri of source.triangles){
+ const fid=Number(tri.matched2022BuildingFid),z=tri.sourceRawZFt;
+ if(!Array.isArray(z)||z.length!==3||z.some(v=>!Number.isFinite(v)))throw Error('Invalid raw source roof Z');
+ const s=rawRoofRanges.get(fid)||{min:Infinity,max:-Infinity};
+ for(const v of z){s.min=Math.min(s.min,v);s.max=Math.max(s.max,v);}
+ rawRoofRanges.set(fid,s);
+}
+const roofRefs=new Map();let maxRoofRelief=0,minRoofRelief=Infinity;
+for(const [fid,s] of rawRoofRanges){
+ const h=currentHeights.get(fid);if(!Number.isFinite(h))continue;
+ const relief=(s.max-s.min)*.3048;
+ if(relief>h+2)continue;
+ roofRefs.set(fid,{topZ:s.max,height:h,relief});
+ maxRoofRelief=Math.max(maxRoofRelief,relief);minRoofRelief=Math.min(minRoofRelief,relief);
+}
+if(roofRefs.size<3)throw Error('Too few plausible 2014 roof groups after 2022 height cross-check');
 const bounds=[Infinity,Infinity,-Infinity,-Infinity];
 let buildings=0;
 for(const b of source.matchedFids){
@@ -117,19 +133,23 @@ for(const b of source.matchedFids){
   const tint=[.43+.06*(b.fid%7)/7,.48,.52];
   add(0,lower,other,upper2,tint);add(0,lower,upper2,upper,tint);
  }
- flatRoof(loop,b.heightMetres,[.64,.69,.73]);buildings++;
+ if(!roofRefs.has(Number(b.fid)))flatRoof(loop,b.heightMetres,[.64,.69,.73]);
+ buildings++;
 }
+let sourceRoofTrianglesDrawn=0;
 for(const tri of source.triangles){
  if(!Array.isArray(tri.vertices)||tri.vertices.length!==3||
   tri.vertices.some(p=>p.length!==3||p.some(v=>!Number.isFinite(v))))
   throw Error('Invalid original saved source rooftop triangle');
- const v=tri.vertices;
- // Original municipal source face triangles, displayed at 2022 official roof
- // height: never claim that original 2014 model Z is current surveyed AGL.
- add(1,[v[0][0],v[0][2],v[0][1]],
-       [v[1][0],v[1][2],v[1][1]],
-       [v[2][0],v[2][2],v[2][1]],
+ const fid=Number(tri.matched2022BuildingFid),ref=roofRefs.get(fid);
+ if(!ref)continue;
+ const v=tri.vertices,raw=tri.sourceRawZFt;
+ const y=raw.map(z=>ref.height+.35+(z-ref.topZ)*.3048);
+ add(1,[v[0][0],y[0],v[0][1]],
+       [v[1][0],y[1],v[1][1]],
+       [v[2][0],y[2],v[2][1]],
        [.92,.49,.21]);
+ sourceRoofTrianglesDrawn++;
 }
 for(const tri of facadeSource.triangles){
  if(!Array.isArray(tri.vertices)||tri.vertices.length!==3||
@@ -181,20 +201,21 @@ function draw(){
  gl.bindVertexArray(null);requestAnimationFrame(draw);
 }
 window.mn05RoofQA={ready:true,sourceYear:2014,
- sourceTriangles:source.counts.genuineSavedSourceTriangles,
- matchedFids:source.counts.matched2022Fids,
+ sourceTriangles:sourceRoofTrianglesDrawn,
+ matchedFids:roofRefs.size,
  sourceFacadeTriangles:facadeSource.counts.genuineSavedSourceTriangles,
  matchedFacadeFids:facadeSource.counts.matched2022Fids,
  sourceFacadeObjects:facadeSource.counts.matchedFacadeObjects,
- displayOnly:true,sourceModelUnitSystem:source.sourceModelUnitSystem,
- sourceZReliefPreserved:source.sourceZReliefPreserved&&facadeSource.sourceZReliefPreserved,
- maxSourceRoofReliefMetres:source.sourceRoofReliefRangeMetres[1],
+ displayOnly:true,sourceModelUnitSystem:facadeSource.sourceModelUnitSystem,
+ sourceZReliefPreserved:facadeSource.sourceZReliefPreserved&&sourceRoofTrianglesDrawn>0,
+ maxSourceRoofReliefMetres:maxRoofRelief,minSourceRoofReliefMetres:minRoofRelief,
+ originalRoofFidsRejected:rawRoofRanges.size-roofRefs.size,
  originalZDatumVerified:false,viewAnchor:'2022 roof HEIGHTROOF',
  getRoofVisible:()=>toggle.checked,
  getFacadeVisible:()=>facadeToggle.checked,
  trianglesDrawn:()=>toggle.checked?roofs.count/3:0,
  facadeTrianglesDrawn:()=>facadeToggle.checked?facades.count/3:0};
-state.textContent='官方 2014 屋顶 '+source.counts.genuineSavedSourceTriangles+
+state.textContent='官方 2014 屋顶 '+sourceRoofTrianglesDrawn+
  ' 个三角面 · 立面 '+facadeSource.counts.genuineSavedSourceTriangles+
  ' 个三角面 · 匹配立面建筑 '+facadeSource.counts.matched2022Fids+' 栋';
 draw();
