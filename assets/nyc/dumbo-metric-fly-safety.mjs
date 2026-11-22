@@ -91,13 +91,31 @@ export function makeDumboMetricFlySafety(buildings,bounds,options={}){
       throw new TypeError('Official CSCL lines and camera focus required');
     const available=lines.filter(l=>!l.conflictFids?.length&&
       l.points?.length===2).map(l=>{
-      const a=l.points[0],b=l.points[1];
+      const a=l.points[0],b=l.points[1],dx=b[0]-a[0],dz=b[1]-a[1],
+        length=Math.hypot(dx,dz);
       const pos=[(a[0]+b[0])/2,9.5,(a[1]+b[1])/2];
-      return {pos,fid:l.physicalid,d:Math.hypot(pos[0]-focus[0],pos[2]-focus[2])};
+      return {pos,fid:l.physicalid,name:l.name,length,
+        direction:length>.01?[dx/length,dz/length]:null,
+        d:Math.hypot(pos[0]-focus[0],pos[2]-focus[2])};
     }).sort((a,b)=>a.d-b.d||a.fid-b.fid);
-    const candidate=available.find(c=>!obstacle(c.pos));
+    const candidate=available.find(c=>c.length>=8&&
+      c.direction&&!obstacle(c.pos));
     if(!candidate)throw new Error('No safe real-source street camera spawn');
+    // Aim the visual low-flight camera along the ORIGINAL CSCL segment,
+    // not arbitrarily toward the nearest building wall. Test both directions
+    // against the SAME source-building swept collision before selecting one.
+    const scored=[1,-1].map(sign=>{
+      const direction=candidate.direction.map(v=>v*sign);
+      const ahead=[candidate.pos[0]+direction[0]*30,candidate.pos[1],
+        candidate.pos[2]+direction[1]*30];
+      return {direction,openAheadMetres:sweep(candidate.pos,ahead).movedMetres};
+    });
+    const chosen=scored[0].openAheadMetres>=scored[1].openAheadMetres?
+      scored[0]:scored[1];
     return {position:candidate.pos,sourcePhysicalId:candidate.fid,
+      streetName:candidate.name,
+      headingRadians:Math.atan2(chosen.direction[0],-chosen.direction[1]),
+      openAheadMetres:chosen.openAheadMetres,
       yIsDiagnosticAGL:true,claimedSafeStreetRouting:false};
   }
   return {obstacle,sweep,sourceStreetSpawn,bounds:world,radius,roofMargin,
