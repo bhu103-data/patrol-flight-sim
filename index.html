@@ -5198,8 +5198,11 @@ const CENTRAL_PARK_SITES=[
         cityTraffic.push({kind:j?'sedan':'taxi',bridgehead:true,
           bridgeSegmentCount:CITY_STREETS[0].length-1,
           signalized:true,signalQueueSlot:j,
-          route:connector,offset:connector.total*(.18+j*.46),
-          pace:5.0+j*.6,livery:j});
+          // Equal-speed headway keeps the two bridge connector cars from
+          // overtaking a stopped vehicle after long sessions. Both retain
+          // their separate 5.5-unit signal stop/queue slots.
+          route:connector,offset:connector.total*(.18-j*.02),
+          pace:5.0,livery:j});
       }
       for (const [i,street] of CITY_STREETS.slice(0,3).entries()) {
         const route=makeTrafficRoute(street);
