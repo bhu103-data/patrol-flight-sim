@@ -4,11 +4,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 from shapely.geometry import Polygon
 from shapely.strtree import STRtree
 
+sys.path.insert(0, str(pathlib.Path("tools/nyc").resolve()))
 SCRIPT_PATH = pathlib.Path("tools/nyc/match-mn05-components-to-current-fids.py")
 SPEC = importlib.util.spec_from_file_location("mn05_current_fid_gate", SCRIPT_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
