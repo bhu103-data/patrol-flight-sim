@@ -37,6 +37,14 @@ try{
   check(report.initial.sourceStreetCount>=35,'DCM street lines not displayed');
   check(report.initial.streetSegments>=80,'Official source geometry incomplete');
   check(report.initial.metresPerWorldUnit===1,'Wrong scene geographic scale');
+  check(report.initial.coreRoadbedGeometryVerified===true&&
+    report.initial.officialRoadbedPolygons===11&&
+    report.initial.officialRoadbedIntersections===3&&
+    report.initial.officialRoadbedTriangles===207&&
+    report.initial.roadbedReferenceYear===2022,
+    'Official OTI 2022 source polygons missing from 1:1 flythrough');
+  check(report.initial.trueRoadbedVerified===false,
+    '11 central roadbed polygons are NOT a full city roadbed verification');
   check(report.initial.spawnFromOfficialStreet===true,
     'Free-flight spawn is not on an accepted official Seventh Avenue centerline');
   check(report.initial.windowVisuals>100,'No bounded facade detail');
@@ -49,6 +57,12 @@ try{
     const i=(y*png.width+x)*4;
     if(png.data[i]>65&&png.data[i+1]>70&&png.data[i+2]>75)pixels++;
   }
+  await page.locator('#aerial').click();
+  await page.waitForTimeout(350);
+  const sourceAerial=await page.locator('#scene').screenshot({
+    path:out+'/03-2022-source-roadbed-aerial.png',timeout:90000
+  });
+  await page.locator('#reset').click();
   report.visibleSamples=pixels;
   check(pixels>1000,'New NYC scene is blank or black');
   await page.keyboard.down('w');
@@ -86,6 +100,39 @@ try{
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
     'Fallback lost surveyed footprints');
+  check(report.fallback.officialRoadbedPolygons===11,
+    'Quality fallback must retain official roadbed shape');
+  // Controlled on/off comparison: same camera, same FOV, source-given
+  // building/centreline geometry, only 11 actual 2022 roadbed polygons differ.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?roadbed=off',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  report.sourceOff=await page.evaluate(()=>window.PatrolMetricFlightQA);
+  check(report.sourceOff.officialRoadbedPolygons===0&&
+    report.sourceOff.coreRoadbedGeometryVerified===false,
+    'Source polygon A/B-off view still using new official geometry');
+  check(report.sourceOff.sourceBuildingCount===report.initial.sourceBuildingCount&&
+    report.sourceOff.streetSegments===report.initial.streetSegments,
+    'Source roadbed A/B switch accidentally changed buildings or DCM routing');
+  await page.locator('#aerial').click();
+  await page.waitForTimeout(350);
+  const sourceOffAerial=await page.locator('#scene').screenshot({
+    path:out+'/04-old-invented-roadbands-aerial.png',timeout:90000
+  });
+  const a=PNG.sync.read(sourceAerial),b=PNG.sync.read(sourceOffAerial);
+  check(a.width===b.width&&a.height===b.height,
+    'A/B screenshot framebuffer sizes differ');
+  let changed=0;
+  for(let y=230;y<a.height;y+=2)for(let x=2;x<a.width;x+=2){
+    const i=(y*a.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(a.data[i+j]-b.data[i+j])))>18)
+      changed++;
+  }
+  report.aerialRoadbedDifferencePixelsOver18=changed;
+  report.aerialComparisonResolution=[a.width,a.height];
+  report.aerialComparisonNote='Identical fixed source/old aerial pose with sky/HUD excluded; pixel-difference is geometry-localization QA, not photoreal score';
+  check(changed>80,'Official roadbed core not visibly different from old invented bands: '+changed);
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
