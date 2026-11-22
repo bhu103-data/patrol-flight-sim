@@ -97,3 +97,26 @@ Expected next artifacts: valid-source/forged-source/failure/rollback JSON, 3 dis
 - **Exact browser failure**: 60 s `page.waitForFunction` timed out at **legacy rollback** because it expected a nonzero imported GLB triangle count even when `nycModels=legacy` intentionally disables ALL imports and uses procedural geometry. This was a **QA test-logic defect**, not evidence of a regression in game GLB decoding or loading. The same-triangle-count forged-GLB case had **not yet executed** at this failed head.
 - Narrow QA-only correction `6bab899a1ad88d46d6ca927e8f3242a217e59a7f`: skip waiting for an imported GLB **only** in the intentional legacy rollback branch, while still waiting for a real bundled or scenario GLB in normal/opt-in/network-failed/tampered cases. No game source/manifest/GLB change in this correction.
 - [Exact-head re-run #45039416009](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039416009) is queued at this checkpoint. **Critical negative test still pending**, as are browser PNG review and bridgehead exact-head CI. If failure reoccurs, preserve failure evidence and repair on #272 only. No merge, no manifest enable.
+
+
+## 9. Verified binary-spoof negative control (2026-11-22)
+
+**Exact child source HEAD:** `6bab899a1ad88d46d6ca927e8f3242a217e59a7f`, only three paths changed from #256 and only the test-script rollback wait changed after first CI failure. [Liberty exact-head browser & source workflow #45039416009](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039416009) **SUCCESS (both jobs)**. [Five static in-engine 1280×720 PNGs + JSON artifact #14761162927](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039416009/artifacts/14761162927) independently downloaded, JSON parsed, five unmodified PNGs visually inspected.
+
+| Tested actual Manhattan scenario | GL error | Source-tri count | Candidate-specific collider eligible | Expected result |
+| --- | --- | --- | --- | --- |
+| Default | 0 | 292 bundled | false | exact baseline scene, no new CC0 request |
+| Genuine `nycLibertyCC0=1` | 0 | 15,900 original CC0 | true | `near-cc0`, texture true, received GLB HTTP 200 |
+| `nycModels=legacy` override | 0 | 0 imported (pure procedural) | false | rollback without candidate requests |
+| Forced original GLB network failure | 0 | 292 bundled | false | safe fallback with expected failure warning |
+| **Forged same-triangle-count HTTP 200 GLB** | **0** | **292 bundled** | **false** | **runtime SHA mismatch and fallback, not candidate geometry** |
+
+The last test changed precisely one source BIN byte at offset **1504**, old value 154 → 155, while preserving GLB JSON, **913,936** bytes, and **15,900** indexed triangles; the browser served HTTP 200. The loader rejected it *before decode* with `scenario liberty: Liberty CC0 SHA-256 mismatch; retain bundled fallback`, kept 292-triangle GLB, `PatrolLibertyLodQA=null`, `sourceColliderEligible=false`, WebGL error 0. This **proves the specific forged-payload gate**; do not overinterpret it as a comprehensive cryptographic security audit of all possible malicious files.
+
+The genuine candidate runtime dimensions were **9.323031×31.3×9.323031**, camera vs aircraft distances **34.83/41.24** compressed game units, selected `near-cc0`, source-specific collider true. Measured fixed-camera ROI changed **33.72%** of thresholded sampled pixels vs bundled baseline, which is visual evidence of replacement **not** a photoreal similarity score. Initial load times (one CI environment observation): default **3810 ms**, genuine **3278 ms**, legacy **3466 ms**, network failure **3404 ms**, tampered **3246 ms**; no native-GPU P95/FPS.
+
+**Manual visual reality verdict remains FAIL:** authentic-ish CC0 sculptural mesh improves robe, torch, crown and pedestal, but the island/plaza, quay, ferry and skyline remain stylized, not 1:1 surveyed. Actual near/mid/far independent **in-game aircraft+camera** LOD snapshots not yet present; **mid/far remain unproven at runtime**, regardless of source code.
+
+The source publisher's current [library terms](https://www.innerscene.com/tools/library/terms) explicitly allow CC0 modification and redistribution, and the [item page](https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f) labels CC0, with original nominal 27.7×27.7×93m. Both disclaim survey/engineering accuracy. `liberty.enabled=false` remains unchanged.
+
+**Status at this handoff write:** source, Cosmos, Blender and liberty exact-head browser workflow passed; separate NYC bridgehead exact-head workflow `#45039416015` was still running. Do not assert 5/5 until it finishes. Draft #272 remains unmerged. Next: exact-head bridgehead result, mid/far actual view+aircraft distances, low Fort Wood sweep / hardware GPU measurements; reconcile #256 onto current #103 only after evidence approval.
