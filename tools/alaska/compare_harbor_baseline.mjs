@@ -146,7 +146,7 @@ async function capture(label,file){
     }
   });
   await page.waitForTimeout(1300);
-  await page.addStyleTag({content:
+  const qaScreenshotStyle=await page.addStyleTag({content:
     '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
   await page.screenshot({path:'artifacts/alaska-cabin-port-'+label+'-harbor.png'});
   const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
@@ -189,6 +189,11 @@ async function capture(label,file){
     firstPlayableMs,softwareRafSamples:sorted.length,
     softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
   if(label==='updated'){
+    // Restore the real game's flight-menu button before user-visible map switching.
+    // The screenshots hide #statusBar, which contains #flightMenuBtn.
+    await qaScreenshotStyle.evaluate(node=>node.remove());
+    if(!await page.locator('#flightMenuBtn').isVisible())
+      throw Error('Flight Menu remained hidden after removing QA-only screenshot CSS');
     // Alaska -> Manhattan -> Alaska, within the SAME browser tab and GL context.
     records.mapSwitch=await verifySamePageMapSwitch(page);
   }
