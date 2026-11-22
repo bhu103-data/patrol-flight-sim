@@ -44,4 +44,11 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
   assert.ok(renderer.includes('uAlaskaPhotoNormalRough'));
   assert.ok(renderer.includes('uAlaskaPhotoAlbedo'));
   assert.ok(moduleSource.includes('addTri(center,a,b,top,13)'));
+  const photoStart=renderer.indexOf('if(uAlaskaPhotoReady)',renderer.indexOf('void alaskaGlacierFace('));
+  const lift=renderer.indexOf('material=min(material*(1.0+.20*near),vec3(.95));',photoStart);
+  const photoEnd=renderer.indexOf('      }',lift);
+  assert.ok(photoStart>0 && lift>photoStart && photoEnd>lift,
+    'bounded snowcap luminance lift must occur only in photo-ready glacier shader');
+  assert.ok(renderer.slice(photoStart,lift).includes('if(vHarborSurface>12.5)'),
+    'floe-only brightness must not affect the old surface 12');
 });
