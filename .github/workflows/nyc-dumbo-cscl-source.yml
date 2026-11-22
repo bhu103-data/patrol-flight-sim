@@ -1,0 +1,63 @@
+name: NYC DUMBO official CSCL streetline source snapshot
+
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/collect_dumbo_cscl.mjs'
+      - 'assets/nyc/dumbo-cscl-official-snapshot.json'
+      - 'assets/nyc/dumbo-true-scale-geodesy.js'
+      - 'nyc-dumbo-true-scale.html'
+      - 'tests/nyc-dumbo-cscl-meter-streets.test.mjs'
+      - '.github/workflows/nyc-dumbo-cscl-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write # Only used to freeze an audited source snapshot on this isolated PR branch
+
+jobs:
+  retrieve-official-centerlines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch and validate modern NYC OTI CSCL WGS84 roads in DUMBO
+        run: node tools/nyc/collect_dumbo_cscl.mjs
+      - name: Freeze only verified source IDs to this isolated draft branch
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/nyc-dumbo-real-cscl-streets-20261122-chat' }}
+        run: |
+          # Audited first read on Nov 22 2026: 404 records / 55 official names.
+          # Changes in the live source fail closed rather than rewriting data.
+          node --input-type=module -e '
+            import {readFileSync} from "node:fs";
+            import {createHash} from "node:crypto";
+            const d=JSON.parse(readFileSync("artifacts/nyc-dumbo-cscl-source-snapshot.json"));
+            const sha=createHash("sha256").update(JSON.stringify(d.records)).digest("hex");
+            if(d.acceptedRows!==404 || d.observedNames.length!==55 ||
+              sha!=="21af6bf980db1605c7929207499d7d96066c2f71e7f8381c75036e033b5a0cb2")
+              throw Error("Source changed vs independently inspected audit; do not write branch");
+          '
+          file=assets/nyc/dumbo-cscl-official-snapshot.json
+          if test -e "$file"; then
+            echo "Frozen reviewed city snapshot already present; not updating it"
+            exit 0
+          fi
+          mkdir -p assets/nyc
+          cp artifacts/nyc-dumbo-cscl-source-snapshot.json "$file"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- "$file"
+          git commit -m "data(nyc): freeze verified 404 official 2026 CSCL DUMBO street centerlines"
+          # NEVER push main, another draft or a changed parent revision.
+          git push origin "HEAD:refs/heads/feat/nyc-dumbo-real-cscl-streets-20261122-chat"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nyc-dumbo-official-cscl-bounded-source
+          path: artifacts/nyc-dumbo-cscl-*
+          retention-days: 7
+          if-no-files-found: ignore
