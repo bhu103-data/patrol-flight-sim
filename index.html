@@ -2692,8 +2692,17 @@ const CENTRAL_PARK_SITES=[
     vec3 nyStreetReflection(vec3 worldPos,vec3 normal,vec3 toEye,
                             float road,float puddle) {
       float wet=clamp(uNyStreetWetness,0.0,1.0);
-      if (road<0.01 || wet<0.025 || uAtmosphere.x>0.86) return vec3(0.0);
       vec2 p=worldPos.xz;
+      // PATROL_NYC_BRIDGEHEAD_WET_REFLECTION_V1: daylight wet-surface
+      // soft glint in the existing Brooklyn Bridge -> DUMBO road envelope.
+      // No extra draw pass, no new atlas, no other-map or dry-road effect.
+      float bridgeWetZone=smoothstep(231.0,256.0,p.x)*
+        (1.0-smoothstep(330.0,365.0,p.x))*
+        smoothstep(-407.0,-378.0,p.y)*
+        (1.0-smoothstep(-305.0,-278.0,p.y));
+      float bridgeDetail=bridgeWetZone*step(1.5,uNyStreetQuality);
+      if(road<0.01 || wet<0.025 ||
+          (uAtmosphere.x>0.86 && bridgeDetail<0.001))return vec3(0.0);
       float view=pow(1.0-clamp(dot(normal,normalize(toEye)),0.0,1.0),2.0);
       float square=exp(-length((p-vec2(15.0,3.0))*vec2(0.025,0.013)));
       float win=exp(-length((p-vec2(-7.0,-117.0))*vec2(0.023,0.013)));
@@ -2706,7 +2715,17 @@ const CENTRAL_PARK_SITES=[
       vec3 amber=vec3(0.93,0.52,0.17)*line*win*0.58;
       vec3 lamp=manhattanSpill(worldPos,normal)*(0.3+0.7*view);
       float intensity=wet*(0.07+0.23*puddle+0.10*view)*broken*rip*road;
-      return (magenta+blue+amber+lamp)*intensity*(1.0-uAtmosphere.x*0.82);
+      vec3 oldNight=(magenta+blue+amber+lamp)*intensity*(1.0-uAtmosphere.x*0.82);
+      // Pixel-stable surface-scatter, not a fabricated building/traffic
+      // signal reflection. Broad mottling and distance fade avoid tiling
+      // sparkle in low-altitude flights; the existing night pass remains.
+      float daylight=smoothstep(0.58,0.94,uAtmosphere.x);
+      float grain=nyStreetNoise(p*0.20+vec2(13.7,51.2));
+      float nearFade=1.0-smoothstep(95.0,295.0,distance(worldPos,uEye));
+      float wetGlint=bridgeDetail*wet*road*daylight*nearFade*
+        (0.024+0.065*puddle+0.060*view)*(0.66+0.34*grain);
+      vec3 skyGlint=vec3(0.56,0.64,0.70)*wetGlint;
+      return oldNight+skyGlint;
     }
     void nyFacadeRainStreaks(inout vec3 albedo, vec3 normal) {
       if (uNyStreetQuality<1.5 || uCityFacade==false ||
