@@ -116,6 +116,40 @@ try{
       select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));
     }
   });
+  // SOURCE-OBSERVED QA GAP: the named Waterfront hotel camera is blocked by
+  // foreground box towers on this compressed city. Capture the actual open-water
+  // flight spawn *also*, before the tourist cameras; do not claim a boat is visible
+  // merely because the preset contains the word Waterfront.
+  await page.addStyleTag({content:
+    'body.central-photo *{visibility:hidden!important}'+
+    'body.central-photo #glCanvas{visibility:visible!important}'});
+  await page.waitForTimeout(1400);
+  const harborFlight=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
+  await page.evaluate(()=>document.body.classList.add('central-photo'));
+  let portBytes;
+  try{
+    portBytes=await page.locator('#glCanvas').screenshot({
+      path:OUT+'/00-harbor-spawn-airborne.png',timeout:85000,animations:'allow'});
+  }finally{
+    await page.evaluate(()=>document.body.classList.remove('central-photo'));
+  }
+  const port=PNG.sync.read(portBytes),colors=new Set();
+  let n=0,blueWaterSamples=0,nearBlack=0;
+  for(let y=0;y<port.height;y+=12)for(let x=0;x<port.width;x+=12){
+    const k=(y*port.width+x)*4,r=port.data[k],
+      g=port.data[k+1],b=port.data[k+2];
+    colors.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));n++;
+    if(b>r+10&&b>g+3)blueWaterSamples++;
+    if(r+g+b<28)nearBlack++;
+  }
+  report.harborSpawn={camera:'actual unchanged real-game airborne spawn',
+    aircraftState:harborFlight,pixels:{width:port.width,height:port.height,
+    colorBins:colors.size,waterColorFraction:+(blueWaterSamples/n).toFixed(3),
+    blackFraction:+(nearBlack/n).toFixed(3)},
+    screenshot:'00-harbor-spawn-airborne.png',
+    note:'Independent water/shoreline camera coverage. Ship identity, physical hull, berth and shore registration still require human review.'};
+  check(colors.size>30&&nearBlack/n<.94&&blueWaterSamples/n>.08,
+    'Open-water source camera is missing/blank: '+JSON.stringify(report.harborSpawn));
   await page.keyboard.press('h');
   await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
     null,{timeout:20000});
