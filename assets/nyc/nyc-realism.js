@@ -256,6 +256,9 @@ export async function loadNycRealism(gl){
   // Explicit, isolated opt-in; the production manifest stays disabled for Liberty.
   // This uses the SAME reviewed 15.9k CC0 GLB already staged in PR #103.
   const libertyCC0Pilot=options.get('nycLibertyCC0')==='1' && !useProceduralLandmarks;
+  // Source-verified #103 GLB; never authorize geometry-specific collision by
+  // filename or triangle count alone. No manifest/default enablement.
+  const libertyCC0Sha256='34ed58d06e008adcced5e60376bbcc11d675f3d4ec01434016df92d244f33225';
   const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
     // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
@@ -306,11 +309,35 @@ export async function loadNycRealism(gl){
             throw Error('GLB exceeds import limit');
           const bytes=await file.arrayBuffer();
           if(bytes.byteLength>maxBytes)throw Error('GLB exceeds import limit');
+          if(stagedLiberty){
+            // Fail closed before decoding or creating GPU objects: source
+            // collision radius bands are valid only for these exact bytes.
+            if(!globalThis.crypto?.subtle)throw Error('Secure SHA-256 unavailable');
+            const raw=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+            const digest=Array.from(new Uint8Array(raw),value=>
+              value.toString(16).padStart(2,'0')).join('');
+            if(digest!==libertyCC0Sha256)
+              throw Error('Liberty CC0 SHA-256 mismatch; retain bundled fallback');
+          }
           // Only Liberty can replace an already loaded mesh. Other downloads
           // and decodes need not wait for the independent fallback request.
           if(kind==='liberty')await modelsReady;
           if(gl.isContextLost())return;
           const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles);
+          if(stagedLiberty && (mesh.triangleCount!==15900 ||
+             !mesh.dimensions ||
+             !Number.isFinite(mesh.dimensions.height) ||
+             !Number.isFinite(mesh.dimensions.width) ||
+             !Number.isFinite(mesh.dimensions.depth) ||
+             Math.abs(mesh.dimensions.height-31.3)>0.01 ||
+             Math.abs(mesh.dimensions.width-9.323)>0.04 ||
+             Math.abs(mesh.dimensions.depth-9.323)>0.04)){
+            // Reject mismatched decoded mesh WITHOUT arming scenario collider.
+            for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
+            gl.deleteVertexArray(mesh.vao);
+            if(mesh.texture)gl.deleteTexture(mesh.texture);
+            throw Error('Liberty CC0 dimensions mismatch; retain bundled fallback');
+          }
           mesh.source='scenario';
           if(models[kind]){
             if(stagedLiberty){

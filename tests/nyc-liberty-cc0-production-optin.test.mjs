@@ -57,3 +57,24 @@ test('existing native WebGL fallback and separate map physics stay intact',()=>{
   assert.match(html,/chongqing\.html/);
   assert.match(html,/NYC_CC0_LIBERTY_LOD_V1/);
 });
+
+test('runtime opt-in fail-closes on wrong bytes BEFORE GPU decode and collider selection',()=>{
+  assert.equal(manifest.landmarks.liberty.enabled,false);
+  const digestPos=loader.indexOf("globalThis.crypto.subtle.digest('SHA-256',bytes)");
+  const decodePos=loader.indexOf('const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles)');
+  const sourcePos=loader.indexOf("mesh.source='scenario'",decodePos);
+  assert.ok(digestPos>0&&digestPos<decodePos,'GLB SHA check must precede decoder');
+  assert.ok(loader.includes(sourceSha),'must pin hash to the same CC0 GLB as source tests');
+  assert.ok(loader.includes('digest!==libertyCC0Sha256'),'wrong bytes reject not just log');
+  assert.ok(loader.includes("throw Error('Liberty CC0 SHA-256 mismatch"));
+  assert.ok(decodePos<sourcePos,'decoded dimensions must precede scenario collider tag');
+  for(const constraint of ['mesh.triangleCount!==15900',
+      'Math.abs(mesh.dimensions.height-31.3)>0.01',
+      'Math.abs(mesh.dimensions.width-9.323)>0.04',
+      'Math.abs(mesh.dimensions.depth-9.323)>0.04']){
+    const pos=loader.indexOf(constraint,decodePos);
+    assert.ok(pos>decodePos&&pos<sourcePos,'source geometry guard missing: '+constraint);
+  }
+  assert.ok(loader.includes('gl.deleteVertexArray(mesh.vao)'),
+    'dispose rejected decoded GPU geometry, not just keep unsafe tag');
+});
