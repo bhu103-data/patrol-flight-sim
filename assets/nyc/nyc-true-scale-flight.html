@@ -65,7 +65,8 @@ function program(){
     'flat out float vMaterial;',
     'void main(){vColor=aColor;vNormal=aNormal;vPosition=aPos;vMaterial=aMaterial;',
     'gl_Position=uProj*uView*vec4(aPos,1.0);}'
-  ].join('\n'));
+  ].join('
+'));
   const f=shader(gl.FRAGMENT_SHADER,[
     '#version 300 es',
     'precision highp float;',
@@ -85,7 +86,8 @@ function program(){
     'if(vMaterial>1.5)base=vColor*(.80+.20*lit);',
     'float fog=smoothstep(250.,1000.,distance(uEye,vPosition));',
     'color=vec4(mix(base,vec3(.48,.66,.76),fog*.52),1.);}'
-  ].join('\n'));
+  ].join('
+'));
   const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
   gl.deleteShader(v);gl.deleteShader(f);return p;
@@ -251,13 +253,29 @@ async function start(){
     }
   });
   const stats=geometry.counts;
-  status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+\n    ' municipal streets / '+stats.streetSegments+' source line segments · '+\n    stats.officialRoadbedPolygons+' OTI 2022 roadbed polygons · '+\n    stats.historicalRoofTriangles+' original 2014 roof triangles / '+\n    stats.historicalFacadeTriangles+' original 2014 facade triangles';
-  metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+\n    ' illustrative windows · '+stats.historicalRoofFids+' 2014 roof FIDs / '+\n    stats.historicalFacadeFids+' 2014 facade FIDs · '+stats.triangles+' triangles · '+\n    '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
+  status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
+    ' municipal streets / '+stats.streetSegments+' source line segments · '+
+    stats.officialRoadbedPolygons+' OTI 2022 roadbed polygons · '+
+    stats.historicalRoofTriangles+' original 2014 roof triangles / '+
+    stats.historicalFacadeTriangles+' original 2014 facade triangles';
+  metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
+    ' illustrative windows · '+stats.historicalRoofFids+' 2014 roof FIDs / '+
+    stats.historicalFacadeFids+' 2014 facade FIDs · '+stats.triangles+' triangles · '+
+    '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
-    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,\n    historical2014ModelImported:!!historicalMesh,\n    historical2014SourceYear:historicalMesh?.sourceVintage??null,\n    historical2014RoofTriangles:stats.historicalRoofTriangles,\n    historical2014FacadeTriangles:stats.historicalFacadeTriangles,\n    historical2014RoofFids:stats.historicalRoofFids,\n    historical2014FacadeFids:stats.historicalFacadeFids,\n    historical2014CollisionEnabled:false,\n    historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,\n    historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,
+    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
+    historical2014ModelImported:!!historicalMesh,
+    historical2014SourceYear:historicalMesh?.sourceVintage??null,
+    historical2014RoofTriangles:stats.historicalRoofTriangles,
+    historical2014FacadeTriangles:stats.historicalFacadeTriangles,
+    historical2014RoofFids:stats.historicalRoofFids,
+    historical2014FacadeFids:stats.historicalFacadeFids,
+    historical2014CollisionEnabled:false,
+    historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,
+    historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
