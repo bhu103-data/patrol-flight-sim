@@ -12,9 +12,9 @@ const hook=[
   "  window.PatrolShorePatchNearQA = () => {",
   "    if(!selectedMap.alaska)throw Error('Requires Alaska');",
   "    window.__patrolQaHold=true;",
-  "    // Changed LF2025 area: game x=111..173, z=147..213.",
-  "    // QA camera is over source DEM water at (140,100).",
-  "    const tx=140,tz=184,px=140,py=49,pz=100;",
+  "    // Changed LF2025 area: game x=96..345, z=-432..531; target x=220,z=250 is an affected low coast sample.",
+  "    // QA camera is over source DEM water at (140,250).",
+  "    const tx=220,tz=250,px=140,py=45,pz=250;",
   "    plane.pos=[px,py,pz];",
   "    plane.yaw=Math.atan2(tx-px,tz-pz);",
   "    plane.pitch=Math.atan2(15-py,Math.hypot(tx-px,tz-pz));",
@@ -42,7 +42,7 @@ const browser=await chromium.launch({
 mkdirSync('artifacts',{recursive:true});
 const out={kind:'PATROL_ALASKA_SHORE_CHANGED_SITE_FIXED_CAMERA_WEBGL2_AB',
   renderer:'actual WebGL2 on GitHub Chromium SwiftShader',
-  targetGameXZ:[140,184],cameraGame:[140,49,100],
+  targetGameXZ:[220,250],cameraGame:[140,45,250],
   cases:{},limits:[
     'Real scene captures, temporary QA-only camera hook, no production source mutation.',
     'This visualizes a small 1–12m LANDFIRE class-11 water experiment; no bathymetric accuracy is established.',
@@ -88,8 +88,8 @@ try {
     await page.waitForTimeout(1200);
     const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
     if(after?.map!=='alaska'||!after.playing||
-       Math.hypot(after.position[0]-140,after.position[1]-49,
-                  after.position[2]-100)>.001)
+       Math.hypot(after.position[0]-140,after.position[1]-45,
+                  after.position[2]-250)>.001)
       throw Error('Fixed QA camera moved: '+JSON.stringify(after));
     await page.addStyleTag({content:
       '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
