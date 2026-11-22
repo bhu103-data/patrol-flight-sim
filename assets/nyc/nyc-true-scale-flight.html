@@ -305,6 +305,8 @@ async function start(){
     fullOfficialSurfacesLoaded:!!fullSurfaces,
     fullOfficialSurfacesSchema:fullSurfaces?.schema||null,
     fullOfficialSurfaceCounts:fullCounts,
+    fullOfficialSurfaceSources:fullSurfaces?.sourceUrls||null,
+    fullOfficialSurfaceTerms:fullSurfaces?.sourceTerms||null,
     officialRoadbedPolygons:shownRoadbeds,
     officialRoadbedIntersections:fullCounts?.roadbedIntersections??stats.officialRoadbedIntersections,
     officialRoadbedTriangles:shownRoadbedTriangles,
