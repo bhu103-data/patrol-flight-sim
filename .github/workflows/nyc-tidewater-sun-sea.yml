@@ -29,9 +29,16 @@ jobs:
           python3 -m http.server 8899 --bind 127.0.0.1 >/tmp/patrol-sun-sea.log 2>&1 &
           sleep 2
           curl --fail --silent --show-error http://127.0.0.1:8899/index.html >/dev/null
-      - name: Capture fixed NYC Harbor dusk and noon scenes
+      - name: Capture true full-quality NYC Harbor dusk and noon
         env:
           PATROL_BASE_URL: http://127.0.0.1:8899
+          PATROL_GRAPHICS_MODE: full
+        run: node scripts/nyc-tidewater-sun-sea-browser-qa.mjs
+      - name: Verify independent graphics compatibility fallback
+        if: always()
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8899
+          PATROL_GRAPHICS_MODE: compat
         run: node scripts/nyc-tidewater-sun-sea-browser-qa.mjs
       - name: Archive screenshot evidence even on failed smoke
         uses: actions/upload-artifact@v4

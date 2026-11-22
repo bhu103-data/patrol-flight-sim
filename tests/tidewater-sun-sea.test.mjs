@@ -108,3 +108,16 @@ test('existing wave-height and floatplane sampling model stays intact',()=>{
  assert.match(source,/const vec4 OCEAN_PHASE\[18\]/);
  assert.match(source,/hasOceanCascades\(\)/);
 });
+
+test('browser QA captures normal full renderer and labels compatibility separately',async()=>{
+ const script=await readFile(new URL('../scripts/nyc-tidewater-sun-sea-browser-qa.mjs',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/nyc-tidewater-sun-sea.yml',import.meta.url),'utf8');
+ assert.match(script,/const graphicsMode=process\.env\.PATROL_GRAPHICS_MODE==='compat'\?'compat':'full'/);
+ assert.match(script,/const path=graphicsMode==='compat'\?'\/index\.html\?graphics=compat':'\/index\.html'/);
+ assert.match(script,/graphicsCompat:new URLSearchParams\(location\.search\)/);
+ assert.match(script,/state\.graphicsCompat===\(graphicsMode==='compat'\)/);
+ assert.match(script,/const dest='artifacts\/nyc-tidewater-sun-sea\/'\+graphicsMode/);
+ assert.match(workflow,/PATROL_GRAPHICS_MODE: full/);
+ assert.match(workflow,/PATROL_GRAPHICS_MODE: compat/);
+ assert.match(workflow,/Capture true full-quality NYC Harbor dusk and noon/);
+});

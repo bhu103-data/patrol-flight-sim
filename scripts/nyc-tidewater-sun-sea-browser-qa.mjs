@@ -4,7 +4,9 @@ import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8899').replace(/\/$/,'');
-const dest='artifacts/nyc-tidewater-sun-sea';
+// Do not mistake the old forced compatibility page for full GIS rendering.
+const graphicsMode=process.env.PATROL_GRAPHICS_MODE==='compat'?'compat':'full';
+const dest='artifacts/nyc-tidewater-sun-sea/'+graphicsMode;
 await mkdir(dest,{recursive:true});
 const errors=[],screenshots=[],states={},pixels={};
 const browser=await chromium.launch({headless:true,args:[
@@ -15,9 +17,10 @@ const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFa
 page.on('pageerror',e=>errors.push(e.message));
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('HTTP asset failed: '+r.url());});
 const requireState=(condition,message)=>{if(!condition)throw Error(message);};
-let result={passed:false,errors,screenshots,states,pixels};
+let result={passed:false,graphicsMode,errors,screenshots,states,pixels};
 try{
- const response=await page.goto(base+'/index.html?graphics=compat',
+ const path=graphicsMode==='compat'?'/index.html?graphics=compat':'/index.html';
+ const response=await page.goto(base+path,
   {waitUntil:'domcontentloaded',timeout:60000});
  requireState(response?.ok(),'The game HTML did not load');
  await page.locator('input[name="flightMap"][value="manhattan"]').check({force:true});
@@ -60,6 +63,7 @@ try{
    return {webgl2:!!gl&&!gl.isContextLost(),error:gl?.getError()??null,
     selected:document.querySelector('input[name="flightMap"]:checked')?.value,
     camera:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.text,
+    graphicsCompat:new URLSearchParams(location.search).get('graphics')==='compat',
     clock:document.getElementById('skyTime')?.value,
     azimuth:document.getElementById('skyAzimuth')?.value,
     label:document.getElementById('skyAzimuthValue')?.textContent};
@@ -67,6 +71,8 @@ try{
   requireState(state.webgl2&&state.error===0,'WebGL context/shader error '+JSON.stringify(state));
   requireState(state.selected==='manhattan'&&state.camera==='New York Harbor',
     'Wrong map/camera '+JSON.stringify(state));
+  requireState(state.graphicsCompat===(graphicsMode==='compat'),
+    'Mismatched actual graphics mode: '+JSON.stringify(state));
   requireState(state.clock===clock&&state.azimuth===angle&&
     state.label===(angle==='-1'?'Auto':angle+'°'),
     'Sun direction control not applied: '+JSON.stringify(state));
@@ -94,7 +100,7 @@ try{
   pixels[label]=metric;
  }
  requireState(!errors.length,'Browser exceptions/assets: '+JSON.stringify(errors));
- result={passed:true,errors,screenshots,states,pixels,
+ result={passed:true,graphicsMode,errors,screenshots,states,pixels,
   note:'Software SwiftShader render and three actual screenshots; not a 60 FPS or realism score'};
 }catch(e){
  result={...result,passed:false,error:e.stack||String(e)};
