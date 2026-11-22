@@ -3,6 +3,11 @@ on:
   pull_request:
     paths:
       - 'tools/nyc/true-scale-preview.html'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'scripts/nyc-roadbed-metric-lowfly-build.mjs'
+      - 'tools/nyc/roadbed-source-mesh.mjs'
+      - 'tests/nyc-times-roadbed-polygon-source.test.mjs'
+      - 'tests/nyc-roadbed-lowflight-integration.test.mjs'
       - 'tests/nyc-times-historic-citygml-overlay.test.mjs'
       - 'tools/nyc/extract-tum-lod2-markings.py'
       - 'tools/nyc/probe-tum-lod2-markings.py'
@@ -22,7 +27,7 @@ permissions:
 jobs:
   fly-source-webgl:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,7 +37,7 @@ jobs:
         run: |
           node --check tools/nyc/true-scale-flight.mjs
           node --check tools/nyc/true-scale-flight-browser-smoke.mjs
-          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-roadbed-lowflight-integration.test.mjs
       - name: Fetch actual NYC DCM road geometry, no artificial road fallback
         run: |
           node scripts/nyc-times-true-scale-pilot.mjs
@@ -40,6 +45,10 @@ jobs:
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Fetch actual 2022 NYC OTI roadway surface polygons in same origin
+        run: |
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed.json
       - name: Verify historical TUM CityGML and clip source polygons into this same metre frame
         run: |
           pip install --disable-pip-version-check pyproj==3.7.2 shapely==2.1.2
@@ -49,8 +58,12 @@ jobs:
           test -s artifacts/nyc-true-scale/historic-markings.json
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 earcut@3.0.1
           npx playwright install --with-deps chromium
+      - name: Compile actual 2022 OTI roadbed polygons into one low-flight WebGL mesh
+        run: |
+          node scripts/nyc-roadbed-metric-lowfly-build.mjs
+          test -s artifacts/nyc-true-scale/roadbed-mesh.json
       - name: Serve actual metric geometry only
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-true-scale > /tmp/nyc-metric-flight-http.log 2>&1 &
