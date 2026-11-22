@@ -1,5 +1,5 @@
 // Keep floe snowcaps in the same existing CC0 glacier-snow mesh material.
-// No geometry, collision, shoreline or texture download is introduced.
+// This stacked sample adds bounded snow ridges; shoreline, collisions and textures stay fixed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -20,17 +20,26 @@ test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
     color[0]>=.69&&color[0]<=.80&&
     color[1]>=.85&&color[1]<=.94&&
     color[2]>=.90&&color[2]<=.97);
-  // 86 original polygons each with 7, 8 or 9 triangles, no extra geometry.
-  const expected=Array.from({length:86},(_,i)=>7+i%3)
+  // Each original 7-9 sided cap now has three shallow triangles per
+  // old flat wedge, entirely inside its original shoreline-safe footprint.
+  const oldCount=Array.from({length:86},(_,i)=>7+i%3)
     .reduce((sum,count)=>sum+count,0);
+  const expected=3*oldCount;
   assert.equal(stats.iceFloes,86);
   assert.equal(stats.iceFloesRejectedShore,0);
   assert.equal(snowcaps.length,expected);
+  assert.equal(stats.floeCapTriangles,expected);
+  assert.ok(stats.floeCapMaxRelief>.1&&stats.floeCapMaxRelief<.30,
+    'snow ridge lift is subtle and bounded below one game unit');
   assert.ok(snowcaps.every(face=>face.surface===13),
-    'floe top must use mirrored CC0 surface 13 rather than flat vertex color');
-  assert.ok(snowcaps.every(({a,b,c})=>
-    Math.abs(a[1]-b[1])<1e-6&&Math.abs(a[1]-c[1])<1e-6),
-    'floe cap vertices remain unchanged in a horizontal fan');
+    'every sculpted cap triangle must retain mirrored CC0 surface 13');
+  const sculpted=snowcaps.filter(({a,b,c})=>
+    Math.max(a[1],b[1],c[1])-Math.min(a[1],b[1],c[1])>.018);
+  assert.ok(sculpted.length>oldCount,
+    'a majority of the new top facets should be genuinely non-coplanar');
+  assert.ok(snowcaps.every(({a,b,c})=>[a,b,c].every(p=>
+    p[1]>=12.2+.035+.15-.001&&p[1]<12.2+1)),
+    'raised ice ridges stay above the static slab and below a bounded roof');
 });
 
 test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
@@ -43,7 +52,9 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
     'original glacier UV mode must remain unchanged');
   assert.ok(renderer.includes('uAlaskaPhotoNormalRough'));
   assert.ok(renderer.includes('uAlaskaPhotoAlbedo'));
-  assert.ok(moduleSource.includes('addTri(center,a,b,top,13)'));
+  assert.ok(moduleSource.includes('addTri(crown,ridge[k],ridge[next],top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],a,b,top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],b,ridge[next],top,13)'));
   const photoStart=renderer.indexOf('if(uAlaskaPhotoReady)',renderer.indexOf('void alaskaGlacierFace('));
   const lift=renderer.indexOf('material=min(material*(1.0+.20*near),vec3(.95));',photoStart);
   const photoEnd=renderer.indexOf('      }',lift);
