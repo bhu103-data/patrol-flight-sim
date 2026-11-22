@@ -22,6 +22,7 @@ const correctedDem={...dem,bbox:actualExtent.actualPixelBboxWgs84};
 
 test('flight pilot is reachable but does not replace shipping map or its controls',()=>{
   assert.match(game,/<a href="\.\/tracy-arm-true-scale\.html"/);
+  assert.match(game,/<a href="\.\/tracy-arm-true-scale\.html\?alaskaSource=ifsar5m"/);
   assert.match(src,/href="\.\/index\.html"/);
   assert.match(src,/aria-label="Flightable real-coordinate Tracy Arm USGS terrain"/);
   assert.match(src,/W\/S forward\/back/);
