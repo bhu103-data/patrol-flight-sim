@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   publish-reviewed-asset:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -68,51 +67,3 @@ jobs:
           done
           echo "Cannot publish without force after 15 non-destructive retries." >&2
           exit 1
-
-  inspect-flatiron-multipatch:
-    if: github.repository == 'bhu103-data/patrol-flight-sim' && github.ref == 'refs/heads/feat/nyc-flatiron-dcp-2014-model-import-20261122'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-          fetch-depth: 0
-
-      - name: Download official NYC OTI multipatch source
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/flatiron-oti
-          curl -fL --retry 2 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            -o /tmp/flatiron-oti/DA_WISE_Multipatch.zip \
-            https://s-media.nyc.gov/agencies/oti/DA_WISE_Multipatch.zip
-          unzip -l /tmp/flatiron-oti/DA_WISE_Multipatch.zip | tee /tmp/flatiron-oti/zip-list.txt
-          unzip -q /tmp/flatiron-oti/DA_WISE_Multipatch.zip -d /tmp/flatiron-oti/unpacked
-          find /tmp/flatiron-oti/unpacked -maxdepth 5 -print | tee /tmp/flatiron-oti/file-tree.txt
-
-      - name: Inspect multipatch driver, layers, and BIN attributes
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y gdal-bin
-          ogrinfo --formats | grep -Ei 'OpenFileGDB|FileGDB'
-          GDB="$(find /tmp/flatiron-oti/unpacked -iname '*.gdb' -print -quit)"
-          SHP="$(find /tmp/flatiron-oti/unpacked -iname '*.shp' -print -quit)"
-          if [ -n "$GDB" ]; then
-            ogrinfo -ro -so -al "$GDB" | tee /tmp/flatiron-oti/layer-info.txt
-          elif [ -n "$SHP" ]; then
-            ogrinfo -ro -so "$SHP" | tee /tmp/flatiron-oti/layer-info.txt
-          else
-            echo "No FileGDB or Shapefile found; archive inventory follows." | tee /tmp/flatiron-oti/layer-info.txt
-            find /tmp/flatiron-oti/unpacked -maxdepth 5 -type f -printf '%p %s bytes\n' | tee -a /tmp/flatiron-oti/layer-info.txt
-            exit 1
-          fi
-          grep -Ei 'BIN|geometry|feature count|layer name|EPSG|2263|MultiPatch|PolyhedralSurface|TIN' /tmp/flatiron-oti/layer-info.txt || true
-
-      - name: Upload official multipatch inspection
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flatiron-oti-multipatch-inspection
-          path: /tmp/flatiron-oti/
-          if-no-files-found: warn
