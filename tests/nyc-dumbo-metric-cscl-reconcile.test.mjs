@@ -76,3 +76,31 @@ test('live flight map remains untouched; CSCL, 2022 roadbed and 48 OTI roofs onl
   assert.doesNotMatch(flight,/dumbo-cscl-official-snapshot\.json/);
   assert.doesNotMatch(preview,/advanceFlight\(|PatrolSpaceBridge/);
 });
+
+test('all source vertices agree with exact WGS84 ECEF/ENU within 3cm numerical projection tolerance',()=>{
+  // A geodesy cross-check only: it does NOT claim the underlying municipal
+  // footprints or road centerlines were physically surveyed to 3cm accuracy.
+  const A=6378137,F=1/298.257223563,E2=F*(2-F),R=Math.PI/180;
+  const ecef=(lon,lat)=>{
+    const L=lon*R,P=lat*R,N=A/Math.sqrt(1-E2*Math.sin(P)**2);
+    return [N*Math.cos(P)*Math.cos(L),N*Math.cos(P)*Math.sin(L),
+      N*(1-E2)*Math.sin(P)];
+  };
+  const L=-73.989*R,P=40.702*R,C=Math.cos(L),S=Math.sin(L),
+    c=Math.cos(P),t=Math.sin(P),origin=ecef(-73.989,40.702);
+  const points=[...source.records.flatMap(row=>row.paths.flatMap(path=>path)),
+    ...buildings.features.flatMap(row=>row.ring)];
+  assert.equal(points.length,1922,'expected exact pinned 2026-retrieved source vertices');
+  let max=0,sumSq=0;
+  for(const [lon,lat] of points){
+    const delta=ecef(lon,lat).map((n,i)=>n-origin[i]);
+    const east=-S*delta[0]+C*delta[1];
+    const north=-t*C*delta[0]-t*S*delta[1]+c*delta[2];
+    const [x,z]=toLocalMeters(lon,lat);
+    const error=Math.hypot(east-x,north+z);
+    max=Math.max(max,error);sumSq+=error*error;
+  }
+  assert.ok(max<.03,'single-origin local WGS84 approximation exceeded 3cm: '+max);
+  assert.ok(Math.sqrt(sumSq/points.length)<.01,
+    'source reprojection RMS exceeded 1cm');
+});
