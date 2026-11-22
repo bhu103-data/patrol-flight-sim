@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL P0 / True-coordinate Times Square building massing</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#111a26;color:#e8eef7;font:14px/1.5 system-ui,sans-serif}
+#scene{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#scene:active{cursor:grabbing}
+.panel{position:absolute;left:16px;top:16px;max-width:min(450px,calc(100vw - 50px));background:rgba(8,18,31,.91);padding:16px 18px;border:1px solid #64748b;border-radius:8px;box-shadow:0 5px 22px #0008}
+h1{font-size:17px;line-height:1.25;margin:0 0 8px}p{margin:6px 0}.status{font-variant-numeric:tabular-nums;color:#c0d8ee}
+.warning{color:#ffcf9c}button{font:inherit;background:#263b53;color:#fff;border:1px solid #68809c;padding:5px 10px;border-radius:5px;cursor:pointer}
+a{color:#a3d7ff}.credit{font-size:12px;color:#bdcadb}
+@media(max-width:600px){.panel{padding:10px 12px;font-size:12px;max-width:calc(100vw - 44px)}}
+</style>
+</head><body>
+<canvas id="scene" aria-label="Interactive official Times Square building footprints in true local meters"></canvas>
+<div class="panel">
+<h1>Times Square — real-coordinate 3D footprint pilot</h1>
+<p id="status" class="status">Loading official building footprint snapshot…</p>
+<p>Drag to orbit; wheel to zoom; arrow keys move camera center by 10 m.</p>
+<p><button id="reset">Reset camera</button> <button id="grid">Toggle 50 m reference grid</button></p>
+<p class="warning">Only the building footprint locations and source roof heights are represented. The ground is a reference plane, NOT surveyed NYC terrain. Real street centerlines, subway, signs, façades, entrances, textures, and gameplay collisions have not yet been imported. NOT the existing compressed PATROL Manhattan map.</p>
+<p class="credit">NYC official Building Footprints FID / HEIGHTROOF, WGS84 source snapshot dated 2026-11-20. Approximate One Times Square local origin. <a href="https://data.cityofnewyork.us/d/3g6p-4u5s">Dataset source</a>. Two multi-ring courtyards excluded pending proper hole-aware roof geometry. No third-party imagery.</p>
+</div>
+<script id="vert" type="x-shader/x-vertex">#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in float aSurface;
+uniform mat4 uProjection,uView;
+out vec3 vNormal;
+flat out float vSurface;
+void main(){
+ gl_Position=uProjection*uView*vec4(aPos,1.0);
+ vNormal=aNormal;
+ vSurface=aSurface;
+}</script>
+<script id="frag" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+in vec3 vNormal;
+flat in float vSurface;
+out vec4 outColor;
+void main(){
+ if(vSurface>1.5){outColor=vec4(0.36,0.49,0.59,1.0);return;}
+ vec3 base=vSurface>0.5?vec3(0.49,0.54,0.59):vec3(0.63,0.47,0.36);
+ vec3 sun=normalize(vec3(0.6,1.0,0.42));
+ float light=0.40+0.60*max(dot(normalize(vNormal),sun),0.0);
+ outColor=vec4(base*light,1.0);
+}</script>
+<script type="module">
+import {buildTrueGeoTimesSquare} from './assets/nyc/truegeo-times-square.mjs';
+const canvas=document.querySelector('#scene'),status=document.querySelector('#status');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+if(!gl){status.textContent='WebGL2 unavailable';throw Error('WebGL2 required');}
+function compile(type,source){
+ const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);
+ if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(shader));
+ return shader;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,compile(gl.VERTEX_SHADER,document.querySelector('#vert').textContent));
+gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,document.querySelector('#frag').textContent));
+gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
+const uProjection=gl.getUniformLocation(prog,'uProjection'),uView=gl.getUniformLocation(prog,'uView');
+const norm=v=>{const d=Math.hypot(...v)||1;return v.map(x=>x/d);};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+function projection(fovy,aspect,near,far){
+ const f=1/Math.tan(fovy/2),nf=1/(near-far);
+ return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0]);
+}
+function lookAt(eye,target){
+ const z=norm(eye.map((v,i)=>v-target[i])),x=norm(cross([0,1,0],z)),y=cross(z,x);
+ return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]);
+}
+function makeVao(positions,normals,kinds){
+ const result=gl.createVertexArray();gl.bindVertexArray(result);
+ for(const [i,values,size] of [[0,positions,3],[1,normals,3],[2,kinds,1]]){
+  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,values,gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,0,0);
+ }
+ gl.bindVertexArray(null);return result;
+}
+let mesh=null,grid=null,bounds=null,target=[0,55,0],radius=830,yaw=2.4,pitch=.52,showGrid=true;
+function draw(){
+ const dpr=Math.min(2,devicePixelRatio||1),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),
+  h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.08,.12,.18,1);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(prog);
+ gl.uniformMatrix4fv(uProjection,false,projection(Math.PI/4,w/h,.3,6000));
+ const eye=[target[0]+radius*Math.cos(pitch)*Math.sin(yaw),
+  target[1]+radius*Math.sin(pitch),target[2]+radius*Math.cos(pitch)*Math.cos(yaw)];
+ gl.uniformMatrix4fv(uView,false,lookAt(eye,target));
+ if(grid&&showGrid){gl.bindVertexArray(grid.vao);gl.drawArrays(gl.LINES,0,grid.count);}
+ if(mesh){gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);}
+}
+function makeGrid(bounds){
+ const p=[],n=[],k=[],step=50,
+  minX=Math.floor((bounds.minX-50)/step)*step,maxX=Math.ceil((bounds.maxX+50)/step)*step,
+  minZ=Math.floor((bounds.minZ-50)/step)*step,maxZ=Math.ceil((bounds.maxZ+50)/step)*step;
+ const add=(x,z)=>{p.push(x,-.5,z);n.push(0,1,0);k.push(2);};
+ for(let x=minX;x<=maxX;x+=step){add(x,minZ);add(x,maxZ);}
+ for(let z=minZ;z<=maxZ;z+=step){add(minX,z);add(maxX,z);}
+ return {vao:makeVao(new Float32Array(p),new Float32Array(n),new Float32Array(k)),count:p.length/3};
+}
+function resetCamera(){
+ if(!bounds)return;radius=830;yaw=2.4;pitch=.52;
+ target=[(bounds.minX+bounds.maxX)/2,Math.min(80,bounds.maxY*.32),(bounds.minZ+bounds.maxZ)/2];
+ draw();
+}
+async function start(){
+ const response=await fetch('./assets/nyc/times-square-footprints.json');
+ if(!response.ok)throw Error('Source snapshot HTTP '+response.status);
+ const source=await response.json(),scene=buildTrueGeoTimesSquare(source);
+ if(!scene.stats.length)throw Error('No valid source buildings');
+ bounds=scene.bounds;mesh={vao:makeVao(scene.positions,scene.normals,scene.surfaceKinds),count:scene.positions.length/3};
+ grid=makeGrid(bounds);resetCamera();
+ status.textContent=scene.stats.length+' true-position buildings of '+source.features.length+
+  ' official FIDs · '+(scene.positions.length/9)+' triangles · 1 unit = 1 horizontal meter · '+
+  scene.skipped.length+' hole/multiring exclusions · highest source roof '+bounds.maxY.toFixed(1)+' m';
+}
+let drag=null;
+canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{
+ if(!drag)return;
+ yaw-=(e.clientX-drag[0])*.004;
+ pitch=Math.max(-.02,Math.min(1.45,pitch+(e.clientY-drag[1])*.004));
+ drag=[e.clientX,e.clientY];draw();
+});
+canvas.addEventListener('pointerup',()=>{drag=null;});
+canvas.addEventListener('pointercancel',()=>{drag=null;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(50,Math.min(2400,radius*Math.exp(e.deltaY*.001)));draw();},{passive:false});
+window.addEventListener('keydown',e=>{
+ const move={ArrowUp:[0,0,-10],ArrowDown:[0,0,10],ArrowLeft:[-10,0,0],ArrowRight:[10,0,0]}[e.key];
+ if(move){e.preventDefault();target=target.map((v,i)=>v+move[i]);draw();}
+});
+window.addEventListener('resize',draw);
+document.querySelector('#reset').addEventListener('click',resetCamera);
+document.querySelector('#grid').addEventListener('click',()=>{showGrid=!showGrid;draw();});
+start().catch(e=>{status.textContent='Preview failed: '+e.message;console.error(e);});
+</script></body></html>
