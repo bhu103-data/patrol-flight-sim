@@ -121,3 +121,25 @@ The direct physically-based solar GGX glint `waterDGGX(...) * waterVSmith(...) *
 ### Merge gate status
 
 **Overall PR #263 stays Draft and water visual acceptance remains FAIL; moon angular correction PASS.** Before choosing a smallest separate sun-glint/normal-space production fix, inspect component isolation screenshots and actual p50/p95, preserve unchanged ferry/floatplane wave displacement and 1:1 cross-map behavior. The user expressly forbids hiding the defect with ad-hoc water color adjustments.
+
+## 2026-11-22: real browser component isolation and minimal NYC-only production correction
+
+**Real-world viewport causal isolation passed:** [GitHub Actions run 45039981222](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039981222), [original full-resolution PNGs and report artifact 14761218799](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039981222/artifacts/14761218799). The original live PATROL seaplane Manhattan flight was loaded five times: baseline and four temporary shader-component ablations. Equal 1280×720 screenshots, fixed internal 704×396 WebGL resolution, same exact eye/camera and sun vector, 18:30 clear/summer, same GPU ocean time. 4 ships active, safe C185 water-start and ship collider all intact. Browser reported `passed:true`; no shader, WebGL or JS errors.
+
+**Causal results, measured on x=320..899, y=410..684 sun-facing water ROI (159,500 output pixels)**:
+
+| Test-only component | Blue-green water mask (% pixels) | White glint pixels | Interpretation |
+| --- | ---: | ---: | --- |
+| Original | 43.05% | 939 | Broad implausible cyan patch and white solar glint |
+| Remove GGX direct glint | 44.09% | 0 | GGX owns white sun reflection, **not** the cyan artifact |
+| Remove sky Fresnel reflection | sky and water generally darken, cyan persists | direct glint remains | Sky reflection is not the dominant source of green patch |
+| Remove view-sun crest emission | **3.89%** | **889** | Removes visually false cyan patch while preserving actual solar glint |
+| Flat wave normal | cyan remains | white reflection broadens | Not a surface-normal-space sign error |
+
+Threshold for blue-green mask: `G - R > 16`, `B - R > 16`, `G > 64`, `B > 75`; white-glint threshold `R,G > 200, B > 185`. Thresholds are **diagnostics from raw PNG pixels**, not ground-truth photometry, NYC sea-state spectra, or objective realism percentages. Source images were personally inspected: the no-crest screenshot removes cyan bands while remaining white reflection is visible. SwiftShader RAF p50 is baseline 262.7ms / noGGX 259.1ms / noReflection 245.0ms / noCrest 232.7ms / flatNormal 255.3ms; software rendering is **not native GPU FPS certification**.
+
+**Actual production edit:** `index.html`, NYC-only guard `if(!uManhattan)` on a legacy additive view-dependent `waterCol += vec3(0.025,0.24,0.18)*crest*back*...` after Beer-Lambert, Fresnel and refraction, before GGX. This is **removal of physically unjustified camera-facing emitted light**: the prior `back` term depends on the horizontal sun/camera azimuth, with no `N·L`, microfacet BRDF or energy conservation. This is **not** a replacement water tint/color adjustment and does not change real GGX white solar reflection, wave displacement, normals, boat wakes or any shader constants for non-NYC maps. The earlier independent NYC reflection hemisphere and procedural-moon-angle fixes remain.
+
+**Actual head QA guard:** `scripts/nyc-sunward-water-globe-browser.mjs` now reconstructs the **pre-PR** unguarded crest, old moon and reflection-ray shader in a browser-only HTML response for the before image; production new shader is the after image. QA fixes internal render resolution across cases to 0.55 scale, locks same height/exposure/world sun/ocean phase, measures cyan mask and preserved white glint pixels, requires 55% reduction in cyan share and retention of at least 65% of white-glint pixels. `tests/nyc-sunward-horizon-optics.test.mjs` asserts source of emitted crest is Manhattan-gated and unchanged true sun glint / ocean normals / refraction remain. The actions workflow also verifies C185 water contact, moving-vessel collision, Alaska/Vegas game launches and WebGL errors.
+
+**Status at authoring:** corrected source committed to the same **Draft PR #263** after diagnostic proof; **new exact-head production A/B and cross-map tests have not yet completed**. Keep draft until full raw screenshot review. Same-document live Vegas→NYC map switching and native GPU frame-time benchmark remain untested. Never claim full map photorealism.
