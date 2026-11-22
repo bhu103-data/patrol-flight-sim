@@ -4818,7 +4818,7 @@ const CENTRAL_PARK_SITES=[
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
     // PATROL_NYC_TIMES_SIGNAL_MARKINGS_V1: marked southbound approach to
     // modeled 7th Av at W 44 St. This is NOT a GIS-fitted intersection.
-    if(selectedMap.city && !graphicsCompat){
+    if(typeof selectedMap!=='undefined' && selectedMap.city && !graphicsCompat){
       const white=[.91,.91,.86],green=[.075,.35,.27],black=[.07,.09,.10];
       const safe=(x,z)=>sampleTerrainHeight(x,z)>WATER_H+1.58 &&
         !cityLotAt(x,z);
