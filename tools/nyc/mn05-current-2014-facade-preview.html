@@ -20,6 +20,7 @@ small{color:#d1bc99}
 <h1>纽约 Times Square · 2014 市政真实立面与屋顶网格</h1>
 <p><strong>仅显示 24 栋通过当前 OTI 屋顶及源 FootPrint Surface 相对高度核验的建筑。不是正式游戏地图，也不是 2026 实景模型。</strong></p>
 <p id="stat">读取原始 NYC DCP Rhino 立面与屋顶缓存网格…</p>
+<p id="viewLabel">全区概览 · 24 栋候选建筑</p>
 <p>立面和屋顶均来自 2014 年原始 Brep 缓存网格；高度以各自源 FootPrint Surface Z 为零点，保留原始相对形状。不生成窗户、墙面、盒体或虚构屋顶。</p>
 <p>鼠标拖动旋转 · 滚轮缩放。X=向东米，Z=向北米，Y=相对建筑基底高度米。</p>
 <small>源模型：NYC DCP 2014 Manhattan MN05，EPSG:2263 US survey feet。相对高度只用于受限 QA 预览；全局垂直基准仍未认证，禁止导入运行地图。</small>
@@ -114,7 +115,17 @@ try{
  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
  for(const p of allPoints)for(let i=0;i<3;i++){min[i]=Math.min(min[i],p[i]);max[i]=Math.max(max[i],p[i]);}
  target=[(min[0]+max[0])*.5,(min[1]+max[1])*.5,(min[2]+max[2])*.5];
- distance=Math.max(max[0]-min[0],max[2]-min[2])*1.75+160;
+ const span=Math.max(max[0]-min[0],max[2]-min[2]);
+ const heightSpan=max[1]-min[1];
+ distance=Math.max(span*.95+80,heightSpan*1.0+70);
+ const buildingCenters={};
+ for(const fid of fids){
+  const feature=footprintRows.get(fid),row=pilotRows.get(fid);
+  const ring=feature.rings[0].map(p=>local(p[0],p[1]));
+  const cx=ring.reduce((a,p)=>a+p[0],0)/ring.length;
+  const cz=ring.reduce((a,p)=>a+p[1],0)/ring.length;
+  buildingCenters[fid]=[cx,(row.otiHeightRoofFt||0)*FT*.48,cz];
+ }
  const facadeBuffer=createBufferSet(facades.pos,facades.normals);
  const roofBuffer=createBufferSet(roofs.pos,roofs.normals);
  const outlineBuffer=createBufferSet(outlines.pos,outlines.normals);
@@ -138,7 +149,9 @@ try{
   sourceBaseRelativeHeight:true,verticalDatumStatus:'NOT_CERTIFIED',
   runtimeImportAllowed:false,glError:()=>gl.getError(),
   horizontalBoundsMetres:[min[0],min[2],max[0],max[2]],
-  candidateFids:fids.slice(),camera:()=>({yaw,pitch,distance,target:target.slice()})
+  candidateFids:fids.slice(),buildingCenters,
+  setCamera:(v)=>{if(v.target)target=v.target.slice();if(Number.isFinite(v.yaw))yaw=v.yaw;if(Number.isFinite(v.pitch))pitch=v.pitch;if(Number.isFinite(v.distance))distance=v.distance;},
+  camera:()=>({yaw,pitch,distance,target:target.slice()})
  };
  stat.textContent='真实建筑 '+fids.length+' 栋 · 原始立面面片 '+facadeParts.length.toLocaleString('en-US')+
   ' · 立面三角面 '+facades.triangles.toLocaleString('en-US')+
