@@ -17,7 +17,9 @@ class BK02SourceMeshTest(unittest.TestCase):
         self.assertEqual(self.mesh["source3dmSha256"],self.report["source3dmSha256"])
         self.assertEqual(self.mesh["sourceZipSha256"],self.report["sourceZipSha256"])
         self.assertEqual(self.mesh["sourceCRS"],
-          "EPSG:2263 (US survey feet XY; raw Z datum unverified)")
+          "EPSG:2263 US survey feet XY; Rhino document Feet Z; vertical datum unverified")
+        self.assertEqual(self.mesh["modelUnitSystem"],"UnitSystem.Feet")
+        self.assertEqual(self.report["modelUnitSystem"],"UnitSystem.Feet")
         self.assertFalse(self.mesh["verticalDatumVerified"])
         self.assertFalse(self.report["sourceVerticalDatumVerified"])
         self.assertEqual(self.mesh["originWGS84"],[-73.989,40.702])
@@ -45,21 +47,21 @@ class BK02SourceMeshTest(unittest.TestCase):
             self.assertEqual(len(patch["triangles"]),patch["triangleCount"]*3)
             self.assertTrue(all(math.isfinite(x) for x in patch["vertices"]))
             self.assertTrue(all(0<=i<patch["vertexCount"] for i in patch["triangles"]))
-            # Extraction selects original Brep objects whose source bounds
-            # intersect the 25m-padded OTI AOI, then retains the COMPLETE
-            # cached face mesh. Do not clip genuine source triangles to the
-            # AOI rectangle: a building at the edge may extend beyond it.
-            xs=patch["vertices"][0::3]
-            souths=patch["vertices"][1::3]
-            self.assertLessEqual(min(xs),maxx+1.0)
-            self.assertGreaterEqual(max(xs),minx-1.0)
-            self.assertLessEqual(min(souths),maxz+1.0)
-            self.assertGreaterEqual(max(souths),minz-1.0)
+            self.assertEqual(len(patch["sourceBoundsRawModelUnits"]),6)
+            self.assertTrue(all(math.isfinite(x) for x in patch["sourceBoundsRawModelUnits"]))
+            self.assertGreaterEqual(patch["outsideRoiTrianglesDiscarded"],0)
+            for i in range(0,len(patch["triangles"]),3):
+                points=[patch["vertices"][patch["triangles"][i+k]*3:
+                  patch["triangles"][i+k]*3+3] for k in range(3)]
+                east=sum(p[0] for p in points)/3
+                south=sum(p[1] for p in points)/3
+                self.assertTrue(minx<=east<=maxx)
+                self.assertTrue(minz<=south<=maxz)
     def test_raw_source_z_is_preserved_not_claimed_as_2026_elevation(self):
-        lo,hi=self.mesh["rawSourceZFeetRange"]
+        lo,hi=self.mesh["rawSourceZRhinoFeetRange"]
         self.assertTrue(math.isfinite(lo) and math.isfinite(hi) and hi>lo)
         self.assertEqual(self.report["sourceZInterpretation"],
-          "RAW_2014_RHINO_Z_UNVERIFIED_VERTICAL_DATUM")
+          "RAW_2014_RHINO_DOCUMENT_FEET_VERTICAL_DATUM_UNVERIFIED")
         self.assertNotIn("2026_as_built",str(self.mesh).lower())
     def test_48_current_oti_buildings_remain_separate_reference(self):
         source=json.loads((ROOT/"assets/nyc/dumbo-oti-metric-48.json").read_text())
