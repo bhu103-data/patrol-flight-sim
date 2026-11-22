@@ -7,6 +7,7 @@ on:
       - 'tests/floatplane-wave-pose.test.mjs'
       - 'tools/aircraft/nyc-ocean-wave-qa.mjs'
       - 'tests/nyc-tidewater-water-detail.test.mjs'
+      - 'tests/nyc-tidewater-sky-atmosphere.test.mjs'
       - 'tools/aircraft/nyc-water-crest-compare.mjs'
       - '.github/workflows/nyc-c185-wave-qa.yml'
 permissions:
@@ -21,7 +22,7 @@ jobs:
         with:
           node-version: '22'
       - name: Local flight/float regression
-        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs tests/nyc-tidewater-water-detail.test.mjs
+        run: node --test tests/floatplane-wave-pose.test.mjs tests/floatplane-lowfps-physics.test.mjs tests/floatplane-water-start.test.mjs tests/nyc-tidewater-water-detail.test.mjs tests/nyc-tidewater-sky-atmosphere.test.mjs
       - name: Install software WebGL2 browser
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -45,6 +46,10 @@ jobs:
       - name: NYC horizon long-slope visual filter A/B (physics unchanged)
         env:
           PATROL_COMPARE_MODE: band-filter
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: Tidewater-style NYC sunrise, solar disk and reflected-sun A/B
+        env:
+          PATROL_COMPARE_MODE: sky-atmosphere
         run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
