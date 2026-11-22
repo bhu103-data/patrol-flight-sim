@@ -20,3 +20,14 @@ jobs:
           node-version: '22'
       - name: Verify all browser-free regression tests
         run: node --test tests/*.test.mjs
+      - name: Audit official CC0 ferry GLBs, LODs and source permission (NYC ferry PR only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: python3 tools/nyc/audit_cc0_ferry_lods.py
+      - name: Preserve CC0 publisher source and model metrics (NYC ferry PR only)
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-nyc-ferry-cc0-source-qa
+          path: nyc-harbor-audit/
+          if-no-files-found: warn
+          retention-days: 7
