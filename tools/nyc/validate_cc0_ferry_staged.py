@@ -12,6 +12,11 @@ ROOT=Path("nyc-harbor-audit/staged")
 SOURCE=Path("nyc-harbor-audit/official-tevy")
 ROOT.mkdir(parents=True,exist_ok=True)
 EXPECTED=[52069,19775,5478]
+PINNED_OUTPUT_SHA=[
+    "143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288",
+    "c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91",
+    "7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b",
+]
 LIMIT=8*1024*1024
 out={"licence":"CC0 1.0; https://tevy.dev/models/car-ferry",
      "description":"Generic ro-ro ferry, not survey of NYC Ferry vessel",
@@ -39,6 +44,8 @@ for lod in range(3):
             if "extensions" in prim:raise ValueError("Still compressed primitive")
             n_idx=model["accessors"][prim["indices"]]["count"] if "indices" in prim else pa["count"]
             tri+=n_idx//3
+    if hashlib.sha256(data).hexdigest()!=PINNED_OUTPUT_SHA[lod]:
+        raise ValueError(f"LOD{lod} post-conversion checksum changed; review encoder version")
     if tri!=EXPECTED[lod]:
         raise ValueError(f"LOD{lod} triangle count changed {tri} from source {EXPECTED[lod]}")
     # Current renderer supports exactly ONE embedded Base Color texture
