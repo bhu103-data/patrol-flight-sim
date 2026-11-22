@@ -3,7 +3,7 @@
 // Rendering switches are debug-gated and never change game city geometry.
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const dir='artifacts/nyc-visual-provenance';
 await mkdir(dir,{recursive:true});
@@ -120,6 +120,75 @@ try{
   for(const group of groups.slice(1))
     report.comparison[group]=compare('44th-none','44th-'+group);
   report.restored=compare('44th-none','44th-restored');
+  const baselineStats=await page.evaluate(()=>{
+    const api=window.__patrolNycVisualProbe;
+    if(typeof api?.setGisSkippedFids!=='function')
+      throw Error('Opt-in per-FID GIS rebuild API is unavailable');
+    return api.setGisSkippedFids([]);
+  });
+  check(Array.isArray(baselineStats.sourceFids)&&baselineStats.sourceFids.length>0,
+    'GIS source FID inventory is unavailable');
+  await page.evaluate(()=>{
+    const canvas=document.getElementById('glCanvas'),gl=canvas?.getContext('webgl2');
+    if(!gl||gl.isContextLost())throw Error('WebGL2 context unavailable for source FID scan');
+    gl.finish();
+    const data=new Uint8Array(canvas.width*canvas.height*4);
+    gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);
+    window.__patrolNycGisBaseline={width:canvas.width,height:canvas.height,data};
+  });
+  report.gisSourceFids=baselineStats.sourceFids;
+  report.fidScan=await page.evaluate(async fids=>{
+    const api=window.__patrolNycVisualProbe,canvas=document.getElementById('glCanvas'),
+      gl=canvas?.getContext('webgl2'),baseline=window.__patrolNycGisBaseline;
+    if(!gl||!baseline||baseline.width!==canvas.width||baseline.height!==canvas.height)
+      throw Error('Source FID baseline framebuffer mismatch');
+    const {width,height,data:before}=baseline,results=[];
+    for(const fid of fids){
+      const stats=api.setGisSkippedFids([fid]);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      gl.finish();
+      const after=new Uint8Array(width*height*4);
+      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,after);
+      let pixels=0,changed24=0,changed45=0,meanAbs=0;
+      for(let y=0;y<height;y+=2){
+        const gy=height-1-y;
+        for(let x=0;x<460;x+=2){
+          const i=(gy*width+x)*4;
+          const dr=Math.abs(before[i]-after[i]),
+            dg=Math.abs(before[i+1]-after[i+1]),
+            db=Math.abs(before[i+2]-after[i+2]),delta=Math.max(dr,dg,db);
+          meanAbs+=(dr+dg+db)/3;
+          if(delta>=24)changed24++;
+          if(delta>=45)changed45++;
+          pixels++;
+        }
+      }
+      results.push({fid,sourceBuildings:stats.sourceBuildings,
+        skippedDiagnosticFids:stats.skippedDiagnosticFids,
+        changed24Fraction:Number((changed24/pixels).toFixed(4)),
+        changed45Fraction:Number((changed45/pixels).toFixed(4)),
+        meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
+        glError:gl.getError()});
+    }
+    api.setGisSkippedFids([]);
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    gl.finish();
+    return results.sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
+  },baselineStats.sourceFids);
+  report.fidScanHypothesis=report.fidScan[0]
+    ?'Highest-impact single GIS source FID: '+report.fidScan[0].fid
+    :'No individually rendered GIS source FIDs were scanned';
+  report.fidScanTop=report.fidScan.slice(0,10);
+  report.fidScanGlErrors=report.fidScan.filter(x=>x.glError!==0);
+  if(report.fidScan[0]?.changed45Fraction>=.01){
+    const topFid=report.fidScan[0].fid;
+    await page.evaluate(fid=>window.__patrolNycVisualProbe.setGisSkippedFids([fid]),topFid);
+    await capture('44th-skip-fid-'+topFid,'none');
+    await page.evaluate(()=>window.__patrolNycVisualProbe.setGisSkippedFids([]));
+    await page.waitForTimeout(650);
+    await capture('44th-fid-scan-restored','none');
+    report.fidScanRestored=compare('44th-none','44th-fid-scan-restored');
+  }
   report.rankedByRoi=Object.keys(report.focusRois).map(region=>{
     const ranked=Object.entries(report.comparison).map(([layer,regions])=>({
       layer,...regions[region]
@@ -138,6 +207,9 @@ try{
   report.centerHypothesis=center[0]?.changed45Fraction>=.035
     ?'Center-wall source layer: '+center[0].layer:'INCONCLUSIVE';
   check(report.errors.length===0,'Browser errors: '+report.errors.join('; '));
+  check(report.fidScan.length===baselineStats.sourceFids.length && report.fidScan.length>0,
+    'Per-FID GIS occlusion scan did not cover every rendered source FID');
+  check(report.fidScanGlErrors.length===0,'WebGL errors during per-FID GIS scan');
   check(best&&best.changed45Fraction>=.035,
     'Left-wall ROI did not react to any probed mesh source; another render group remains uninstrumented');
   report.passed=true;
