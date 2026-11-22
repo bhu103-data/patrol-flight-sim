@@ -1,0 +1,44 @@
+name: NYC official 2014 MN05 rooftop Brep bounded-ROI geometry
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/inspect-mn05-roof-source-roi.py'
+      - 'tools/nyc/probe-official-mn05-rhino.py'
+      - 'tools/nyc/official_mn05_projection.py'
+      - '.github/workflows/nyc-mn05-roof-source-roi.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scoped-roof-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Rhino source topology inspector and install 2026 supported Brep loop API
+        run: |
+          python -m py_compile tools/nyc/probe-official-mn05-rhino.py
+          python -m py_compile tools/nyc/inspect-mn05-roof-source-roi.py
+          python -m pip install --no-cache-dir --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2
+          python tests/nyc-official-mn05-coordinate-frame.test.py
+      - name: Obtain ORIGINAL official NYC DCP MN05 3DM in bounded single-job temporary area
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
+      - name: Identify real Rooftop Surface and Facade Surface Brep source within Times Square 1:1 metre bbox
+        run: |
+          python tools/nyc/inspect-mn05-roof-source-roi.py
+          test -s artifacts/nyc-official-mn05/times-square-roof-source-roi.json
+      - name: Upload source evidence and polygon boundary diagnosis, never the 627MB source model
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-2014-mn05-real-roof-brep-roi-QA
+          path: |
+            artifacts/nyc-official-mn05/mn05-probe.json
+            artifacts/nyc-official-mn05/times-square-roof-source-roi.json
+          retention-days: 7
+          if-no-files-found: warn
