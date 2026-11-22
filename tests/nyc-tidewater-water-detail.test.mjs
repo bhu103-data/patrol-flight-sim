@@ -125,3 +125,11 @@ test('NYC crosswind optical slope is reversible and never changes C185 wave heig
   assert.match(qa,/src\.replace\(crosswindEnabled,crosswindDisabled\)/);
   assert.doesNotMatch(html,/NYC_CREST_BEND/);
 });
+
+test('repeat-baseline QA compares identical production HTML on independent scene loads',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(qa,/PATROL_COMPARE_MODE==='repeat-baseline'/);
+  assert.match(qa,/sourceBefore=inject\(repeatAB\?src/);
+  assert.match(qa,/sourceAfter=inject\(src\)/);
+  assert.match(qa,/repeatAB\?'repeat-baseline'/);
+});
