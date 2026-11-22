@@ -32,19 +32,25 @@
  <div class="eyebrow">PATROL / NYC OTI / Geospatial staging</div>
  <h1>DUMBO — 1 meter = 1 scene unit</h1>
  <p class="strong" id="details">Loading official building rings…</p>
- <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead view</p>
- <p class="warning">This is NOT a surveyed present-day street scene. Buildings follow one NYC OTI WGS84 projection; missing streets, bridges, terrain, façades, and newer buildings are not invented.</p>
- <button id="reset">Reset camera</button>
+ <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead · R = Front/Dock road</p>
+ <p class="warning">This is NOT a surveyed present-day street scene. 2022 paved roadbed shows only one Front/Dock corridor, NOT all streets or 2026 signals. Bridges, elevations, façades, and newer buildings remain missing.</p>
+ <button id="reset">Reset camera</button> <button id="roadFocus">Show 2022 Front/Dock pavement</button>
 </div>
-<canvas id="map" width="460" height="420" aria-label="Original georeferenced footprint plan, north is up"></canvas>
-<div id="mapText">N ↑ · OTI footprint plan</div>
-<div id="footer">Official source: NYC OTI BUILDING_view (5zhs-2jue), archived 2026-11-22; heights in feet above ground converted to meters. Flat placeholder terrain, no impact on PATROL gameplay.</div>
+<canvas id="map" width="460" height="420" aria-label="Official building footprints and limited 2022 Front/Dock pavement plan, north is up"></canvas>
+<div id="mapText">N ↑ · OTI footprints + 2022 pavement</div>
+<div id="footer">Official source: NYC OTI BUILDING_view (5zhs-2jue), archived 2026-11-22; heights in feet above ground converted to meters. 2022 paved-roadbed boundaries are from a separate official snapshot, not traffic lanes. Flat placeholder terrain; no impact on gameplay.</div>
 <script type="module">
-import {prepareDistrict,DUMBO_ORIGIN} from '../../assets/nyc/dumbo-oti-metric.mjs';
+import {prepareDistrict,DUMBO_ORIGIN,signedArea} from '../../assets/nyc/dumbo-oti-metric.mjs';
+import {prepareOfficialDumboRoadbed} from '../../assets/nyc/dumbo-roadbed-metric.mjs';
 const src=await fetch('../../assets/nyc/dumbo-oti-metric-48.json').then(r=>{
  if(!r.ok)throw Error('NYC OTI source snapshot HTTP '+r.status);
  return r.json();
 });
+const roadSource=await fetch('../../assets/nyc/dumbo-front-dock-roadbed-2022.json').then(r=>{
+ if(!r.ok)throw Error('NYC OTI 2022 roadbed snapshot HTTP '+r.status);
+ return r.json();
+});
+const roads=prepareOfficialDumboRoadbed(roadSource);
 const buildings=prepareDistrict(src);
 const bounds={minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity,maxY:0};
 for(const b of buildings){
@@ -52,12 +58,17 @@ for(const b of buildings){
   bounds.minZ=Math.min(bounds.minZ,z);bounds.maxZ=Math.max(bounds.maxZ,z)}
  bounds.maxY=Math.max(bounds.maxY,b.roofY);
 }
+// Extend the common world frame to include the actual 2022 Front/Dock pavement AOI.
+for(const road of roads.triangles)for(const [x,z] of road.points){
+ bounds.minX=Math.min(bounds.minX,x);bounds.maxX=Math.max(bounds.maxX,x);
+ bounds.minZ=Math.min(bounds.minZ,z);bounds.maxZ=Math.max(bounds.maxZ,z);
+}
 const center=[(bounds.maxX+bounds.minX)*.5,0,(bounds.minZ+bounds.maxZ)*.5];
 const spanX=bounds.maxX-bounds.minX,spanZ=bounds.maxZ-bounds.minZ;
 document.getElementById('details').textContent=
  buildings.length+' verified exterior rings · '+
  Math.round(spanX)+' × '+Math.round(spanZ)+' m · max roof '+
- Math.round(bounds.maxY)+' m';
+ Math.round(bounds.maxY)+' m · '+roads.stats.renderedTriangles+' 2022 paved roadbed triangles';
 
 const canvas=document.getElementById('render'),gl=canvas.getContext('webgl2',{antialias:true,depth:true});
 if(!gl)throw Error('WebGL2 unavailable (preview cannot be certified)');
@@ -89,6 +100,18 @@ function face(a,b,c,col){
  geometryTriangles++;
 }
 function shade(fid){const seed=(fid*157) % 7;return [.38+.025*seed,.31+.018*seed,.27+.014*seed]}
+// Historical source pavement, shown beneath the buildings as 2022 data, not invented lanes.
+// Source exporter rounded vertices to millimetres: degenerate triangles are rejected by
+// prepareOfficialDumboRoadbed while the committed original JSON is left unchanged.
+const roadTriangles=roads.stats.renderedTriangles;
+for(const t of roads.triangles){
+ const [a,b,c]=t.points;
+ const y=-.035,roadColor=t.sub===350010?[.24,.28,.31]:[.18,.21,.24];
+ // +Y facing winding in X/east, Z/south game coordinates.
+ if(signedArea(t.points)>0)
+  face([a[0],y,a[1]],[c[0],y,c[1]],[b[0],y,b[1]],roadColor);
+ else face([a[0],y,a[1]],[b[0],y,b[1]],[c[0],y,c[1]],roadColor);
+}
 for(const b of buildings){
  const tone=shade(b.fid),roof=[.39,.45,.47];
  for(let i=0;i<b.ring.length;i++){
@@ -124,16 +147,31 @@ function lookAt(eye,at){const z=norm(eye.map((v,i)=>v-at[i]));
  const x=norm(cross3([0,1,0],z)),y=cross3(z,x);
  return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,
  x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1])}
+const districtCenter=[...center];
+const roadX=roads.triangles.flatMap(t=>t.points.map(p=>p[0]));
+const roadZ=roads.triangles.flatMap(t=>t.points.map(p=>p[1]));
+const roadFocus=[(Math.min(...roadX)+Math.max(...roadX))*.5,
+  0,(Math.min(...roadZ)+Math.max(...roadZ))*.5];
 let yaw=.55,pitch=.55,dist=Math.max(600,Math.max(spanX,spanZ)*1.1);
-function reset(){yaw=.55;pitch=.55;dist=Math.max(600,Math.max(spanX,spanZ)*1.1)}
+function reset(){
+ center[0]=districtCenter[0];center[1]=districtCenter[1];center[2]=districtCenter[2];
+ yaw=.55;pitch=.55;dist=Math.max(600,Math.max(spanX,spanZ)*1.1);
+}
+function focusRoad(){
+ center[0]=roadFocus[0];center[1]=roadFocus[1];center[2]=roadFocus[2];
+ yaw=.2;pitch=1.25;dist=240;
+}
 document.getElementById('reset').onclick=reset;
+document.getElementById('roadFocus').onclick=focusRoad;
+window.__metricCamera={reset,focusRoad,roadFocus};
 let held=false,lastX=0,lastY=0;
 canvas.addEventListener('pointerdown',e=>{held=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(!held)return;yaw+=(e.clientX-lastX)*.006;
  pitch=Math.max(.12,Math.min(1.55,pitch+(e.clientY-lastY)*.006));lastX=e.clientX;lastY=e.clientY});
 canvas.addEventListener('pointerup',()=>held=false);
 canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(95,Math.min(1400,dist*Math.exp(e.deltaY*.001)))},{passive:false});
-document.addEventListener('keydown',e=>{if(e.key==='t'||e.key==='T')pitch=1.54;
+document.addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R')focusRoad();
+ else if(e.key==='t'||e.key==='T')pitch=1.54;
  else if(e.key==='ArrowLeft')yaw-=.1;else if(e.key==='ArrowRight')yaw+=.1;
  else if(e.key==='ArrowUp')pitch=Math.min(1.55,pitch+.08);
  else if(e.key==='ArrowDown')pitch=Math.max(.12,pitch-.08)});
@@ -142,6 +180,13 @@ ctx.clearRect(0,0,plan.width,plan.height);
 const pad=20,planScale=Math.min((plan.width-pad*2)/spanX,(plan.height-pad*2)/spanZ);
 function px(p){return [(p[0]-bounds.minX)*planScale+pad,(p[1]-bounds.minZ)*planScale+pad]}
 ctx.fillStyle='#092239';ctx.fillRect(0,0,plan.width,plan.height);
+// Only polygons actually present in the official 2022 pavement snapshot.
+ctx.fillStyle='#526271';
+for(const t of roads.triangles){
+ ctx.beginPath();const [a,b,c]=t.points.map(px);
+ ctx.moveTo(...a);ctx.lineTo(...b);ctx.lineTo(...c);
+ ctx.closePath();ctx.fill();
+}
 for(const b of buildings){ctx.beginPath();const [x,y]=px(b.ring[0]);ctx.moveTo(x,y);
  for(const p of b.ring.slice(1)){const [a,c]=px(p);ctx.lineTo(a,c)}ctx.closePath();
  ctx.fillStyle='#b88d73';ctx.strokeStyle='#f4d8c7';ctx.lineWidth=1;ctx.fill();ctx.stroke()}
@@ -162,5 +207,7 @@ function draw(){
 }
 draw();
 window.__metricQa={buildings:buildings.length,triangles:geometryTriangles,spanMeters:[spanX,spanZ],
- origin:DUMBO_ORIGIN,renderer:gl.getParameter(gl.RENDERER),webgl2:true};
+ origin:DUMBO_ORIGIN,roadbed:{...roads.stats,year:roads.year},
+ roadTriangles,buildingTriangles:geometryTriangles-roadTriangles,
+ renderer:gl.getParameter(gl.RENDERER),webgl2:true};
 </script></body></html>
