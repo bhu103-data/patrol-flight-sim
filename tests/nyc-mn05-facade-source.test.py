@@ -70,8 +70,40 @@ class Mn05FacadeSourceTests(unittest.TestCase):
         result = match_roof_triangles(tri, [a])
         self.assertEqual(result["building"]["fid"], 11)
         self.assertAlmostEqual(result["coverage"], 1.0)
+        self.assertAlmostEqual(result["coverageMargin"], 1.0)
         self.assertIsNone(match_roof_triangles(
             [[(20, 20, 100), (30, 20, 100), (20, 30, 100)]], [a]))
+
+    def test_duplicate_roof_footprints_are_rejected_as_ambiguous(self):
+        a = building(11, [(0, 0), (10, 0), (10, 10), (0, 10)])
+        b = building(22, [(0, 0), (10, 0), (10, 10), (0, 10)])
+        square = [
+            [(0, 0, 100), (10, 0, 100), (10, 10, 100)],
+            [(0, 0, 100), (10, 10, 100), (0, 10, 100)],
+        ]
+        self.assertIsNone(match_roof_triangles(square, [a, b]))
+
+    def test_near_tied_overlapping_roof_footprints_are_rejected(self):
+        a = building(11, [(0, 0), (10, 0), (10, 10), (0, 10)])
+        b = building(22, [(0.5, 0), (10.5, 0), (10.5, 10), (0.5, 10)])
+        square = [
+            [(0, 0, 100), (10, 0, 100), (10, 10, 100)],
+            [(0, 0, 100), (10, 10, 100), (0, 10, 100)],
+        ]
+        self.assertIsNone(match_roof_triangles(square, [a, b]))
+
+    def test_clear_roof_overlap_margin_is_recorded(self):
+        a = building(11, [(0, 0), (10, 0), (10, 10), (0, 10)])
+        b = building(22, [(2, 0), (12, 0), (12, 10), (2, 10)])
+        square = [
+            [(0, 0, 100), (10, 0, 100), (10, 10, 100)],
+            [(0, 0, 100), (10, 10, 100), (0, 10, 100)],
+        ]
+        result = match_roof_triangles(square, [a, b])
+        self.assertEqual(result["building"]["fid"], 11)
+        self.assertAlmostEqual(result["coverage"], 1.0)
+        self.assertAlmostEqual(result["secondBestCoverage"], 0.8)
+        self.assertAlmostEqual(result["coverageMargin"], 0.2)
 
 
     def test_height_ratio_gate_rejects_grossly_mismatched_source_facades(self):
