@@ -6,12 +6,13 @@ on:
       - 'tools/nyc/probe-official-bk02-rhino.py'
       - 'tools/nyc/inspect-bk02-source-roi.py'
       - 'tools/nyc/bk02_source_layers.py'
-      - 'tests/nyc-bk02-source-layers.test.py'
       - 'tools/nyc/official_bk02_projection.py'
       - 'tools/nyc/dumbo-2014-source-preview.html'
       - 'scripts/dumbo-2014-source-browser-smoke.mjs'
       - 'tests/nyc-bk02-coordinate-frame.test.py'
-      - 'tests/nyc-bk02-source-mesh.test.py'      - 'assets/nyc/dumbo-oti-metric-48.json'
+      - 'tests/nyc-bk02-source-layers.test.py'
+      - 'tests/nyc-bk02-source-mesh.test.py'
+      - 'assets/nyc/dumbo-oti-metric-48.json'
       - '.github/workflows/nyc-dumbo-2014-rhino-source.yml'
 permissions:
   contents: read
@@ -31,11 +32,13 @@ jobs:
           python -m py_compile tools/nyc/official_bk02_projection.py
           python -m py_compile tools/nyc/probe-official-bk02-rhino.py
           python -m py_compile tools/nyc/inspect-bk02-source-roi.py
-          python -m py_compile tools/nyc/bk02_source_layers.py          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2
+          python -m py_compile tools/nyc/bk02_source_layers.py
+          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2
           python tests/nyc-bk02-coordinate-frame.test.py
-          python tests/nyc-bk02-source-layers.test.py      - name: Download exact official BK02 2014 Rhino archive with hard size/path limits
+          python tests/nyc-bk02-source-layers.test.py
+      - name: Download exact official BK02 2014 Rhino archive with hard size/path limits
         run: PATROL_KEEP_BK02=1 python tools/nyc/probe-official-bk02-rhino.py
-      - name: Extract only original roof/facade/footprint cached meshes inside 48-building DUMBO AOI
+      - name: Extract original roof/facade/footprint cached meshes inside the 48-building DUMBO AOI
         run: |
           python tools/nyc/inspect-bk02-source-roi.py
           test ! -e artifacts/nyc-official-bk02/bk02-source.3dm
