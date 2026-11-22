@@ -14,6 +14,8 @@ test('debug draw omission is explicitly opt-in and NYC-only',()=>{
   assert.match(html,/if\(nycVisualProbeEnabled\)\{\s*const groups=/);
   assert.match(html,/if\(!groups\.includes\(group\)\)throw Error/);
   assert.match(html,/window\.__patrolNycVisualProbe=\{/);
+  assert.match(html,/freezeSceneryTime\(value\)/);
+  assert.match(html,/nycVisualProbeFrozenSceneryTime===null/);
   assert.match(html,/window\.__patrolNycVisualProbe\.setGisSkippedFids=ids=>/);
   assert.match(html,/skipFids:new Set\(skipFids\)/);
   assert.match(gis,/skipFids!==null && !\(skipFids instanceof Set\)/);
@@ -53,6 +55,13 @@ test('probe measures left wall, center wall, LED and full-frame regions',()=>{
   assert.match(probe,/typeof window\.__patrolNycVisualProbe\?\.setGisSkippedFids==='function'/);
   assert.match(probe,/await capture\('44th-restored','none'\)/);
   assert.match(probe,/report\.rankedByRoi=/);
+  assert.match(probe,/freezeSceneryTime\(42\)/);
+  assert.ok(probe.indexOf('freezeSceneryTime(42)')<
+    probe.indexOf('report.fidScan=await page.evaluate'),
+    'freeze scene before per-FID framebuffer scan');
+  assert.match(probe,/baselineSourceBuildings/);
+  assert.match(probe,/removedExactlyOneSourceBuilding/);
+  assert.match(probe,/fidScanAmbiguous/);
   assert.match(probe,/report\.fidScan=await page\.evaluate/);
   assert.match(probe,/gl\.readPixels/);
   assert.match(probe,/report\.fidScanTop=report\.fidScan\.slice\(0,10\)/);
