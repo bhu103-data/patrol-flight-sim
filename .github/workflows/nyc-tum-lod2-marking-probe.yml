@@ -1,0 +1,39 @@
+name: NYC historical LoD2 street geometry source evidence
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/probe-tum-lod2-markings.py'
+      - 'tools/nyc/extract-tum-lod2-markings.py'
+      - '.github/workflows/nyc-tum-lod2-marking-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check verified source and clipping tool syntax
+        run: |
+          python -m py_compile tools/nyc/probe-tum-lod2-markings.py
+          python -m py_compile tools/nyc/extract-tum-lod2-markings.py
+      - name: Install official CRS projection and geometry clip libraries
+        run: pip install --disable-pip-version-check pyproj==3.7.2 shapely==2.1.2
+      - name: Query real historical CityGML ZIP; no fabricated geometry fallback
+        run: PATROL_KEEP_GML=1 python tools/nyc/probe-tum-lod2-markings.py
+      - name: Convert verified EPSG32118 CityGML polygons into bounded source-QA metric rings
+        run: python tools/nyc/extract-tum-lod2-markings.py
+      - name: Upload provenance, archive header and CRS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-tum-lod2-provenance-only
+          path: |
+            artifacts/nyc-tum-lod2-markings/probe.json
+            artifacts/nyc-tum-lod2-markings/times-square-markings-source.json
+          retention-days: 7
+          if-no-files-found: warn

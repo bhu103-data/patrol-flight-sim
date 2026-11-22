@@ -1,0 +1,65 @@
+name: NYC official 2014 MN05 rooftop Brep bounded-ROI geometry
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/inspect-mn05-roof-source-roi.py'
+      - 'tools/nyc/mn05-actual-roofs-source-preview.html'
+      - 'scripts/nyc-mn05-source-roof-browser-smoke.mjs'
+      - 'tests/nyc-official-2014-roof-mesh-source.test.py'
+      - 'tools/nyc/probe-official-mn05-rhino.py'
+      - 'tools/nyc/official_mn05_projection.py'
+      - '.github/workflows/nyc-mn05-roof-source-roi.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scoped-roof-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Rhino source topology inspector and install 2026 supported Brep loop API
+        run: |
+          python -m py_compile tools/nyc/probe-official-mn05-rhino.py
+          python -m py_compile tools/nyc/inspect-mn05-roof-source-roi.py
+          python -m pip install --no-cache-dir --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2
+          python tests/nyc-official-mn05-coordinate-frame.test.py
+      - name: Obtain ORIGINAL official NYC DCP MN05 3DM in bounded single-job temporary area
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
+      - name: Extract real NYC 2014 cached rooftop meshes without fabricated Brep polygons
+        run: |
+          python tools/nyc/inspect-mn05-roof-source-roi.py
+          test -s artifacts/nyc-official-mn05/times-square-roof-source-roi.json
+          test -s artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+          python tests/nyc-official-2014-roof-mesh-source.test.py
+      - name: Install free browser and run actual cached rooftop WebGL QA
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+          cp tools/nyc/mn05-actual-roofs-source-preview.html artifacts/nyc-official-mn05/mn05-actual-roofs-source-preview.html
+          python3 -m http.server 8766 --bind 127.0.0.1 --directory artifacts/nyc-official-mn05 > /tmp/nyc-roof-src-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8766/mn05-actual-roofs-source-preview.html -o /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/nyc-mn05-source-roof-browser-smoke.mjs
+      - name: Upload source evidence and polygon boundary diagnosis, never the 627MB source model
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-2014-mn05-real-roof-brep-roi-QA
+          path: |
+            artifacts/nyc-official-mn05/mn05-probe.json
+            artifacts/nyc-official-mn05/times-square-roof-source-roi.json
+            artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+            artifacts/nyc-official-mn05/2014-real-roof-source-aerial.png
+            artifacts/nyc-official-mn05/2014-real-roof-source-rotated.png
+            artifacts/nyc-official-mn05/source-roof-browser-report.json
+            artifacts/nyc-official-mn05/mn05-actual-roofs-source-preview.html
+          retention-days: 7
+          if-no-files-found: warn
