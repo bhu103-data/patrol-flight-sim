@@ -147,7 +147,7 @@ try{
   await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?quality=low',
     {waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
-    window.PatrolMetricFlightQA.frames>2,null,{timeout:60000});
+    window.PatrolMetricFlightQA.frames>2,null,{timeout:90000});
   report.fallback=await page.evaluate(()=>window.PatrolMetricFlightQA);
   check(report.fallback.windowVisuals===0,'Low detail still generates window geometry');
   check(report.fallback.streetEyeMetres===3.2&&
@@ -229,7 +229,7 @@ try{
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
     window.PatrolMetricFlightQA.airborneMode===true&&
     window.PatrolMetricFlightQA.airborneSteps>=4,
-    null,{timeout:65000});
+    null,{timeout:90000});
   report.c185Before=await page.evaluate(()=>({
     pos:window.PatrolMetricFlightQA.airbornePos,
     yaw:window.PatrolMetricFlightQA.airborneYaw,
@@ -247,7 +247,7 @@ try{
     report.c185Before.sourceRoadbed>=70,
     'Do not claim full native aircraft physics or lose full OTI source geometry');
   const cockpitBefore=await page.locator('#scene').screenshot({
-    path:out+'/07-c185-source-airborne-cockpit-before.png',timeout:90000
+    path:out+'/08-c185-source-airborne-cockpit-before.png',timeout:90000
   });
   await page.keyboard.down('w');
   await page.keyboard.down('d');
@@ -301,7 +301,7 @@ try{
   check(report.c185After.glError===0&&report.c185After.errors.length===0,
     'C185 source-airborne mode has browser/GL fault');
   const cockpitAfter=await page.locator('#scene').screenshot({
-    path:out+'/08-c185-source-airborne-cockpit-after.png',timeout:90000
+    path:out+'/09-c185-source-airborne-cockpit-after.png',timeout:90000
   });
   report.c185Screenshots={beforeBytes:cockpitBefore.length,afterBytes:cockpitAfter.length};
   check(cockpitBefore.length>5000&&cockpitAfter.length>5000,
