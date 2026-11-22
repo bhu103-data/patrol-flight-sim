@@ -12,7 +12,7 @@ permissions:
 jobs:
   node-regressions:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +23,12 @@ jobs:
       - name: Audit official CC0 ferry GLBs, LODs and source permission (NYC ferry PR only)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
         run: python3 tools/nyc/audit_cc0_ferry_lods.py
+      - name: Decode and validate WebGL2-ready CC0 ferry near/mid/far GLBs
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: |
+          npm install --global @gltf-transform/cli
+          python3 -m pip install --disable-pip-version-check pillow
+          bash tools/nyc/build_cc0_ferry_lods.sh
       - name: Preserve CC0 publisher source and model metrics (NYC ferry PR only)
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
         uses: actions/upload-artifact@v4
