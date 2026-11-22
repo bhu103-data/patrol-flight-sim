@@ -70,7 +70,7 @@ test('Flight controls are bound to an independent source preview, not production
   assert.match(source,/advanceMetricFlight\(flyState,flightKeys,delta,buildingData,metreBounds\)/);
   assert.match(source,/metricFlightTarget\(flyState.position,flyState.yaw,flyState.pitch\)/);
   assert.match(source,/getFlight:\(\)=>\(/);
-  assert.ok(source.includes('官方道路中心线'));
+  assert.ok(source.includes('官方 DCM 道路中心线'));
   assert.ok(!game.includes('true-scale-flight.mjs'));
   assert.match(workflow,/cp tools\/nyc\/true-scale-flight\.mjs artifacts\/nyc-true-scale\/flight\.mjs/);
   for(const path of ['../tools/nyc/true-scale-flight.mjs',
