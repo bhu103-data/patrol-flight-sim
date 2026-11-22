@@ -113,15 +113,14 @@ def main():
     mad_dx=statistics.median(abs(p["deltaEastM"]-median_dx) for p in calibration)
     mad_dz=statistics.median(abs(p["deltaSouthM"]-median_dz) for p in calibration)
     shift_e=-median_dx;shift_s=-median_dz
-    post_shift_scores=[]
-    for p in best_by_oti.values():
+    for p in pairs:
         i=p["otiIndex"];f=current[i];g=source[p["sourceUUID"]]
         moved=translate(g,xoff=shift_e,yoff=shift_s)
         inter=f["geometry"].intersection(moved).area
         union=f["geometry"].union(moved).area
         p["postShiftFootprintIoU"]=inter/union if union else 0
         p["postShiftCentroidDistanceM"]=f["geometry"].centroid.distance(moved.centroid)
-        post_shift_scores.append(p)
+    post_shift_scores=list(best_by_oti.values())
     post_high=sum(p["postShiftFootprintIoU"]>=.85 and
       p["postShiftCentroidDistanceM"]<=.5 and
       .85<=p["sourceToOtiAreaRatio"]<=1.15 for p in post_shift_scores)
