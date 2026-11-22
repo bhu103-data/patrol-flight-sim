@@ -43,7 +43,7 @@ test('new runtime scene renders 118 source buildings plus 89 official street seg
   assert.equal(g.interleaved.length,g.counts.triangles*3*MESH_STRIDE);
   assert.ok(g.interleaved.every(Number.isFinite),'GPU buffer is finite');
   assert.equal(g.provenance.streets,roads.source);
-  assert.match(g.caveat,/illustrative or unverified/);
+  assert.match(g.caveat,/artist-authored or unverified/);
   const y=[];
   for(let i=1;i<g.interleaved.length;i+=MESH_STRIDE)y.push(g.interleaved[i]);
   assert.ok(Math.max(...y)>260,'actual official roof height not compressed');
@@ -137,7 +137,7 @@ test('PATROL launcher routes experimental map to real-source free-flight entry',
   assert.match(page,/id="roadbedFocus"/);
   assert.match(page,/const coreSourceFID24700=\[4\.09,32\.58\]/);
   assert.match(page,/roadbedFocusOriginWGS84:roadSource\.originWGS84/);
-  assert.match(page,/roadbedOff\?null:/,'same experimental map keeps source-on/off evidence');
+  assert.match(page,/roadbedResponse=roadbedOff\|\|fullSurfaces\?null:/,'same experimental map keeps source-on/off evidence');
   assert.match(page,/source buildings/);
   assert.doesNotMatch(page,/https?:\/\/(?:google\.com|maps\.google|cesium\.com)/);
   assert.match(page,/not the original aircraft physics/);
@@ -155,4 +155,31 @@ test('source street view has upstream 3.2m eye and 1.2m footprint clearance, not
   assert.match(html,/streetClearanceRadiusMetres:streetClearanceMetres/);
   assert.doesNotMatch(html,/buildingContains\(massing,east,north,65\)/);
   assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/);
+});
+
+test('full official OTI 2022 surfaces replace guessed asphalt bands in the same one-metre viewer',async()=>{
+  const html=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  const mesh=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-neighborhood.mjs',import.meta.url),'utf8');
+  assert.match(html,/fetchAndCompileOfficialOti2022Surfaces/);
+  assert.match(html,/drawIllustrativeStreetBands:!fullSurfaces/);
+  assert.match(html,/gl\.drawArrays\(gl\.TRIANGLES,0,roadbedMesh\.count\)/);
+  assert.match(html,/gl\.drawArrays\(gl\.TRIANGLES,0,pedestrianMesh\.count\)/);
+  assert.match(html,/gl\.drawArrays\(gl\.LINES,0,curbMesh\.count\)/);
+  assert.match(html,/fullOfficialSurfacesLoaded/);
+  assert.match(html,/roadbedFullNYCCoverage:false/);
+  assert.match(html,/noSurveyedVerticalDatum/);
+  assert.match(mesh,/drawIllustrativeStreetBands=true/);
+  assert.match(mesh,/if\(drawIllustrativeStreetBands\)/);
+});
+test('full source mode suppresses only guessed asphalt, preserving DCM centreline records',()=>{
+  const g=buildNeighborhoodMesh(massing,roads,{
+    detail:false,officialRoadbed:null,drawIllustrativeStreetBands:false
+  });
+  assert.equal(g.illustrativeStreetBands,false);
+  assert.equal(g.counts.illustrativeStreetBandTriangles,0);
+  assert.equal(g.counts.streetFeatures,38);
+  assert.equal(g.counts.streetSegments,89);
+  assert.ok(g.counts.triangles>0);
 });

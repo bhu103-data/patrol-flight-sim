@@ -25,7 +25,7 @@ export function buildingContains(massing,east,north,eyeHeight){
   return null;
 }
 
-export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null}={}){
+export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null,drawIllustrativeStreetBands=true}={}){
   if(massing.units!=='metres'||massing.heightScale!==1||
      !Array.isArray(massing.buildings)||!massing.buildings.length)
     throw Error('A genuine metre-scale NYC source scene is required');
@@ -39,7 +39,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const point=([e,n],y=0)=>[e-centerE,y,centerN-n];
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
-    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0};
+    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
+    illustrativeStreetBandTriangles:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -159,7 +160,10 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       const sx=-dZ/len*visualWidth*.5,sz=dX/len*visualWidth*.5;
       const A=[a[0]+sx,-.135,a[2]+sz],B=[b[0]+sx,-.135,b[2]+sz],
             C=[b[0]-sx,-.135,b[2]-sz],D=[a[0]-sx,-.135,a[2]-sz];
-      quad(A,B,C,D,[.18,.205,.23],2);
+      if(drawIllustrativeStreetBands){
+        quad(A,B,C,D,[.18,.205,.23],2);
+        counts.illustrativeStreetBandTriangles+=2;
+      }
       // Thin source-centreline audit trace only; NOT NYCDOT lane markings.
       const k=.11,tx=-dZ/len*k,tz=dX/len*k;
       quad([a[0]+tx,-.11,a[2]+tz],[b[0]+tx,-.11,b[2]+tz],
@@ -218,5 +222,6 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       streetSourceDate:streetSource.capturedAt,
       roadbed:officialRoadbed?.source||null,
       roadbedImageryYear:officialRoadbed?.imagery||null},
-    caveat:'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
+    illustrativeStreetBands:drawIllustrativeStreetBands,
+    caveat:'True 1:1 OTI roof/footprint FIDs and DCM centreline alignment. DCM-width asphalt bands are illustrative and can be suppressed when the full official OTI 2022 roadbed mesh is available; facades and roof finishes remain artist-authored or unverified.'};
 }
