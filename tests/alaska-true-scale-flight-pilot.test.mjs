@@ -164,7 +164,11 @@ test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15
   assert.match(src,/indices=new Uint32Array\\(\\(n-1\\)\\*\\(m-1\\)\\*6\\)/);
   assert.match(loader,/manifest\\.sourceVerticalCrs!=='EPSG:5703'/);
   assert.match(loader,/manifest\\.geoid!=='GEOID09'/);
-  assert.match(loader,/manifest\\.sourceProject/);
+  assert.match(loader,/manifest\\.project/);
+  assert.match(loader,/manifest\\.workunit/);
+  assert.match(loader,/manifest\\.coverageValidFraction!==1/);
+  assert.match(loader,/manifest\\.tileSeamP95Metres/);
+  assert.match(loader,/assetUrl\\.origin!==manifestAbsolute\\.origin/);
   assert.match(smoke,/PATROL_ALASKA_IFSAR5M/);
   assert.match(smoke,/sourceCellCount===1536\\*2880/);
   assert.match(smoke,/meshSpacingMeters/);
