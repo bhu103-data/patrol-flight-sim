@@ -83,10 +83,54 @@ try{
   colors.add([png.data[i],png.data[i+1],png.data[i+2]].join(','));
  }
  assert.ok(colors.size>75,'Suspicious near-blank preview: '+colors.size+' colors');
+ // Operate the actual source-coordinate camera in the same live WebGL2 scene.
+ // This DOES NOT turn the preview into the production C185 airplane.
+ const flyFixture=await page.evaluate(()=>{
+   const qa=window.__metricFly;
+   const {fid,roofY,vertex}=qa.sourceProbe;
+   return {safety:qa.safety,groundCollision:qa.check(
+      [vertex[0],Math.min(roofY,10),vertex[1]]),
+     highClearance:qa.check([vertex[0],roofY+2,vertex[1]]),
+     sourceFid:fid};
+ });
+ assert.equal(flyFixture.safety.buildingCount,48);
+ assert.equal(flyFixture.safety.radius,1.3);
+ assert.equal(flyFixture.groundCollision?.kind,'building');
+ assert.equal(flyFixture.groundCollision?.fid,flyFixture.sourceFid);
+ assert.equal(flyFixture.highClearance,null,
+  'Real OTI roof AGL must allow altitude above roof + visual camera clearance');
+ await page.keyboard.press('f');
+ await page.waitForFunction('window.__metricFly?.getState().enabled===true');
+ const spawnState=await page.evaluate(()=>window.__metricFly.getState());
+ assert.equal(spawnState.position[1],9.5);
+ assert.equal(spawnState.cameraOnly,true);
+ assert.equal(spawnState.realC185Physics,false);
+ assert.equal(spawnState.conflictRoadsDriveable,false);
+ assert.ok(Number.isSafeInteger(spawnState.sourcePhysicalId));
+ await page.keyboard.down('e');
+ try{
+  await page.waitForFunction(
+    'window.__metricFly?.getState().travelledMetres>0.05',null,{timeout:20000});
+ }finally{await page.keyboard.up('e');}
+ const movedState=await page.evaluate(()=>window.__metricFly.getState());
+ assert.ok(movedState.position[1]>spawnState.position[1]+.02,
+  'Trusted E input must actually move camera vertically in metric metres');
+ assert.ok(movedState.travelledMetres>.05);
+ assert.equal(movedState.blockedAttempts,0);
+ const flyImage=await page.screenshot({path:output+'/05-dumbo-true-metre-safe-lowflight.png'});
+ assert.ok(PNG.sync.read(flyImage).width===1280);
+ await page.keyboard.press('Escape');
+ assert.equal(await page.evaluate(()=>window.__metricFly.getState().enabled),false);
+ const flight={spawn:spawnState,afterMovement:movedState,fixture:flyFixture,
+   liveKeyboardVerified:true,
+   sourceCrossingRoadsDriveable:false,
+   genuineAircraftFlightDynamics:false,
+   groundElevationAndBridgesSurveyed:false};
  const report={passed:true,source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
-  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png'],
+  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png'],
+  lowFlight:flight,
   roadFocus,roadCameraChangedSamples:changed,conflictFocus,
   conflictCameraChangedSamples:conflictChanged,
   limitation:'48 source OTI roofs, limited 2022 Front/Dock pavement and 295 source CSCL centerline segments; 4 unresolved cross-dataset footprint overlaps; no surveyed curbs, actual 2026 lanes, verified elevation/bridges or flight collisions'};
