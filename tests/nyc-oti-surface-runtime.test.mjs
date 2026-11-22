@@ -110,18 +110,18 @@ const feature=(objectId,subtype,polygons)=>({
 const makeSurfaces=massing=>{
   const roadbeds=Array.from({length:70},(_,i)=>feature(
     i+1,i===0?350010:350000,
-    [ring(-120+(i%10)*12,-100+Math.floor(i/10)*12,5)]
+    [[ring(-120+(i%10)*12,-100+Math.floor(i/10)*12,5)]]
   ));
   const plazas=Array.from({length:10},(_,i)=>feature(
     i+1,600000,[i===0
       ?[ring(20,20,5),ring(21,21,1.5)]
-      :ring(20+(i%5)*8,35+Math.floor(i/5)*8,5)]
+      :[ring(20+(i%5)*8,35+Math.floor(i/5)*8,5)]]
   ));
   const sidewalks=Array.from({length:40},(_,i)=>feature(
     i+1,i===0?380010:380000,
     [i===0
       ?[ring(-80,45,5),ring(-79,46,1)]
-      :ring(-80+(i%8)*8,55+Math.floor(i/8)*8,5)]
+      :[ring(-80+(i%8)*8,55+Math.floor(i/8)*8,5)]]
   ));
   return {
     schema:'patrol-nyc-oti-surfaces-2022-runtime-v1',
