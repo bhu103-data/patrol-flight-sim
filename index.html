@@ -6651,7 +6651,11 @@ const CENTRAL_PARK_SITES=[
         }
         continue;
       }
-      const dumbOtiPilot=!local&&bridgeheadBrooklyn
+      // Isolated legacy city-building source tests execute this function
+      // without the optional municipal pilot helper; the real game always
+      // declares it, while these older harnesses retain the old fallback.
+      const dumbOtiPilot=!local&&bridgeheadBrooklyn &&
+        typeof matchingDumboOtiPilot==='function'
         ?matchingDumboOtiPilot(lot,detailBand):null;
       if(dumbOtiPilot){
         buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,dumbOtiPilot,y);
