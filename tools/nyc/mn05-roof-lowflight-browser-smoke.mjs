@@ -16,7 +16,7 @@ try{
   const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:1});
   page.on('pageerror',e=>report.errors.push('JS '+e.message));
   page.on('console',m=>{if(m.type()==='error')report.errors.push('console '+m.text());});
-  const nav=await page.goto('http://127.0.0.1:8767/preview.html?mn05Roofs=1',
+  const nav=await page.goto('http://127.0.0.1:8767/preview.html?mn05Roofs=1&skipHistoricGML=1',
     {waitUntil:'domcontentloaded',timeout:60000});
   if(!nav?.ok())throw Error('1:1 source-flight preview not served');
   await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
