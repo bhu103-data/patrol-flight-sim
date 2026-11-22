@@ -4,8 +4,12 @@ import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 const url=process.env.PATROL_BASE_URL||'http://127.0.0.1:8765';
 const output='artifacts/nyc-dumbo-metric';
+const actualHead=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+if(process.env.PR_HEAD_SHA && process.env.PR_HEAD_SHA!==actualHead)
+  throw Error('Browser scene checkout is not PR HEAD: '+actualHead);
 await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,args:[
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -126,7 +130,9 @@ try{
    sourceCrossingRoadsDriveable:false,
    genuineAircraftFlightDynamics:false,
    groundElevationAndBridgesSurveyed:false};
- const report={passed:true,source:'NYC OTI BUILDING_view 5zhs-2jue',
+ const report={passed:true,headSha:actualHead,
+  triggerSha:process.env.GITHUB_SHA||null,
+  source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
   images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png'],
