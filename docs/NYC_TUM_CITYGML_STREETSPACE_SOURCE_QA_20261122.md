@@ -57,6 +57,21 @@ TUM/LION direction codes map as follows, based on the official LION/CSCL metadat
 
 The mapping is a QA comparison only; do not use 2016 TUM traffic attributes as current vehicle-routing truth.
 
+## First-run current-CSCL reconciliation and spatial-match correction
+
+The first exact source artifact (Actions run `45061998734`, artifact `14769459548`) successfully downloaded all three archives, extracted the Times Square ROI, and completed the CSCL comparison calculations. The run was marked failed only because the final report gate read a nonexistent `featureCount` key; the comparison helper actually returns `featureCountIntersectingExactRoi`. A child fix adds a regression test for that report contract.
+
+Independent review of the retained first-run artifact found 96 TUM roadbed-to-CSCL comparisons:
+- Street-name match: 96/96.
+- Physical-ID candidate exists: 90/96.
+- Direction-code agreement: 95/96.
+- 2016 TUM total-lane count agrees with current CSCL: 68/95 (71.6%); treat the TUM lane count as stale.
+- Original physical-ID matching had four spatial outliers above 10m: West 44th, 45th, 46th and 47th Streets. The 2016 TUM physical-ID segmentation does not always align with current CSCL segment splits.
+
+A narrowly bounded fallback is now added: when a TUM physical-ID candidate is more than 10m from the roadbed centroid, and a same-normalized-name CSCL segment is closer, the comparison selects the closer same-name segment while preserving the original physical-ID candidate distance and mismatch flag. Recalculation against the retained first-run artifact reduces the selected-match centroid distance from p50/p95/max **0.777 / 8.760 / 109.188m** to **0.765 / 3.534 / 8.962m**; all 96 selected matches are then within 10m. The four ID mismatches remain explicitly counted, not hidden. The updated exact-head workflow rerun reproduced these results: run `45064002794` completed successfully and produced artifact `14769743909`. The report status is `pass`, with no errors and three explicit source-quality warnings. The physical-ID fallback, exact-ROI count contract, and current-CSCL comparison are therefore CI-verified on the child PR head.
+
+The 2016-vs-current lane disagreement and the 22/96 roadbed area-attribute outliers remain source-quality warnings. This does not authorize TUM lane routing or runtime geometry import.
+
 ## Known limitations from the source publisher
 
 - The model is a 2015–2017-era generation, not a 2026 as-built survey.
