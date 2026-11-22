@@ -24,6 +24,7 @@ test('eleven NYC cameras include surveyed One Astor and nonblank PNG checks',()=
  }
  for(const label of ['Times Square Street Level','44th Street LED Canyon',
    'One Times Square','Duffy Square Street View','Statue of Liberty',
+   '1515 Broadway · Curtainwall QA',
    'DUMBO · Warehouse Blocks','Lower Manhattan · Window Facades']){
   assert.ok(script.includes(label),'missing physical camera '+label);
  }
