@@ -155,5 +155,86 @@ class TumCityGmlStreetspaceQaTests(unittest.TestCase):
         self.assertNotIn("featureCount", result)
 
 
+    def test_stale_physical_id_uses_nearer_same_name_current_segment(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            roadbed_path = root / "roadbed.geojson"
+            cscl_path = root / "current-cscl.geojson"
+
+            roadbed_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "properties": {
+                        "name": "WEST 46 STREET",
+                        "physical_id": "1849",
+                        "traffic_direction": "W",
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-73.9861, 40.7550],
+                            [-73.9859, 40.7550],
+                            [-73.9859, 40.7552],
+                            [-73.9861, 40.7552],
+                            [-73.9861, 40.7550],
+                        ]],
+                    },
+                }],
+            }), encoding="utf-8")
+            cscl_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "stname_label": "W 46 ST",
+                            "trafdir": "FT",
+                            "physicalid": "1849",
+                        },
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                [-73.9845, 40.7551],
+                                [-73.9843, 40.7551],
+                            ],
+                        },
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "stname_label": "W 46 ST",
+                            "trafdir": "FT",
+                            "physicalid": "1848",
+                        },
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                [-73.9862, 40.7551],
+                                [-73.9858, 40.7551],
+                            ],
+                        },
+                    },
+                ],
+            }), encoding="utf-8")
+
+            result = current_cscl_comparison(
+                roadbed_path,
+                cscl_path,
+                root / "out",
+                (-73.9900, 40.7530, -73.9800, 40.7600),
+                0.005,
+            )
+
+        match = result["tumRoadbedToCurrentCscl"]["matches"][0]
+        self.assertEqual(match["matchMethod"], "normalized_street_name_after_physical_id_spatial_mismatch")
+        self.assertTrue(match["physicalIdExistsInCurrentCscl"])
+        self.assertGreater(match["physicalIdCandidateDistanceM"], 10.0)
+        self.assertTrue(match["physicalIdCandidateSpatialMismatch"])
+        self.assertLess(match["centroidToCurrentCsclDistanceM"], 10.0)
+        self.assertEqual(result["tumRoadbedToCurrentCscl"]["physicalIdSpatialMismatchCount"], 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()
