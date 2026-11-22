@@ -14,6 +14,35 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-unsafe-swiftshader'
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+// Browser-only source instrumentation for repeatable close oblique seam shots.
+// The response is modified ONLY in this smoke runner: GitHub production assets
+// and the deployed game never receive a QA camera or debug state.
+const qaCameraMarker='let marketInspect=null;';
+let qaCameraInjected=false;
+await page.route('**/assets/chongqing/chongqing.js',async route=>{
+  const response=await route.fetch();
+  check(response.ok(),'Unable to fetch actual Chongqing runtime for oblique QA');
+  const runtime=await response.text();
+  check(runtime.split(qaCameraMarker).length===2,
+    'QA camera injection anchor absent or ambiguous');
+  const hook=`
+window.__patrolQaOblique=(siteId,side)=>{
+  const site=marketFronts.snapshot().find(s=>s.id===siteId);
+  if(!site||![1,-1].includes(side))throw Error('Unknown oblique market target');
+  const x=site.x+side*19,z=site.z+17;
+  const y=Math.max(site.base+9,ground(x,z)+5);
+  const aim=[site.x+side*9.72,site.base+7.5,site.z+2.55];
+  marketInspect={eye:new THREE.Vector3(x,y,z),aim:new THREE.Vector3(...aim)};
+  return {siteId,side,eye:[x,y,z],aim,
+    groundClearance:y-ground(x,z),
+    facadeOuter:site.x+side*9.76};
+};
+`;
+  await route.fulfill({response,body:runtime.replace(
+    qaCameraMarker,qaCameraMarker+'\n'+hook)});
+  qaCameraInjected=true;
+});
+
 page.on('pageerror',err=>errors.push(err.message));
 page.on('console',msg=>{if(msg.type()==='error')warnings.push(msg.text());});
 page.on('requestfailed',req=>{
@@ -141,6 +170,35 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
+  // The middle shop's left side is blocked by high hillside/neighbor
+  // roof in real #200 Chromium capture. Instead sample the RIGHT seam of
+  // stone-stair and LEFT seam of adjacent river-market across the low terrace.
+  // Both use the same authored edge overlap and day/high material; no
+  // production camera shortcut, geometry replacement or pilot teleport.
+  check(qaCameraInjected,'Browser-only market camera hook was not installed');
+  for(const [siteId,side,name] of [
+    ['stone-stair',1,'03g-stone-stair-right-seam-oblique'],
+    ['river-market',-1,'03h-river-market-left-seam-oblique']
+  ]){
+    const pose=await page.evaluate(({siteId,side})=>
+      window.__patrolQaOblique?.(siteId,side),{siteId,side});
+    check(pose?.siteId===siteId&&pose.side===side&&
+      pose.eye.every(Number.isFinite)&&pose.aim.every(Number.isFinite)&&
+      pose.groundClearance>=4.9,
+      'Invalid actual-world oblique inspection camera '+JSON.stringify(pose));
+    await page.waitForTimeout(850);
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+      .marketInspectorActive===true,
+      'Oblique QA must use the real fixed architectural camera');
+    await capture(name);
+    screenshots[screenshots.length-1].obliquePose=pose;
+  }
+  // Restore the stock Digit8 view before testing all mobile input paths.
+  await page.keyboard.press('8');
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .marketInspectorActive===true,
+    'Could not restore Digit8 following seam angle captures');
+
   // The game renders desktop screenshots above, but its separate mobile
   // joystick and on-screen flight button must also release this fixed eye.
   // Use Chromium's CDP touch input on the real on-screen controls,
