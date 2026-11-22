@@ -11,6 +11,7 @@ on:
       - 'scripts/nyc-times-roadbed-polygon-source.mjs'
       - 'scripts/nyc-sidewalk-curb-webgl-preview-build.mjs'
       - 'tools/nyc/sidewalk-curb-browser-smoke.mjs'
+      - 'tools/nyc/official-street-topology-audit.py'
   workflow_dispatch:
 
 permissions:
@@ -39,6 +40,11 @@ jobs:
           node scripts/nyc-times-sidewalk-curb-source.mjs
           test -s artifacts/nyc-curb-sidewalk-source/edges.json
           test -s artifacts/nyc-curb-sidewalk-source/sidewalk-curb.svg
+      - name: Audit same-metre official roadbed, sidewalk, building and curb topology
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
       - name: Install Earcut and free Chromium WebGL2 for source geometry display
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1 earcut@3.0.1
