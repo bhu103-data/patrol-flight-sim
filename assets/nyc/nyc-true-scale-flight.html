@@ -308,6 +308,13 @@ async function start(){
         boost:keySet.has(' ')||keySet.has('shift'),
         brake:keySet.has('b')
       };
+      qa.airborneLastControl={...control};
+      qa.airborneKeyHistory??=[];
+      if(control.turn||control.pitch||control.boost||control.brake){
+        qa.airborneActiveControlFrames=(qa.airborneActiveControlFrames||0)+1;
+        if(qa.airborneKeyHistory.length<24)
+          qa.airborneKeyHistory.push({frame:frames,control:{...control}});
+      }
       const substeps=Math.max(1,Math.ceil(dt/.025));
       for(let step=0;step<substeps;step++)
         airborne=c185SourceAirborneStep(airborne,control,dt/substeps,sourceCollision);
