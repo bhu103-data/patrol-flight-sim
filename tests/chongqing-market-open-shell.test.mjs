@@ -1,0 +1,54 @@
+// Focused runtime extraction of the actual secondary-market shop loop.
+// Do not duplicate the shop specification in tests: execute production source.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+
+const source=await readFile(new URL('../assets/chongqing/details.js',import.meta.url),'utf8');
+const begin=source.indexOf("  const names=['山城小面'");
+const end=source.indexOf('  // Hotpot shop facade:',begin);
+assert.ok(begin>=0&&end>begin,'actual secondary-shop construction must exist');
+const shopLoop=source.slice(begin,end);
+
+function generated(){
+  const draws=[],signs=[],obstacles=[];
+  const ground=(x,z)=>43+.003*x+.17*(z-345);
+  new Function('ground','obstacles','put','sign','lantern',shopLoop)(
+    ground,obstacles,(...values)=>draws.push(values),
+    (...values)=>signs.push(values),()=>{});
+  return {draws,signs,obstacles,ground};
+}
+
+test('exact three gallery shells retain sides/back but no opaque original front slab',()=>{
+  const {draws,signs,obstacles,ground}=generated();
+  assert.equal(obstacles.length,14,'unchanged shop occupancy for collision indexing');
+  for(const x of [236,284,332]){
+    const z=345,base=ground(x,z),y=base+7.9;
+    const walls=draws.filter(([kind,px,py,pz])=>
+      (kind==='terra'||kind==='timber')&&Math.abs(py-y)<1e-6&&
+      Math.abs(px-x)<10.1&&pz>=z-14.2&&pz<=z-5.7);
+    assert.equal(walls.length,3,'back wall + exactly two sides of '+x);
+    assert.ok(walls.some(m=>Math.abs(m[1]-x)<1e-6&&m[6]<.4),
+      'back is narrow, not filled box');
+    assert.equal(walls.filter(m=>m[4]>19&&m[6]>15).length,0,
+      'cannot leave old 20x16 opaque box behind apertures');
+    assert.equal(draws.filter(m=>m[0]==='window'&&
+      Math.abs(m[1]-x)<1e-6&&Math.abs(m[3]-(z+2.15))<.01).length,0,
+      'old navy 16-wide window overlay may not fill new holes');
+    const entry=signs.find(s=>s[1]===x-2.5||s[1]===x+2.5);
+    assert.ok(entry&&entry[5]===1.35&&entry[4]===9,
+      'market sign should be a small unique plaque, above the windows');
+    assert.ok(obstacles.some(o=>o.x===x&&o.z===z-6&&o.w===20&&o.d===16),
+      'existing collision shell stays unchanged');
+  }
+});
+
+test('non-gallery shops still have original solid bodies and standard signage',()=>{
+  const {draws,signs,ground}=generated();
+  const x=212,z=303,y=ground(x,z);
+  assert.ok(draws.some(m=>(m[0]==='timber'||m[0]==='terra')&&
+    m[1]===x&&Math.abs(m[2]-(y+7.9))<1e-6&&
+    m[4]===20&&m[6]===16));
+  assert.ok(draws.some(m=>m[0]==='window'&&m[1]===x&&m[4]===16));
+  assert.ok(signs.some(s=>s[1]===x&&s[4]===17&&s[5]===4.5));
+});
