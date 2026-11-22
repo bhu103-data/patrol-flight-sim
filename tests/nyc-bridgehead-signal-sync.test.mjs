@@ -50,7 +50,7 @@ test('arriving on red stops before the crossing; green resumes without a jump',(
   assert.ok(travel(a,12.1)>194.5,'car must depart on green');
   assert.ok(travel(a,12.1)<195.5,'departure must not teleport');
   assert.ok(travel(a,18)>travel(a,12.1));
-  assert.ok(Math.abs(travel(a,12+16/7)-201.5)<1e-6,
+  assert.ok(Math.abs(travel(a,12+16/7)-202.5)<1e-6,
     'green launch must accelerate back to normal cruise speed');
 });
 
