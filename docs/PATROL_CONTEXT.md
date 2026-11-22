@@ -182,3 +182,46 @@ The old 5-row red-brick warehouse look was factually wrong.
   Inspect source-correct modern facade plus low-flying view, transition
   check and triangle/frame-time budgets before acceptance; document exact
   head SHA and Actions artifacts only after the new jobs pass.
+
+## Exact code-head verification — Nexus identity / PBR and flight maps (2026-11-22)
+
+**Supersedes all earlier references to a historic warehouse at BIN 3389054.**
+The verified building is `The Nexus, 84 Front Street, Brooklyn` (12-story
+condominium completed 2006), source https://archinect.com/meltzermandl/project/the-nexus.
+Architectural yellow-brick / blue-green-silver-metal material identity is
+corroborated by https://www.archpaper.com/2005/07/all-rise-2/.
+The official OTI `BUILDING_view` ring provides only exterior footprint and
+`HEIGHT_ROOF=121 ft`, not measured individual window openings or a
+precise eighth-floor setback.
+
+**Production geometry commit verified:** `c88bda8039555e08a7d8a28f96575e09de5dc177`.
+- Code uses existing PBR **paint/metal surface tag 4** on actual forward
+  polygon-edge metal panels and window header accents; the alternate
+  Brooklyn surface 12 brick mortar shader must NOT shade metal cladding.
+- Executing the **actual GitHub index.html mesh function** (not a mock)
+  yields 1,056 quads, 11 roof triangles, 148 metal-tagged quads,
+  108 recessed glazing panes, 40 extra raised metal spandrels,
+  and 12 authored glass rows on FID1080628. Only the public
+  identification/building material TYPES and 12 stories are sourced;
+  mesh bay coordinates and coloring are artistic approximations.
+  Other source FIDs: 336 and 455 quads, with ZERO metal-tag4 quads.
+- Relative to parent #204: +615 quads / +2 roof triangles =
+  **+1,232 triangles** for one LOD3 near-flight building, still
+  existing single city mesh batch; no new JS runtime dependency,
+  GLB, photo, network fetch, texture or extra draw call.
+- [Source/geometry and cross-map run 45040365081](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040365081):
+  **11/11 source-specific tests and 481/481 all Node regressions passed**,
+  inspected from the raw Actions job log for this exact source code SHA.
+- [Exact-code-head same-session seaplane map-switch run 45040365043](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040365043)
+  succeeded: Manhattan -> Alaska -> Manhattan, glError 0, aircraft stays
+  seaplane, correct world flags, finite flight pose, no browser errors,
+  three nonempty actual WebGL2 PNG screenshots. Scene-load measurements
+  22.553s, 24.288s, 22.266s on software Chromium; not hardware FPS.
+  [Evidence artifact 14761177549](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040365043/artifacts/14761177549).
+- **Still pending** on this exact code SHA: source-identity correct
+  A/B low-flying DUMBO building screenshots/SwiftShader ABBA timing;
+  Brooklyn bridgehead 9-camera images and full WebGL Alaska/C185
+  confirmations may still be queued/ongoing. No source-derived
+  eighth-floor roof setback or local GPU hardware frame timing.
+- Draft PR #264 stays stacked on #204; do NOT merge or enable for all
+  users before reviewing the actual screenshots and real source caveats.
