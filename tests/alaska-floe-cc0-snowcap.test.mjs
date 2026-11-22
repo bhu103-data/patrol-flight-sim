@@ -57,6 +57,9 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
 
 test('native Edge GPU QA cannot be mistaken for CI SwiftShader FPS',()=>{
   assert.ok(qaHarness.includes("process.env.PATROL_NATIVE_GPU==='1'"));
+  assert.ok(qaHarness.includes('process.env.PATROL_BASELINE_SHA'));
+  assert.ok(qaHarness.includes("execFileSync('git',['show',baselineSha+':'+gitPath]"));
+  assert.ok(qaHarness.includes('Pinned baseline bytes do not match'));
   assert.ok(qaHarness.includes("channel:browserChannel"));
   assert.ok(qaHarness.includes('Real GPU cannot be verified'));
   assert.ok(qaHarness.includes("/swiftshader|llvmpipe|softpipe|software|microsoft basic render|warp|cpu raster/i"));
