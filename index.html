@@ -1758,23 +1758,24 @@ const CENTRAL_PARK_SITES=[
         float a=az+layer*.39;
         float drift=vnoise(vec2(a*2.75+layer*13.7,uTime*.023))-.5;
         float fold=sin(a*10.8-uTime*(.14+layer*.027)+drift*3.2);
-        float edge=.22+layer*.13+drift*.075+fold*.041;
+        float edge=.20+layer*.12+drift*.075+fold*.055;
         float above=el-edge;
         float height=.14+.028*sin(a*4.1+uTime*.042+layer);
-        float curtain=smoothstep(-.028,.012,above)
-                     *(1.0-smoothstep(height*.58,height,above));
+        float curtain=smoothstep(-.016,.010,above)
+                     *(1.0-smoothstep(height*.60,height,above));
         // High-frequency threads fade with pixel footprint rather than
         // sparkling on distant hills or jagged water reflection samples.
-        float fibers=pow(.5+.5*sin(a*38.0+fold*2.1-uTime*.15),2.0);
-        fibers=mix(.42,fibers,filamentAA);
-        float halo=exp(-abs(above)*18.0)*.05;
+        float fibers=.55+.30*sin(a*58.0+drift*6.0-uTime*.45)
+                     +.15*sin(a*110.0+fold*2.0+uTime*.21);
+        fibers=mix(.68,clamp(fibers,.10,1.0),filamentAA);
+        float halo=exp(-abs(above-.008)*45.0)*.12;
         float bounds=1.0-smoothstep(.48,1.16,abs(az+.08-layer*.10));
         vec3 green=vec3(.07,.63,.32);
         vec3 violet=vec3(.30,.18,.51);
         vec3 hue=mix(green,violet,
           smoothstep(.035,height*.9,above)*(.47+layer*.15));
-        light+=hue*(curtain*(.24+.70*fibers)+halo)
-          *bounds*(.97-layer*.17);
+        light+=hue*(curtain*(.20+.90*fibers)+halo)
+          *bounds*(1.06-layer*.16);
       }
       return clamp(light*visibility*smoothstep(.055,.17,rd.y),
         vec3(0.0),vec3(.80));

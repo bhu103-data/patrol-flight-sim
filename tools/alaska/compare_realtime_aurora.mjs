@@ -30,6 +30,12 @@ function qaDocument(input,output){
     '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
     '    }else{','      flightStep=advanceFlight(dt);','    }'
   ].join(eol));
+  // Freeze shader time only in both temporary QA pages. Normal gameplay is dynamic.
+  const clock='    gl.uniform1f(uWorld.time, time);';
+  if(html.split(clock).length!==2)
+    throw Error('QA shader time anchor nonunique: '+input);
+  html=html.replace(clock,
+    '    gl.uniform1f(uWorld.time, window.__patrolAuroraFreeze?96.0:time);');
   writeFileSync(output,html);
 }
 qaDocument('alaska-aurora-base.html','alaska-aurora-base-qa.html');
