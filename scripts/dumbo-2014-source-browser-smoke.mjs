@@ -18,7 +18,7 @@ try{
   {waitUntil:'domcontentloaded',timeout:90000});
  if(!response?.ok())throw Error('Official BK02 source preview HTTP failed');
  await page.waitForFunction(()=>window.PatrolDumbo2014SourceQA?.ready&&
-  window.PatrolDumbo2014SourceQA.frames>12,null,{timeout:120000});
+  window.PatrolDumbo2014SourceQA.frames>60,null,{timeout:120000});
  report.data=await page.evaluate(()=>window.PatrolDumbo2014SourceQA);
  const q=report.data;
  if(q.sourceFacadePatches<=50||q.sourceRoofPatches<=10||
