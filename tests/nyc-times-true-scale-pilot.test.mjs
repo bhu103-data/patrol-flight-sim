@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {ORIGIN,BBOX,BUILDING_SOURCE,ROAD_SOURCE,metresPerDegree,toLocalMeters,
-  buildingsInMeters,roadsInMeters,fetchOfficialRoads,makeSvg
+  buildingsInMeters,roadsInMeters,clipLineToBbox,fetchOfficialRoads,makeSvg
 } from '../scripts/nyc-times-true-scale-pilot.mjs';
 
 const asset=JSON.parse(readFileSync(new URL('../assets/nyc/times-square-footprints.json',import.meta.url),'utf8'));
@@ -69,6 +69,31 @@ test('official street geometry uses precisely the same metre frame',()=>{
   assert.match(svg,/polyline/);
   assert.match(svg,/#d98a57/,'paper street visually distinct, not a driveable road');
   assert.match(svg,/#55c8f5/,'mapped street visually distinct');
+});
+
+test('DCM features crossing query bbox are clipped, not used as out-of-area geometry',()=>{
+  const [west,south]=toLocalMeters([BBOX[0],BBOX[1]]);
+  const [east,north]=toLocalMeters([BBOX[2],BBOX[3]]);
+  const across=clipLineToBbox([
+    [west-2000,(south+north)/2],
+    [(east+west)/2,(south+north)/2],
+    [east+1600,(south+north)/2]
+  ]);
+  assert.equal(across.length,1);
+  assert.ok(Math.abs(across[0][0][0]-west)<.002);
+  assert.ok(Math.abs(across[0].at(-1)[0]-east)<.002);
+  assert.ok(across[0].every(p=>p[0]>=west-.002&&p[0]<=east+.002&&
+    p[1]>=south-.002&&p[1]<=north+.002));
+  assert.deepEqual(clipLineToBbox([[west-100,south-80],[west-60,south-20]]),[]);
+  // This geometrical clip must not modify source FIDs or invent extra roads.
+  const sampled=roadsInMeters({type:'FeatureCollection',features:[{
+    type:'Feature',properties:{OBJECTID:1,Street_NM:'BROADWAY'},
+    geometry:{type:'LineString',coordinates:[
+      [BBOX[0]-.002,ORIGIN[1]],[BBOX[2]+.002,ORIGIN[1]]
+    ]}
+  }]});
+  assert.equal(sampled.length,1);
+  assert.ok(sampled[0].lines[0].every(p=>p[0]>=west-.002&&p[0]<=east+.002));
 });
 
 test('network fetching is official-source-only, bounded, and not a fictional fallback',async()=>{
