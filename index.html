@@ -6093,13 +6093,18 @@ const CENTRAL_PARK_SITES=[
         // ballooning LOD1's global window/batch budget. Never touch survey lots.
         if(east>-185&&east<175&&north>-526&&north<-155&&
            ((parcelSeed>>>4)&3)===0){
-          const capW=w*(.68+(archType%3)*.05),capD=d*(.69+(archType%4)*.045);
           const facadeZ=z+d*.5+.041;
           for(let band=1;band<=3;band++){
             const rowY=y+2.0+(h*k-3.2)*band*.25;
             addModelBox(addQuad,x,rowY,facadeZ,w*.90,.082,.10,trim);
           }
-          addModelBox(addQuad,x,y+h-.16,z,capW+.10,.25,capD+.10,trim);
+          // The shared rooftop coping below already closes the upper crown.
+          // Instead, attach small corbels to the LOWER setback seam; an
+          // extra roof slab here would overlap the existing cap and z-fight.
+          const setbackY=y+h*k;
+          for(const offset of [-.30,-.10,.10,.30])
+            addModelBox(addQuad,x+offset*w,setbackY-.14,facadeZ,
+              .11,.28,.12,trim);
           for(const offset of [-.24,.24])
             addModelBox(addQuad,x+offset*w,y+h*k*.47,facadeZ,
               .075,h*k*.72,.085,trim);
