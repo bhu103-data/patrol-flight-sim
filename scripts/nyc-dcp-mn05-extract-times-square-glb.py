@@ -111,14 +111,24 @@ def intersects(a, b):
 
 
 def mesh_data(mesh):
-    vertices = np.asarray([[float(p.X), float(p.Y), float(p.Z)]
-                           for p in mesh.Vertices], dtype=np.float64)
+    def xyz(point):
+        if hasattr(point, "X"):
+            return [float(point.X), float(point.Y), float(point.Z)]
+        return [float(point[0]), float(point[1]), float(point[2])]
+    vertices = np.asarray([xyz(point) for point in mesh.Vertices], dtype=np.float64)
     faces = []
     for face in mesh.Faces:
-        a, b, c, d = int(face.A), int(face.B), int(face.C), int(face.D)
-        faces.append((a, b, c))
-        if d != c:
-            faces.append((a, c, d))
+        values = tuple(int(value) for value in face)
+        if len(values) == 3:
+            a, b, c = values
+            faces.append((a, b, c))
+        elif len(values) == 4:
+            a, b, c, d = values
+            faces.append((a, b, c))
+            if d != c:
+                faces.append((a, c, d))
+        else:
+            raise ValueError("Unexpected rhino3dm MeshFace tuple: " + repr(values))
     if not len(vertices) or not faces:
         return None
     return vertices, np.asarray(faces, dtype=np.int64)
