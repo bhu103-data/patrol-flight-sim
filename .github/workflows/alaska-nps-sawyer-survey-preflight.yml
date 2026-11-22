@@ -1,0 +1,44 @@
+name: Alaska NPS Sawyer survey source byte preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tools/alaska/probe_nps_sawyer_surveys.py
+      - tests/test_alaska_nps_survey_preflight.py
+      - docs/ALASKA_NPS_SAWYER_SURVEY_PREFLIGHT.md
+      - .github/workflows/alaska-nps-sawyer-survey-preflight.yml
+
+permissions:
+  contents: read
+
+jobs:
+  nps-sawyer-public-source:
+    if: github.head_ref == 'qa/alaska-nps-sawyer-survey-preflight-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Avoid the synthetic merge ref in source-accountability checks.
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Python syntax and fail-closed offline tests
+        run: |
+          python3 -m py_compile tools/alaska/probe_nps_sawyer_surveys.py
+          python3 tests/test_alaska_nps_survey_preflight.py
+      - name: Public catalog pins only (no network)
+        run: |
+          python3 tools/alaska/probe_nps_sawyer_surveys.py \
+            --offline --output artifacts/alaska-nps-sawyer-catalog-only.json
+      - name: Source ZIP signatures via bounded 16-byte reads
+        run: |
+          python3 tools/alaska/probe_nps_sawyer_surveys.py \
+            --timeout 20 --output artifacts/alaska-nps-sawyer-source-preflight.json
+      - name: Preserve source evidence even when public endpoints fail
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alaska-nps-sawyer-readonly-source-preflight
+          path: artifacts/alaska-nps-sawyer-*.json
+          retention-days: 7
+          if-no-files-found: warn
