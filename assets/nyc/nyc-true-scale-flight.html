@@ -26,7 +26,7 @@
 <p class="muted" id="metadata"></p>
 <p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street view</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button></p>
 </aside>
 <footer>NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
 <script type="module">
@@ -146,6 +146,12 @@ async function start(){
   // Spawn from a REAL official Seventh Avenue DCM centreline, not an
   // arbitrary point that can start inside a source-derived skyscraper.
   const [eOffset,nOffset]=wgs84ToMeters(roadSource.originWGS84,massing.origin);
+  // Preserve the independent parent #267 street-eye camera fix.
+  // Sweep margin against real municipal building footprint planes;
+  // a 65m airborne eye cannot prove street-level collision clearance.
+  const streetEyeMetres=3.2,streetClearanceMetres=1.2;
+  const safeOffsets=[[0,0],[streetClearanceMetres,0],[-streetClearanceMetres,0],
+    [0,streetClearanceMetres],[0,-streetClearanceMetres]];
   const sourceStreetCandidates=[];
   for(const road of roadSource.roads){
     if(road[0]!=='7 Avenue')continue;
@@ -155,10 +161,10 @@ async function start(){
         dx=b[0]-a[0],dn=b[1]-a[1];
       const site=[east-geometry.center.east,
         geometry.center.north-north];
-      if(Math.hypot(...site)>250||
-         buildingContains(massing,east,north,65)!==null)continue;
-      sourceStreetCandidates.push({position:[site[0],65,site[1]],
-        yaw:Math.atan2(dx,dn),pitch:-.08,
+      if(Math.hypot(...site)>250||safeOffsets.some(([de,dn])=>
+        buildingContains(massing,east+de,north+dn,streetEyeMetres)!==null))continue;
+      sourceStreetCandidates.push({position:[site[0],streetEyeMetres,site[1]],
+        yaw:Math.atan2(dx,dn),pitch:0,
         distance:Math.hypot(...site)});
     }
   }
@@ -210,6 +216,9 @@ async function start(){
     sourceBuildings:geometry.provenance.buildings,
     renderer:'native WebGL2',usesOriginalAircraftPhysics:false,
     spawnFromOfficialStreet:sourceStreetCandidates.length>0,
+    streetEyeMetres:sourceStreetCandidates.length?streetEyeMetres:null,
+    streetClearanceRadiusMetres:streetClearanceMetres,
+    safeStreetCandidateCount:sourceStreetCandidates.length,
     frames:0,errors:[]};
   const bound=Math.max(420,span*.7);
   function frame(t){
