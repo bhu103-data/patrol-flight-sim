@@ -5929,6 +5929,36 @@ const CENTRAL_PARK_SITES=[
           windows++;
         }
       }
+      // PATROL_NYC_ONE_ASTOR_CURTAINWALL_V1: 1515 Broadway / One Astor
+      // Plaza has reflective glazing and light anodized mullions above a
+      // substantial street-level podium. Earlier style-index logic marked
+      // the surveyed FID 212747 as opaque masonry, creating the conspicuous
+      // featureless block in the 44th Street fixed camera. Keep its original
+      // NYC Building Footprints polygon, roof, GLB-independent renderer,
+      // LEDs, collision envelope, and all existing window positions.
+      //
+      // Only six long existing source edges receive thin *surface* transoms
+      // and vertical fins. Approx. 84 quads / 168 triangles across the site;
+      // no box bodies, new textures, physics or additional WebGL draw calls.
+      if(detailBand===4 && lot[9]===212747 && isGlass &&
+         length>=3.3 && roofY-y>20){
+        const curtainStart=y+6.55,curtainEnd=roofY-.70;
+        const aluminum=[.46,.53,.57],darkMetal=[.18,.23,.28];
+        const half=Math.min(.018,.085/length);
+        for(let m=1;m<=4;m++){
+          const t=m/5;
+          face(at(t-half,curtainStart,.103),
+            at(t+half,curtainStart,.103),
+            at(t+half,curtainEnd,.103),
+            at(t-half,curtainEnd,.103),aluminum,9);
+        }
+        for(let row=1;row<=10;row++){
+          const yy=curtainStart+(curtainEnd-curtainStart)*row/11;
+          face(at(.04,yy-.028,.108),at(.96,yy-.028,.108),
+            at(.96,yy+.028,.108),at(.04,yy+.028,.108),
+            row%3===0?aluminum:darkMetal,9);
+        }
+      }
     }
     // Ear clipping handles the OTI's concave L-, U- and wedge-shaped roofs.
     // Unlike a centroid fan, no roof is drawn outside its source footprint.
@@ -8329,7 +8359,7 @@ const CENTRAL_PARK_SITES=[
       // documented static screens attached instead of suspended in air.
       const surveyedHeight=survey?Math.max(ledTop,
         Math.min(h*1.45,Math.max(h*.66,survey.ft*.3048*.32))):h;
-      const glazed=style===0||style===3||b.name.includes('Marriott')||
+      const glazed=style===0||style===3||b.name==='1515 Broadway'||b.name.includes('Marriott')||
         b.name.includes('EDITION');
       const metal=glazed?[.35,.43,.48]:[.37,.38,.39],
         stone=glazed?[.46,.53,.57]:color.map(v=>Math.min(.91,v*1.16));
