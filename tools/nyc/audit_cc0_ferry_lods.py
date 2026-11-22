@@ -15,6 +15,13 @@ from urllib.parse import urlsplit
 BASE = "https://tevy.dev/models/car-ferry"
 DEST = pathlib.Path("nyc-harbor-audit/official-tevy")
 DEST.mkdir(parents=True,exist_ok=True)
+# Freeze the publisher's v1 binaries. A later changed source needs a NEW audit
+# and explicit rights/geometry reapproval before any runtime import.
+PINNED_SHA256={
+  0:"c6afaae8bb66da747e3059d5dc17df56a221a94e6a13c8e9a199ddeb9154e0d5",
+  1:"1013a80e4fc662e46ebbfe78bf1771f41a0fef6a46655a83705d746b123ab2b5",
+  2:"619acc4a52c9405c521fc6ea5443f186231fe9fe6dc0d2f6e5d3735a98217db2"
+}
 REPORT={"source_page":BASE,"publisher":"tevy.dev / tevy","source_version":"v1 2026-10-27",
         "license":"CC0 1.0 Universal, publisher model-page dedication",
         "license_text_url":"https://creativecommons.org/publicdomain/zero/1.0/legalcode",
@@ -41,6 +48,8 @@ for lod in range(3):
     entry={"url":url,"lod":lod}
     try:
         data=fetch(url,7_000_000)
+        if hashlib.sha256(data).hexdigest()!=PINNED_SHA256[lod]:
+            raise ValueError("Pinned official v1 GLB SHA-256 changed")
         if len(data)<28 or data[:4]!=b"glTF" or struct.unpack_from("<II",data,4)!=(2,len(data)):
             raise ValueError("Not valid GLB2 header/length")
         json_len,chunk_type=struct.unpack_from("<II",data,12)
