@@ -45,6 +45,11 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
   <label style="display:block;margin:7px 0;color:#e0c69a">
     <input id="historicToggle" type="checkbox"/> 对照 2015–2017 历史真实涂装隔离带
   </label>
+  <label style="display:block;margin:7px 0;color:#f3a269">
+    <input id="mn05RoofToggle" type="checkbox"/> 叠加官方 2014 MN05 缓存屋顶面（仅小范围历史参考）
+  </label>
+  <small>2014 历史屋顶保留原始 X/Z 米制形状，但显示 Y 锚定 2022 HEIGHTROOF；
+  垂直基准未确认，不代表真实 2026 屋顶或飞机碰撞体。</small>
   <small>历史层来自 TUM／NYC Open Data，可能与 2026 年街道不同，
   不代表当前道路中心线、车道或人行道现状。</small>
   <small>仅为测绘源场景的碰撞/尺度样板。建筑外墙是中性体量，不是真实外立面；
@@ -232,12 +237,22 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
-  const historyResponse=await fetch('./historic-markings.json');
-  if(!historyResponse.ok)throw Error('Verified historic CityGML geometry is missing');
-  const historical=await historyResponse.json();
-  if(historical.role!=='QA_ONLY_HISTORIC_CITYGML_NOT_IN_GAME'||
+  // Explicit independent rooftop/low-flight QA can disable the unrelated
+  // historic TUM 2015-2017 road-median overlay. Default route is unchanged:
+  // if not explicitly skipped, genuine TUM JSON is still mandatory and
+  // cannot silently be replaced by invented/stale geometry.
+  const skipHistoricGML=new URLSearchParams(location.search).get('skipHistoricGML')==='1';
+  const historyResponse=skipHistoricGML?null:await fetch('./historic-markings.json');
+  if(!skipHistoricGML&&!historyResponse.ok)
+    throw Error('Verified historic CityGML geometry is missing');
+  const historical=skipHistoricGML?{
+    role:'EXPLICITLY_DISABLED_IN_ROOFTOP_QA',
+    sourceCrs:'NOT_LOADED',readyToRender:false,polygons:[],
+    sourceVintage:'NOT_LOADED'}:await historyResponse.json();
+  if(!skipHistoricGML&&(
+     historical.role!=='QA_ONLY_HISTORIC_CITYGML_NOT_IN_GAME'||
      historical.sourceCrs!=='EPSG:32118'||historical.readyToRender!==false||
-     !Array.isArray(historical.polygons)||historical.polygons.length>60)
+     !Array.isArray(historical.polygons)||historical.polygons.length>60))
     throw Error('Historical polygon provenance or size is not valid');
   // Build a SEPARATE optional material layer from real clipped polygons.
   // No automatic historical 2017 layer appears in the 2026 current-city view.
@@ -265,6 +280,7 @@ try{
   position.length=oldVertex;colors.length=oldColors;normals.length=oldNormals;
   triCount=oldTriangleCount;
   const historicToggle=document.querySelector('#historicToggle');
+  if(skipHistoricGML){historicToggle.checked=false;historicToggle.disabled=true;}
   const realRoadResponse=await fetch('./roadbed-mesh.json');
   if(!realRoadResponse.ok)throw Error('Actual source OTI Roadbed 2022 triangles missing');
   const realRoads=await realRoadResponse.json();
@@ -302,6 +318,61 @@ try{
   const rowSurface=meshBuffer(hintPos,envelopes.colors,envelopes.normals);
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
+  // Opt-in original municipal 2014 cached Brep roof triangles.
+  // This is NOT geometry synthesized from a bbox; absent source is a hard
+  // error when explicitly enabled, but default street flight never fetches it.
+  const mn05RoofToggle=document.querySelector('#mn05RoofToggle');
+  let mn05RoofMesh=null,mn05RoofEvidence=null,mn05RoofLoadError=null;
+  async function loadMn05SourceRoof(){
+    if(mn05RoofMesh)return;
+    const response=await fetch('./mn05-cached-roof-metric-preview.json');
+    if(!response.ok)throw Error('Authentic 2014 NYC DCP roof mesh asset missing');
+    const roofData=await response.json();
+    if(roofData.schema!=='nyc-mn05-2014-saved-brep-roof-triangles-v1'||
+      roofData.assetRole!=='2014_HISTORICAL_SOURCE_ONLY_NOT_GAME_COLLISION'||
+      roofData.sourceRhinoSha256!=='b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57'||
+      roofData.meshAccepted!==true||roofData.sourceVerticalDatumVerified!==false||
+      roofData.localOriginLonLat?.join(',')!==
+        source.projection?.originLonLat?.join(',')||
+      roofData.counts?.matched2022Fids<3||
+      roofData.counts?.genuineSavedSourceTriangles<10||
+      roofData.counts?.genuineSavedSourceTriangles>12000||
+      roofData.counts.genuineSavedSourceTriangles!==roofData.triangles?.length)
+      throw Error('Municipal 2014 roof provenance, metre frame or historical scope failed');
+    const positions=[],colors=[],normals=[];
+    for(const t of roofData.triangles){
+      if(!Number.isSafeInteger(t.matched2022BuildingFid)||
+         t.vertices?.length!==3||t.vertices.some(p=>p?.length!==3||
+          p.some(v=>!Number.isFinite(v))))
+        throw Error('Invalid original NYC DCP source triangle');
+      for(const [east,north,diagnosticY] of t.vertices){
+        addPoint(positions,colors,normals,[east,diagnosticY,north],
+          [.94,.48,.24],[0,1,0]);
+      }
+    }
+    mn05RoofMesh=meshBuffer(positions,colors,normals);
+    mn05RoofEvidence={
+      sourceYear:2014,
+      realSavedFaceTriangles:mn05RoofMesh.count/3,
+      matched2022Fids:roofData.counts.matched2022Fids,
+      displayHeight:'2022 HEIGHTROOF anchor; 2014 source Z datum unknown',
+      original3dmSha256:roofData.sourceRhinoSha256
+    };
+  }
+  mn05RoofToggle.addEventListener('change',async()=>{
+    if(!mn05RoofToggle.checked)return;
+    try{await loadMn05SourceRoof();}
+    catch(e){
+      mn05RoofLoadError=e.message;
+      mn05RoofToggle.checked=false;
+      console.error('Official 2014 roof opt-in failed:',e);
+    }
+  });
+  // Query parameter never changes PATROL's production NYC or default preview.
+  if(new URLSearchParams(location.search).get('mn05Roofs')==='1'){
+    mn05RoofToggle.checked=true;
+    await loadMn05SourceRoof();
+  }
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.CULL_FACE);
   gl.clearColor(.045,.076,.105,1);
@@ -341,6 +412,10 @@ try{
     }
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
+    if(mn05RoofToggle.checked&&mn05RoofMesh){
+      gl.bindVertexArray(mn05RoofMesh.vao);
+      gl.drawArrays(gl.TRIANGLES,0,mn05RoofMesh.count);
+    }
     if(historicToggle.checked&&historicMesh.count>0){
       gl.bindVertexArray(historicMesh.vao);
       gl.drawArrays(gl.TRIANGLES,0,historicMesh.count);
@@ -352,6 +427,14 @@ try{
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
     buildingTriangles:triCount,streetVertices:streets.count,
     streetWidthEnvelopes:envelopes.stats,
+    authenticMn05RoofSource:{
+      available:()=>Boolean(mn05RoofMesh),
+      visible:()=>mn05RoofToggle.checked&&Boolean(mn05RoofMesh),
+      sourceTriangles:()=>mn05RoofEvidence?.realSavedFaceTriangles||0,
+      matched2022Fids:()=>mn05RoofEvidence?.matched2022Fids||0,
+      sourceYear:2014,sourceVerticalDatumVerified:false,
+      lastLoadError:()=>mn05RoofLoadError
+    },
     realRoadbedSource:{features:realRoads.counts.features,
       polygons:realRoads.counts.polygons,triangles:realRoads.counts.triangles,
       referenceYear:realRoads.referenceImageryYear,

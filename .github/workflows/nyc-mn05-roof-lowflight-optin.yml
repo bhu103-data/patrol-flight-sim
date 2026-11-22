@@ -1,0 +1,103 @@
+name: NYC real 2014 MN05 rooftop in existing 1:1 metre low-flight WebGL2
+on:
+  push:
+    branches: [feat/nyc-mn05-true-scale-flight-roof-optin-20261122-chat]
+    paths:
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/mn05-roof-lowflight-browser-smoke.mjs'
+      - 'tests/nyc-mn05-roof-lowflight-optin.test.mjs'
+      - '.github/workflows/nyc-mn05-roof-lowflight-optin.yml'
+  pull_request:
+    branches: [feat/nyc-mn05-real-roof-edge-mesh-20261122-chat]
+    paths:
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/mn05-roof-lowflight-browser-smoke.mjs'
+      - 'tests/nyc-mn05-roof-lowflight-optin.test.mjs'
+      - '.github/workflows/nyc-mn05-roof-lowflight-optin.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-roof-lowflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Protect original same-metre lowflight control, source CRS and opt-in isolation
+        run: |
+          node --check tools/nyc/mn05-roof-lowflight-browser-smoke.mjs
+          node --test tests/nyc-mn05-roof-lowflight-optin.test.mjs tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-roadbed-lowflight-integration.test.mjs
+      - name: Install bounded original-source/metric extraction libraries
+        run: |
+          python -m pip install --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
+          python tests/nyc-mn05-cached-roof-source.test.py
+          python tests/nyc-official-mn05-coordinate-frame.test.py
+      - name: Fetch genuine NYC DCM centreline and 2022 building source
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          test -s artifacts/nyc-true-scale/source.json
+          cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
+          cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
+          cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Fetch only real official 2022 OTI pavement polygons, bounded retry on temporary service failure
+        run: |
+          for attempt in 1 2 3; do
+            if node scripts/nyc-times-roadbed-polygon-source.mjs; then break; fi
+            if [ "$attempt" = 3 ]; then
+              echo "Official NYC roadbed service unavailable; no invented replacement" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 7))"
+          done
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+      - name: Fetch hash-pinned real NYC DCP 2014 original Rhino rooftop source
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
+          python tools/nyc/extract-mn05-cached-roof-mesh.py
+          test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
+          test -s artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+          cp artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json artifacts/nyc-true-scale/mn05-cached-roof-metric-preview.json
+      - name: Install free Chromium WebGL2 and genuine polygon tessellation libraries
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 earcut@3.0.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Compile source-true NYC 2022 roadbed, no fictional DCM road strips
+        run: |
+          node scripts/nyc-roadbed-metric-lowfly-build.mjs
+          test -s artifacts/nyc-true-scale/roadbed-mesh.json
+      - name: Serve original source-metre flight with explicitly disabled unrelated TUM legacy roads
+        run: |
+          python3 -m http.server 8767 --bind 127.0.0.1 --directory artifacts/nyc-true-scale > /tmp/nyc-roof-flight-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS 'http://127.0.0.1:8767/preview.html?mn05Roofs=1&skipHistoricGML=1' -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Native Chromium WebGL2 roof ON/OFF paired same-camera, E-flight and collision
+        run: |
+          node tools/nyc/mn05-roof-lowflight-browser-smoke.mjs
+          test -s artifacts/nyc-true-scale/real-mn05-roofs-lowflight-browser-report.json
+          test -s artifacts/nyc-true-scale/real-mn05-roofs-lowflight-aerial-on.png
+          test -s artifacts/nyc-true-scale/real-mn05-roofs-lowflight-aerial-off.png
+          test -s artifacts/nyc-true-scale/real-mn05-roofs-lowflight-street.png
+      - name: Upload source-provenance JSON, WebGL2 screenshots and failure evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-mn05-2014-roofs-authentic-source-1to1-lowflight
+          path: |
+            artifacts/nyc-true-scale/real-mn05-roofs-lowflight-browser-report.json
+            artifacts/nyc-true-scale/real-mn05-roofs-lowflight-aerial-on.png
+            artifacts/nyc-true-scale/real-mn05-roofs-lowflight-aerial-off.png
+            artifacts/nyc-true-scale/real-mn05-roofs-lowflight-street.png
+            artifacts/nyc-true-scale/mn05-cached-roof-metric-preview.json
+            artifacts/nyc-official-mn05/mn05-probe.json
+          retention-days: 7
+          if-no-files-found: warn
