@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - tools/alaska/audit_nps_sawyer_raster_metadata.py
+      - tests/test_alaska_nps_raster_metadata.py
       - .github/workflows/alaska-nps-sawyer-geotiff-metadata.yml
 
 permissions:
@@ -23,6 +24,8 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check rasterio==1.4.3
       - name: Python source syntax
         run: python3 -m py_compile tools/alaska/audit_nps_sawyer_raster_metadata.py
+      - name: GeoTIFF metadata safety tests (offline)
+        run: python3 tests/test_alaska_nps_raster_metadata.py
       - name: Stream two official NPS archives within 350 MiB each; extract metadata only
         run: |
           python3 tools/alaska/audit_nps_sawyer_raster_metadata.py \
