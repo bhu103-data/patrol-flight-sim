@@ -22,6 +22,7 @@ on:
       - 'tests/nyc-times-pedestrian-topology-audit.test.mjs'
       - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
       - 'tests/nyc-official-pedestrian-lowflight.test.mjs'
+      - 'tools/nyc/official-street-topology-audit.py'
   workflow_dispatch:
 
 permissions:
@@ -61,6 +62,11 @@ jobs:
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Independently audit official roadbed, sidewalk, curb and building geometry
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -82,6 +88,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nyc-official-metre-lowflight-evidence
-          path: artifacts/nyc-true-scale/
+          path: |
+            artifacts/nyc-true-scale/
+            artifacts/nyc-curb-sidewalk-source/topology-audit.json
           retention-days: 7
           if-no-files-found: ignore
