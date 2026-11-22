@@ -117,3 +117,85 @@ reality branch, source one mapped roadbed and facade site for the
 Times Square pilot; prohibit adding generic extra tower boxes as a fix.
 
 **No videos or rendered animations.** Browser screenshot files are static.
+
+
+## 6. Exact-head follow-up acceptance — 2026-11-22 17:xx UTC
+
+### Functional evidence is green; visual/geographic acceptance remains red
+
+- #293 `feat/nyc-metric-fid-material-preview-20261122-chat`, HEAD
+  `8625ef4be8685f4ec462248f360d28507c67f01d`: **4/4 Actions pass**,
+  including `NYC 1:1 official-source free-flight WebGL QA`,
+  `PATROL regression tests`, Cosmos source checks and Brooklyn Bridgehead
+  WebGL smoke. Its exact-head bridgehead artifact is run
+  [45048583221](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45048583221),
+  artifact `14764733767`. The browser report says `passed=true`,
+  `graphicsError=0`, `warnings=[]`, and records the bridge, DUMBO,
+  Liberty and Times Square camera captures. This is a functional browser
+  smoke, not proof of real-world geometry.
+- Visual inspection of the exact #293 captures finds stylized low-poly
+  buildings, large flat wall areas, repeated rectangular windows and
+  non-surveyed facade materials. The #293 test report itself explicitly
+  records `trueFacadeVerified=false` and
+  `materialEvidence=visual-proxy-only-not-as-built`. Keep the material
+  change as an opt-in preview; do not promote it as photoreal facade work.
+- The same report records 118 source footprint buildings, 38 DCM street
+  features / 89 line segments, 11 official 2022 roadbed/intersection
+  polygons (207 triangles), but `roadbedFullNYCCoverage=false`,
+  `trueRoadbedVerified=false`, and `trueFacadeVerified=false`.
+  It also confirms the preview is an independent free-camera scene and
+  `usesOriginalAircraftPhysics=false`. The material preview adds 1,560
+  wall triangles while leaving the scene total at 23,459; this is a
+  bounded visual experiment, not a complete facade dataset.
+- #248, stacked on #235 (which is stacked on #211), has 8/8 Actions green.
+  Its true-scale flythrough report records 118 official footprint/height
+  buildings, 38 DCM centerline features / 89 segments, and 11 2022
+  roadbed/intersection polygons. It explicitly labels the view an
+  experimental free-flight camera, not original aircraft physics; facade
+  windows are artist-authored and not surveyed. Its exact screenshots
+  visibly retain large blank facade planes. Do not merge it as a
+  replacement for the live aircraft scene.
+- #239's separate metric-massing pilot also passes its seven checks, but
+  its exact low-flight image is a footprint-and-roof-height extrusion
+  pilot (2,101 triangles), not a detailed architectural facade model.
+  It is a useful geometry/unit reference only.
+
+### Potential official 2014 3D building model — held out pending rights
+
+NYC Planning's official metadata describes a city-wide 2014 aerial-survey
+model with a hybrid CityGML LOD1/LOD2 specification, building roof/facade
+layers and approximately 100 iconic buildings at LOD2. It reports 95% XY
+positional accuracy within +/-1.25 ft and 95% Z accuracy within +/-1.6 ft.
+The model is historical (2014 capture; metadata last updated 2018), not a
+current-day scan. Sources:
+- https://data.nyc.gov/City-Government/NYC-3D-Model-by-Community-District/u5j4-zxpn
+- https://www.nyc.gov/assets/planning/download/pdf/data-maps/open-data/nyc-3d-model-metadata.pdf
+- https://github.com/CityOfNewYork/nyc-geo-metadata/blob/master/Metadata/Metadata_3DBuildingModel.md
+
+**Rights gate: do not import or redistribute this model yet.** Its metadata
+says only "Open Data policies and restrictions apply" and "Access Rights:
+Public"; it does not name a specific redistribution license. NYC.gov's
+current Terms of Use state that materials on NYC.gov are City property with
+all rights reserved, and direct users to contact the relevant agency for
+permission to use City intellectual property. Until the dataset-specific
+terms or written permission clearly authorize modification and
+redistribution of the model files, treat this asset as **not approved**.
+No model files or derivatives from this dataset were downloaded, committed,
+or used in PATROL. This is a fail-closed provenance decision, not a claim
+that the public dataset is unusable for every purpose.
+
+### Current release decision
+
+- Keep #211 Draft and keep #293/#248/#239 as isolated opt-in experiments.
+- Do not duplicate the #218 BQE port; its three files remain unchanged at
+  the #211 head.
+- Do not call the city photorealistic or geographically certified.
+- Next viable Manhattan facade path: obtain explicit reuse permission for
+  the official 2014 model, **or** create original project-authored LOD2
+  geometry from independently documented, redistributable source records.
+  A source snapshot must record dataset/version/date, license, attribution,
+  coordinate frame, feature IDs, geometry/texture budgets and camera
+  residuals before any production import.
+- Keep real aircraft dynamics, collision, map switching, roadbed/curbs,
+  and native-hardware frame-time gates separate from the experimental
+  free-camera pass.
