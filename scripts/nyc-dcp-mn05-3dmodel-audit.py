@@ -23,9 +23,9 @@ TARGET_LAYERS = {
     "Building_FootPrint",
     "Building_RoofTop",
     "Building_Facade",
-    "Surface_Foot Print",
-    "Surface_Roof Top",
-    "Surface_Facade",
+    "FootPrint Surface",
+    "RoofTop Surface",
+    "Facade Surface",
 }
 
 
@@ -96,6 +96,12 @@ def inspect(model_path: Path, report_path: Path):
     bin_values = set()
     doitt_values = set()
     source_values = set()
+    surface_brep_counts = Counter()
+    cached_mesh_sample = defaultdict(lambda: {
+        "objectsSampled": 0, "brepFacesSampled": 0, "facesWithCachedMesh": 0,
+        "cachedMeshVertices": 0, "cachedMeshFaces": 0
+    })
+    surface_samples = defaultdict(list)
     inside_objects = []
     total_mesh_vertices = 0
     total_mesh_faces = 0
@@ -136,6 +142,34 @@ def inspect(model_path: Path, report_path: Path):
 
         layer_inside_counts[layer] += 1
         geometry_inside_counts[geometry_type] += 1
+        if layer in ("FootPrint Surface", "RoofTop Surface", "Facade Surface") and geometry_type == "Brep":
+            surface_brep_counts[layer] += 1
+            sample = cached_mesh_sample[layer]
+            if sample["objectsSampled"] < 40:
+                sample["objectsSampled"] += 1
+                face_count = len(geometry.Faces)
+                sample["brepFacesSampled"] += face_count
+                cached_vertices = 0
+                cached_faces = 0
+                faces_with_mesh = 0
+                for face in geometry.Faces:
+                    mesh = face.GetMesh(rhino3dm.MeshType.Any)
+                    if mesh is not None:
+                        faces_with_mesh += 1
+                        cached_vertices += len(mesh.Vertices)
+                        cached_faces += len(mesh.Faces)
+                sample["facesWithCachedMesh"] += faces_with_mesh
+                sample["cachedMeshVertices"] += cached_vertices
+                sample["cachedMeshFaces"] += cached_faces
+                if len(surface_samples[layer]) < 8:
+                    surface_samples[layer].append({
+                        "objectName": getattr(attributes, "Name", None),
+                        "brepFaces": face_count,
+                        "facesWithCachedMesh": faces_with_mesh,
+                        "cachedMeshVertices": cached_vertices,
+                        "cachedMeshFaces": cached_faces,
+                        "bboxStatePlaneFtUS": [round(v, 3) for v in bounds],
+                    })
         keys = {
             "BIN": user_value(attributes, "BIN"),
             "DOITT_ID": user_value(attributes, "DOITT_ID"),
@@ -179,6 +213,9 @@ def inspect(model_path: Path, report_path: Path):
             "allObjects": layer_counts.get(name, 0),
             "insideTimesSquareBbox": layer_inside_counts.get(name, 0),
             "geometryTypes": dict(layer_geometry.get(name, {})),
+            "brepObjectsInside": surface_brep_counts.get(name, 0),
+            "cachedMeshSample": dict(cached_mesh_sample.get(name, {})),
+            "cachedMeshSampleObjects": surface_samples.get(name, []),
         }
 
     report = {
@@ -226,8 +263,8 @@ def inspect(model_path: Path, report_path: Path):
         "sampleObjectsInsideTimesSquareBbox": inside_objects,
         "recommendation": (
             "candidate-for-roof-and-facade-geometry-review"
-            if layer_inside_counts.get("Surface_Facade", 0) > 0
-            and layer_inside_counts.get("Surface_Roof Top", 0) > 0
+            if layer_inside_counts.get("Facade Surface", 0) > 0
+            and layer_inside_counts.get("RoofTop Surface", 0) > 0
             else "do-not-integrate-until-source-layer-coverage-is-proven"
         ),
         "limitations": [
