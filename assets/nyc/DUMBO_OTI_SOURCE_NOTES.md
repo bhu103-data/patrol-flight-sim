@@ -27,6 +27,12 @@ The runtime pilot reuses three authentic **exterior source ring shapes**, unmodi
 - The three pilot site matches require normal quality LOD3, city map, intact local parcel, no registered OTI footprint. Distant/low graphics and other maps retain existing generated buildings.
 - Polygon holes and courtyards are excluded from this small pilot; do not use the same method for holed source geometries.
 
+## Independent façade-depth follow-up (not survey openings)
+
+On the stacked `feat/nyc-dumbo-oti-deep-reveals-20261122-chat` branch only, each original polygon exterior wall is split into masonry strips **around** its original lightweight window bays. Glass planes now sit 0.18 PATROL units inward from the source-derived exterior, with four actual 3D return faces (left jamb, right jamb, sill and header) per opening. Each pilot also gains one **original authored**, inward-facing entry bay on a bounded long edge, preferably south-facing. This is a readability/detail treatment, **not** an NYC-measured window/door location or surveyed floorplan.
+
+Deterministic execution of the production helper generated **45/33/51 windows** and **one door per source FID**, with **441/336/455 total quads** and unchanged **9/9/8 roof triangles**. All vertices stayed within each original worker collider envelope (including its 0.12-unit parapet allowance); no street/water/collision/height/aircraft logic, texture fetch, draw call or source WGS84 record was changed. The higher polygon budget requires exact-head real WebGL2 screenshots and frame-pacing review before merge; source-only geometry tests are not enough to claim visual or native GPU FPS success.
+
 ## QA gates
 
 1. `node --test tests/nyc-dumbo-oti-source-silhouette.test.mjs`: authentic FID and source heights, polygon orientation, ear-clipped roof area, vertex bounds, regression/fallback.
