@@ -83,6 +83,11 @@ test('three adjacent DUMBO infill roofs have distinct actual parapet profiles',(
       assert.equal(pane.at(-1),13,'rooflight needs glass material, not masonry');
       assert.ok(new Set(pane.slice(0,4).map(p=>p[1].toFixed(4))).size===2,
         'the rooflight must slope in actual 3D, not be a flat decal');
+      const [a,b,c]=pane;
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-
+        (b[0]-a[0])*(c[2]-a[2]);
+      assert.ok(normalY>0.2,
+        'roof glass must face upward so the aerial view cannot backface-cull it');
     }
   }
 });
