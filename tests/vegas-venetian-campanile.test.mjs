@@ -37,3 +37,45 @@ test('tower collision, site, roof apex and map selector are unchanged',()=>{
   assert.match(html,/function buildVegasStrip\(geometry\)/);
   assert.match(html,/function buildVegasHotels\(/);
 });
+
+test('actual clock mesh has twelve readable ticks and two hands on both existing faces',()=>{
+  const begin=html.lastIndexOf('    for(const side of [-1,1]){',
+    html.indexOf('      const clock=',start));
+  const end=html.indexOf('    // PATROL_VEGAS_CAMPANILE_BELL_V1',begin);
+  assert.ok(begin>start&&end>begin,'target only the two campanile dials');
+  const dialQuads=[],dialBoxes=[];
+  new Function('box','addQuad','ground','cream','iron',html.slice(begin,end))(
+    (...args)=>dialBoxes.push(args),(...args)=>dialQuads.push(args),
+    ground,[.89,.81,.67],[.24,.23,.21]);
+  assert.equal(dialQuads.length,68,'2 faces × (20 ivory sectors +12 ticks +2 hands)');
+  assert.equal(dialBoxes.length,2,'each dial retains one raised central pivot');
+  const ink=dialQuads.filter(q=>q[4][0]===.20);
+  assert.equal(ink.length,28,'24 cardinal/short ticks plus four hands');
+  for(const q of dialQuads){
+    assert.ok(q.slice(0,4).every(v=>v.length===3&&v.every(Number.isFinite)),
+      'clock ticks are actual finite 3D triangles, not overlaid HTML text');
+  }
+  assert.ok(dialQuads.filter(q=>q[0][0]<-13).length>=14);
+  assert.ok(dialQuads.filter(q=>q[0][0]>-9).length>=14);
+});
+test('lightweight suspended bell stays inside the already-conservative tower collider',()=>{
+  const begin=html.indexOf('    // PATROL_VEGAS_CAMPANILE_BELL_V1',start);
+  const end=html.indexOf('    cylinder(-11,8,[[ground+16.4',begin);
+  assert.ok(begin>start&&end>begin);
+  const bells=[],supports=[];
+  new Function('box','cylinder','ground','iron',html.slice(begin,end))(
+    (...args)=>supports.push(args),(...args)=>bells.push(args),
+    ground,[.24,.23,.21]);
+  assert.equal(bells.length,2,'single main bell and low-poly clapper');
+  assert.equal(supports.length,1,'one suspended horizontal bell bar');
+  for(const [x,z,levels,color,sides] of bells){
+    assert.deepEqual([x,z],[-11,8]);
+    assert.ok([8,10].includes(sides),'mobile-friendly radial tessellation');
+    assert.ok(levels.every(([y,rad])=>y>=ground+14.5&&
+      y<=ground+15.5&&rad<=.52&&rad>0),
+      'no bell facet may pierce the exterior facade or roof');
+    assert.equal(color.length,3);
+  }
+  assert.ok(supports[0][3]<1.8&&supports[0][4]<.2,
+    'slender support must leave the arch openings visible');
+});
