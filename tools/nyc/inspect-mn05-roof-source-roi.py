@@ -10,6 +10,7 @@ import collections
 import hashlib
 import json
 import math
+import os
 import pathlib
 import sys
 
@@ -356,7 +357,10 @@ def inspect():
     except Exception as err:
         report["errors"].append(f"{type(err).__name__}: {err}")
     finally:
-        SOURCE.unlink(missing_ok=True)
+        # Keep the exact source 3DM only when a same-job downstream extractor
+        # explicitly requests it. The workflow removes it before artifact upload.
+        if os.environ.get("PATROL_KEEP_MN05") != "1":
+            SOURCE.unlink(missing_ok=True)
         if not report["meshAccepted"]:
             MESH_OUT.unlink(missing_ok=True)
         OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2))
