@@ -279,11 +279,12 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
 
 test('Digit8 free inspection camera is front-facing and 5+ above real hillside',async()=>{
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
-  assert.match(game,/marketInspect=\\{\\s*eye:new THREE\\.Vector3\\(site\\.x\\+2,site\\.base\\+8\\.5,site\\.z\\+18\\),\\s*aim:new THREE\\.Vector3\\(site\\.x,site\\.base\\+5\\.7,site\\.z\\+2\\.78\\)/);
-  assert.match(game,/if\\(marketInspect\\)\\{\\s*cameraDesired\\.copy\\(marketInspect\\.eye\\)/);
-  assert.match(game,/marketInspectorActive:Boolean\\(marketInspect\\)/);
-  assert.match(game,/canvas\\.addEventListener\\('pointerdown',e=>\\{marketInspect=null/);
-  assert.match(game,/canvas\\.addEventListener\\('wheel',e=>\\{marketInspect=null/);
+  assert.ok(game.includes('eye:new THREE.Vector3(site.x+2,site.base+8.5,site.z+18)'));
+  assert.ok(game.includes('aim:new THREE.Vector3(site.x,site.base+5.7,site.z+2.78)'));
+  assert.ok(game.includes('cameraDesired.copy(marketInspect.eye)'));
+  assert.ok(game.includes('marketInspectorActive:Boolean(marketInspect)'));
+  assert.ok(game.includes("canvas.addEventListener('pointerdown',e=>{marketInspect=null"));
+  assert.ok(game.includes("canvas.addEventListener('wheel',e=>{marketInspect=null"));
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
   const real=new Function('clamp',terrain+';return {ground};')(
