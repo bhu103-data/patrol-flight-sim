@@ -201,7 +201,9 @@ function imageFile(filename){
     const image=new Image();
     image.onload=()=>resolve(image);
     image.onerror=()=>reject(Error('Texture unavailable: '+filename));
-    image.src='./assets/nyc/'+filename;
+    // Resolve from this module, so the root PATROL page and the nested
+    // 1:1 NYC viewer load the same local CC0 texture files.
+    image.src=new URL(filename,import.meta.url).href;
   });
 }
 async function photos(gl){
@@ -245,6 +247,11 @@ async function photos(gl){
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flip);
     gl.bindTexture(gl.TEXTURE_2D,null);
   }
+}
+// Shared CC0 texture loader for the opt-in 1:1 WebGL2 NYC reference scene.
+// It loads only local PBR maps; no optional landmark GLBs or game state.
+export async function loadNycPbrTextures(gl){
+  return photos(gl);
 }
 export async function loadNycRealism(gl){
   const models=Object.create(null),failures=[];

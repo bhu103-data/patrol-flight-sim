@@ -26,7 +26,7 @@
 <p class="muted" id="metadata"></p>
 <p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button> <button id="historicalFocus" type="button" style="pointer-events:auto">2014 model focus FID 212747</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
 </aside>
 <footer id="flightModeStatus">NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
 <script type="module">
@@ -34,6 +34,7 @@ import {buildMeteredMassing,wgs84ToMeters,metersToWgs84} from './times-square-me
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
 import {makeC185AirborneState,c185SourceAirborneStep,c185SceneCollision}
   from './nyc-c185-metre-airborne.mjs';
+import {loadNycPbrTextures} from './nyc-realism.js';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
       metadata=document.getElementById('metadata');
@@ -74,17 +75,85 @@ function program(){
     'in vec3 vPosition;',
     'flat in float vMaterial;',
     'uniform vec3 uEye;',
+    'uniform float uPbrReady;',
+    'uniform sampler2D uWallDiffuse;',
+    'uniform sampler2D uWallNormal;',
+    'uniform sampler2D uWallARM;',
+    'uniform sampler2D uAsphaltDiffuse;',
+    'uniform sampler2D uAsphaltNormal;',
+    'uniform sampler2D uAsphaltARM;',
+    'uniform sampler2D uConcreteDiffuse;',
     'out vec4 color;',
+    'float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
     'void main(){',
     'vec3 n=normalize(vNormal),sun=normalize(vec3(.47,.91,.30));',
-    'float lit=max(dot(n,sun),0.0);',
-    'vec3 base=vColor*(.60+.50*lit);',
-    'if(vMaterial>0.5&&vMaterial<1.5){',
-    'float fresnel=pow(1.-abs(dot(n,normalize(uEye-vPosition))),3.);',
-    'base=mix(base,vec3(.55,.75,.86),fresnel*.45);}',
-    'if(vMaterial>1.5)base=vColor*(.80+.20*lit);',
-    'float fog=smoothstep(250.,1000.,distance(uEye,vPosition));',
-    'color=vec4(mix(base,vec3(.48,.66,.76),fog*.52),1.);}'
+    'vec3 base=vColor;',
+    'float roughness=.78,metallic=.02,ao=1.0;',
+    'if(uPbrReady>.5){',
+    'if(vMaterial<.5){',
+    'vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.00001,0.0,.00001));',
+    'vec2 uv=vec2(dot(vPosition,tangent),vPosition.y)*vec2(.30,.29);',
+    'vec3 photo=texture(uWallDiffuse,uv).rgb;',
+    'vec3 arm=texture(uWallARM,uv).rgb;',
+    'vec3 bump=texture(uWallNormal,uv).rgb*2.0-1.0;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'base*=clamp(.68+.65*lum,.60,1.35);',
+    'roughness=clamp(arm.g,.44,.94);metallic=clamp(arm.b,0.0,.25);ao=clamp(arm.r,.45,1.0);',
+    'n=normalize(n+(tangent*bump.x+vec3(0.0,1.0,0.0)*bump.y)*.055);',
+    '}else if(vMaterial>.5&&vMaterial<1.5){',
+    'vec3 view=normalize(uEye-vPosition);',
+    'float fresnel=pow(1.0-clamp(abs(dot(view,n)),0.0,1.0),5.0);',
+    'vec3 sky=mix(vec3(.14,.23,.32),vec3(.40,.55,.66),.58);',
+    'vec2 cell=floor(vec2(vPosition.x*.68+vPosition.z*.57,vPosition.y*.43));',
+    'float occupied=step(.76,hash21(cell+vec2(37.2,19.5)));',
+    'base=mix(base*.72,sky,.28+.45*fresnel);',
+    'base+=vec3(.58,.39,.18)*occupied*.24;',
+    'roughness=.18;metallic=.08;ao=1.0;',
+    '}else if(vMaterial>1.5&&vMaterial<2.5){',
+    'vec2 uv=vPosition.xz*.38;',
+    'vec3 photo=texture(uAsphaltDiffuse,uv).rgb;',
+    'vec3 arm=texture(uAsphaltARM,uv).rgb;',
+    'vec3 bump=texture(uAsphaltNormal,uv).rgb*2.0-1.0;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'base*=clamp(.68+1.15*lum,.70,1.42);',
+    'roughness=clamp(arm.g,.55,.99);metallic=clamp(arm.b,0.0,.08);ao=clamp(arm.r,.45,1.0);',
+    'vec3 tangent=normalize(vec3(1.0,0.0,0.0));',
+    'vec3 bitangent=normalize(cross(n,tangent));',
+    'n=normalize(n+(tangent*bump.x+bitangent*bump.y)*.07);',
+    '}else if(vMaterial>2.5&&vMaterial<3.5){',
+    'vec2 uv=vPosition.xz*.58;',
+    'vec3 photo=texture(uConcreteDiffuse,uv).rgb;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'float aggregate=hash21(floor(vPosition.xz*2.2));',
+    'base*=clamp(.72+.58*lum,.72,1.22)*(0.97+aggregate*.06);',
+    'roughness=.88;metallic=0.0;ao=.90;',
+    '}else if(vMaterial>4.5&&vMaterial<5.5){',
+    'base*=.72;roughness=.97;metallic=0.0;ao=.72;',
+    '}',
+    '}',
+    'vec3 view=normalize(uEye-vPosition),halfway=normalize(view+sun);',
+    'float nDotL=max(dot(n,sun),0.0),nDotV=max(dot(n,view),.05);',
+    'float nDotH=max(dot(n,halfway),0.0),vDotH=max(dot(view,halfway),0.0);',
+    'float alpha=max(.04,roughness*roughness),alpha2=alpha*alpha;',
+    'float denom=nDotH*nDotH*(alpha2-1.0)+1.0;',
+    'float D=alpha2/(3.14159265*denom*denom);',
+    'float k=(roughness+1.0)*(roughness+1.0)/8.0;',
+    'float Gv=nDotV/(nDotV*(1.0-k)+k),Gl=nDotL/(nDotL*(1.0-k)+k);',
+    'vec3 F0=mix(vec3(.04),base,metallic);',
+    'vec3 F=F0+(1.0-F0)*pow(1.0-vDotH,5.0);',
+    'vec3 specular=(D*Gv*Gl*F)/(4.0*nDotV*max(nDotL,.001)+.001);',
+    'vec3 diffuse=(1.0-F)*(1.0-metallic)*base/3.14159265;',
+    // Match PATROL's established Manhattan ambient/direct balance while
+    // retaining the new GGX highlight. The first pass was too dark at street level.
+    'float light=0.61+0.40*nDotL+0.13*max(n.y,0.0);',
+    'vec3 lit=base*light*ao+specular*nDotL*1.45;',
+    'if(vMaterial>.5&&vMaterial<1.5){',
+    'float rim=pow(1.0-clamp(abs(dot(n,view)),0.0,1.0),3.0);',
+    'lit=mix(lit,vec3(.55,.75,.86),rim*.16);',
+    '}',
+    'float fog=smoothstep(250.0,1000.0,distance(uEye,vPosition));',
+    'color=vec4(mix(lit,vec3(.48,.66,.76),fog*.52),1.0);',
+    '}'
   ].join('\n'));
   const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
@@ -131,13 +200,44 @@ async function start(){
   if(roadbedResponse&&!roadbedResponse.ok)
     throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
+  const historicalOff=params.get('historical')==='off';
+  const historicalResponse=await fetch('./nyc-mn05-2014-source-mesh.json',{cache:'no-cache'});
+  if(!historicalResponse.ok)
+    throw Error('Official NYC 2014 MN05 model asset HTTP '+historicalResponse.status);
+  const historicalSourceMesh=await historicalResponse.json();
+  const historicalMesh=historicalOff?null:historicalSourceMesh;
   const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
+    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed,historicalMesh});
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   gl.bufferData(gl.ARRAY_BUFFER,geometry.interleaved,gl.STATIC_DRAW);
   const prg=program();gl.useProgram(prg);
+  const pbrOff=params.get('pbr')==='off';
+  let pbrTextures=null,pbrTextureLoadError=null;
+  if(!pbrOff){
+    try{pbrTextures=await loadNycPbrTextures(gl);}
+    catch(error){pbrTextureLoadError=error.message;console.warn('[PATROL NYC] PBR maps unavailable:',error);}
+  }
+  const pbrBindings=pbrTextures?[
+    ['uWallDiffuse',pbrTextures.wallDiffuse],
+    ['uWallNormal',pbrTextures.wallNormal],
+    ['uWallARM',pbrTextures.wallARM],
+    ['uAsphaltDiffuse',pbrTextures.asphalt],
+    ['uAsphaltNormal',pbrTextures.asphaltNormal],
+    ['uAsphaltARM',pbrTextures.asphaltARM],
+    ['uConcreteDiffuse',pbrTextures.concrete]
+  ]:[];
+  let pbrTextureMapCount=0;
+  for(const [name,texture] of pbrBindings){
+    if(!texture)continue;
+    gl.activeTexture(gl.TEXTURE0+pbrTextureMapCount);
+    gl.bindTexture(gl.TEXTURE_2D,texture);
+    gl.uniform1i(gl.getUniformLocation(prg,name),pbrTextureMapCount);
+    pbrTextureMapCount++;
+  }
+  gl.uniform1f(gl.getUniformLocation(prg,'uPbrReady'),pbrTextureMapCount===7?1:0);
+  gl.activeTexture(gl.TEXTURE0);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(1,3,gl.FLOAT,false,40,12);gl.enableVertexAttribArray(1);
@@ -177,7 +277,77 @@ async function start(){
     position:[...sourceStreetSpawn.position],
     yaw:sourceStreetSpawn.yaw,pitch:sourceStreetSpawn.pitch
   });
-  let camera=reset(),last=0,frames=0;
+  let historicalFocusQA={accepted:false,reason:'not-requested'};
+  const historicalFocus=()=>{
+    const fid=Number(params.get('focus2014')||212747);
+    const rows=historicalSourceMesh.roofTriangles.filter(
+      t=>Number(t.matched2022BuildingFid)===fid);
+    const facadeRows=historicalSourceMesh.facadeTriangles.filter(
+      t=>Number(t.matched2022BuildingFid)===fid);
+    const building=massing.buildings.find(b=>Number(b.fid)===fid);
+    if(!rows.length||!building){
+      historicalFocusQA={accepted:false,fid,reason:'missing-matched-roof-or-current-footprint'};
+      return reset();
+    }
+    const points=rows.flatMap(t=>t.vertices);
+    const east=points.reduce((s,p)=>s+p[0],0)/points.length;
+    const north=points.reduce((s,p)=>s+p[1],0)/points.length;
+    const [sourceOffsetE,sourceOffsetN]=wgs84ToMeters(
+      historicalSourceMesh.localOriginLonLat,massing.origin);
+    const targetX=east+sourceOffsetE-geometry.center.east;
+    const targetZ=geometry.center.north-(north+sourceOffsetN);
+    // Aim at a real lower/mid facade point, not the roof centroid. The
+    // previous fixed offset placed the camera INSIDE FID 212747.
+    const targetHeight=Math.max(8,Math.min(36,building.roofHeightMeters*.22));
+    const target=[targetX,targetHeight,targetZ];
+    const firstBuildingHit=(eye)=>{
+      const distance=Math.hypot(targetX-eye[0],targetZ-eye[2]);
+      const steps=Math.max(1,Math.ceil(distance/.5));
+      for(let step=1;step<steps;step++){
+        const t=step/steps;
+        const x=eye[0]+(targetX-eye[0])*t;
+        const y=eye[1]+(targetHeight-eye[1])*t;
+        const z=eye[2]+(targetZ-eye[2])*t;
+        const hit=buildingContains(massing,x+geometry.center.east,
+          geometry.center.north-z,y);
+        if(hit!==null)return {fid:hit,distanceMetres:distance*t,heightMetres:y};
+      }
+      return null;
+    };
+    const views=sourceStreetCandidates.map(candidate=>{
+      const eye=[...candidate.position];
+      const horizontalDistance=Math.hypot(targetX-eye[0],targetZ-eye[2]);
+      const eyeInsideBuildingFid=buildingContains(massing,
+        eye[0]+geometry.center.east,geometry.center.north-eye[2],eye[1]);
+      return {candidate,eye,horizontalDistance,eyeInsideBuildingFid,
+        firstHit:firstBuildingHit(eye)};
+    }).filter(view=>view.horizontalDistance>=20&&view.horizontalDistance<=180&&
+      view.eyeInsideBuildingFid===null&&view.firstHit?.fid===fid&&
+      view.firstHit.distanceMetres>3&&
+      view.firstHit.distanceMetres<view.horizontalDistance-1)
+      .sort((a,b)=>a.horizontalDistance-b.horizontalDistance);
+    const view=views[0];
+    if(!view){
+      historicalFocusQA={accepted:false,fid,reason:'no-clear-official-street-sightline-to-matched-building',
+        candidateCount:sourceStreetCandidates.length};
+      return reset();
+    }
+    const eye=view.eye;
+    const yaw=Math.atan2(targetX-eye[0],eye[2]-targetZ);
+    const pitch=Math.atan2(targetHeight-eye[1],view.horizontalDistance);
+    historicalFocusQA={
+      accepted:true,fid,sourceRoofTriangles:rows.length,
+      sourceFacadeTriangles:facadeRows.length,
+      cameraPosition:eye.slice(),targetPosition:target,
+      horizontalDistanceMetres:view.horizontalDistance,
+      targetHeightMetres:targetHeight,
+      eyeInsideBuildingFid:view.eyeInsideBuildingFid,
+      firstHit:view.firstHit,
+      street:'7 Avenue',clearanceRadiusMetres:streetClearanceMetres
+    };
+    return {position:eye,yaw,pitch};
+  };
+  let camera=params.has('focus2014')?historicalFocus():reset(),last=0,frames=0;
   // A deliberately restricted PATROL airborne-only aircraft-control slice.
   // Original game floatplanes, water taxi, gear, HUD, terrain, weapons,
   // glTF plane and takeoff physics are NOT ported or claimed here.
@@ -200,6 +370,7 @@ async function start(){
   });
   updateAirborneMode();
   document.getElementById('reset').addEventListener('click',()=>camera=reset());
+  document.getElementById('historicalFocus').addEventListener('click',()=>camera=historicalFocus());
   document.getElementById('aerial').addEventListener('click',()=>{
     camera={position:[0,340,Math.min(450,span*.55)],yaw:0,pitch:-.40};
   });
@@ -247,16 +418,36 @@ async function start(){
   const stats=geometry.counts;
   status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
     ' municipal streets / '+stats.streetSegments+' source line segments · '+
-    stats.officialRoadbedPolygons+' OTI 2022 true roadbed polygons · free flight camera';
+    stats.officialRoadbedPolygons+' OTI 2022 roadbed polygons · '+
+    stats.historicalRoofTriangles+' original 2014 roof triangles / '+
+    stats.historicalFacadeTriangles+' original 2014 facade triangles';
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
-    ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
-    massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' official source pavement triangles';
+    ' illustrative windows ('+stats.historicalSourceFacadeWindows+
+    ' placed on exposed 2014 source faces) · '+stats.historicalRoofFids+' 2014 roof FIDs / '+
+    stats.historicalFacadeFids+' 2014 facade FIDs · '+pbrTextureMapCount+
+    ' CC0 PBR maps · '+stats.triangles+' triangles · '+
+    '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
     trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
+    historical2014ModelImported:!!historicalMesh,
+    historical2014SourceYear:historicalMesh?.sourceVintage??null,
+    historical2014RoofTriangles:stats.historicalRoofTriangles,
+    historical2014FacadeTriangles:stats.historicalFacadeTriangles,
+    historical2014RoofFids:stats.historicalRoofFids,
+    historical2014FacadeFids:stats.historicalFacadeFids,
+    historical2014SourceFacadeWindows:stats.historicalSourceFacadeWindows,
+    historical2014SourceFacadeWindowFids:stats.historicalSourceFacadeWindowFidList,
+    pbrTexturesReady:pbrTextureMapCount===7,pbrTextureMapCount,pbrTextureLoadError,
+    dcmFallbackBands:stats.dcmFallbackBands,dcmFallbackTriangles:stats.dcmFallbackTriangles,
+    roadMaterialClasses:{officialOti2022:2,dcmIllustrativeFallback:5},
+    historical2014CollisionEnabled:false,
+    historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,
+    historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,
+    historicalFocusFid:params.has('focus2014')?Number(params.get('focus2014')):null,
+    historicalFocus:historicalFocusQA,
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,

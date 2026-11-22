@@ -1,0 +1,131 @@
+name: NYC official 2014 MN05 model import into 1:1 WebGL scene
+on:
+  push:
+    branches:
+      - feat/nyc-mn05-official-2014-model-import-20261122-chat
+    paths:
+      - 'tools/nyc/**'
+      - 'assets/nyc/nyc-true-scale-neighborhood.mjs'
+      - 'assets/nyc/nyc-true-scale-flight.html'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/PBR_TEXTURE_SOURCES.md'
+      - 'tests/nyc-texture-assets.test.mjs'
+      - 'tests/nyc-mn05-model-import.test.mjs'
+      - 'tests/nyc-mn05-cached-roof-source.test.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
+      - 'tests/nyc-official-mn05-coordinate-frame.test.py'
+      - 'scripts/nyc-true-scale-flight-browser-smoke.mjs'
+      - '.github/workflows/nyc-mn05-model-import.yml'
+  pull_request:
+    paths:
+      - 'tools/nyc/**'
+      - 'assets/nyc/nyc-true-scale-neighborhood.mjs'
+      - 'assets/nyc/nyc-true-scale-flight.html'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/PBR_TEXTURE_SOURCES.md'
+      - 'tests/nyc-texture-assets.test.mjs'
+      - 'tests/nyc-mn05-model-import.test.mjs'
+      - 'tests/nyc-mn05-cached-roof-source.test.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
+      - 'tests/nyc-official-mn05-coordinate-frame.test.py'
+      - 'scripts/nyc-true-scale-flight-browser-smoke.mjs'
+      - '.github/workflows/nyc-mn05-model-import.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-authentic-municipal-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned open-source Rhino and geometry readers
+        run: |
+          python -m pip install --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
+      - name: Validate original cached-face extraction and source matching
+        run: |
+          python -m py_compile tools/nyc/probe-official-mn05-rhino.py
+          python -m py_compile tools/nyc/official_mn05_projection.py
+          python -m py_compile tools/nyc/inspect_mn05_support.py
+          python -m py_compile tools/nyc/inspect_mn05_facade_support.py
+          python -m py_compile tools/nyc/extract-mn05-cached-roof-mesh.py
+          python -m py_compile tools/nyc/extract-mn05-cached-facade-mesh.py
+          python -m py_compile tools/nyc/build-mn05-game-asset.py
+          python tests/nyc-mn05-cached-roof-source.test.py
+          python tests/nyc-mn05-cached-facade-source.test.py
+          python tests/nyc-official-mn05-coordinate-frame.test.py
+      - name: Download and verify original NYC DCP 2014 MN05 Rhino model
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
+      - name: Extract authentic saved roof and facade meshes and match current 2022 FIDs
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/extract-mn05-cached-roof-mesh.py
+          test -s artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+          python tools/nyc/extract-mn05-cached-facade-mesh.py
+          test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
+          test -s artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
+      - name: Package bounded original model triangles as a runtime asset
+        run: |
+          python tools/nyc/build-mn05-game-asset.py
+          test -s assets/nyc/nyc-mn05-2014-source-mesh.json
+          test $(wc -c < assets/nyc/nyc-mn05-2014-source-mesh.json) -lt 8000000
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate imported 2014 mesh geometry and existing NYC regressions
+        run: |
+          node --check assets/nyc/nyc-true-scale-neighborhood.mjs
+          node --check scripts/nyc-true-scale-flight-browser-smoke.mjs
+          node --test tests/nyc-mn05-model-import.test.mjs tests/nyc-texture-assets.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-wgs84-control-points.test.mjs
+      - name: Install free Chromium WebGL2 for live same-camera A/B
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve PATROL and run real-time 2014 mesh integration QA
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/nyc-mn05-runtime-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture same-camera source-mesh ON/OFF screenshots and WebGL evidence
+        run: |
+          node scripts/nyc-true-scale-flight-browser-smoke.mjs
+          test -s artifacts/nyc-true-scale-flight/report.json
+          test -s artifacts/nyc-true-scale-flight/01-true-scale-flythrough.png
+          test -s artifacts/nyc-true-scale-flight/04-2014-matched-building-model-off.png
+      - name: Commit generated official source mesh only after extraction and live QA pass
+        if: success() && github.event_name != 'pull_request'
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/nyc/nyc-mn05-2014-source-mesh.json
+          if git diff --cached --quiet; then
+            echo "Generated official source mesh is byte-identical to the committed runtime asset."
+          else
+            git commit -m "assets(nyc): import matched official 2014 MN05 roof and facade meshes"
+            git push origin "HEAD:${BRANCH_NAME}"
+          fi
+      - name: Publish mesh, provenance and visual QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-mn05-official-2014-runtime-import
+          path: |
+            assets/nyc/nyc-mn05-2014-source-mesh.json
+            artifacts/nyc-official-mn05/mn05-probe.json
+            artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+            artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
+            artifacts/nyc-true-scale-flight/report.json
+            artifacts/nyc-true-scale-flight/*.png
+          retention-days: 14
+          if-no-files-found: warn

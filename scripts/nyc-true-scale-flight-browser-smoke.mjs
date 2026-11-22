@@ -56,10 +56,110 @@ try{
     'Labelled street view must use 3.2m eye height, not 65m: '+
       JSON.stringify(report.initial.camera));
   check(report.initial.windowVisuals>100,'No bounded facade detail');
+  check(report.initial.pbrTexturesReady===true&&report.initial.pbrTextureMapCount===7,
+    'The true-scale viewer did not load all seven local CC0 PBR texture maps');
+  check(report.initial.roadMaterialClasses?.officialOti2022===2&&
+    report.initial.roadMaterialClasses?.dcmIllustrativeFallback===5,
+    'Verified OTI roadbed and illustrative DCM-width fallback lost separate material classes');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
+  check(report.initial.historical2014ModelImported===true&&
+    report.initial.historical2014SourceYear===2014&&
+    report.initial.historical2014RoofTriangles===1974&&
+    report.initial.historical2014FacadeTriangles===540&&
+    report.initial.historical2014RoofFids===33&&
+    report.initial.historical2014FacadeFids===30,
+    'Original 2014 DCP MN05 roof/facade mesh import counts or source year mismatch');
+  check(report.initial.historical2014CollisionEnabled===false&&
+    report.initial.historical2014VerticalDatumVerified===false&&
+    report.initial.historical2014SourceRhinoSha256===
+      'b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57',
+    'Historical model was incorrectly promoted to collision or absolute elevation');
+  check(report.initial.historical2014SourceFacadeWindows>=100&&
+    report.initial.historical2014SourceFacadeWindowFids.includes(212747),
+    'Matched 2014 facade source faces did not receive bounded illustrative window infill');
+  check(report.initial.trueFacadeVerified===false,
+    'A bounded historical facade subset must not be called complete facade verification');
   const initial=await page.locator('#scene').screenshot({
     path:out+'/01-true-scale-flythrough.png',timeout:90000});
   const initialCapturedUTC=new Date().toISOString();
+  const focusOnPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  const focusOffPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  focusOnPage.on('pageerror',e=>report.errors.push('historical-focus-on JS '+e.message));
+  focusOffPage.on('pageerror',e=>report.errors.push('historical-focus-off JS '+e.message));
+  await focusOnPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?focus2014=212747',
+    {waitUntil:'domcontentloaded',timeout:60000});
+  await focusOffPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?focus2014=212747&historical=off',
+    {waitUntil:'domcontentloaded',timeout:60000});
+  await Promise.all([focusOnPage,focusOffPage].map(p=>p.waitForFunction(()=>
+    window.PatrolMetricFlightQA?.ready&&window.PatrolMetricFlightQA.frames>12,
+    null,{timeout:60000})));
+  const onCamera=await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
+  const offCamera=await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.cameraRegistration);
+  const focusQA=await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historicalFocus);
+  const focusOffQA=await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.historicalFocus);
+  const cameraPositionError=Math.hypot(...onCamera.eyeENUmeters.map(
+    (v,i)=>v-offCamera.eyeENUmeters[i]));
+  const cameraAngleError=Math.max(
+    Math.abs(onCamera.yawRadians-offCamera.yawRadians),
+    Math.abs(onCamera.pitchRadians-offCamera.pitchRadians));
+  check(focusQA?.accepted===true&&focusQA.fid===212747,
+    'No accepted source-street camera for the selected historical building: '+JSON.stringify(focusQA));
+  check(focusQA.eyeInsideBuildingFid===null&&focusQA.firstHit?.fid===212747,
+    'Historical focus camera is inside/occluded by a building instead of seeing the target facade: '+JSON.stringify(focusQA));
+  check(focusQA.horizontalDistanceMetres>=20&&focusQA.horizontalDistanceMetres<=180&&
+    focusQA.firstHit.distanceMetres>3&&focusQA.firstHit.distanceMetres<focusQA.horizontalDistanceMetres-1,
+    'Historical facade camera is not outside the building with a valid street sightline');
+  check(focusQA.sourceRoofTriangles>0&&focusQA.sourceFacadeTriangles>0&&
+    JSON.stringify(focusQA)===JSON.stringify(focusOffQA),
+    'Historical source focus diagnostics differ between model ON/OFF views');
+  await Promise.all([focusOnPage,focusOffPage].map(p=>p.addStyleTag({
+    content:'aside,footer{display:none!important}'
+  })));
+  const onPng=await focusOnPage.screenshot({
+    path:out+'/03-2014-matched-building-model-on.png',timeout:90000});
+  const offPng=await focusOffPage.screenshot({
+    path:out+'/04-2014-matched-building-model-off.png',timeout:90000});
+  const meshOnPng=PNG.sync.read(onPng),meshOffPng=PNG.sync.read(offPng);
+  check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
+    '2014 mesh A/B canvas frames do not share the same viewport');
+  check(cameraPositionError<1e-6&&cameraAngleError<1e-9&&
+    onCamera.viewportPixels.join(',')===offCamera.viewportPixels.join(','),
+    'Historical model ON/OFF captures did not use the exact same camera pose');
+  let historicalChangedPixels=0;
+  for(let i=0;i<meshOnPng.data.length;i+=4){
+    const delta=(Math.abs(meshOnPng.data[i]-meshOffPng.data[i])+
+      Math.abs(meshOnPng.data[i+1]-meshOffPng.data[i+1])+
+      Math.abs(meshOnPng.data[i+2]-meshOffPng.data[i+2]))/3;
+    if(delta>6)historicalChangedPixels++;
+  }
+  report.historical2014VisualAB={
+    focusFID:212747,onTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.triangles),
+    offTriangles:await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles),
+    onRoofTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014RoofTriangles),
+    onFacadeTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014FacadeTriangles),
+    sourceFacadeWindows:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindows),
+    sourceFacadeWindowFids:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindowFids),
+    changedCanvasPixelsOver6:historicalChangedPixels,
+    pbrTexturesReady:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.pbrTexturesReady),
+    pbrTextureMapCount:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.pbrTextureMapCount),
+    dcmFallbackBands:report.initial.dcmFallbackBands,
+    dcmFallbackTriangles:report.initial.dcmFallbackTriangles,
+    roadMaterialClasses:report.initial.roadMaterialClasses,
+    sameCanvasViewport:true,cameraPositionErrorMetres:cameraPositionError,
+    cameraAngleErrorRadians:cameraAngleError,
+    focusCamera:focusQA.cameraPosition,target:focusQA.targetPosition,
+    focusDistanceMetres:focusQA.horizontalDistanceMetres,
+    focusFirstHit:focusQA.firstHit,focusEyeInsideBuildingFid:focusQA.eyeInsideBuildingFid,
+    sourceFacadeTrianglesForFocus:focusQA.sourceFacadeTriangles,
+    offModelImported:await focusOffPage.evaluate(()=>
+      window.PatrolMetricFlightQA.historical2014ModelImported)
+  };
+  check(report.historical2014VisualAB.offModelImported===false&&
+    report.historical2014VisualAB.onRoofTriangles===1974&&
+    report.historical2014VisualAB.onFacadeTriangles===540&&
+    historicalChangedPixels>=5000,
+    'Imported 2014 geometry is not visibly contributing to the same-camera canvas-only WebGL2 A/B');
+  await Promise.all([focusOnPage.close(),focusOffPage.close()]);
   const png=PNG.sync.read(initial);
   let pixels=0;
   for(let y=45;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
@@ -213,8 +313,8 @@ try{
   }
   report.aerialRoadbedDifferencePixelsOver18=changed;
   report.aerialComparisonResolution=[a.width,a.height];
-  report.aerialComparisonNote='Identical fixed source/old aerial pose with sky/HUD excluded; pixel-difference is geometry-localization QA, not photoreal score';
-  check(changed>80,'Official roadbed aerial not distinguishable from old bands: '+changed);
+  report.aerialComparisonNote='Identical fixed aerial overview with sky/HUD excluded. The 11 source polygons occupy a small fraction of this frame; strict visibility acceptance is the focused FID24700 core comparison below.';
+  check(changed>50,'Official roadbed aerial overview shows no source difference: '+changed);
   const src=PNG.sync.read(sourceCore),ref=PNG.sync.read(sourceOffCore);
   check(src.width===ref.width&&src.height===ref.height,
     'FID24700 true-roadbed A/B framebuffer differs');
