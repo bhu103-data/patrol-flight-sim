@@ -1,0 +1,59 @@
+{
+  "asset": "dumbo-bk02-2014-source.glb",
+  "assetBytes": 436816,
+  "assetSha256": "2b531c1716a49333c628613c42a44dae5dba8ab00c4718ac0933889a3b6defc8",
+  "sourceDataset": "NYC 3D Model by Community District — BK02",
+  "publisher": "NYC Department of City Planning / NYC Open Data",
+  "sourceVintage": 2014,
+  "sourceZipSha256": "e16f1dae5521f02835042ac5a6a36f3750603b03170d218d7d6b9f2a616c6ff1",
+  "source3dmSha256": "c22a7e7225425e01b5f50e5d68f6dc75b93a9d05c8a4ae566f1c1d40ec981493",
+  "sourceCoordinateReference": "EPSG:2263 NAD83 New York Long Island US survey feet XY; Rhino document feet Z",
+  "viewerCoordinateFrame": "DUMBO local east/up/south metres; origin WGS84 [-73.989, 40.702]",
+  "verticalDatumVerified": false,
+  "diagnosticOffsetApplied": false,
+  "sourceMeshMeaning": "Original Rhino cached display tessellation of roof/facade/footprint Brep faces; not exact Brep trim topology or photogrammetry",
+  "counts": {
+    "roof": {
+      "patches": 314,
+      "vertices": 3100,
+      "triangles": 2390
+    },
+    "facade": {
+      "patches": 2093,
+      "vertices": 9288,
+      "triangles": 5085
+    },
+    "footprint": {
+      "patches": 82,
+      "vertices": 1350,
+      "triangles": 1066
+    }
+  },
+  "totalTriangles": 8541,
+  "totalUniqueVertices": 13738,
+  "rawSourceZRhinoFeetRange": [
+    5.479,
+    442.849
+  ],
+  "sourceLayerNames": {
+    "roof": "Buildings::Surface_RoofTop",
+    "facade": "Buildings::Surface_Facade",
+    "footprint": "Buildings::Surface_FootPrint"
+  },
+  "usePolicy": "NYC Open Data public-data policy; NOT CC0 or a Creative Commons license. NYC Open Data policy states public datasets are available without restrictions or licensing requirements; identify source, version and modifications when republishing or incorporating into an application.",
+  "attribution": "Source: NYC Department of City Planning, NYC 3D Model by Community District — BK02, 2014 aerial survey, via NYC Open Data. Modified by PATROL as described in this provenance record.",
+  "terms": [
+    "https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje",
+    "https://www.nyc.gov/opendata/get-started/FAQs",
+    "https://cityofnewyork.github.io/opendatatsm/publicpolicies.html",
+    "https://www.nyc.gov/assets/planning/download/pdf/data-maps/open-data/nyc-3d-model-metadata.pdf"
+  ],
+  "disclaimer": "The City disclaims warranties of completeness, accuracy, content and fitness. This historical 2014 source mesh is not a 2026 as-built model; its absolute vertical datum is unverified; do not use for collision or altitude claims.",
+  "modifications": [
+    "Bounded extraction from official BK02 Rhino source within DUMBO AOI plus 25m padding",
+    "EPSG:2263 US survey foot XY transformed to local DUMBO east/south metres",
+    "Rhino Z converted from feet to relative metres from minimum extracted source Z; absolute datum remains unverified",
+    "Original cached triangles retained without simplification; per-vertex normals calculated from source triangles",
+    "Visualization-only flat PBR base colours assigned by source layer kind; no fabricated textures or signage"
+  ]
+}

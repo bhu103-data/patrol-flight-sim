@@ -10,6 +10,10 @@ on:
       - 'assets/nyc/dumbo-cscl-true-metre.js'
       - 'assets/nyc/dumbo-cscl-metric-reconcile.mjs'
       - 'assets/nyc/dumbo-metric-fly-safety.mjs'
+      - 'assets/nyc/dumbo-bk02-glb-loader.mjs'
+      - 'assets/nyc/dumbo-bk02-2014-source.glb'
+      - 'assets/nyc/dumbo-bk02-2014-source-provenance.json'
+      - 'tests/nyc-dumbo-2014-glb.test.mjs'
       - 'tests/nyc-dumbo-metric-lowflight-collision.test.mjs'
       - 'tests/nyc-dumbo-metric-cscl-reconcile.test.mjs'
       - 'tests/nyc-dumbo-metric-roadbed.test.mjs'
@@ -32,7 +36,7 @@ jobs:
         with:
           node-version: '22'
       - name: Validate projection, roof triangulation and fallback isolation
-        run: node --test tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs tests/nyc-dumbo-metric-lowflight-collision.test.mjs
+        run: node --test tests/nyc-dumbo-2014-glb.test.mjs tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs tests/nyc-dumbo-metric-lowflight-collision.test.mjs
       - name: Install pinned Chromium browser harness
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0

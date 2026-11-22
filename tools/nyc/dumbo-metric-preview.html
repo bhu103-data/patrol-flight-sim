@@ -32,10 +32,12 @@
  <div class="eyebrow">PATROL / NYC OTI / Geospatial staging</div>
  <h1>DUMBO — 1 meter = 1 scene unit</h1>
  <p class="strong" id="details">Loading official building rings…</p>
- <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead · R = 2022 pavement · C = source conflicts · <b>F = source-metre low flight</b> (W/A/S/D, Q/E vertical, arrows look, Esc to exit)</p>
+ <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead · R = 2022 pavement · C = source conflicts · M = 2014 source mesh · <b>F = source-metre low flight</b> (W/A/S/D, Q/E vertical, arrows look, Esc to exit)</p>
  <p id="flightStatus">Low-flight camera inactive. Camera collision is against OTI roof prisms, NOT aircraft physics.</p>
  <p class="warning">This is NOT a surveyed present-day street scene. 2022 paved roadbed covers only a short Front/Dock corridor; teal CSCL lines are later-retrieved official street CENTERLINES, not curbs or lane widths. Red lines flag unresolved municipal building/source overlaps. No surveyed bridges, elevations, façades or 2026 signal state.</p>
  <button id="reset">Reset camera</button> <button id="roadFocus">2022 Front/Dock pavement</button> <button id="conflictFocus">CSCL / building conflicts</button>
+ <button id="source2014">2014 source mesh: OFF</button>
+ <p id="sourceStatus" class="warning">Press M or click the button to load the original 2014 roof/facade mesh. Visual-only; no collision changes.</p>
 </div>
 <canvas id="map" width="460" height="420" aria-label="Official building footprints and limited 2022 Front/Dock pavement plan, north is up"></canvas>
 <div id="mapText">N ↑ · 2022 pavement / CSCL / roofs</div>
@@ -45,6 +47,7 @@ import {prepareDistrict,DUMBO_ORIGIN,signedArea} from '../../assets/nyc/dumbo-ot
 import {prepareOfficialDumboRoadbed} from '../../assets/nyc/dumbo-roadbed-metric.mjs';
 import {reconcileMetricStreets,sourceLineRibbon} from '../../assets/nyc/dumbo-cscl-metric-reconcile.mjs';
 import {makeDumboMetricFlySafety} from '../../assets/nyc/dumbo-metric-fly-safety.mjs';
+import {loadDumbo2014GLB} from '../../assets/nyc/dumbo-bk02-glb-loader.mjs';
 const src=await fetch('../../assets/nyc/dumbo-oti-metric-48.json').then(r=>{
  if(!r.ok)throw Error('NYC OTI source snapshot HTTP '+r.status);
  return r.json();
@@ -90,9 +93,10 @@ void main(){vec4 v=uView*vec4(aPosition,1.);
  vShade=.40+.60*diffuse;vDepth=-v.z;vColor=aColor;}`;
 const frag=`#version 300 es\nprecision highp float;
 in vec3 vColor;in float vShade;in float vDepth;out vec4 outColor;
+uniform float uAlpha;
 void main(){float fog=1.-exp(-vDepth*.0005);fog=clamp(fog,0.,.45);
  vec3 linear=mix(vColor*vShade,vec3(.47,.63,.73),fog);
- outColor=vec4(pow(linear,vec3(1./2.2)),1.);}`;
+ outColor=vec4(pow(linear,vec3(1./2.2)),uAlpha);}`;
 function compile(type,source){const sh=gl.createShader(type);gl.shaderSource(sh,source);gl.compileShader(sh);
  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(sh));return sh}
 const program=gl.createProgram();gl.attachShader(program,compile(gl.VERTEX_SHADER,vert));
@@ -156,12 +160,59 @@ for(let z=Math.floor(bounds.minZ/gridSize)*gridSize;z<bounds.maxZ+gridSize;z+=gr
 const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
 const solidCount=vertices.length/9,gridCount=gridVertices.length/9;
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([...vertices,...gridVertices]),gl.STATIC_DRAW);
-for(const [name,offset] of [['aPosition',0],['aNormal',3],['aColor',6]]){
- const loc=gl.getAttribLocation(program,name);gl.enableVertexAttribArray(loc);
- gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);
+function bindVertexBuffer(vbo){
+ gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+ for(const [name,offset] of [['aPosition',0],['aNormal',3],['aColor',6]]){
+  const loc=gl.getAttribLocation(program,name);gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);
+ }
 }
+bindVertexBuffer(buffer);
 const uProjection=gl.getUniformLocation(program,'uProjection');
 const uView=gl.getUniformLocation(program,'uView');
+const uAlpha=gl.getUniformLocation(program,'uAlpha');
+let source2014Buffer=null,source2014Count=0,showSource2014=false,source2014Loading=false;
+const source2014Qa={ready:false,enabled:false,triangles:0,visibleTriangles:0,vertexCount:0,
+ facadePatches:0,roofPatches:0,footprintPatches:0,verticalDatumVerified:false,
+ diagnosticOffsetApplied:false,collisionBuildingCount:0,collisionUnaffected:true,error:null};
+const sourceButton=document.getElementById('source2014'),sourceStatus=document.getElementById('sourceStatus');
+function updateSourceStatus(){
+ sourceButton.textContent='2014 source mesh: '+(showSource2014?'ON':'OFF');
+ if(source2014Loading)sourceStatus.textContent='Loading bounded official 2014 BK02 GLB…';
+ else if(source2014Qa.error)sourceStatus.textContent='2014 GLB load failed: '+source2014Qa.error;
+ else if(source2014Qa.ready&&showSource2014)
+  sourceStatus.textContent='ON · '+source2014Qa.facadePatches.toLocaleString()+' facade patches · '+
+   source2014Qa.roofPatches+' roof patches · '+source2014Qa.triangles.toLocaleString()+
+   ' source triangles. Historical visual overlay only; collision remains 48 current OTI buildings. Vertical datum and candidate 3.5m XY offset are unverified; no offset applied.';
+ else if(source2014Qa.ready)
+  sourceStatus.textContent='OFF · 2014 source GLB loaded. Press M to show the historical roof/facade ghost overlay.';
+ else sourceStatus.textContent='OFF · Press M or click to load the original 2014 BK02 roof/facade GLB (visual-only; no collision changes).';
+}
+async function toggleSource2014(){
+ if(source2014Loading)return;
+ const next=!showSource2014;
+ if(next&&!source2014Buffer){
+  source2014Loading=true;updateSourceStatus();
+  try{
+   const result=await loadDumbo2014GLB('../../assets/nyc/dumbo-bk02-2014-source.glb');
+   source2014Buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,source2014Buffer);
+   gl.bufferData(gl.ARRAY_BUFFER,result.vertices,gl.STATIC_DRAW);
+   source2014Count=result.vertices.length/9;
+   Object.assign(source2014Qa,{ready:true,triangles:result.stats.triangles,
+    visibleTriangles:result.stats.visibleTriangles,vertexCount:result.stats.vertexCount,
+    facadePatches:result.stats.counts.facade.patches,roofPatches:result.stats.counts.roof.patches,
+    footprintPatches:result.stats.counts.footprint.patches,
+    verticalDatumVerified:result.stats.verticalDatumVerified,
+    diagnosticOffsetApplied:result.stats.diagnosticOffsetApplied,
+    source3dmSha256:result.stats.source3dmSha256});
+  }catch(error){source2014Qa.error=String(error?.message||error);}
+  finally{source2014Loading=false;}
+ }
+ showSource2014=next&&Boolean(source2014Buffer);
+ source2014Qa.enabled=showSource2014;updateSourceStatus();
+}
+sourceButton.addEventListener('click',()=>{void toggleSource2014();});
+updateSourceStatus();
 function perspective(fov,aspect,near,far){const f=1/Math.tan(fov/2),r=1/(near-far);
  return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*r,-1,0,0,2*far*near*r,0])}
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
@@ -180,6 +231,7 @@ const conflictLines=network.lines.filter(l=>l.conflictFids.length);
 const conflictFocus=[conflictLines.reduce((s,l)=>s+(l.points[0][0]+l.points[1][0])/2,0)/conflictLines.length,
   0,conflictLines.reduce((s,l)=>s+(l.points[0][1]+l.points[1][1])/2,0)/conflictLines.length];
 const flySafety=makeDumboMetricFlySafety(buildings,bounds);
+source2014Qa.collisionBuildingCount=flySafety.buildingCount;
 const safeSpawn=flySafety.sourceStreetSpawn(network.lines,roadFocus);
 // The spawn uses an actual non-conflicting CSCL line, not a fake aircraft
 // starting point, an invented airfield, or a purported legal flight route.
@@ -279,6 +331,7 @@ canvas.addEventListener('pointermove',e=>{if(!held)return;
 canvas.addEventListener('pointerup',()=>held=false);
 canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(95,Math.min(1400,dist*Math.exp(e.deltaY*.001)))},{passive:false});
 document.addEventListener('keydown',e=>{
+ if(e.code==='KeyM'&&!e.repeat){void toggleSource2014();return;}
  if(e.code==='KeyF'&&!e.repeat){flyMode?disableFly():enableFly();return;}
  if(flyMode){
    if(e.code==='Escape'){disableFly();return;}
@@ -343,7 +396,14 @@ function draw(time){
    [center[0],bounds.maxY*.25,center[2]];
  gl.uniformMatrix4fv(uProjection,false,perspective(55*Math.PI/180,w/h,.4,5000));
  gl.uniformMatrix4fv(uView,false,lookAt(eye,at));
+ bindVertexBuffer(buffer);gl.uniform1f(uAlpha,1.0);
  gl.drawArrays(gl.TRIANGLES,0,solidCount);gl.drawArrays(gl.LINES,solidCount,gridCount);
+ if(showSource2014&&source2014Buffer){
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+  bindVertexBuffer(source2014Buffer);gl.uniform1f(uAlpha,.58);
+  gl.drawArrays(gl.TRIANGLES,0,source2014Count);
+  gl.depthMask(true);gl.disable(gl.BLEND);gl.uniform1f(uAlpha,1.0);
+ }
  requestAnimationFrame(draw);
 }
 draw();
@@ -355,5 +415,5 @@ window.__metricQa={buildings:buildings.length,triangles:geometryTriangles,spanMe
  excludedRecords:network.excludedRecords,segments:network.segmentCount,
  streetNames:network.streetNames.length,conflicts:network.conflicts,
  sourceBBox:network.sourceBBox,networkLengthMetres:network.networkLengthMetres},
- renderer:gl.getParameter(gl.RENDERER),webgl2:true};
+ renderer:gl.getParameter(gl.RENDERER),webgl2:true,source2014:source2014Qa};
 </script></body></html>
