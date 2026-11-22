@@ -174,7 +174,7 @@ const uAlpha=gl.getUniformLocation(program,'uAlpha');
 let source2014Buffer=null,source2014Count=0,showSource2014=false,source2014Loading=false;
 const source2014Qa={ready:false,enabled:false,triangles:0,visibleTriangles:0,vertexCount:0,
  facadePatches:0,roofPatches:0,footprintPatches:0,verticalDatumVerified:false,
- diagnosticOffsetApplied:false,collisionBuildingCount:flySafety.buildingCount,collisionUnaffected:true,error:null};
+ diagnosticOffsetApplied:false,collisionBuildingCount:0,collisionUnaffected:true,error:null};
 const sourceButton=document.getElementById('source2014'),sourceStatus=document.getElementById('sourceStatus');
 function updateSourceStatus(){
  sourceButton.textContent='2014 source mesh: '+(showSource2014?'ON':'OFF');
@@ -231,6 +231,7 @@ const conflictLines=network.lines.filter(l=>l.conflictFids.length);
 const conflictFocus=[conflictLines.reduce((s,l)=>s+(l.points[0][0]+l.points[1][0])/2,0)/conflictLines.length,
   0,conflictLines.reduce((s,l)=>s+(l.points[0][1]+l.points[1][1])/2,0)/conflictLines.length];
 const flySafety=makeDumboMetricFlySafety(buildings,bounds);
+source2014Qa.collisionBuildingCount=flySafety.buildingCount;
 const safeSpawn=flySafety.sourceStreetSpawn(network.lines,roadFocus);
 // The spawn uses an actual non-conflicting CSCL line, not a fake aircraft
 // starting point, an invented airfield, or a purported legal flight route.
