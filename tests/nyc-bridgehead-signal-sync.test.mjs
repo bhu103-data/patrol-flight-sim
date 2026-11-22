@@ -12,7 +12,7 @@ const {green,phase,travel}=new Function(js+
   'return {green:bridgeheadSignalGreen,phase:bridgeheadSignalPhase,travel:bridgeheadSignalTravel};')();
 
 function actor(slot=0){
-  const stop=194.5-slot*5.5;
+  const stop=194.5-slot*6.05;
   return {signalized:true,signalQueueSlot:slot,kind:slot?'sedan':'taxi',
     bridgeSegmentCount:1,route:{lengths:[0,200,420],total:420},
     pace:7,offset:stop-35};
@@ -84,7 +84,7 @@ test('yellow nominal arrival stops for next green; clear green crosses',()=>{
 
 test('queue slots stop at distinct physical points and never reverse travel',()=>{
   const taxi=actor(0),sedan=actor(1);
-  assert.ok(Math.abs(travel(taxi,7)-travel(sedan,7)-5.5)<1e-8);
+  assert.ok(Math.abs(travel(taxi,7)-travel(sedan,7)-6.05)<1e-8);
   for(const car of [taxi,sedan]){
     let prev=travel(car,0),stationary=0;
     for(let t=.25;t<1100;t+=.25){
