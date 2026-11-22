@@ -46,9 +46,10 @@ test('source-width visual envelope shares true-metre low-fly WebGL but not defau
   const workflow=await readFile(new URL('../.github/workflows/nyc-times-true-scale-flight.yml',import.meta.url),'utf8');
   const game=await readFile(new URL('../index.html',import.meta.url),'utf8');
   assert.match(preview,/buildOfficialStreetWidthEnvelopes\(source\)/);
-  assert.match(preview,/gl\.drawArrays\(gl\.TRIANGLES,0,rowSurface\.count\)/);
+  assert.match(preview,/gl\.drawArrays\(gl\.TRIANGLES,0,pavement\.count\)/);
+  assert.doesNotMatch(preview,/gl\.drawArrays\(gl\.TRIANGLES,0,rowSurface\.count\)/);
   assert.match(preview,/streetWidthEnvelopes:envelopes\.stats/);
-  assert.match(preview,/不是实际铺装路面或车道/);
+  assert.match(preview,/官方 OTI 2022 道路面/);
   assert.match(workflow,/cp tools\/nyc\/true-scale-street-envelope\.mjs artifacts\/nyc-true-scale\/street-envelope\.mjs/);
   assert.ok(!game.includes('street-envelope.mjs'),'no false ROW overlays on existing game');
 });
