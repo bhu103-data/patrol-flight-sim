@@ -13,11 +13,15 @@ not the previously claimed 7.7×8.0 km. Its old sample spacing is about
 The prior area/spacing claims in the archived discussion below are obsolete.
 
 The root cause is the Esri ArcGIS ImageServer default
-`adjustAspectRatio=true` for square output images. The 5m local export
-was also widened in latitude. Source-exact re-registration with ACTUAL
-server extents cut high/low mismatch from **169.129 m RMSE** to
-**2.108 m RMSE (P95 absolute 4.559 m)** across 65,536 cells. The
-same-service source raster was unchanged on fresh export (65,536/65,536
+`adjustAspectRatio=true` for square output images. The old 30m export
+was widened in latitude. The first apparent 2.108m comparison was based
+on an earlier 5m export whose own bbox had also been widened; it is NOT a
+valid comparison for the corrected 5m source. The corrected 5m export
+uses `adjustAspectRatio=false` and the official actual WGS84 bbox. Its
+comparison with the original coarse grid is **22.956m RMSE / 63.050m P95
+absolute** over 65,536 samples. Four edge P95s are west 8.738m, east
+73.668m, south 0.001m and north 82.894m. The source is not ready to stitch.
+The old 30m source itself was unchanged on fresh export (65,536/65,536
 quantized pixels identical). Never apply a hand-tuned positional shift.
 
 The updated independent flight pilot reads the official true extent,
@@ -44,24 +48,26 @@ still unproven.
   rotates the raster 90 degrees and compresses vertical scaling to match its
   fictional flight route; the separate `tracy-arm-true-scale.html` does not.
 - The separate north-up terrain preview uses local WGS84 ECEF→ENU **metres**:
-  the full original region is approximately 7689 m east-west × 7990 m
-  north-south, and the original 1836 m elevations are **not compressed**.
-  The raster's source-specific vertical datum has not been independently
-  established by the bundled old GeoTIFF metadata, so this is not a
-  survey-grade absolute-elevation claim.
+  the actual old raster footprint is approximately 7.7 km east-west ×
+  14.4 km north-south. The original 1836 m elevations are not compressed.
+  The raster's source-specific vertical datum is not established by the
+  old dynamic-service TIFF tags, so this is not a survey-grade
+  absolute-elevation claim.
 - Official USGS 5 m Alaska product footprint intersected all **9/9** sample
   points in a 3×3 test over this bounding box. Project/workunit:
   `AK_IFSAR_Sum_L4_C353_2010`, collection ~2010–2012, index
   `dem_gsd_meters=5`, project vertical CRS EPSG:5703 (NAVD88), GEOID09.
   **Index metadata does not automatically certify the vertical CRS of
   an arbitrary dynamic image export.**
-- A **real** official 256² Float32 TIFF was extracted from ImageServer for
-  the small bbox
-  `[-133.1886140472,57.8750248162,-133.1682218903,57.8863189338]`.
-  Requested pixel spacing is approximately 4.715 m × 4.911 m;
-  valid pixel fraction 100%, local peak 776.73 m, TIFF SHA256
-  `1be5b08b0e62595a7676932bbecf11952020bb4ede3e58d05f8aca5516605e61`.
-  This **does not** verify 5 m full-scene product continuity.
+- The corrected small 256² Float32 export for
+  `[-133.1886140472,57.8750248162,-133.1682218903,57.8863189338]`
+  uses the explicit `adjustAspectRatio=false` parameter. The current
+  artifact reports 4.715×4.911m spacing, 100% valid pixels, 521.443m
+  maximum and TIFF SHA256
+  `2c370501049c8fb779ec6a12982bb62c660c75bd6a64466781aa7503cf816a76`.
+  This is a dynamic service export, not yet a pinned native OPR GeoTIFF.
+  It is not safe to merge because the east and north edges differ from
+  coarse source by 73.668m and 82.894m P95.
 - The local experimental 5 m tile and fallback full ~30 m scene **both
   rendered and moved the camera in Chromium WebGL2** in run
   [45039658872](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039658872).
