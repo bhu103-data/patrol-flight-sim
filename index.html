@@ -6231,6 +6231,88 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
+
+  // PATROL_DUMBO_BRIDGEHEAD_INFILLED_APERTURES_V1
+  // Three compact, non-OTI procedural bridgehead blocks exposed by the BQE
+  // sightline fix. This is original game-scale industrial masonry geometry,
+  // NOT photogrammetry or a surveyed window inventory. Wall rectangles are
+  // omitted at the openings, so the dark glazing really sits 0.16 units
+  // BEHIND the street face instead of being pasted onto an opaque cube.
+  function buildDumboBridgeheadInfillApertures(addQuad,site){
+    const {x,y,z,w,d,h,brick,stone,seed}=site;
+    const darkReveal=[.21,.20,.19],sash=[.28,.30,.31];
+    const glazing=[.14,.23,.28];
+    const inset=.16,base=3.35;
+    const levels=Math.max(2,Math.min(3,Math.floor((h-base)/2.70)));
+    const step=(h-base)/levels;
+    let openings=0,returns=0,faces=0;
+    for(const axis of ['z','x'])for(const side of [-1,1]){
+      const span=axis==='z'?w:d;
+      const half=span*.5,bays=Math.max(2,Math.min(4,
+        Math.floor(span/(2.65+(seed%3)*.14))));
+      const pitch=span/bays;
+      const at=(u,v,depth=0)=>axis==='z'
+        ?[x+u,y+v,z+side*(d*.5+depth)]
+        :[x+side*(w*.5+depth),y+v,z+u];
+      const face=(a,b,c,d,color,tag=12)=>{
+        if((axis==='z')===(side>0))addQuad(a,b,c,d,color,tag);
+        else addQuad(d,c,b,a,color,tag);
+        faces++;
+      };
+      const rect=(u0,u1,v0,v1,color,tag=12,depth=0)=>{
+        if(u1-u0<.005||v1-v0<.005)return;
+        face(at(u0,v0,depth),at(u1,v0,depth),
+          at(u1,v1,depth),at(u0,v1,depth),color,tag);
+      };
+      rect(-half,half,0,base,brick);
+      let filledTo=base;
+      for(let floor=0;floor<levels;floor++){
+        const lo=base+floor*step+.30;
+        const hi=Math.min(h-.43,base+(floor+1)*step-.40);
+        rect(-half,half,filledTo,lo,brick);
+        for(let col=0;col<bays;col++){
+          const begin=-half+col*pitch,end=begin+pitch;
+          const width=pitch*(.56+((seed+col)%3)*.035);
+          const left=(begin+end-width)*.5,right=left+width;
+          rect(begin,left,lo,hi,brick);rect(right,end,lo,hi,brick);
+          // A literal opening in the exterior masonry; no opaque wall
+          // directly behind these glass panes.
+          rect(left,right,lo,hi,glazing,13,-inset);
+          // Four side/top/bottom returns bound the opening in 3D.
+          face(at(left,lo),at(left,lo,-inset),
+            at(left,hi,-inset),at(left,hi),darkReveal);
+          face(at(right,lo,-inset),at(right,lo),
+            at(right,hi),at(right,hi,-inset),darkReveal);
+          face(at(left,hi),at(right,hi),
+            at(right,hi,-inset),at(left,hi,-inset),brick);
+          face(at(left,lo,-inset),at(right,lo,-inset),
+            at(right,lo),at(left,lo),stone);
+          // Cast-iron horizontal transom and non-identical sash counts.
+          const mid=lo+(hi-lo)*(.47+((seed+floor)%3)*.04);
+          rect(left+.018,right-.018,mid-.027,mid+.027,sash,12,-.116);
+          if((floor+col+seed)%3!==0){
+            const u=(left+right)*.5;
+            rect(u-.021,u+.021,lo+.05,hi-.05,sash,12,-.11);
+          }
+          // Projecting stone sill is shallow and stays inside the
+          // existing road-cleared parcel margin (max +0.09).
+          rect(left-.06,right+.06,lo-.095,lo-.043,stone,12,.09);
+          rect(left-.045,right+.045,hi+.025,hi+.085,stone,12,.055);
+          openings++;returns+=4;
+        }
+        filledTo=hi;
+      }
+      rect(-half,half,filledTo,h,brick);
+      // Corner quoin rhythm varies by street and does not add a tower cube.
+      for(const edge of [-1,1])for(let band=1;band<=3;band++){
+        const u=edge*(half-.17);
+        rect(u-.14,u+.14,h-band*.48,h-band*.48+.11,
+          band%2?stone:brick,12,.045);
+      }
+    }
+    return {openings,returns,faces,levels};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6253,6 +6335,13 @@ const CENTRAL_PARK_SITES=[
       // Brooklyn Bridge/DUMBO has a distinct low-/mid-rise brick streetscape.
       const bridgeheadBrooklyn=!local && detailBand>=2 &&
         east>205&&east<435&&north>-415&&north<-195;
+      // An intentionally tiny infill pocket, separate from the two
+      // warehouse-specific PRs (#97/#121/#123) around 285/-330 and 372/-285.
+      const dumboInfillRecessed=bridgeheadBrooklyn &&
+        detailBand===3 && !destroyed && !lot[7] &&
+        east>260&&east<328&&north>-371&&north<-337 &&
+        w>=8&&d>=8.5&&h>11&&h<19 &&
+        !graphicsCompat && smoothScenery();
       const heroDowntown=!local && detailBand>=2 &&
         east>-180&&east<170&&north>-526&&north<-195;
       const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-
@@ -6364,6 +6453,11 @@ const CENTRAL_PARK_SITES=[
         addModelBox(addQuad,x,y+h*k*.5,z,w,h*k,d,material);
         addModelBox(addQuad,x,y+h*(1+k)*.5,z,w*(.68+(archType%3)*.05),
           h*(1-k),d*(.69+(archType%4)*.045),material);
+      }else if(dumboInfillRecessed){
+        // Replace the opaque main cuboid with a pierced masonry shell.
+        buildDumboBridgeheadInfillApertures(addQuad,{
+          x,y,z,w,d,h,brick:material,stone:trim,seed:archType
+        });
       }else{
         addModelBox(addQuad,x,y+h/2,z,w,h,d,material,
           bridgeheadBrooklyn?12:0);
@@ -6406,7 +6500,7 @@ const CENTRAL_PARK_SITES=[
           y+h+.21,z+roofProfile.d*.20,
           roofProfile.w*.19,.42,roofProfile.d*.18,[.44,.46,.46]);
       }
-      if(detailBand>=2 && tone>0.52){
+      if(!dumboInfillRecessed && detailBand>=2 && tone>0.52){
         // Vertical front piers terminate at the first setback; otherwise
         // they hang in midair beside the narrowed upper floors.
         const lowerFraction=[.57,.68,.77,.63,.73][archType%5];
@@ -6419,7 +6513,7 @@ const CENTRAL_PARK_SITES=[
               z+side*(d/2+.022),.38,height,.13,trim);
           }
         }
-      } else if(detailBand>=2 && h>7){
+      } else if(!dumboInfillRecessed && detailBand>=2 && h>7){
         for(let level=3.7;level<h-.6;level+=tone>.24?3.5:5.3){
           const tier=facadeTier(level);
           addModelBox(addQuad,tier.x,y+level,z,
@@ -6430,7 +6524,7 @@ const CENTRAL_PARK_SITES=[
       // DUMBO / Brooklyn Bridge bounded architectural relief.
       // Batched into the existing building mesh; small offsets are well inside
       // the reserved sidewalk margin. This is stylized game geometry, not GIS.
-      if(bridgeheadBrooklyn && !destroyed && h>9){
+      if(bridgeheadBrooklyn && !dumboInfillRecessed && !destroyed && h>9){
         const mortar=material.map(v=>Math.max(.10,v*.75));
         const fireSteel=[.22,.26,.28],stepSteel=[.35,.38,.39];
         for(const side of [-1,1]){
@@ -6565,9 +6659,9 @@ const CENTRAL_PARK_SITES=[
             addModelBox(addQuad,bx,y+0.62,wall+side*0.22,bayWidth+0.14,0.072,0.11,mullion);
             addModelBox(addQuad,bx,y+1.45,wall+side*0.24,0.065,1.55,0.10,mullion);
           }
-          // Match window elevations and facade offsets to every tower tier.
-          // Planar glass panes replace numerous opaque solid cubes.
-          for(let floor=0;floor<levels;floor++){
+          // These ordinary upper windows are decals over a cuboid; the
+          // isolated bridgehead infill instead uses actual wall apertures.
+          if(!dumboInfillRecessed)for(let floor=0;floor<levels;floor++){
             const py=y+4+floor*floorSpacing;
             if(py+.96>y+h-.15)break;
             const tier=facadeTier(py-y),face=z+side*tier.d*.5;
@@ -6641,8 +6735,8 @@ const CENTRAL_PARK_SITES=[
             }
           }
         }
-        // Side glazing follows the real setback silhouette above the fifth floor.
-        for(const side of [-1,1]){
+        // The bridgehead aperture shell already carries four real facades.
+        if(!dumboInfillRecessed)for(const side of [-1,1]){
           for(let floor=0;floor<levels;floor++){
             const py=y+4+floor*floorSpacing;
             if(py+.94>y+h-.2)break;
