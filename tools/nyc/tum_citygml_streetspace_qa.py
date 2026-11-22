@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Inspect and clip the public TUM/NYC CityGML street-space sources for a Times Square QA pilot.
+"""Inspect TUM NYC CityGML street-space sources and compare them with current NYC CSCL.
 
-This tool intentionally creates research artifacts only. It never writes into PATROL runtime assets.
+This tool creates research artifacts only. It never writes into PATROL runtime assets.
 """
 from __future__ import annotations
 
@@ -13,26 +13,37 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from pyproj import Transformer
+from shapely.geometry import shape
+from shapely.ops import transform as transform_geometry
 
 DATASETS = {
     "roadbed": {
         "label": "NYC CityGML LoD2 Roadbed",
         "url": "https://www.3dcitydb.net/3dcitydb/fileadmin/public/datasets/NYC/NYC_street_space_CityGML_LoD2/NYC_CityGML_LoD2_Roadbed.zip",
         "required": True,
+        "area_attribute": "street_area_3D_sqm",
     },
     "intersection": {
         "label": "NYC CityGML LoD2 Intersection",
         "url": "https://www.3dcitydb.net/3dcitydb/fileadmin/public/datasets/NYC/NYC_street_space_CityGML_LoD2/NYC_CityGML_LoD2_Intersection.zip",
         "required": True,
+        "area_attribute": "intersection_area_sqm",
     },
     "road_marking": {
         "label": "NYC CityGML LoD2 Median Painted / Road Markings",
         "url": "https://www.3dcitydb.net/3dcitydb/fileadmin/public/datasets/NYC/NYC_street_space_CityGML_LoD2/NYC_CityGML_LoD2_Median_Painted.zip",
         "required": False,
+        "area_attribute": "median_area_sqm",
     },
 }
+
+WGS84_TO_NYLI = Transformer.from_crs("EPSG:4326", "EPSG:32118", always_xy=True)
+TUM_TO_CSCL_TRAFFIC_DIRECTION = {"W": "FT", "A": "TF", "T": "TW", "P": "NV"}
 
 
 def run_command(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -86,37 +97,104 @@ def geometry_positions(node: Any):
         yield from geometry_positions(child)
 
 
-def summarize_geojson(path: Path) -> dict[str, Any]:
+def normalize_name(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", re.sub(r"[^A-Z0-9 ]+", " ", str(value).upper())).strip()
+
+
+def normalize_direction_code(value: Any) -> str | None:
+    if value is None:
+        return None
+    return TUM_TO_CSCL_TRAFFIC_DIRECTION.get(str(value).strip().upper())
+
+
+def get_property(properties: dict[str, Any], *candidates: str) -> Any:
+    wanted = {candidate.lower() for candidate in candidates}
+    for key, value in properties.items():
+        if key.lower() in wanted and value not in (None, ""):
+            return value
+    return None
+
+
+def summarize_geojson(path: Path, area_attribute: str | None = None) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     features = data.get("features", [])
     min_x = min_y = float("inf")
     max_x = max_y = float("-inf")
+    min_z = float("inf")
+    max_z = float("-inf")
     vertex_count = 0
     geometry_types: dict[str, int] = {}
+    valid_count = invalid_count = empty_count = 0
+    projected_area_m2 = 0.0
+    area_ratios: list[float] = []
+
     for feature in features:
-        geometry = feature.get("geometry") or {}
-        geometry_type = geometry.get("type", "null")
+        geometry_data = feature.get("geometry")
+        if not geometry_data:
+            empty_count += 1
+            continue
+        geometry_type = geometry_data.get("type", "null")
         geometry_types[geometry_type] = geometry_types.get(geometry_type, 0) + 1
-        for position in geometry_positions(geometry.get("coordinates")):
+        geometry = shape(geometry_data)
+        if geometry.is_empty:
+            empty_count += 1
+            continue
+        if geometry.is_valid:
+            valid_count += 1
+        else:
+            invalid_count += 1
+        projected = transform_geometry(WGS84_TO_NYLI.transform, geometry)
+        projected_area_m2 += projected.area
+        properties = feature.get("properties") or {}
+        if area_attribute:
+            attribute_area = properties.get(area_attribute)
+            if isinstance(attribute_area, (int, float)) and attribute_area > 0:
+                area_ratios.append(projected.area / float(attribute_area))
+        for position in geometry_positions(geometry_data.get("coordinates")):
             vertex_count += 1
             min_x = min(min_x, float(position[0]))
             max_x = max(max_x, float(position[0]))
             min_y = min(min_y, float(position[1]))
             max_y = max(max_y, float(position[1]))
-    bounds = None
-    if vertex_count:
-        bounds = [min_x, min_y, max_x, max_y]
+            if len(position) >= 3:
+                min_z = min(min_z, float(position[2]))
+                max_z = max(max_z, float(position[2]))
+
+    bounds = [min_x, min_y, max_x, max_y] if vertex_count else None
+    z_range = [min_z, max_z] if min_z != float("inf") else None
+    area_comparison = None
+    if area_ratios:
+        sorted_ratios = sorted(area_ratios)
+        area_comparison = {
+            "attribute": area_attribute,
+            "comparedCount": len(area_ratios),
+            "within5Percent": sum(abs(ratio - 1.0) <= 0.05 for ratio in area_ratios),
+            "medianGeometryToAttributeRatio": sorted_ratios[len(sorted_ratios) // 2],
+            "minRatio": min(area_ratios),
+            "maxRatio": max(area_ratios),
+        }
     return {
         "featureCount": len(features),
         "vertexCount": vertex_count,
         "geometryTypes": geometry_types,
         "boundsWgs84": bounds,
+        "zRange": z_range,
+        "geometryValidCount": valid_count,
+        "geometryInvalidCount": invalid_count,
+        "geometryEmptyCount": empty_count,
+        "projectedAreaM2": projected_area_m2,
+        "areaAttributeComparison": area_comparison,
         "bytes": path.stat().st_size,
     }
 
 
 def ogrinfo_json(source_path: Path) -> dict[str, Any]:
-    result = run_command(["ogrinfo", "-json", "-ro", "-so", "-al", str(source_path)])
+    result = run_command([
+        "ogrinfo", "-json", "-ro", "-so", "-al",
+        "-oo", "EXPOSE_GML_ID=YES", str(source_path),
+    ])
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as error:
@@ -186,27 +264,29 @@ def process_dataset(
             geometry_fields = layer.get("geometryFields") or []
             if not geometry_fields:
                 continue
-            source_feature_count = layer.get("featureCount")
             output_name = f"{dataset_key}-{source_index:02d}-{layer_index:02d}-{slug(layer_name)}.geojson"
             output_path = geojson_dir / output_name
             command = [
-                "ogr2ogr", "-f", "GeoJSON", str(output_path), str(source_path), layer_name,
+                "ogr2ogr", "-f", "GeoJSON", str(output_path),
+                "-oo", "EXPOSE_GML_ID=YES", str(source_path), layer_name,
                 "-t_srs", "EPSG:4326",
                 "-spat", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3]),
                 "-spat_srs", "EPSG:4326",
                 "-lco", "RFC7946=YES",
             ]
             run_command(command)
-            summary = summarize_geojson(output_path) if output_path.exists() else {
+            summary = summarize_geojson(output_path, metadata["area_attribute"]) if output_path.exists() else {
                 "featureCount": 0, "vertexCount": 0, "geometryTypes": {},
-                "boundsWgs84": None, "bytes": 0,
+                "boundsWgs84": None, "zRange": None, "geometryValidCount": 0,
+                "geometryInvalidCount": 0, "geometryEmptyCount": 0,
+                "projectedAreaM2": 0, "areaAttributeComparison": None, "bytes": 0,
             }
             layer_result = {
                 "name": layer_name,
-                "sourceFeatureCount": source_feature_count,
+                "sourceFeatureCount": layer.get("featureCount"),
                 "sourceGeometryType": geometry_fields[0].get("type"),
                 "sourceSrsWkt": layer_srs(layer),
-                "sourceExtent": layer.get("geometryFields", [{}])[0].get("extent"),
+                "sourceExtent": geometry_fields[0].get("extent"),
                 "roiGeoJson": output_name,
                 **summary,
             }
@@ -214,14 +294,156 @@ def process_dataset(
             dataset_result["roiFeatureCount"] += summary["featureCount"]
             dataset_result["roiVertexCount"] += summary["vertexCount"]
             dataset_result["roiBytes"] += summary["bytes"]
-
     return dataset_result
+
+
+def current_cscl_comparison(roadbed_path: Path, cscl_path: Path, output_dir: Path) -> dict[str, Any]:
+    roadbed = json.loads(roadbed_path.read_text(encoding="utf-8")).get("features", [])
+    cscl_data = json.loads(cscl_path.read_text(encoding="utf-8"))
+    cscl = cscl_data.get("features", [])
+    if not cscl:
+        raise RuntimeError("Current NYC CSCL query returned no Times Square features")
+
+    lines = []
+    cscl_codes: dict[str, int] = {}
+    road_type_codes: dict[str, int] = {}
+    cscl_names: dict[str, int] = {}
+    cscl_by_physical_id: dict[str, dict[str, Any]] = {}
+    for feature in cscl:
+        geometry_data = feature.get("geometry")
+        if not geometry_data:
+            continue
+        geometry = transform_geometry(WGS84_TO_NYLI.transform, shape(geometry_data))
+        if geometry.is_empty:
+            continue
+        properties = feature.get("properties") or {}
+        name = get_property(properties, "street", "street_name", "streetname", "stname", "st_name", "full_street_name", "name")
+        direction = get_property(properties, "trafdir", "traffic_direction")
+        road_type = get_property(properties, "rw_type", "rwtype", "roadway_type")
+        physical_id = get_property(properties, "physicalid", "physical_id")
+        if direction is not None:
+            key = str(direction)
+            cscl_codes[key] = cscl_codes.get(key, 0) + 1
+        if road_type is not None:
+            key = str(road_type)
+            road_type_codes[key] = road_type_codes.get(key, 0) + 1
+        normalized_name = normalize_name(name)
+        if normalized_name:
+            cscl_names[normalized_name] = cscl_names.get(normalized_name, 0) + 1
+        if physical_id is not None:
+            cscl_by_physical_id[str(physical_id)] = {
+                "name": name, "direction": direction, "roadType": road_type,
+                "properties": properties, "geometry": geometry,
+            }
+        lines.append({
+            "name": name,
+            "normalizedName": normalized_name,
+            "direction": direction,
+            "roadType": road_type,
+            "physicalId": physical_id,
+            "properties": properties,
+            "geometry": geometry,
+        })
+    if not lines:
+        raise RuntimeError("Current NYC CSCL query contained no usable line geometries")
+
+    distances: list[float] = []
+    matches: list[dict[str, Any]] = []
+    same_name_count = physical_id_match_count = direction_agreement_count = 0
+    for feature in roadbed:
+        geometry_data = feature.get("geometry")
+        if not geometry_data:
+            continue
+        polygon = transform_geometry(WGS84_TO_NYLI.transform, shape(geometry_data))
+        if polygon.is_empty:
+            continue
+        properties = feature.get("properties") or {}
+        source_name = get_property(properties, "name")
+        normalized_source_name = normalize_name(source_name)
+        source_physical_id = get_property(properties, "physical_id")
+        source_direction = get_property(properties, "traffic_direction")
+        expected_direction = normalize_direction_code(source_direction)
+        centroid = polygon.centroid
+        same_name = [line for line in lines if normalized_source_name and line["normalizedName"] == normalized_source_name]
+        candidates = same_name if same_name else lines
+        nearest = min(candidates, key=lambda line: centroid.distance(line["geometry"]))
+        distance_m = centroid.distance(nearest["geometry"])
+        distances.append(distance_m)
+        name_match = bool(same_name)
+        physical_match = (
+            source_physical_id is not None
+            and str(source_physical_id) in cscl_by_physical_id
+        )
+        direction_match = (
+            expected_direction is not None
+            and str(nearest["direction"]).strip().upper() == expected_direction
+        )
+        same_name_count += int(name_match)
+        physical_id_match_count += int(physical_match)
+        direction_agreement_count += int(direction_match)
+        matches.append({
+            "tumName": source_name,
+            "tumSegmentId": get_property(properties, "segment_id"),
+            "tumPhysicalId": source_physical_id,
+            "tumTrafficDirection2016": source_direction,
+            "expectedCurrentTrafficDirectionCode": expected_direction,
+            "currentCsclName": nearest["name"],
+            "currentCsclPhysicalId": nearest["physicalId"],
+            "currentCsclTrafficDirection": nearest["direction"],
+            "currentCsclRoadType": nearest["roadType"],
+            "centroidToCurrentCsclDistanceM": round(distance_m, 3),
+            "sameStreetName": name_match,
+            "physicalIdExistsInCurrentCscl": physical_match,
+            "trafficDirectionCodeAgrees": direction_match,
+        })
+
+    sorted_distances = sorted(distances)
+    def percentile(values: list[float], fraction: float) -> float | None:
+        if not values:
+            return None
+        index = min(len(values) - 1, max(0, round((len(values) - 1) * fraction)))
+        return round(values[index], 3)
+
+    copied_cscl = output_dir / "geojson" / "current-cscl-2026-times-square.geojson"
+    copied_cscl.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cscl_path, copied_cscl)
+    return {
+        "source": "NYC Open Data CSCL / Centerline",
+        "url": "https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/inkn-q76z",
+        "apiUrl": "https://data.cityofnewyork.us/resource/inkn-q76z.geojson",
+        "retrievedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "featureCount": len(cscl),
+        "geometryTypes": sorted({feature.get("geometry", {}).get("type") for feature in cscl if feature.get("geometry")}),
+        "propertyKeys": sorted({key for feature in cscl for key in (feature.get("properties") or {}).keys()}),
+        "trafficDirectionCodes": cscl_codes,
+        "roadTypeCodes": road_type_codes,
+        "streetNameCount": len(cscl_names),
+        "tumRoadbedToCurrentCscl": {
+            "comparedRoadbedCount": len(matches),
+            "sameStreetNameCount": same_name_count,
+            "physicalIdExistsCount": physical_id_match_count,
+            "trafficDirectionAgreementCount": direction_agreement_count,
+            "centroidToNearestCurrentCsclDistanceM": {
+                "p50": percentile(sorted_distances, 0.50),
+                "p95": percentile(sorted_distances, 0.95),
+                "max": round(max(sorted_distances), 3) if sorted_distances else None,
+                "within3m": sum(distance <= 3 for distance in distances),
+                "within5m": sum(distance <= 5 for distance in distances),
+                "within10m": sum(distance <= 10 for distance in distances),
+            },
+            "directionMapping": {"W": "FT", "A": "TF", "T": "TW", "P": "NV"},
+            "matches": matches,
+        },
+        "geojson": copied_cscl.name,
+        "bytes": copied_cscl.stat().st_size,
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--current-cscl", type=Path, required=True)
     parser.add_argument(
         "--bbox", nargs=4, type=float, required=True,
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
@@ -237,6 +459,7 @@ def main() -> int:
         "status": "running",
         "bboxWgs84": list(bbox),
         "datasets": [],
+        "currentCscl": None,
         "errors": [],
         "warnings": [],
         "sourceRights": {
@@ -247,7 +470,7 @@ def main() -> int:
             "attributionRequired": True,
         },
         "knownLimits": {
-            "vintage": "2015-2017-era model generation; not a 2026 as-built survey",
+            "vintage": "2015-2017-era TUM model generation; not a 2026 as-built survey",
             "streetVerticalDatum": "TUM documentation states street-space objects currently use a 0 m base height and are not adapted to terrain",
             "geometryQuality": "TUM warns that automatically generated street-space objects can contain faulty results in complex scenarios",
             "runtimeImportAllowed": False,
@@ -264,15 +487,16 @@ def main() -> int:
         return 1
 
     required_keys_with_features = {"roadbed", "intersection"}
-    for key in DATASETS:
-        archive = args.input_dir / {
-            "roadbed": "NYC_CityGML_LoD2_Roadbed.zip",
-            "intersection": "NYC_CityGML_LoD2_Intersection.zip",
-            "road_marking": "NYC_CityGML_LoD2_Median_Painted.zip",
-        }[key]
+    archive_names = {
+        "roadbed": "NYC_CityGML_LoD2_Roadbed.zip",
+        "intersection": "NYC_CityGML_LoD2_Intersection.zip",
+        "road_marking": "NYC_CityGML_LoD2_Median_Painted.zip",
+    }
+    for key, metadata in DATASETS.items():
+        archive = args.input_dir / archive_names[key]
         if not archive.exists():
             message = f"Missing archive: {archive}"
-            if DATASETS[key]["required"]:
+            if metadata["required"]:
                 report["errors"].append(message)
             else:
                 report["warnings"].append(message)
@@ -282,10 +506,32 @@ def main() -> int:
             report["datasets"].append(result)
             if key in required_keys_with_features and result["roiFeatureCount"] == 0:
                 report["errors"].append(f"{key} dataset produced no features in the Times Square ROI")
+            if result["layers"] and any(layer["geometryInvalidCount"] for layer in result["layers"]):
+                report["errors"].append(f"{key} dataset contains invalid ROI geometries")
             if key == "road_marking" and result["roiFeatureCount"] == 0:
                 report["warnings"].append("No road-marking features intersected the Times Square ROI")
+            for layer in result["layers"]:
+                comparison = layer.get("areaAttributeComparison")
+                if comparison and comparison["within5Percent"] < comparison["comparedCount"] * 0.8:
+                    report["warnings"].append(
+                        f"{key}/{layer['name']}: fewer than 80% of ROI geometries match the source area attribute within 5%; inspect split/duplicate source segments"
+                    )
         except Exception as error:
             report["errors"].append(f"{key}: {error}")
+
+    try:
+        roadbed_path = next(
+            args.output_dir / "geojson" / layer["roiGeoJson"]
+            for dataset in report["datasets"] if dataset["key"] == "roadbed"
+            for layer in dataset["layers"] if layer["roiFeatureCount"] > 0
+        )
+        if not args.current_cscl.exists():
+            raise RuntimeError(f"Missing current CSCL GeoJSON: {args.current_cscl}")
+        report["currentCscl"] = current_cscl_comparison(roadbed_path, args.current_cscl, args.output_dir)
+        if report["currentCscl"]["featureCount"] == 0:
+            report["errors"].append("Current CSCL query returned zero ROI features")
+    except Exception as error:
+        report["errors"].append(f"current CSCL comparison: {error}")
 
     report["status"] = "pass" if not report["errors"] else "fail"
     report_path = args.output_dir / "report.json"
