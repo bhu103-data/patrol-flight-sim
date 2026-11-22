@@ -213,6 +213,12 @@ def main():
   report["tileSeam"]["boundaryGradientP95Metres"]=round(float(np.percentile(horiz[across],95)),3)
   report["tileSeam"]["withinTileGradientP95Metres"]=round(float(np.percentile(horiz[within],95)),3)
   report["tileSeam"]["boundaryGradientP99Metres"]=round(float(np.percentile(horiz[across],99)),3)
+ if report["tileSeam"]["boundaryGradientP95Metres"] is None or \
+    report["tileSeam"]["boundaryGradientP95Metres"]>10:
+  raise RuntimeError("Native IfSAR project-tile boundary exceeds 10m P95 gradient guard")
+ if not seam_overlap or seam_overlap[0]["overlap"]["rmse_m"]>0.5 or \
+    seam_overlap[0]["overlap"]["p95_abs_m"]>1.0:
+  raise RuntimeError("Native IfSAR source-tile overlap failed 0.5m RMSE / 1m P95 guard")
  report["elevationRangeMetres"]={
    "min":round(float(dst[valid].min()),3),"max":round(float(dst[valid].max()),3),
    "mean":round(float(dst[valid].mean()),3),"p50":round(float(np.median(dst[valid])),3)}
@@ -396,6 +402,14 @@ def main():
    "collectionEnd":source_meta["collect_end"],
    "workunit":source_meta["workunit"],"project":source_meta["project"],
    "sourceTileSha256":[x["sha256"] for x in report["sourceTiles"]],
+   "coverageValidFraction":report["tileSeam"]["coverageValidFraction"],
+   "tileSeamP95Metres":report["tileSeam"]["boundaryGradientP95Metres"],
+   "withinTileGradientP95Metres":report["tileSeam"]["withinTileGradientP95Metres"],
+   "tileSeamP99Metres":report["tileSeam"]["boundaryGradientP99Metres"],
+   "tileOverlapRmseMetres":seam_overlap[0]["overlap"]["rmse_m"],
+   "tileOverlapP95AbsMetres":seam_overlap[0]["overlap"]["p95_abs_m"],
+   "sourceLicense":"USGS 3DEP public domain",
+   "verticalDatumEvidence":"Official USGS 3DEP index metadata EPSG:5703 / GEOID09; native tile XML directs users to original project metadata for vertical accuracy. Do not treat as WGS84 ellipsoid height.",
    "absoluteRawSha256":report["runtimeAsset"]["absoluteRawSha256"],
    "deltaRawSha256":report["runtimeAsset"]["deltaRawSha256"],
    "gzipSha256":report["runtimeAsset"]["gzipSha256"],
