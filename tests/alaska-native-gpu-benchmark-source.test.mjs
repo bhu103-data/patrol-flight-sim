@@ -28,3 +28,12 @@ test('native benchmark compares independent exact-source baseline with candidate
   assert.match(source,/\['baseline','updated','updated','baseline'\]/);
   assert.match(source,/moduleFetches\.length!==1/);
 });
+
+test('native benchmark measures only focused foreground Edge without throttle bypass',()=>{
+  const source=readFileSync(resolve(root,rel),'utf8');
+  assert.match(source,/await page\.bringToFront\(\)/);
+  assert.match(source,/document\.hasFocus\(\)/);
+  assert.match(source,/!health\.focused/);
+  assert.equal(source.includes('--disable-background-timer-throttling'),false);
+  assert.equal(source.includes('--disable-renderer-backgrounding'),false);
+});
