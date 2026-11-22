@@ -58,6 +58,7 @@ async function capture(label,file){
   });
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
+  const startupClock=Date.now();
   const response=await page.goto(root+'/'+file+'?alaskaView=harbor',
     {waitUntil:'domcontentloaded',timeout:30000});
   if(response?.status()!==200)throw Error('HTTP error for '+label);
@@ -71,6 +72,9 @@ async function capture(label,file){
     const title=document.getElementById('titleOverlay');
     return (err&&!err.hidden)||(load?.classList.contains('done')&&title?.hidden);
   },null,{timeout:110000});
+  // Measured browser-harness wall-clock time to the first playable scene.
+  // This includes UI/selection and is not a pure asset download benchmark.
+  const firstPlayableMs=Date.now()-startupClock;
   const state=await page.evaluate(()=>({
     flight:window.PatrolSpaceBridge?.getState?.(),
     menuError:document.getElementById('menuError')?.hidden?null:
@@ -99,7 +103,26 @@ async function capture(label,file){
   await page.waitForTimeout(950);
   await page.screenshot({path:'artifacts/alaska-cabin-port-'+label+'-near.png'});
   const near=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
-  records[label]={...state.flight,after,near,pageErrors:errors};
+  // Fixed-pose RAF cadence on headless SwiftShader: diagnostic ONLY, not GPU FPS.
+  // Bound measurement to 12 intervals or 15 seconds if software GL is slow.
+  const intervals=await page.evaluate(()=>new Promise(resolve=>{
+    let previous=null,done=false;const values=[];
+    const timeout=setTimeout(()=>{done=true;resolve(values);},15000);
+    const frame=now=>{
+      if(done)return;
+      if(previous!==null)values.push(now-previous);
+      previous=now;
+      if(values.length>=12){
+        done=true;clearTimeout(timeout);resolve(values);
+      }else requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }));
+  const sorted=intervals.slice().sort((a,b)=>a-b);
+  const percentile=p=>sorted.length?sorted[Math.max(0,Math.ceil(p*sorted.length)-1)]:null;
+  records[label]={...state.flight,after,near,pageErrors:errors,
+    firstPlayableMs,softwareRafSamples:sorted.length,
+    softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
   if(errors.length)throw Error(label+' JS errors: '+errors.join('; '));
   await page.close();
 }
