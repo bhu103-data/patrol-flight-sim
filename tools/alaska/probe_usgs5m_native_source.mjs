@@ -107,6 +107,13 @@ async function main(){
   }
   const projects=report.metadataCandidates.filter(a=>a.sourcedem_link);
   if(!projects.length)throw Error('No verified QL5 source project record or download link');
+  report.nativeProductDirectory=projects.map(a=>({
+    workunit:a.workunit,project:a.project,ql:a.ql,demGsdMeters:a.dem_gsd_meters,
+    horizontalCrs:a.horiz_crs,verticalCrs:a.vert_crs,geoid:a.geoid,
+    collectionStart:a.collect_start,collectionEnd:a.collect_end,
+    category:a.sourcedem_category,published:a.sourcedem_pub_date,
+    metadataLink:a.metadata_link,sourceDirectory:a.sourcedem_link
+  }));
   const prefixes=[...new Set(projects.map(a=>{
     const u=new URL(a.sourcedem_link);return u.searchParams.get('prefix');
   }).filter(Boolean))];
