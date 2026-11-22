@@ -44,7 +44,7 @@ export function makeDumboMetricFlySafety(buildings,bounds,options={}){
     minZ:bounds.minZ-25,maxZ:bounds.maxZ+25,minY,maxY};
   const records=buildings.map(b=>{
     if(!Number.isSafeInteger(b.fid)||!finite(b.roofY)||
-       b.roofY<4||!Array.isArray(b.ring)||b.ring.length<3)
+       b.roofY<=3.048||!Array.isArray(b.ring)||b.ring.length<3)
       throw new TypeError('Invalid municipal building prism');
     return {fid:b.fid,roofY:b.roofY,ring:b.ring,
       minX:Math.min(...b.ring.map(p=>p[0]))-radius,
