@@ -26,9 +26,12 @@ try{
       canvas:[canvas?.width,canvas?.height]};
   });
   report.stats=stats;
+  report.visualOnlyMask=true; // Source polygons remain intact in edges.json.
   if(!stats.ready||stats.error||stats.contextLost||stats.glError!==0||
     stats.sourceBuildings<100||stats.realPavementFeatures<50||
     stats.realSidewalkFeatures<5||stats.realSidewalkTriangles<100||
+    !(stats.sidewalkVisualMaskSquareMetres>0.1)||
+    !(stats.sidewalkDisplayBuildingOverlapSquareMetres<=1e-6)||
     stats.realCurbFeatures<5||stats.realCurbCuts<5||
     stats.realCurbLineVertices<1000||stats.canvas[0]<1000)
     throw Error('Source-curb WebGL geometry acceptance failure '+
