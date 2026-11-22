@@ -500,8 +500,12 @@ window.PatrolTrueScaleQA=()=>({
   sourceVerticalDatumEvidence:sourceAudit?.sourceVerticalDatumEvidence||null,
   sourceTileSha256:sourceAudit?[...sourceAudit.sourceTileSha256]:null,
   sourceCoverageValidFraction:sourceAudit?.sourceCoverageValidFraction??null,
-  meshLodStride:dem?.meshLodStride||1,
-  officialSourceExtentCorrected:true
+  tileSeamP95Metres:sourceAudit?.tileSeamP95Metres??null,
+  withinTileGradientP95Metres:sourceAudit?.withinTileGradientP95Metres??null,
+  tileOverlapRmseMetres:sourceAudit?.tileOverlapRmseMetres??null,
+  tileOverlapP95AbsMetres:sourceAudit?.tileOverlapP95AbsMetres??null,
+  sourceLicense:sourceAudit?.sourceLicense||null,
+  meshLodStride:dem?.meshLodStride||1
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
 </script>
