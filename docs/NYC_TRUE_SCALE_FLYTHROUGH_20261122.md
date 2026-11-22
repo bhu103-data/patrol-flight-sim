@@ -63,6 +63,68 @@ Sources and terms:
 - No Google Maps 3D tiles, paid imagery, external browser runtime texture
   calls, or nonredistributable asset model is present.
 
+## 2022 OTI source roadbed — **11 actual measured-shape FIDs**, opt-in true-scale map only
+
+This independent candidate goes beyond DCM **road centrelines** for a *bounded
+piece of Times Square*. New \`assets/nyc/nyc-oti-roadbed-core-2022.json\` is
+derived solely from the city-published 2022 OTI Roadbed service at
+https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/Roadbed_2022/FeatureServer/20.
+NYC Open Data also catalogs the planimetrics and the source imagery is from
+18 March 2022 Manhattan, with the planimetric update completed in 2023.
+The original authoritative publicly accessible NYC OTI query was audited
+in stacked source work [PR #244](https://github.com/bhu103-data/patrol-flight-sim/pull/244):
+successful Actions 44993348708 / artifact 14742652611, originally 81
+polygon features with 8,883 original OTI vertices.
+
+This **small reusable core slice** consists of source FIDs
+\`21362,21367,22195,22209,22454,22459,23654,23665,23947,24700,24701\`.
+Three are original source-code **350010** intersection polygons; eight
+are **350000** paved roadbed polygons. This is **not a full city/neighborhood
+roadbed inventory**. Original 1,403 vertices across those 11 source records
+were topology-preservingly reduced with 0.05m simplification followed by
+0.01m coordinate rounding, leaving 229 vertices. The actual worst observed
+post-rounding boundary Hausdorff difference is **0.060106m**, and worst
+area difference is **0.095078%**, recomputed against the full source geometries.
+The asset reports conservative ceilings 0.061m and 0.096% respectively.
+
+The source uses the #234 local WGS84 anchor (-73.9864883,40.756421).
+The playable reference viewer uses #235's different anchor
+(-73.9864883,40.75775). The code reprojects the OTI anchor into the
+building anchor using the **same shared WGS84 local metre function**, never
+simply overlays the arrays. Roadbed source polygons are concave roof-style
+ear clipped to 207 upward triangles at exactly Y=-0.075m, not collapsed
+to bounding rectangles, not stretched to #248's DCM strips. Adjacent DCM
+fallback bands are still **only illustrative**, especially outside these FIDs;
+the source patches are rendered above the existing illustrative band to make
+the geometrically evidenced asphalt border inspectable. They do not infer
+lane count, line marking, sidewalk, curb, construction grades or legal
+turn rules.
+
+In the experimental NYC TRUE-SCALE scene only, the OTI source-core slice
+is enabled. \`?roadbed=off\` displays the previous invented road-width bands
+unchanged. \`?quality=low\` disables expensive fake windows but retains
+all 11 official roadway shapes. The original 0.32-scale production NYC
+aircraft map, original flight physics and other world maps are not edited.
+Browser QA captures the **same aerial camera** with the source slice on/off
+plus the original source flythrough screenshots and measured 3-D triangle
+budgets. SwiftShader proves WebGL behavior, **not** hardware frame times.
+
+### Source/reuse and limitations
+
+- NYC Open Data Terms: https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje
+- NYC Roadbed dataset: https://data.cityofnewyork.us/Transportation/NYC-Planimetric-Database-Roadbed/i36f-5ih7
+- Official capturing rules: https://github.com/CityOfNewYork/nyc-planimetrics/blob/main/Capture_Rules.md
+- The published local source is a **modified/decreased-vertex portion** of
+  public NYC OTI municipal data, not an original survey or third-party
+  photogrammetric mesh. No NYC images, advertisements or Google 3-D data
+  included. Record attribution, capture year, transformation and
+  simplification when redistributing; verify legal terms at integration time.
+- 2022 paving may differ from 2026 Times Square plazas, pedestrian space,
+  curb ramps, buses and temporary changes. The map remains NOT photoreal.
+- Rendering the 11 official polygons does **not** grant a certified road
+  surface to aircraft physics; the collision/road elevation datum and the
+  rest of the street/pedestrian network need independent measured sources.
+
 ## Actual QA gate
 
 \`\`\`
