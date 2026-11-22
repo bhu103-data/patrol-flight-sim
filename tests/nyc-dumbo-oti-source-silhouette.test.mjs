@@ -75,14 +75,14 @@ test('actual source topology produces non-box silhouettes and watertight roof ar
     assert.ok(result.floors>=3);
     assert.ok(quads.filter(q=>q.at(-1)===13).length===result.windows+result.doors,
       'one source-derived window pane per authored bay, no duplicate main box');
-    assert.ok(quads.length<=500 && tris.length<=13,
+    assert.ok(quads.length<=(src.fid===1080628?1100:500) && tris.length<=13,
       'bounded same-mesh quad/triangle budget for WebGL2');
   }
   assert.ok(new Set(shapeCounts).size>=2,
     'GIS silhouettes should not be three clone rectangles');
 });
 
-test('all 129 pilot windows and three original authored entries have 0.18-unit wall cavities',()=>{
+test('192 source-pilot panes, including 108 Nexus condo bays, retain recessed window geometry',()=>{
   assert.match(source,/PATROL_DUMBO_OTI_RECESSED_BAYS_V2/);
   const {select,build}=setup();
   let totalWindows=0,totalDoors=0,totalQuads=0;
@@ -108,14 +108,14 @@ test('all 129 pilot windows and three original authored entries have 0.18-unit w
       assert.ok(distance>=.17&&distance<=.19,
         'each glass/door plane must sit 0.18 units behind the shell');
     }
-    assert.ok(quads.length<=500&&tris.length<=13,
+    assert.ok(quads.length<=(result.fid===1080628?1100:500)&&tris.length<=13,
       'recessed detail must remain within native one-batch mesh budget');
     totalWindows+=result.windows;totalDoors+=result.doors;
     totalQuads+=quads.length;
   }
-  assert.equal(totalWindows,129);
+  assert.equal(totalWindows,192);
   assert.equal(totalDoors,3);
-  assert.ok(totalQuads<=1300);
+  assert.ok(totalQuads<=1900);
 });
 
 test('fitted WGS84 polygon never crosses original road-cleared collision proxy',()=>{
