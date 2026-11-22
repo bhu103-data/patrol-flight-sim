@@ -25,6 +25,7 @@ const check=(v,s)=>{if(!v)throw Error(s);};
 // No production index.html camera/geometry, shader or flight changes.
 const lodSourceReturn='    return {panes,triangles:panes*18};';
 const lodScenicAnchor='  const DC_SCENIC_VIEWS=[';
+const lodBuilderAnchor='  function buildCityBuildings(parcels,local=false) {';
 await page.route('**/index.html*',async route=>{
  const response=await route.fetch();
  let html=await response.text();
@@ -32,6 +33,8 @@ await page.route('**/index.html*',async route=>{
    'Actual LOD1 window helper missing from tested game HTML');
  check(html.split(lodScenicAnchor).length===2,
    'Expected single NYC scenic array boundary for QA-only camera');
+ check(html.split(lodBuilderAnchor).length===2,
+   'Expected single actual production NYC building builder for eligibility audit');
  const collector=[
    '    if(panes>0){',
    '      const sites=(window.__patrolLodSiteSamples??=[]);',
@@ -53,6 +56,31 @@ await page.route('**/index.html*',async route=>{
    '  };'
  ].join('\n');
  html=html.replace(lodScenicAnchor,hook+'\n'+lodScenicAnchor);
+ const eligibility=[
+   '    if(!local && selectedMap.city && !window.__patrolLodEligibility){',
+   '      const info={total:parcels.length,surveyed:0,band0:0,band1:0,band2:0,band3:0,',
+   '        inRegion:0,regionBand1:0,regionBand1Tall:0,seedHit:0,geometryEligible:0,examples:[]};',
+   '      for(const lot of parcels){',
+   '        const [east,north,w,d,h,tone,destroyed]=lot;',
+   '        if(lot[7]){info.surveyed++;continue;}',
+   '        const band=nycDetailBand(east,north);info["band"+band]++;',
+   '        if(!(east>-185&&east<175&&north>-526&&north<-155))continue;',
+   '        info.inRegion++;if(band!==1)continue;info.regionBand1++;',
+   '        if(!(h>20)&&!destroyed)continue;',
+   '        info.regionBand1Tall++;',
+   '        const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);',
+   '        const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);',
+   '        const seed=(Math.imul(gridX,73856093)^Math.imul(gridZ,19349663)^',
+   '          Math.imul(gridX*gridZ,83492791))>>>0;',
+   '        if(((seed>>>4)&3)!==0)continue;info.seedHit++;',
+   '        if(w>6.2&&d>5.5&&h*(.62+(seed%13%3)*.09)>11)info.geometryEligible++;',
+   '        if(info.examples.length<12)info.examples.push({east,north,w,d,h,band,seed});',
+   '      }',
+   '      window.__patrolLodEligibility=info;',
+   '    }'
+ ].join('\n');
+ html=html.replace(lodBuilderAnchor,lodBuilderAnchor+'\n'+eligibility);
+
  await route.fulfill({response,body:html});
 });
 
@@ -214,7 +242,9 @@ try{
 // Sample actual generated LOD1 helper calls and preserve exact game-space
 // x/z + pose for independent screenshot QA. No fake meshes are drawn.
 const lodSites=await page.evaluate(()=>window.__patrolLodSiteSamples||[]);
-check(lodSites.length>0,'LOD1 helper generated zero source-selected panes');
+const lodEligibility=await page.evaluate(()=>window.__patrolLodEligibility||null);
+await writeFile(out+'/lod1-eligibility-diagnostic.json',JSON.stringify({count:lodSites.length,sites:lodSites.slice(0,15),eligibility:lodEligibility},null,2));
+check(lodSites.length>0,'LOD1 helper generated zero source-selected panes: '+JSON.stringify(lodEligibility));
 const ordered=[...lodSites].sort((a,b)=>
   b.w*b.shaftHeight-a.w*a.shaftHeight);
 const selected=[];
