@@ -12543,9 +12543,6 @@ const CENTRAL_PARK_SITES=[
 
   async function launchFlight(event) {
     event.preventDefault();
-    // No persisted or cross-map height scaling: even a failed DEM load
-    // must return to the original Alaska/other-map flight physics.
-    activeAlaskaTerrainScale = ALASKA_STANDARD_SCALE;
     // PATROL_CQ_CINEMATIC_V3: carry Manhattan's selected environment from
     // the shared PATROL launcher into the independent Chongqing Three.js scene.
     // No flight/control or approved Blender asset behavior is changed.
@@ -12570,6 +12567,9 @@ const CENTRAL_PARK_SITES=[
       menuError.hidden=false;
       return;
     }
+    // A duplicate submit while terrain is loading must not reset the live
+    // worker/CPU/GPU Alaska scale. Only accepted launches reset this state.
+    activeAlaskaTerrainScale = ALASKA_STANDARD_SCALE;
     crash = null;
     crashOverlay.hidden = true;
     groundWarning.hidden = true;
