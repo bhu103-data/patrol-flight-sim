@@ -76,6 +76,24 @@ async function capture(name){
     pixels.hotpotLowerFacadeDayLuma=sum/Math.max(1,pixelsCount);
     check(Number.isFinite(pixels.hotpotLowerFacadeDayLuma),
       'Unable to measure the same-camera daylight storefront');
+    // The physical timber returns should be distinguishable from the
+    // repeated glass atlas in the unchanged daylight spawn. Record image
+    // statistics, but do not set a global-lighting-dependent hard threshold.
+    const windowColors=new Set();
+    let contrast=0,n=0;
+    for(let y=5;y<147;y+=4)for(let x=448;x<1232;x+=4){
+      const i=(y*png.width+x)*4;
+      const r=png.data[i],g=png.data[i+1],bl=png.data[i+2];
+      windowColors.add(((r>>4)<<8)|((g>>4)<<4)|(bl>>4));
+      if(x>449){
+        const j=i-16;
+        contrast+=Math.abs(r-png.data[j])+Math.abs(g-png.data[j])+
+          Math.abs(bl-png.data[j]);n++;
+      }
+    }
+    pixels.hotpotUpperWindowColorBins=windowColors.size;
+    pixels.hotpotUpperWindowRoughContrast=contrast/Math.max(1,3*n);
+
   }
   if(name==='00-spawn'){
     // The original oversized red sphere covered ~36% of this fixed ROI.
@@ -115,6 +133,12 @@ async function capture(name){
       state.game.hotpotLowerFacadeTriangles<=1500 &&
       state.game.hotpotLowerFacadeTop<8.55,
       'Original hotpot masonry/timber relief is missing or blocks upper windows');
+    check(state.game.hotpotUpperWindowBays===7 &&
+      state.game.hotpotUpperWindowFrameParts===59 &&
+      state.game.hotpotUpperWindowTriangles===876 &&
+      state.game.hotpotUpperWindowDepth>.6 &&
+      state.game.hotpotUpperWindowMaxX<=320.5,
+      'Layered hotpot window reveals absent/overlapping original frontage');
 
     check(Number.isFinite(state.game.hotpotTerraceCornerSpread)&&
       state.game.hotpotTerraceCornerSpread<.03,
