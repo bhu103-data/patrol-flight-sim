@@ -68,8 +68,11 @@ async function captureSite(label,base){
       if(!state.webgl||state.error!==0||state.camera!=='Times Square'||
           state.angle!==angle)throw Error(label+': camera/GL state '+JSON.stringify(state));
       await page.evaluate(()=>document.body.classList.add('patrol-fid-qa'));
+      // Page-level capture avoids Playwright's element-stability wait on
+      // PATROL's continuously animated/re-sized WebGL canvas. The QA class
+      // still hides every UI element except the actual game canvas.
       let pngBytes;
-      try{pngBytes=await page.locator('#glCanvas').screenshot({
+      try{pngBytes=await page.screenshot({
         path:out+'/'+label+'-orbit-'+(angle<0?'neg':'pos')+Math.abs(angle)+'.png',
         animations:'allow',timeout:75000
       });}finally{
