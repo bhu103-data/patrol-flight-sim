@@ -8,10 +8,11 @@ WGS84 bbox, and emits a south-first int16 0.1m grid for a later opt-in renderer.
 It does not edit the production map or flight physics.
 """
 from __future__ import annotations
-import base64,gzip,hashlib,json,math,os,pathlib,time,urllib.request,xml.etree.ElementTree as ET
+import base64,gzip,hashlib,json,math,os,pathlib,time,urllib.request,urllib.parse,io,xml.etree.ElementTree as ET
 import numpy as np
 import urllib.parse
 import rasterio
+import tifffile
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
 from rasterio.transform import from_bounds
@@ -110,7 +111,8 @@ def main():
   "noDataInt16":-32768,
   "sourceTiles":[],"tileSeam":{},
   "verticalDatum":"EPSG:5703 NAVD88 / GEOID09 (official 3DEP index metadata)",
-  "verticalCompatibilityWithLegacy30m":"not assumed; coarse comparison is diagnostic only"
+  "verticalCompatibilityWithLegacy30m":"not assumed; coarse comparison is diagnostic only",
+  "legacySourceGeoTIFFTagCheck":"see oldRasterGeoreference and legacy30mRegistrationDiagnostics"
  }
  paths=[]
  for filename,expected_size in EXPECTED.items():
@@ -226,10 +228,79 @@ def main():
  if not all(x["validNativeRaster"] for x in sample):
   raise RuntimeError("Native raster fails one or more 25-point footprint checks")
  report["nativeRasterCoverageSamples"]=sample
- # Compare to the existing 30m grid using its server-verified actual pixel bbox.
+ # Fetch the exact original 30m ImageServer TIFF and inspect its GeoTIFF
+ # pixel-to-world tags. f=json extent is not assumed to equal TIFF extent.
+ old_url=coarse["sourceQuery"]
+ req=urllib.request.Request(old_url,headers={"User-Agent":"PATROL-USGS-GeoTIFF-georef-QA/1.0"})
+ with urllib.request.urlopen(req,timeout=60) as response:
+  old_tiff=response.read(4_000_001)
+ if len(old_tiff)>4_000_000:raise RuntimeError("Original 30m TIFF exceeded safe QA size")
+ with tifffile.TiffFile(io.BytesIO(old_tiff)) as old_tif:
+  old_raster=old_tif.asarray()
+  old_page=old_tif.pages[0]
+  old_tags={}
+  for tag_name in ("ModelPixelScaleTag","ModelTiepointTag","ModelTransformationTag","GeoKeyDirectoryTag","GeoAsciiParamsTag"):
+   tag=old_page.tags.get(tag_name)
+   if tag is not None:
+    value=tag.value
+    old_tags[tag_name]=value.tolist() if hasattr(value,"tolist") else (list(value) if isinstance(value,tuple) else value)
+ old_bbox=None
+ scale=old_tags.get("ModelPixelScaleTag");tie=old_tags.get("ModelTiepointTag")
+ if scale and tie and len(scale)>=2 and len(tie)>=6:
+  old_bbox=[float(tie[3]),float(tie[4]-scale[1]*old_raster.shape[0]),
+            float(tie[3]+scale[0]*old_raster.shape[1]),float(tie[4])]
  old=np.frombuffer(base64.b64decode(coarse["heightsBase64"],validate=True),
    dtype="<u2").reshape((256,256)).astype(np.float64)
- OW,OS,OE,ON=geo["actualPixelBboxWgs84"]
+ if old_raster.shape!=(256,256):raise RuntimeError("Fresh original USGS TIFF shape changed")
+ # Verify the baked array orientation against the raw source TIFF itself.
+ fresh_south=np.maximum(old_raster[::-1].astype(np.float64),0)
+ fresh_south=np.rint(fresh_south).clip(0,8000)
+ report["oldRasterGeoreference"]={
+  "requestedBbox":coarse["bbox"],"fJsonBbox":geo["actualPixelBboxWgs84"],
+  "geoTiffTags":old_tags,"bboxDerivedFromGeoTiff":old_bbox,
+  "rawTiffSha256":hashlib.sha256(old_tiff).hexdigest(),
+  "bakedMatchesFreshSouthFirst":int(np.count_nonzero(fresh_south==old)),
+  "pixelCount":int(old.size),
+  "fJsonMatchesGeoTiffTags":bool(old_bbox and max(abs(a-b) for a,b in zip(old_bbox,geo["actualPixelBboxWgs84"]))<1e-8)
+ }
+ rows=np.arange(0,TARGET_HEIGHT,16);cols=np.arange(0,TARGET_WIDTH,16)
+ lons=west+(cols+.5)*(east-west)/TARGET_WIDTH
+ lats=south+(rows+.5)*(north-south)/TARGET_HEIGHT
+ new_sample=dst[np.ix_(rows,cols)].astype(np.float64)
+ valid_sample=(new_sample!=NODATA_OUT)
+ bbox_options={"requested":coarse["bbox"],"fJson":geo["actualPixelBboxWgs84"]}
+ if old_bbox:bbox_options["geoTiffTags"]=old_bbox
+ orientation_options={
+  "asBaked":old,"flipY":old[::-1,:],"flipX":old[:,::-1],
+  "flipXY":old[::-1,::-1],"transpose":old.T,
+  "rotate90CW":np.rot90(old,-1),"rotate90CCW":np.rot90(old,1)
+ }
+ orient_report=[]
+ for bbox_name,ob in bbox_options.items():
+  ow,os_,oe,on=ob
+  XX,YY=np.meshgrid((lons-ow)/(oe-ow)*256-.5,(lats-os_)/(on-os_)*256-.5)
+  for orient_name,orient in orientation_options.items():
+   base_valid=(XX>=0)&(XX<=255)&(YY>=0)&(YY<=255)
+   best=None
+   for dy in range(-12,13):
+    for dx in range(-12,13):
+     sample_valid=valid_sample&base_valid
+     if not sample_valid.any():continue
+     interp=bilinear(orient,XX+dx,YY+dy)
+     delta=new_sample[sample_valid]-interp[sample_valid]
+     rmse=float(np.sqrt(np.mean(delta*delta)))
+     if best is None or rmse<best["rmse"]:
+      best={"rmse":rmse,"dx":dx,"dy":dy,"n":int(sample_valid.sum()),
+        "bias":float(np.mean(delta))}
+   if best:
+    orient_report.append({"bbox":bbox_name,"orientation":orient_name,
+      "rmse":round(best["rmse"],3),"bias":round(best["bias"],3),
+      "bestShift30mPx":[best["dx"],best["dy"]],"n":best["n"],
+      "searchBoundary":abs(best["dx"])==12 or abs(best["dy"])==12})
+ report["legacy30mRegistrationDiagnostics"]=sorted(orient_report,key=lambda x:x["rmse"])[:12]
+ # Use TIFF-tag bbox for the primary diagnostic if present; otherwise use the
+ # server JSON bbox. Never move pixels to make this diagnostic look better.
+ OW,OS,OE,ON=old_bbox if old_bbox else geo["actualPixelBboxWgs84"]
  rows=np.arange(0,TARGET_HEIGHT,4);cols=np.arange(0,TARGET_WIDTH,4)
  lons=west+(cols+.5)*(east-west)/TARGET_WIDTH
  lats=south+(rows+.5)*(north-south)/TARGET_HEIGHT
@@ -250,7 +321,8 @@ def main():
   mask=valid[rr,cc]
   return dist(new_edge[mask]-old_edge[mask])
  report["legacy30mComparison"]={
-   "sampleStep":4,"verticalDatumCompatibility":"not independently established; do not blend based on this comparison",
+   "sampleStep":4,"comparisonBboxSource":"GeoTIFF tags" if old_bbox else "USGS f=json",
+   "verticalDatumCompatibility":"not independently established; do not blend based on this comparison",
    "native5mMinusLegacy30m":dist((new_sample-old_interp)[valid_sample]),
    "edges":{side:edge_comparison(side) for side in ("west","east","south","north")}
  }
