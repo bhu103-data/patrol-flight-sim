@@ -246,6 +246,7 @@ async function start(){
     materialEvidence:geometry.provenance.materialFidelity,
     materialPreviewBuildings:stats.previewMaterialBuildings,
     materialPreviewWallTriangles:stats.previewMaterialWallTriangles,
+    materialBrickModuleMeters:materialCatalog?.materials?.['brick-proxy']?.tileMeters||null,
     roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
     roadbedFullNYCCoverage:false,
     roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
