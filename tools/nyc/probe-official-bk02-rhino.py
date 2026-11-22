@@ -105,10 +105,61 @@ try:
         metadata["modelUnitSystem"]=str(model.Settings.ModelUnitSystem)
     except Exception as err:
         metadata["modelUnitSystem"]="unavailable: "+str(err)[:180]
-    layers=[{"index":i,"name":x.Name,"fullPath":getattr(x,"FullPath",None)}
+    settings=model.Settings
+    setting_names=[name for name in dir(settings) if not name.startswith("_")]
+    metadata["modelSettingsProperties"]=setting_names
+    metadata["modelSettingsGeoreference"]={}
+    for name in setting_names:
+        if any(token in name.casefold() for token in ("earth","anchor","basepoint","base_point","origin","coordinate")):
+            try:
+                value=getattr(settings,name)
+                if isinstance(value,(str,int,float,bool)) or value is None:
+                    metadata["modelSettingsGeoreference"][name]=value
+                else:
+                    props=[p for p in dir(value) if not p.startswith("_")]
+                    fields={}
+                    for prop in props:
+                        try:
+                            v=getattr(value,prop)
+                            if isinstance(v,(str,int,float,bool)) or v is None:
+                                fields[prop]=v
+                        except Exception:pass
+                    metadata["modelSettingsGeoreference"][name]={
+                      "type":type(value).__name__,"repr":repr(value)[:300],
+                      "properties":fields}
+            except Exception as err:
+                metadata["modelSettingsGeoreference"][name]="unavailable: "+str(err)[:120]
+    def color_json(value):
+        if value is None:return None
+        fields={}
+        for key in ("R","G","B","A"):
+            try:fields[key]=int(getattr(value,key))
+            except Exception:pass
+        return {"type":type(value).__name__,"rgba":fields,"repr":repr(value)[:120]}
+    try:
+        materials=list(model.Materials)
+        metadata["materialCount"]=len(materials)
+        metadata["materials"]=[]
+        for i,material in enumerate(materials[:200]):
+            item={"index":i}
+            for key in ("Name","Transparency","Shine","Reflectivity","Metallic","Roughness"):
+                try:
+                    value=getattr(material,key)
+                    if isinstance(value,(str,int,float,bool)) or value is None:item[key]=value
+                except Exception:pass
+            for key in ("DiffuseColor","SpecularColor","EmissionColor"):
+                try:item[key]=color_json(getattr(material,key))
+                except Exception:pass
+            metadata["materials"].append(item)
+    except Exception as err:
+        metadata["materialInventoryError"]=str(err)[:300]
+        metadata["materialCount"]=None
+    layers=[{"index":i,"name":x.Name,"fullPath":getattr(x,"FullPath",None),
+             "color":color_json(getattr(x,"Color",None))}
             for i,x in enumerate(model.Layers)]
     metadata["layers"]=layers[:160]
     counts={};layer_counts={};examples=[]
+    style_counts={};style_samples=[]
     for i,obj in enumerate(model.Objects):
         if i>=MAX_OBJECTS:
             raise ValueError("BK02 Rhino object inventory exceeds 500,000 object safety cap")
@@ -117,6 +168,16 @@ try:
         li=obj.Attributes.LayerIndex
         lname=layers[li]["fullPath"] or layers[li]["name"] if 0<=li<len(layers) else "unknown"
         layer_counts[lname]=layer_counts.get(lname,0)+1
+        attrs=obj.Attributes
+        material_source=str(getattr(attrs,"MaterialSource","unknown"))
+        color_source=str(getattr(attrs,"ColorSource","unknown"))
+        material_index=getattr(attrs,"MaterialIndex",-1)
+        style_counts["materialSource:"+material_source]=style_counts.get("materialSource:"+material_source,0)+1
+        style_counts["colorSource:"+color_source]=style_counts.get("colorSource:"+color_source,0)+1
+        if any(token in lname.casefold() for token in ("surface_facade","facade surface","surface_rooftop","rooftop surface")) and len(style_samples)<60:
+            style_samples.append({"layerName":lname,"geometry":kind,
+              "materialSource":material_source,"materialIndex":material_index,
+              "colorSource":color_source,"objectColor":color_json(getattr(attrs,"ObjectColor",None))})
         if len(examples)<20:
             sample={"geometry":kind,"layerIndex":li,"layerName":lname,
                     "hasBoundingBox":hasattr(geom,"GetBoundingBox"),
@@ -131,6 +192,8 @@ try:
     metadata["objectCount"]=sum(counts.values())
     metadata["geometryTypes"]=counts
     metadata["layerObjectCounts"]=layer_counts
+    metadata["styleSourceCounts"]=style_counts
+    metadata["styleSamples"]=style_samples
     metadata["sampleObjects"]=examples
     metadata["imported"]=True
 except Exception as exc:
