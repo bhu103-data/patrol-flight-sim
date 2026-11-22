@@ -7,6 +7,7 @@ export const MARKET_ROCK_BOUNDS=Object.freeze({
 });
 const TERRAIN=Object.freeze({x0:-990,z0:-690,dx:1980/208,dz:1380/148});
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const smooth=(x,a,b)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 export function sampleChongqingRenderedTerrain(x,z,ground){
   if(!Number.isFinite(x)||!Number.isFinite(z))throw Error('finite terrain sample required');
   const gx=clamp((x-TERRAIN.x0)/TERRAIN.dx,0,208-1e-8),
@@ -40,10 +41,15 @@ export function buildChongqingMarketRockOutcrop({THREE,scene,ground,pbr}){
       const height=sampleChongqingRenderedTerrain(x,z,ground)+lift;
       vertices.push(x,height,z);
       uvs.push(x/12,z/12);offsets.push(lift);
-      // Existing hillside atlas remains visible; variable stone face shade
-      // makes physical lamina and naturally staggered rock joints legible.
+      // Alpha-fade rock skin into the original hillside on ALL edges; the
+      // first Chromium A/B exposed a harsh straight triangular rock boundary.
+      // Also feather away from the open left-side market window rather than
+      // making its already steep terrain obstruction thicker.
+      const edgeFade=clamp(Math.min(u,1-u,v,1-v)*6,0,1);
+      const windowClear=1-.88*smooth(x,273,280)*smooth(z,345,354);
+      const alpha=edgeFade*windowClear;
       const grain=.84+.10*bedding+.05*fractured;
-      colors.push(grain,grain*.99,grain*.94);
+      colors.push(grain,grain*.99,grain*.94,alpha);
     }
   }
   for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){
@@ -54,11 +60,17 @@ export function buildChongqingMarketRockOutcrop({THREE,scene,ground,pbr}){
   geometry.setIndex(indices);
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
   geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
-  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  // Four-component vertex color: Three.js USE_COLOR_ALPHA produces a native
+  // smooth fade, without an additional shader or texture import.
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,4));
   geometry.computeVertexNormals();
   const rockMaterial=pbr.hillside.clone();
   rockMaterial.vertexColors=true;
   rockMaterial.color.setHex(0xe0ddd1);
+  rockMaterial.transparent=true;
+  rockMaterial.depthWrite=false;
+  rockMaterial.side=THREE.FrontSide;
+  rockMaterial.forceSinglePass=true;
   rockMaterial.roughness=.95;rockMaterial.metalness=0;
   rockMaterial.bumpScale=.10;
   const mesh=new THREE.Mesh(geometry,rockMaterial);
