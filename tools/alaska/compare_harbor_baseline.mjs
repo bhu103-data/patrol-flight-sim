@@ -4,8 +4,24 @@
  */
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 const root='http://127.0.0.1:8765';
-const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
+const baselineSha=process.env.PATROL_NATIVE_GPU==='1'
+  ? (process.env.PATROL_BASELINE_SHA||'bc155141742811bca3c4b1988672b238bd50a98b')
+  : 'bc155141742811bca3c4b1988672b238bd50a98b';
+// Reject accidentally mixing a different baseline file with a claimed SHA.
+// CI and Windows cmd redirection write git-show bytes without recoding.
+for(const [local,gitPath] of [
+  ['alaska-baseline.html','index.html'],
+  ['assets/alaska/alaska-fjord-detail-baseline-qa.js','assets/alaska/alaska-fjord-detail.js']
+]){
+  const actual=readFileSync(local,'utf8');
+  const expected=execFileSync('git',['show',baselineSha+':'+gitPath],
+    {encoding:'utf8',maxBuffer:2_000_000});
+  if(actual!==expected)
+    throw Error('Pinned baseline bytes do not match '+baselineSha+':'+gitPath);
+}
+
 // Add the SAME QA-only camera hook to both documents in temporary copies.
  // Neither the actual game source nor the benchmark geometry is changed.
  function cameraQAPage(input,output){
