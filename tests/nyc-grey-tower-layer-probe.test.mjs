@@ -12,6 +12,10 @@ test('debug draw omission is explicitly opt-in and NYC-only',()=>{
   assert.match(html,/if\(nycVisualProbeEnabled\)\{\s*const groups=/);
   assert.match(html,/if\(!groups\.includes\(group\)\)throw Error/);
   assert.match(html,/window\.__patrolNycVisualProbe=\{/);
+  assert.match(html,/window\.__patrolNycVisualProbe\.setGisSkippedFids=ids=>/);
+  assert.match(html,/skipFids:new Set\(skipFids\)/);
+  assert.match(gis,/skipFids!==null && !\(skipFids instanceof Set\)/);
+  assert.match(gis,/sourceFids:\[\.\.\.sourceFids\]/);
   assert.doesNotMatch(html,/new URLSearchParams\(location\.search\)\.get\('nycVisualProbe'\)!=='0'/);
 });
 
@@ -45,6 +49,10 @@ test('probe measures left wall, center wall, LED and full-frame regions',()=>{
   assert.match(probe,/for\(const group of groups\)await capture/);
   assert.match(probe,/await capture\('44th-restored','none'\)/);
   assert.match(probe,/report\.rankedByRoi=/);
+  assert.match(probe,/report\.fidScan=await page\.evaluate/);
+  assert.match(probe,/gl\.readPixels/);
+  assert.match(probe,/report\.fidScanTop=report\.fidScan\.slice\(0,10\)/);
+  assert.match(probe,/44th-skip-fid-/);
   assert.match(probe,/Left-wall source layer:/);
   assert.match(probe,/getContext\('webgl2'\)/);
   assert.match(probe,/report\.passed=true/);
