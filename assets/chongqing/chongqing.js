@@ -939,6 +939,19 @@ function scenicView(key){
       };
     }
   }
+  if(key==='Digit8'){
+    const site=marketFronts.snapshot()[1]??marketFronts.snapshot()[0];
+    if(site){
+      // A second, closer angle reveals the physical window jamb depth;
+      // Digit7 stays unchanged for baseline before/after comparisons.
+      const eyeX=site.x+3,eyeZ=site.z+18;
+      destinations.Digit8={
+        name:'山城商铺 · 实体窗洞近景',
+        pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
+        target:[site.x,site.base+9.6,site.z+2.6]
+      };
+    }
+  }
   const next=destinations[key];
   if(!next)return false;
   state.pos.set(...next.pos);
@@ -949,7 +962,7 @@ function scenicView(key){
   jumpQueued=false;
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
-  viewPitch=key==='Digit7'?-.28:.23;
+  viewPitch=key==='Digit8'?-.22:key==='Digit7'?-.28:.23;
   cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
@@ -1389,7 +1402,9 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   marketGalleryRoofs:marketFronts.stats.curvedRoofs,
-  marketGalleryInstances:marketFronts.stats.instances
+  marketGalleryInstances:marketFronts.stats.instances,
+  marketOpenFacades:marketFronts.stats.openFacades,
+  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();

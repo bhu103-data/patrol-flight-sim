@@ -112,8 +112,11 @@ try{
   await page.waitForTimeout(1000);
   const marketState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(marketState.marketGalleryRoofs===3 &&
-    marketState.marketGalleryInstances>=70,
-    'New secondary timber shopfronts not integrated in the live city');
+    marketState.marketGalleryInstances===117 &&
+    marketState.marketOpenFacades===3 &&
+    marketState.marketOpenFacadeTriangles===1872,
+    'Three physical facade apertures or batched shop geometry missing in live WebGL: '+
+      JSON.stringify(marketState));
   check(marketState.avatarFlying,'Market inspector must remain above the hillside');
   await capture('03d-marketfront-night-low');
   const savedPose=marketState.position;
@@ -127,6 +130,15 @@ try{
   check(Math.hypot(...savedPose.map((v,i)=>v-highPose[i]))<4,
     'Market day/high shot must be the same physical location as night/low');
   await capture('03e-marketfront-day-high');
+  // Dedicated true close-up: the existing Digit7 camera remains identical
+  // to the parent PR, allowing apples-to-apples baseline comparison.
+  await page.keyboard.press('8');
+  await page.waitForTimeout(1100);
+  const closeState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(closeState.marketOpenFacades===3 &&
+    closeState.marketOpenFacadeTriangles===1872,
+    'Open window jambs not present when filming the actual close-up');
+  await capture('03f-marketfront-open-bays-close-high');
   await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
