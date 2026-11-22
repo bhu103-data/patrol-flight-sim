@@ -112,7 +112,7 @@ try{
   await page.waitForTimeout(1000);
   const marketState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(marketState.marketGalleryRoofs===3 &&
-    marketState.marketGalleryInstances===117 &&
+    marketState.marketGalleryInstances===156 &&
     marketState.marketOpenFacades===3 &&
     marketState.marketOpenFacadeTriangles===1872,
     'Three physical facade apertures or batched shop geometry missing in live WebGL: '+
