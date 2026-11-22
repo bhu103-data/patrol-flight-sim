@@ -9,6 +9,8 @@ on:
       - 'assets/nyc/dumbo-cscl-official-snapshot.json'
       - 'assets/nyc/dumbo-cscl-true-metre.js'
       - 'assets/nyc/dumbo-cscl-metric-reconcile.mjs'
+      - 'assets/nyc/dumbo-metric-fly-safety.mjs'
+      - 'tests/nyc-dumbo-metric-lowflight-collision.test.mjs'
       - 'tests/nyc-dumbo-metric-cscl-reconcile.test.mjs'
       - 'tests/nyc-dumbo-metric-roadbed.test.mjs'
       - 'assets/nyc/dumbo-oti-metric-48.json'
@@ -24,11 +26,13 @@ jobs:
     timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Validate projection, roof triangulation and fallback isolation
-        run: node --test tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs
+        run: node --test tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs tests/nyc-dumbo-metric-lowflight-collision.test.mjs
       - name: Install pinned Chromium browser harness
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
@@ -41,6 +45,7 @@ jobs:
       - name: Render exact-source DUMBO oblique and overhead WebGL2
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tools/nyc/dumbo-metric-browser-smoke.mjs
       - name: Preserve browser screenshot and report evidence
         if: always()
