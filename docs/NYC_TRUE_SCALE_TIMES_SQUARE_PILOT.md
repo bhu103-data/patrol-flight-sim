@@ -24,6 +24,34 @@ The bounded source-query area is longitude -73.9900 to -73.9822, latitude 40.755
 
 IMPORTANT: A centreline is not a curb, roadbed polygon, or verified number of driving lanes. The source can include paper or record streets. Heights and building footprints do not supply true facade photography or current ground-floor storefront details.
 
+## Road centerline bounds — exact tile clipping follow-up
+
+The DCM API spatial predicate \`esriSpatialRelIntersects\` **selects**
+whole street features whose geometry touches the WGS84 envelope; the returned
+GeoJSON may extend far beyond the envelope. The original source task
+(2026-11-22, before the clipping patch) produced 118 buildings, 39 street
+features and 138 road line parts with output bounds reaching
+\`[-1228.58,-1234.71,630.2,1251.42]\` metres. Those dimensions do **not**
+represent the desired Times Square tile size; the apparent kilometer-wide
+road extent was a query-artifact error.
+
+\`clipSourceStreetLine\` clips only the local metre-coordinate road lines at
+\`SOURCE_TILE_METRES\`, computed from the exact existing WGS84 \`BBOX\`.
+It uses line-segment/boundary intersection, splits discontinuous visible
+pieces, and drops lines fully outside the tile. It does **not** invent
+adjacent lanes, sidewalks, intersections, stop lines or observed DOT phases.
+Official \`OBJECTID\`, street name, build status, paper street and
+source width attributes remain unchanged. The output JSON records the
+clip envelope; \`boundsMetres\` now reflects clipped road pieces plus
+the original building outlines. One source building vertex slightly
+outside the query envelope remains unmodified, to preserve its official FID
+geometry rather than silently crop a building.
+
+Acceptance: exact-head tests must prove clipping is metre-correct, source
+identity survives, and disconnected road pieces are not spuriously joined.
+Re-run the official public data fetch in CI; inspect new
+\`source.json\` and \`plan.svg\` rather than claiming city-wide fidelity.
+
 ## Required next stages
 
 1. Filter unbuilt/paper roads and acquire official roadbed, curb, sidewalk and plaza boundaries, with redistribution-rights review.
