@@ -23,7 +23,7 @@ BASE = "https://nsde.ngs.noaa.gov"
 OUT = Path("alaska-official-aoi-results/noaa-cusp-index")
 OUT.mkdir(parents=True, exist_ok=True)
 MAX_INDEX_BYTES = 1_000_000
-MAX_ARCHIVE_BYTES = 25 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_BYTES = 60 * 1024 * 1024
 report = {
   "source": "NOAA Shoreline Data Explorer, /cusp/cuspidx/{z}/{x}/{y}.pbf",
