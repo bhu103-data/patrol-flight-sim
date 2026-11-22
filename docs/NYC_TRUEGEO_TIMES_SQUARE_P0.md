@@ -42,14 +42,21 @@ The preview creates 118 real-position building massings from 120 verified
 snapshot records: 2,104 wall/roof triangles, source real roof heights,
 local meter coordinates, and a reference grid every 50 meters. Two FIDs
 800370 and 1072214 have inner courtyard rings and are intentionally
-excluded rather than falsely filled with solid roofs. No fake road mesh
-is created; the grid is NOT a street map. Drag to orbit, mouse wheel to
+excluded rather than falsely filled with solid roofs. No fake road mesh is created; the grid is NOT a street map. A separate
+opt-in button fetches NYC official live CSCL records and draws their
+actual **centerlines** in the same ENU meter frame: no guessed roadbed
+width, curbs or pedestrian plazas. On 2026-11-22, the independent data-only
+QA returned 28 unique physical IDs, 30 line segments and 58 WGS84 vertices
+with direction and road-type attributes, but those records have NOT been
+licensed/packaged as a redistributed production road asset. Drag to orbit, mouse wheel to
 zoom, and arrow keys for 10-meter panning. Check GitHub Actions Node and
 live software-WebGL2 screenshot QA on exact HEAD before acceptance.
 
 ## Unresolved P0 gates for real street-level NYC
 
-1. Acquire actual municipal Centerline/CSCL street polylines from
+1. Independently validate traffic use, geometric fidelity, exact area
+   selection and dataset rights for the dynamically retrieved municipal
+   Centerline/CSCL street polylines from
    https://data.cityofnewyork.us/d/inkn-q76z with per-dataset rights,
    fields, direction and coordinate reference checks. A centerline does
    not provide independently verified street width, sidewalk, elevation,
@@ -72,6 +79,7 @@ live software-WebGL2 screenshot QA on exact HEAD before acceptance.
    overlap count, native GPU frame time P50/P95, triangles, VRAM and load.
    SwiftShader browser success is NOT hardware FPS evidence.
 
-**Not claimed:** actual NYC road network, DUMBO, subway elevations,
+**Not claimed:** production-ready roadbeds or an operational NYC road network,
+DUMBO, subway elevations,
 New York photogrammetric assets, citywide ground collision or realistic
 branded ads. This is a geospatial building proof, NOT a finished game map.
