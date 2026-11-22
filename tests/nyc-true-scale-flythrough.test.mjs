@@ -137,7 +137,7 @@ test('PATROL launcher routes experimental map to real-source free-flight entry',
   assert.match(page,/id="roadbedFocus"/);
   assert.match(page,/const coreSourceFID24700=\[4\.09,32\.58\]/);
   assert.match(page,/roadbedFocusOriginWGS84:roadSource\.originWGS84/);
-  assert.match(page,/roadbedOff\?null:/,'same experimental map keeps source-on/off evidence');
+  assert.match(page,/roadbedResponse=roadbedOff\|\|fullSurfaces\?null:/,'same experimental map keeps source-on/off evidence');
   assert.match(page,/source buildings/);
   assert.doesNotMatch(page,/https?:\/\/(?:google\.com|maps\.google|cesium\.com)/);
   assert.match(page,/not the original aircraft physics/);
