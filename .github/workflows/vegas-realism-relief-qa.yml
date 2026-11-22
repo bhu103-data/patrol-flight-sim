@@ -1,0 +1,49 @@
+name: Vegas USGS 3DEP visual-relief browser QA
+
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/vegas/**'
+      - 'scripts/vegas-core-browser-smoke.mjs'
+      - 'tests/allmap-visual-relief.test.mjs'
+      - 'tests/vegas-usgs-ridges.test.mjs'
+      - '.github/workflows/vegas-realism-relief-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vegas-six-camera:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check USGS provenance, fallbacks and four-map source boundaries
+        run: node --test tests/vegas-usgs-ridges.test.mjs tests/allmap-visual-relief.test.mjs
+      - name: Install free open-source Chromium QA dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Serve current candidate
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-vegas-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture six real Las Vegas WebGL2 scenes and assert measured DEM was loaded
+        env:
+          PATROL_QA_TAG: candidate
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/vegas-core-browser-smoke.mjs
+      - name: Keep screenshot evidence and browser reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-usgs-3dep-six-camera
+          path: artifacts/vegas/candidate/
+          if-no-files-found: warn
+          retention-days: 7
