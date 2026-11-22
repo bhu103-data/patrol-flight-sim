@@ -145,3 +145,23 @@ This checkpoint is factual status **as of GitHub CI #45040331892 being queued**.
 2. Open the artifact and inspect actual near/mid/far screenshots at fixed camera; verify glTF Base Color, hull orientation, waterline, bridge clearance and LOD selection. Cross-map default/compat/Alaska/Chongqing must trigger zero ferry asset fetches.
 3. Test real hardware WebGL2 frame pacing and first-load, if available. SwiftShader frame timing cannot stand in for hardware FPS.
 4. Keep draft/unmerged if any screenshot, collision or legal issue remains. No false claims of survey-grade NYC ferry reproduction.
+
+
+## 2026-11-22 later browser finding — repeated mesh nodes and scene draw triangles
+
+**A real Chromium run failed, and this failure must not be hidden.**
+[PR browser job 45040010548](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040010548), source before the specialized near-float fix, fetched all three GLBs and produced:
+- \`far\` and \`mid\`: \`GLB geometry exceeds ferry visual/collision contract\`.
+- \`near\`: \`GLB is empty, too large or flat\` from the native 240k-position-floats limit.
+- No import was approved: original procedural ferry remained as fallback.
+
+Independently parsed the full **scene graph** (not just unique mesh entries) of all three *already verified* output GLBs. The source tevy model references one mesh (\`visor_ram_L_rod_fittings\` and \`visor_ram_R_rod_fittings\`) twice, so the native decoder uploads both copies:
+- LOD0 **52,069 unique indexed triangles** → **52,121 expanded scene triangles**, or **469,089 POSITION XYZ floats**.
+- LOD1 **19,775 unique indexed** → **19,827 scene triangles**, or **178,443 POSITION XYZ floats**.
+- LOD2 **5,478 unique indexed** → **5,502 scene triangles**, or **49,518 POSITION XYZ floats**.
+
+The original GLB source counts and SHA-256 are **unchanged**. The feature-branch runtime model manifest now checks the *drawn* scene triangles, not the distinct mesh primitive sum. Existing width/depth collision contract remains **6.6×26 game units** (visual mesh normalized approx 5.34×24.47). The position-float override is **480,000 solely on the licensed SHA-pinned near ferry**, all other city assets remain 240k.
+
+The new failure message includes actual \`triangleCount\`, \`width\` and \`depth\` so a subsequent visual/geometry mismatch can be diagnosed without weakening safeguards. Existing \`tests/nyc-harbor-ferry-lods.test.mjs\` was updated to distinguish source unique triangles from scene-rendered triangles.
+
+**Latest run at this checkpoint:** [#45040981830](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040981830) was queued. The last completed older regression with the near-float fix and prior triangle check reached **474/474 tests** on [#45040331892](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040331892). **Do not report browser QA or current-head Node QA passed until the actual subsequent run does.** Draft PR #258 remains **unmerged**, no changes to baseline maps, ship physics, routes, or plane collision.
