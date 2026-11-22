@@ -867,7 +867,7 @@ function stopJoystick(e){
 }
 joystick.addEventListener('pointerdown',e=>{
   if(joystickPointer!==null)return;
-  e.preventDefault();joystickPointer=e.pointerId;
+  e.preventDefault();marketDetailTarget=null;joystickPointer=e.pointerId;
   joystick.setPointerCapture(e.pointerId);updateJoystick(e);
 });
 joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
@@ -998,7 +998,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{keys.clear();touchForward=touchSideways=0;joystickPointer=null;joystickKnob.style.transform='translate(0,0)';});
-canvas.addEventListener('pointerdown',e=>{dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{marketDetailTarget=null;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',()=>dragging=false);
 canvas.addEventListener('pointercancel',()=>dragging=false);
 canvas.addEventListener('pointermove',e=>{
@@ -1007,7 +1007,7 @@ canvas.addEventListener('pointermove',e=>{
   viewPitch=clamp(viewPitch+(e.clientY-mouseY)*.004,-.3,1.05);
   mouseX=e.clientX;mouseY=e.clientY;
 });
-canvas.addEventListener('wheel',e=>{camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
+canvas.addEventListener('wheel',e=>{marketDetailTarget=null;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
 document.querySelectorAll('#mobile button').forEach(b=>{
   const key=b.dataset.key;
   b.addEventListener('pointerdown',e=>{e.preventDefault();press(key,true);b.setPointerCapture(e.pointerId);});
