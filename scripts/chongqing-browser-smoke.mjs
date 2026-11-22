@@ -79,6 +79,23 @@ async function capture(name){
     check(state.game.hotpotDisplayParts>=17&&state.game.hotpotDisplayParts<=25&&
       state.game.hotpotDisplayHeight<=2.5,
       'Grounded open hotpot display missing from live game');
+    // Same camera as main 25e734e: old entrance slab was nearly flat in
+    // 750:950 x 300:355 (mean horizontal luminance step 0.04 / 8-bit).
+    // Keep actual pixels inspectable, alongside the 2-draw/triangle limit.
+    let step=0,samples=0;
+    for(let y=300;y<355;y+=3)for(let x=751;x<950;x++){
+      const offset=(y*png.width+x)*4;
+      const prior=offset-4;
+      const luminanceAt=i=>(png.data[i]+png.data[i+1]+png.data[i+2])/3;
+      step+=Math.abs(luminanceAt(offset)-luminanceAt(prior));
+      samples++;
+    }
+    pixels.hotpotForecourtEdgeStep=step/Math.max(1,samples);
+    check(state.game.hotpotForecourtPavers===92 &&
+      state.game.hotpotForecourtDrainBars===40 &&
+      state.game.hotpotForecourtTriangles<=1700,
+      'Missing bounded photographic-stone pavers at the hotpot spawn');
+
     check(Number.isFinite(state.game.hotpotTerraceCornerSpread)&&
       state.game.hotpotTerraceCornerSpread<.03,
       'Hotpot shop corner terrain still clips the foundation: '+
