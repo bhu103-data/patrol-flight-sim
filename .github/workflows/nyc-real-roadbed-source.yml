@@ -1,0 +1,64 @@
+name: NYC real 2022 roadbed polygon source QA
+
+on:
+  pull_request:
+    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat]
+    paths:
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'tests/nyc-times-roadbed-polygon-source.test.mjs'
+      - '.github/workflows/nyc-real-roadbed-source.yml'
+      - 'scripts/nyc-times-true-scale-pilot.mjs'
+      - 'scripts/nyc-roadbed-polygon-webgl-preview-build.mjs'
+      - 'tools/nyc/roadbed-polygon-browser-smoke.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measured-roadbed-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify original DCM source plus OTI roadbed polygon safety
+        run: |
+          node --check scripts/nyc-times-roadbed-polygon-source.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs
+      - name: Acquire original NYC DCP centreline and OTI polygons without fabricated fallback
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+          test -s artifacts/nyc-roadbed-source/overlay.svg
+      - name: Install triangulator and free Chromium WebGL2 browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 earcut@3.0.1
+          npx playwright install --with-deps chromium
+      - name: Triangulate original OTI roadbed geometry and create separate WebGL preview
+        run: |
+          node --check scripts/nyc-roadbed-polygon-webgl-preview-build.mjs
+          node scripts/nyc-roadbed-polygon-webgl-preview-build.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed-mesh.json
+          test -s artifacts/nyc-roadbed-source/preview.html
+      - name: Serve opt-in measured-source scene (not production game)
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-roadbed-source > /tmp/nyc-oti-roadbed-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify actual road polygon WebGL2 pixels and camera orbit
+        run: node tools/nyc/roadbed-polygon-browser-smoke.mjs
+      - name: Upload 1:1 source reference only (not flight map)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-roadbed-polygon-source-QA
+          path: artifacts/nyc-roadbed-source/
+          retention-days: 7
+          if-no-files-found: ignore
