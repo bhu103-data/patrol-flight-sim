@@ -22,6 +22,9 @@ test('registry labels ALL surface choices as artist-authored proxies; no unlicen
   assert.equal(validateNycMaterialCatalog(catalog,
     massing.buildings.map(b=>b.fid)),true);
   assert.equal(catalog.fidelity,'visual-proxy-only-not-as-built');
+  assert.deepEqual(catalog.materials['brick-proxy'].tileMeters,
+    [.2032,.06773333333333333],
+    'US modular nominal brick module includes the mortar joint');
   for(const m of Object.values(catalog.materials)){
     assert.equal(m.externalTextures,null);
     assert.equal(m.source,'original-procedural');
@@ -33,8 +36,10 @@ test('registry labels ALL surface choices as artist-authored proxies; no unlicen
   assert.equal(materialForNycFID(50000001,200,catalog).shaderId,4);
   assert.match(materialForNycFID(22922,13,catalog).evidence,/not-surveyed/);
   assert.ok(Array.isArray(NYC_MATERIAL_PREVIEW_GLSL));
-  assert.ok(NYC_MATERIAL_PREVIEW_GLSL.some(x=>x.includes('.62,.21')),
-    'brick tile measures metres, not arbitrary game units');
+  assert.ok(NYC_MATERIAL_PREVIEW_GLSL.some(x=>x.includes('.2032,.06773333333333333')),
+    'brick tile uses 8in x 2-2/3in US modular nominal dimensions');
+  assert.ok(NYC_MATERIAL_PREVIEW_GLSL.some(x=>x.includes('step(.047,cell.x)')),
+    'horizontal mortar joint uses the 3/8in nominal module gap');
 });
 
 test('material registry rejects fabricated verification, wrong FID and remote texture map',()=>{
