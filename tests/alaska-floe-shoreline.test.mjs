@@ -67,3 +67,25 @@ test('invalid elevation in the actual perimeter is never interpreted as water',(
   assert.equal(result.iceFloes,clear.iceFloes-1);
   assert.equal(result.iceFloesRejectedShore,1);
 });
+
+test('static floe waterline sides have bounded dark facets below their snow tops',()=>{
+  const triangles=[],quads=[];
+  const stats=buildAlaskaFjordDetail({
+    terrainAt:()=>11,waterY:WATER,
+    addTri(a,b,c,color){triangles.push({a,b,c,color});},
+    addQuad(a,b,c,d,color){quads.push({a,b,c,d,color});}
+  });
+  assert.equal(stats.iceFloes,86,'all clear-water floes remain present');
+  // Only the floe skirts have a bottom exactly waterY - .085.
+  const skirts=quads.filter(q=>
+    Math.abs(q.c[1]-(WATER+.035-.12))<1e-6 &&
+    Math.abs(q.d[1]-(WATER+.035-.12))<1e-6);
+  assert.ok(skirts.length>600,'every floe retains its visible waterline wall');
+  const levels=new Set(skirts.map(q=>q.color[1].toFixed(3)));
+  assert.ok(levels.size>25,'shore-facing ice avoids a repeated flat-color wall');
+  assert.ok(skirts.every(q=>q.color.every(v=>v>=0&&v<=.7)),
+    'facets are shaded, never overexposed ice-white');
+  assert.ok(skirts.every(q=>q.a.every(Number.isFinite)&&
+    q.b.every(Number.isFinite)&&q.c.every(Number.isFinite)&&
+    q.d.every(Number.isFinite)),'facets cannot introduce invalid vertices');
+});
