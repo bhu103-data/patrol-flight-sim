@@ -1,0 +1,48 @@
+name: NYC true-metre pilot WebGL2 screenshots
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/nyc-metric-pilot-browser.yml'
+      - 'nyc-times-square-metric-pilot.html'
+      - 'assets/nyc/nyc-metric-geometry-pilot.js'
+      - 'assets/nyc/times-square-footprints.json'
+      - 'tests/nyc-metric-pilot-browser-smoke.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metric-pilot-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Node metric footprint source checks
+        run: node --test tests/nyc-metric-geometry-pilot.test.mjs
+      - name: Install pinned Chromium and PNG reader
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1 pngjs@7.0.0
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Serve isolated metric reference in original repository
+        shell: bash
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 >/tmp/patrol-nyc-metric-http.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8127/nyc-times-square-metric-pilot.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify WebGL2 screenshot, metric geometry and orbit interaction
+        timeout-minutes: 5
+        run: node tests/nyc-metric-pilot-browser-smoke.cjs
+      - name: Upload unaltered WebGL2 captures and machine report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-real-metric-pilot-webgl-qa
+          path: artifacts/nyc-metric-pilot/
+          retention-days: 14
+          if-no-files-found: warn
