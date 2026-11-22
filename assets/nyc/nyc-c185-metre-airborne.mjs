@@ -43,15 +43,15 @@ export function c185SourceAirborneStep(state,control,dt,obstruction=null){
   if(!valid3(candidate)||!Number.isFinite(speed))
     throw Error('Non-finite PATROL airborne update');
   // Original flight envelope is a swept path, never point-end teleport.
-  // Use the real 1:1 official footprint prism at 0.25m substeps + 1.2m
-  // margin. Unverified NYC ground elevation => require safe 5m model AGL.
+  // Use the real 1:1 municipal prism with 0.25m path substeps;
+  // aircraft nose/wing tips are tested by the caller's obstruction. Unverified NYC ground elevation => require safe 5m model AGL.
   const distance=Math.hypot(...candidate.map((v,i)=>v-prev[i]));
   const parts=Math.max(1,Math.ceil(distance/.25));
   let safe=true,reason=null,at=null;
   for(let i=1;i<=parts;i++){
     const p=prev.map((v,j)=>v+(candidate[j]-v)*i/parts);
     if(p[1]<5){safe=false;reason='Unsurveyed model-ground clearance';at=p;break;}
-    if(obstruction?.(p)){safe=false;reason='NYC official building footprint prism';at=p;break;}
+    if(obstruction?.(p,{yaw,pitch:nextPitch,bank})){safe=false;reason='NYC official building footprint prism';at=p;break;}
   }
   const pos=safe?candidate:prev;
   const finalSpeed=safe?speed:0;
@@ -64,12 +64,38 @@ export function c185SourceAirborneStep(state,control,dt,obstruction=null){
     collision:!safe?{reason,attempted:at}:null,
     steps:(state.steps||0)+1};
 }
-export function c185SceneCollision(massing,center,buildingContains,radius=1.2){
+export const C185_HALF_SPAN_METRES=5.461;
+export const C185_HALF_LENGTH_METRES=3.90525;
+export function c185SceneCollision(massing,center,buildingContains,margin=.60){
   if(!Number.isFinite(center?.east)||!Number.isFinite(center?.north)||
-      typeof buildingContains!=='function')
-    throw Error('Missing exact NYC world frame for C185 collision');
-  const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]];
-  return p=>offsets.some(([e,n])=>
-    buildingContains(massing,p[0]+center.east+e,
-      center.north-p[2]+n,p[1])!==null);
+     typeof buildingContains!=='function'||!(margin>=0&&margin<=1.2))
+    throw Error('Missing exact NYC frame or invalid C185 collision margin');
+  // Source flight and floatplane authored dimensions: C185 span 10.922m,
+  // length 7.8105m. Sample 3-D swept wing ends, fuselage nose/tail
+  // and intermediate corners, not just the 1.2m spectator-camera center.
+  const extent=[
+    [0,0],[0,C185_HALF_SPAN_METRES],[0,-C185_HALF_SPAN_METRES],
+    [C185_HALF_LENGTH_METRES,0],[-C185_HALF_LENGTH_METRES,0],
+    [1.95,3.3],[1.95,-3.3],[-1.95,3.3],[-1.95,-3.3]
+  ];
+  const margins=[[0,0],[margin,0],[-margin,0],[0,margin],[0,-margin]];
+  return (p,pose={})=>{
+    const yaw=Number.isFinite(pose.yaw)?pose.yaw:Math.PI;
+    const pitch=Number.isFinite(pose.pitch)?pose.pitch:0;
+    const bank=Number.isFinite(pose.bank)?pose.bank:0;
+    const sy=Math.sin(yaw),cy=Math.cos(yaw),
+      sp=Math.sin(pitch),cp=Math.cos(pitch),
+      sr=Math.sin(bank),cr=Math.cos(bank);
+    const fwd=[sy*cp,sp,cy*cp];
+    const right=[cy*cr-sy*sp*sr,cp*sr,-sy*cr-cy*sp*sr];
+    for(const [along,across] of extent){
+      const east=p[0]+along*fwd[0]+across*right[0]+center.east;
+      const height=p[1]+along*fwd[1]+across*right[1];
+      const north=center.north-(p[2]+along*fwd[2]+across*right[2]);
+      for(const [de,dn] of margins)
+        if(buildingContains(massing,east+de,north+dn,height)!==null)
+          return true;
+    }
+    return false;
+  };
 }
