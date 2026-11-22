@@ -56,8 +56,13 @@ test('real measured TIGER bends only flush Strip joints and preserves road and f
    const [a,b,c,d]=vertices;
    const centerA=vegasMeasuredRoadX(verified,a[2]);
    const centerB=vegasMeasuredRoadX(verified,c[2]);
-   assert.ok(Math.abs((a[0]+b[0])/2-centerA)<7.23);
-   assert.ok(Math.abs((c[0]+d[0])/2-centerB)<7.23);
+   assert.ok(Math.abs(Math.abs((a[0]+d[0])/2-centerA)-7.18)<.0001,
+     'TIGER seam start follows the measured road centreline');
+   assert.ok(Math.abs(Math.abs((b[0]+c[0])/2-centerB)-7.18)<.0001,
+     'TIGER seam end follows the measured road centreline');
+   const normalY=(b[2]-a[2])*(c[0]-a[0])-
+     (b[0]-a[0])*(c[2]-a[2]);
+   assert.ok(normalY>0,'both roadside strips must face upward');
    assert.ok([a,b,c,d].every(p=>p[0]>=-43&&p[0]<=-27 &&
        p[2]>=-210&&p[2]<=-122),
        'TIGER seams remain within original asphalt footprint');
