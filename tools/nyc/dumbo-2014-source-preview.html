@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL | DUMBO 2014 official source surfaces</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b1420;color:#edf4f7;font:14px/1.45 system-ui,Segoe UI,sans-serif}
+#scene{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#scene:active{cursor:grabbing}
+aside{position:absolute;left:16px;top:16px;max-width:min(500px,calc(100vw - 54px));padding:15px 18px;background:#081522e8;border:1px solid #486173;border-radius:10px;pointer-events:none;box-shadow:0 12px 38px #0008}
+h1{font-size:17px;margin:0 0 6px}p{margin:6px 0}.muted{color:#aec2cf}.warn{color:#ffd59a}
+footer{position:absolute;right:12px;bottom:12px;background:#081522d9;padding:6px 9px;border-radius:6px;color:#c0d0db;font-size:12px}
+</style></head><body>
+<canvas id="scene" aria-label="Original NYC DCP 2014 BK02 Rhino roof and facade source meshes"></canvas>
+<aside>
+<h1>DUMBO | NYC DCP 2014 BK02 source surfaces</h1>
+<p id="status">Loading official Rhino cached surfaces…</p>
+<p id="counts" class="muted"></p>
+<p class="warn">Historical 2014 source geometry, not 2026 facades or photogrammetry. Raw source Z is displayed relative to the lowest extracted Z for preview only; its vertical datum is unverified. No gameplay, aircraft, road or collision changes.</p>
+<p class="muted">Drag to orbit · wheel to zoom · T overhead · R reset. X=east, Z=south, Y=relative source height.</p>
+</aside>
+<footer>NYC DCP 2014 BK02 · EPSG:2263 US survey feet XY · isolated WebGL2 source preview</footer>
+<script type="module">
+const canvas=document.getElementById('scene'),status=document.getElementById('status'),
+ countsNode=document.getElementById('counts');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+if(!gl){status.textContent='ERROR: WebGL2 unavailable';}
+else start().catch(e=>{status.textContent='Source preview failed: '+e.message;});
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+ if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+function makeProgram(){
+ const vs=shader(gl.VERTEX_SHADER,`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec3 aColor;
+uniform mat4 uView;uniform mat4 uProj;
+out vec3 vNormal;out vec3 vColor;out vec3 vPos;
+void main(){vNormal=aNormal;vColor=aColor;vPos=aPos;gl_Position=uProj*uView*vec4(aPos,1.0);}`);
+ const fs=shader(gl.FRAGMENT_SHADER,`#version 300 es
+precision highp float;
+in vec3 vNormal;in vec3 vColor;in vec3 vPos;
+out vec4 frag;
+void main(){
+ vec3 n=normalize(vNormal),sun=normalize(vec3(.42,.82,.37));
+ float light=.34+.66*abs(dot(n,sun));
+ float distanceFog=smoothstep(450.,1100.,length(vPos));
+ vec3 base=vColor*light;
+ frag=vec4(mix(base,vec3(.27,.40,.49),distanceFog*.42),1.0);
+}`);
+ const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,fs);gl.linkProgram(p);
+ if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
+ gl.deleteShader(vs);gl.deleteShader(fs);return p;
+}
+function perspective(fov,aspect,near,far){const f=1/Math.tan(fov/2),q=1/(near-far);
+ return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*q,-1,0,0,2*far*near*q,0]);}
+function norm(v){const n=Math.hypot(...v)||1;return v.map(x=>x/n);}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function lookAt(eye,target){const z=norm(eye.map((v,i)=>v-target[i])),x=norm(cross([0,1,0],z)),y=cross(z,x);
+ return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,
+ -x.reduce((s,v,i)=>s+v*eye[i],0),-y.reduce((s,v,i)=>s+v*eye[i],0),-z.reduce((s,v,i)=>s+v*eye[i],0),1]);}
+async function start(){
+ const [meshResponse,otiResponse]=await Promise.all([
+  fetch('./dumbo-2014-source-mesh.json',{cache:'no-cache'}),
+  fetch('./dumbo-oti-metric-48.json',{cache:'no-cache'})]);
+ if(!meshResponse.ok||!otiResponse.ok)throw Error('Source JSON missing');
+ const source=await meshResponse.json(),oti=await otiResponse.json();
+ if(source.schema!=='patrol-nyc-dumbo-bk02-2014-cached-roof-facade-mesh-v1'||
+   source.verticalDatumVerified!==false)throw Error('Unrecognized historical source schema');
+ const zBase=source.rawSourceZFeetRange[0],ft=1200/3937;
+ const colorByKind={roof:[.69,.74,.78],facade:[.48,.57,.63],footprint:[.26,.36,.41]};
+ const packed=[];
+ let minY=Infinity,maxY=-Infinity,renderedTriangles=0;
+ for(const patch of source.meshPatches){
+  const color=colorByKind[patch.kind];if(!color)continue;
+  const v=patch.vertices,idx=patch.triangles;
+  for(let j=0;j<idx.length;j+=3){
+   const pts=[];
+   for(let k=0;k<3;k++){
+    const q=idx[j+k]*3,e=v[q],s=v[q+1],rawZ=v[q+2],y=(rawZ-zBase)*ft;
+    pts.push([e,y,s]);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+   }
+   const u=pts[1].map((x,i)=>x-pts[0][i]),w=pts[2].map((x,i)=>x-pts[0][i]);
+   const n=norm(cross(u,w));
+   for(const p of pts)packed.push(...p,...n,...color);
+   renderedTriangles++;
+  }
+ }
+ if(renderedTriangles<500||!packed.length)throw Error('Insufficient authentic source mesh triangles');
+ const [minX,minZ,maxX,maxZ]=source.boundsMeters,cx=(minX+maxX)/2,cz=(minZ+maxZ)/2,
+  cy=(minY+maxY)*.43,span=Math.max(maxX-minX,maxZ-minZ);
+ const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(packed),gl.STATIC_DRAW);
+ const prg=makeProgram();gl.useProgram(prg);
+ const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+ const stride=36;
+ gl.vertexAttribPointer(0,3,gl.FLOAT,false,stride,0);gl.enableVertexAttribArray(0);
+ gl.vertexAttribPointer(1,3,gl.FLOAT,false,stride,12);gl.enableVertexAttribArray(1);
+ gl.vertexAttribPointer(2,3,gl.FLOAT,false,stride,24);gl.enableVertexAttribArray(2);
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
+ const uView=gl.getUniformLocation(prg,'uView'),uProj=gl.getUniformLocation(prg,'uProj');
+ let camera={yaw:.68,pitch:-.46,distance:Math.max(620,span*1.25)};
+ const target=[cx,cy,cz],initial={...camera};
+ function cameraEye(){const cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);
+  return [target[0]+Math.sin(camera.yaw)*cp*camera.distance,
+    target[1]-sp*camera.distance,target[2]+Math.cos(camera.yaw)*cp*camera.distance];}
+ function reset(){camera={...initial};}
+ document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='t'){camera.yaw=0;camera.pitch=-1.48;camera.distance=Math.max(760,span*1.65);}
+  if(e.key.toLowerCase()==='r')reset();});
+ let dragging=false,last=[0,0];
+ canvas.addEventListener('pointerdown',e=>{dragging=true;last=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+ canvas.addEventListener('pointerup',()=>dragging=false);canvas.addEventListener('pointercancel',()=>dragging=false);
+ canvas.addEventListener('pointermove',e=>{if(!dragging)return;camera.yaw+=(e.clientX-last[0])*.004;
+  camera.pitch=Math.max(-1.52,Math.min(1.25,camera.pitch+(e.clientY-last[1])*.003));
+  last=[e.clientX,e.clientY];});
+ canvas.addEventListener('wheel',e=>{camera.distance=Math.max(120,Math.min(2400,camera.distance*Math.exp(e.deltaY*.001)));e.preventDefault();},{passive:false});
+ const qa=window.PatrolDumbo2014SourceQA={
+  ready:true,source3dmSha256:source.source3dmSha256,sourceZipSha256:source.sourceZipSha256,
+  sourceRoofPatches:source.counts.roofPatches,sourceFacadePatches:source.counts.facadePatches,
+  sourceFootprintPatches:source.counts.footprintPatches,sourceTriangles:source.counts.triangles,
+  sourceVertices:source.counts.vertices,renderedTriangles,otiBuildings:oti.features.length,
+  sourceZRangeFeet:source.rawSourceZFeetRange,sourceVerticalDatumVerified:false,
+  sourceCoordinateFrame:'EPSG:2263 US survey feet XY -> DUMBO local east/south metres',
+  webgl2:true,glError:0,contextLost:false,frames:0,camera:[]};
+ status.textContent='Loaded '+qa.sourceFacadePatches+' real 2014 facade patches + '+qa.sourceRoofPatches+' roof patches';
+ countsNode.textContent='48 current OTI 2022 reference footprints · '+qa.sourceTriangles.toLocaleString()+
+  ' source triangles · '+qa.renderedTriangles.toLocaleString()+' drawn triangles · raw Z normalized only for preview';
+ let frames=0;
+ function frame(){
+  const scale=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.floor(canvas.clientWidth*scale)),
+   h=Math.max(1,Math.floor(canvas.clientHeight*scale));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  gl.viewport(0,0,w,h);gl.clearColor(.055,.09,.13,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const eye=cameraEye();gl.uniformMatrix4fv(uView,false,lookAt(eye,target));
+  gl.uniformMatrix4fv(uProj,false,perspective(Math.PI/3,w/Math.max(1,h),.5,5000));
+  gl.drawArrays(gl.TRIANGLES,0,packed.length/9);qa.frames=++frames;qa.camera=[...eye];
+  if(frames%45===1)qa.glError=gl.getError();requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+}
+</script></body></html>
