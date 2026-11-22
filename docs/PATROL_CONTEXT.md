@@ -41,7 +41,7 @@ This is a new, explicitly recorded handoff, NOT a claim that an older
 - This branch's new `index.html` geometry keeps the original OTI polygon
   roof exterior, adds two clipped, jointly area-preserving planar fields
   with 0.64 PATROL-unit authored step, a vertical join, coping and physical
-  stone facade stringcourses. **Inner tier line, pitch and 0.64-unit drop
+  stone facade stringcourses. **Inner tier line, two flat elevations and 0.64-unit drop
   are new artistic geometry, NOT actual surveyed roof facets.**
 - 2014 OTI city 3D model / BK02 archival 3dm source
   https://data.cityofnewyork.us/d/u5j4-zxpn has potential roof surfaces,
@@ -91,3 +91,52 @@ This is a new, explicitly recorded handoff, NOT a claim that an older
 4. Coordinate parent #204 and the parallel source-derived #243, traffic
    integration #211, and other active geometry PRs; do not merge stack out of
    order or overwrite others.
+
+
+## Verified runtime handoff — same-camera FID1080628 A/B (2026-11-22)
+- **Working Draft PR:** https://github.com/bhu103-data/patrol-flight-sim/pull/264
+  (child of #204). Latest visual/code branch before this checkpoint:
+  `cf3e1cb14588ff8cb7403fb1076a1091d4ef1897`.
+  `main` and other PR branches were not updated.
+- **Measured exact live production geometry** (same original OTI polygon):
+  - Before #204: 441 quads + 9 roof triangles;
+  - After: 449 quads + 11 roof triangles;
+  - Net **+8 quads/+2 triangles = +18 rendered triangles** in existing
+    batched city mesh, with no new separate draw call, GLB, texture or import.
+  - 6 stone facade stringcourse quads, 2 roof step/coping quads, same
+    45 windows/1 door, source projected exterior polygon area
+    **59.7243776392 PATROL units²** both before and after.
+  - Source FID 1080628, BIN 3389054, HEIGHT_ROOF 121 feet, original 12
+    WGS84 source points. Game x/z and 0.64 step **not** true survey coordinates.
+- [Node and source/geometry QA run 45038610113](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45038610113):
+  **10/10 targeted; 480/480 full cross-map Node tests passed**.
+  C185 live WebGL, Alaska WebGL and bridgehead live traffic checks also passed
+  on original `cf3e1cb` head. Independently check run details for remaining
+  Brooklyn bridgehead browser and latest matched-camera workflow before merge.
+- **Actual A/B matched-browser artifact:**
+  [run 45038471784](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45038471784),
+  [artifact 14760329307](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45038471784/artifacts/14760329307).
+  Original #204 SHA `53f00bd16b6520c161ed85db81f9fa3bf2065ebc` vs candidate
+  `ec72ece1ba17cf7fce7a5304c0021229428e12ec` (same production mesh
+  code as later doc-only head). Actual native PATROL WebGL2 canvas screenshots
+  `baseline-fidRoof.png`, `candidate-fidRoof.png`, and paired OTI street
+  screenshots. **Passed true 1075×605 SwiftShader WebGL2 test, errors []**.
+  Human inspection: near-flying FID warehouse roof step clearly changes;
+  street facade view has only a small top-edge difference, does **not** prove
+  map-wide visual authenticity. Pixel audit on fixed roof ROI x470–810,
+  y265–480: ~15.17% of pixels exceed RGB sum difference 30; full-frame
+  ~1.24%. Street full-frame changed ~0.044%; this is visual change only,
+  **not** fidelity to licensed street photography or reality.
+- **First flight scene load** over four ABBA passes (software runner):
+  baseline 3339 ms / 2864 ms; candidate 2873 ms / 2829 ms. Under this
+  runner, no proof of faster initial load or native GPU improvements.
+- **rAF p50 ms** for roof camera: baseline [50.0,1233.3], candidate
+  [1066.6,1049.9]; street: baseline [966.7,1233.3], candidate
+  [949.9,1016.7]. Software frame pacing is extremely variable between
+  iterations, so **native GPU frame budget NOT verified**. A-B-B-A report
+  lists descriptive roof +64.93% and street -10.61%; these are not
+  reliable optimized frame-time improvements.
+- **Remaining hard blockers:** need actual BK02 surveyed geometry for inner
+  roof surfaces, uniform true road/building geolocation, close hand-flown
+  aircraft/collision + map-switch evidence, native GPU timing and human
+  street-level architectural matching. Keep Draft; merge parents in order.
