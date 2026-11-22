@@ -46,6 +46,9 @@ try{
       start.sourceVerticalCrs==='EPSG:5703'&&
       start.sourceProject==='Alaska_Mid_Accuracy_DEM_Summer_2015'&&
       start.workunit==='AK_IFSAR_Sum_L4_C353_2010'&&
+      start.sourceCollectionStart===1278720000000&&
+      start.sourceCollectionEnd===1347062400000&&
+      start.sourceVerticalDatumEvidence?.includes('EPSG:5703 / GEOID09')&&
       start.sourceCoverageValidFraction===1&&
       start.sourceTileSha256?.length===2&&start.sourceTileSha256.every(x=>/^[a-f0-9]{64}$/.test(x))&&
       start.sourcePeak>1800&&start.sourcePeak<2000
