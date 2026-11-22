@@ -100,8 +100,14 @@ test('optional 5m tile is source-aligned, leaves default 30m untouched and valid
   assert.match(src,/detailWarning='5m source tile is unavailable\/invalid/);
   assert.match(src,/wgs84ToLocalEnu\(\.\.\.rasterCellWgs84\(dem,col,row\),0,\.\.\.origin\)/);
   assert.match(src,/origin=sourceTileOrigin\(coarse\)/);
-  assert.match(decoder,/parentCoarseCellCentres\.join/);
-  assert.match(decoder,/Math\.abs\(actual\[0\]-expected\[0\]\)>1e-7/);
+  // The historical parent-cell index anchor was invalid because the original
+  // USGS raster's actual output bbox differs from its stored request bbox.
+  assert.match(decoder,/payload\.actualBboxVerifiedFromServer\.every/);
+  assert.match(decoder,/High-resolution tile escapes actual USGS parent pixel extent/);
+  assert.match(decoder,/payload\.bbox\[0\]<parent\.bbox\[0\]/);
+  assert.match(decoder,/payload\.bbox\[2\]>parent\.bbox\[2\]/);
+  assert.match(decoder,/request\.searchParams\.get\('adjustAspectRatio'\)!=='false'/);
+  assert.match(decoder,/sampleSpacingApproxMeters/);
   assert.match(decoder,/NoData found in experimental 5m source tile/);
   assert.match(decoder,/Number\(payload\.projectIndexEvidence\?\.dem_gsd_meters\)!==5/);
   assert.match(decoder,/String\(payload\.projectIndexEvidence\?\.vert_crs\)!=='5703'/);
