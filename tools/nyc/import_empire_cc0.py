@@ -193,13 +193,13 @@ def audit(data):
                     fail("POSITION must be FLOAT VEC3")
                 for name, allowed in (("NORMAL", ("VEC3",)), ("COLOR_0", ("VEC3", "VEC4")), ("TEXCOORD_0", ("VEC2",))):
                     if name in attrs:
-                        a = doc["accessors"][attrs[name]]
-                        if a.get("type") not in allowed or a.get("componentType") not in COMPONENTS:
+                        a, _ = read_accessor(doc, binary, attrs[name])
+                        if a.get("type") not in allowed:
                             fail(f"Unsupported {name} attribute format")
                 if texture_indices and "TEXCOORD_0" not in attrs:
                     fail("Textured primitives must provide TEXCOORD_0")
                 if "indices" in primitive:
-                    idx = doc["accessors"][primitive["indices"]]
+                    idx, _ = read_accessor(doc, binary, primitive["indices"])
                     if idx.get("type") != "SCALAR" or idx.get("componentType") not in (5121, 5123, 5125):
                         fail("Indices must be unsigned SCALAR")
                     count = idx.get("count", 0)
