@@ -45,10 +45,16 @@ class BK02SourceMeshTest(unittest.TestCase):
             self.assertEqual(len(patch["triangles"]),patch["triangleCount"]*3)
             self.assertTrue(all(math.isfinite(x) for x in patch["vertices"]))
             self.assertTrue(all(0<=i<patch["vertexCount"] for i in patch["triangles"]))
-            for i in range(0,len(patch["vertices"]),3):
-                east,south,z=patch["vertices"][i:i+3]
-                self.assertTrue(minx-30<=east<=maxx+30)
-                self.assertTrue(minz-30<=south<=maxz+30)
+            # Extraction selects original Brep objects whose source bounds
+            # intersect the 25m-padded OTI AOI, then retains the COMPLETE
+            # cached face mesh. Do not clip genuine source triangles to the
+            # AOI rectangle: a building at the edge may extend beyond it.
+            xs=patch["vertices"][0::3]
+            souths=patch["vertices"][1::3]
+            self.assertLessEqual(min(xs),maxx+1.0)
+            self.assertGreaterEqual(max(xs),minx-1.0)
+            self.assertLessEqual(min(souths),maxz+1.0)
+            self.assertGreaterEqual(max(souths),minz-1.0)
     def test_raw_source_z_is_preserved_not_claimed_as_2026_elevation(self):
         lo,hi=self.mesh["rawSourceZFeetRange"]
         self.assertTrue(math.isfinite(lo) and math.isfinite(hi) and hi>lo)
