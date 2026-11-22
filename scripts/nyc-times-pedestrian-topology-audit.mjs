@@ -5,6 +5,7 @@
  */
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
+import {ORIGIN,metresPerDegree} from './nyc-times-true-scale-pilot.mjs';
 
 const EPS=1e-9;
 const cross=(a,b)=>a[0]*b[1]-a[1]*b[0];
@@ -59,13 +60,55 @@ export function coveredLength(a,b,features){
   }
   return inside;
 }
+// Return the exact portions of a measured source polyline outside the UNION
+// of official roadbed/plaza surfaces. Keep endpoint/length evidence rather
+// than classifying a whole street with a single painted centerline.
+export function outsideSourceIntervals(a,b,features){
+  const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy);
+  if(!Number.isFinite(len))throw Error('Nonfinite source segment');
+  if(len<.000001)return [];
+  const cuts=[0,1];
+  for(const feature of features){
+    for(const rings of feature.polygons){
+      for(const ring of rings){
+        for(let i=0;i<ring.length-1;i++){
+          const c=ring[i],d=ring[i+1],sx=d[0]-c[0],sy=d[1]-c[1];
+          const den=cross([dx,dy],[sx,sy]);
+          if(Math.abs(den)<EPS)continue;
+          const q=[c[0]-a[0],c[1]-a[1]];
+          const t=cross(q,[sx,sy])/den,u=cross(q,[dx,dy])/den;
+          if(t>EPS&&t<1-EPS&&u>=-EPS&&u<=1+EPS)cuts.push(t);
+        }
+      }
+    }
+  }
+  cuts.sort((x,y)=>x-y);
+  const gaps=[];
+  for(let i=1;i<cuts.length;i++){
+    const lo=cuts[i-1],hi=cuts[i],delta=hi-lo;
+    if(delta<1e-10)continue;
+    const mid=(lo+hi)/2;
+    if(pointInPolygons([a[0]+mid*dx,a[1]+mid*dy],features))continue;
+    gaps.push({
+      startMeters:[a[0]+lo*dx,a[1]+lo*dy],
+      endMeters:[a[0]+hi*dx,a[1]+hi*dy],
+      lengthMeters:delta*len
+    });
+  }
+  return gaps;
+}
+function approximateSourceWGS84(p){
+  const scale=metresPerDegree(ORIGIN[1]);
+  return [+((ORIGIN[0]+p[0]/scale[0]).toFixed(7)),
+    +((ORIGIN[1]+p[1]/scale[1]).toFixed(7))];
+}
 export function classifyCenterlines(source,roadbed,pedestrian){
   if(source?.projection?.originLonLat?.join(',')!==
      roadbed?.projection?.originLonLat?.join(',')||
      source?.projection?.originLonLat?.join(',')!==
      pedestrian?.projection?.originLonLat?.join(','))
     throw Error('Mapped official datasets have incompatible CRS origins');
-  const named=new Map();
+  const named=new Map(),uncoveredBroadway=[];
   const typed={
     roadbed:roadbed.roadbeds,
     plaza:pedestrian.plaza,
@@ -79,7 +122,7 @@ export function classifyCenterlines(source,roadbed,pedestrian){
     const row=named.get(name)||{streetName:name,segmentCount:0,
       centrelineMetres:0,roadbedMetres:0,plazaMetres:0,sidewalkMetres:0,
       roadbedOrPlazaMetres:0};
-    for(const line of street.lines){
+    for(const [lineIndex,line] of street.lines.entries()){
       for(let i=1;i<line.length;i++){
         const a=line[i-1],b=line[i],len=Math.hypot(b[0]-a[0],b[1]-a[1]);
         if(len<.000001)continue;
@@ -91,6 +134,19 @@ export function classifyCenterlines(source,roadbed,pedestrian){
           roadbedOrPlazaMetres:coveredLength(a,b,typed.roadbedOrPlaza)
         };
         for(const k of Object.keys(parts)){row[k]+=parts[k];all[k]+=parts[k];}
+        if(/broadway/i.test(name)){
+          for(const gap of outsideSourceIntervals(a,b,typed.roadbedOrPlaza)){
+            const sidewalkCoveredMeters=coveredLength(
+              gap.startMeters,gap.endMeters,typed.sidewalk);
+            uncoveredBroadway.push({
+              streetName:name,objectId:street.objectId??null,
+              lineIndex,segmentIndex:i-1,
+              ...gap,sidewalkCoveredMeters,
+              startApproxWGS84:approximateSourceWGS84(gap.startMeters),
+              endApproxWGS84:approximateSourceWGS84(gap.endMeters)
+            });
+          }
+        }
         row.segmentCount++;all.segmentCount++;
       }
     }
@@ -108,6 +164,12 @@ export function classifyCenterlines(source,roadbed,pedestrian){
     byStreet:[...named.values()].map(addRatios)
       .sort((a,b)=>a.roadbedPercent-b.roadbedPercent),
     blockedAutomatedRouting:true,
+    broadwayUncovered:{
+      lengthMeters:uncoveredBroadway.reduce((n,x)=>n+x.lengthMeters,0),
+      portions:uncoveredBroadway.sort((a,b)=>b.lengthMeters-a.lengthMeters),
+      positions:'source local east/north metres; approximate inverse WGS84 positions for review only',
+      access:'UNKNOWN — neither 2022 roadbed nor 2022 plaza proves current route permission'
+    },
     note:'Centerline vs official 2022 mapped surface QA, NOT vehicle access rights, plaza opening, sidewalk walkability or current traffic directions'
   };
 }
@@ -126,6 +188,8 @@ export async function run(){
     roadbedPercent:audit.total.roadbedPercent,
     roadbedOrPlazaPercent:audit.total.roadbedOrPlazaPercent,
     Broadway:audit.byStreet.find(x=>x.streetName==='Broadway')||null,
+    BroadwayUncovered:audit.broadwayUncovered.lengthMeters,
+    BroadwayUncoveredPortions:audit.broadwayUncovered.portions.length,
     blockedAutomatedRouting:true
   },null,2));
 }
