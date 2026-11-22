@@ -341,6 +341,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       }
       counts.officialRoadbedPolygons++;
       counts.officialRoadbedTriangles+=triangles.length;
+      if(subtype===350010)counts.officialRoadbedIntersections++;
     }
     counts.officialSurfaceTriangles=counts.officialRoadbedTriangles;
   }
@@ -358,5 +359,5 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       surfaceCaptureRules:officialSurfaces?.captureRules||null},
     caveat:officialSurfaces
       ?'True 1:1 NYC source footprints and DCM alignment plus the complete bounded 2022 OTI roadbed/plaza/sidewalk polygon layers for the Times Square query tile. These are 2D source planimetrics with display-only millimetre offsets, not 2026 elevations, traffic permissions, curb-ramp heights, collision, lane markings or full-NYC coverage; facades remain illustrative.'
-      :'True 1:1 NYC source footprints and DCM alignment plus the checked-in 11-FID 2022 OTI roadbed fallback only. Other road widths remain illustrative; no 2026 elevation, curb/lane, traffic permission, collision or full-NYC coverage is inferred.'};
+      :'True 1:1 NYC source footprints and DCM alignment plus the checked-in 11-FID 2022 OTI roadbed fallback only. Other road widths, facades and roof finishes remain illustrative or unverified; no 2026 elevation, curb/lane, traffic permission, collision or full-NYC coverage is inferred.'};
 }
