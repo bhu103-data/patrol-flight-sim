@@ -188,6 +188,7 @@ def main():
    source_id[fill]=tile_idx
 
  valid=np.isfinite(dst)&(dst!=NODATA_OUT)
+ south_first=dst[::-1,:]
  valid_fraction=float(valid.mean())
  if valid_fraction<.999:
   raise RuntimeError("Native source mosaic leaves NoData inside target bbox: "+str(valid_fraction))
@@ -224,7 +225,7 @@ def main():
    ix=min(TARGET_WIDTH-1,max(0,int((lon-west)/(east-west)*TARGET_WIDTH)))
    iy=min(TARGET_HEIGHT-1,max(0,int((lat-south)/(north-south)*TARGET_HEIGHT)))
    sample.append({"col":col,"row":row,"lon":round(lon,7),"lat":round(lat,7),
-      "validNativeRaster":bool(valid[iy,ix]),"elevationM":round(float(dst[iy,ix]),2) if valid[iy,ix] else None})
+      "validNativeRaster":bool(valid[::-1,:][iy,ix]),"elevationM":round(float(south_first[iy,ix]),2) if valid[::-1,:][iy,ix] else None})
  if not all(x["validNativeRaster"] for x in sample):
   raise RuntimeError("Native raster fails one or more 25-point footprint checks")
  report["nativeRasterCoverageSamples"]=sample
@@ -240,8 +241,7 @@ def main():
   fy=FS+(np.arange(fine_meta["height"])+.5)*(FN-FS)/fine_meta["height"]
   FX,FY=np.meshgrid((fx-west)/(east-west)*TARGET_WIDTH-.5,
                     (fy-south)/(north-south)*TARGET_HEIGHT-.5)
-  native_south=dst[::-1,:]
-  native_at_fine=bilinear(native_south,FX,FY)
+  native_at_fine=bilinear(south_first,FX,FY)
   fine_valid=(fine!=fine_meta["noDataInt16"])&np.isfinite(fine)
   report["dynamic5mImageServerCrossCheck"]={
     "adjustAspectRatio":fine_meta.get("adjustAspectRatio"),
@@ -291,7 +291,7 @@ def main():
  rows=np.arange(0,TARGET_HEIGHT,16);cols=np.arange(0,TARGET_WIDTH,16)
  lons=west+(cols+.5)*(east-west)/TARGET_WIDTH
  lats=south+(rows+.5)*(north-south)/TARGET_HEIGHT
- new_sample=dst[np.ix_(rows,cols)].astype(np.float64)
+ new_sample=south_first[np.ix_(rows,cols)].astype(np.float64)
  valid_sample=(new_sample!=NODATA_OUT)
  bbox_options={"requested":coarse["bbox"],"fJson":geo["actualPixelBboxWgs84"]}
  if old_bbox:bbox_options["geoTiffTags"]=old_bbox
@@ -332,7 +332,7 @@ def main():
  lats=south+(rows+.5)*(north-south)/TARGET_HEIGHT
  XX,YY=np.meshgrid((lons-OW)/(OE-OW)*256-.5,(lats-OS)/(ON-OS)*256-.5)
  old_interp=bilinear(old,XX,YY)
- new_sample=dst[np.ix_(rows,cols)].astype(np.float64)
+ new_sample=south_first[np.ix_(rows,cols)].astype(np.float64)
  valid_sample=(new_sample!=NODATA_OUT)
  def edge_comparison(side):
   if side=="west":rr=np.arange(TARGET_HEIGHT);cc=np.zeros(TARGET_HEIGHT,dtype=np.int64)
@@ -343,7 +343,7 @@ def main():
   lat=south+(rr+.5)*(north-south)/TARGET_HEIGHT
   ox=(lon-OW)/(OE-OW)*256-.5;oy=(lat-OS)/(ON-OS)*256-.5
   old_edge=bilinear(old,ox,oy)
-  new_edge=dst[rr,cc]
+  new_edge=south_first[rr,cc]
   mask=valid[rr,cc]
   return dist(new_edge[mask]-old_edge[mask])
  report["legacy30mComparison"]={
@@ -355,7 +355,6 @@ def main():
  # Reproject output is north-first; runtime geodesy module expects south-first.
  # Store a 2D predictive residual grid (left/up/up-left) before gzip. The
  # absolute elevation range is retained exactly at 0.1m int16 precision.
- south_first=dst[::-1,:]
  q=np.full(south_first.shape,-32768,dtype="<i2")
  q[valid[::-1,:]]=np.rint(south_first[valid[::-1,:]]/QUANT).clip(-32767,32767).astype("<i2")
  absolute_raw=q.tobytes(order="C")
