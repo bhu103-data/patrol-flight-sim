@@ -49,6 +49,7 @@ jobs:
       - name: Compare pinned main before port with candidate at matched WebGL camera
         run: |
           git show bc155141742811bca3c4b1988672b238bd50a98b:index.html > alaska-baseline.html
+          git show bc155141742811bca3c4b1988672b238bd50a98b:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
           node tools/alaska/compare_harbor_baseline.mjs
       - name: Exercise C185 floats on NYC and Alaska water in WebGL2
         run: node tools/aircraft/floatplane-browser-smoke.mjs
