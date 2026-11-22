@@ -45,3 +45,23 @@ The viewer reports original input size, number built/rejected, triangle budget, 
 After road-edge data are lawfully retrieved, a future separate opt-in `TimesSquareMetricPilot` game scene must **replace** the local procedural road/building massing with source-matching GIS; then use matched cameras over Times Square Street, Duffy, 44th LED Canyon and a Brooklyn/harbor regression scene. Reject missing/extra buildings, intersecting road polygons, incorrect roof-height ratios, subway placement mistakes, missing context-loss fallback and performance regressions.
 
 Until then, keep this isolated pilot Draft and the live game unchanged.
+
+## 2026-11-22 next step — actual municipal street axes in the SAME ENU metre frame
+
+A second, separately verified municipal source has now been added: [NYC Open Data official Citywide Street Centerline (CSCL), `inkn-q76z`](https://data.cityofnewyork.us/d/inkn-q76z). Unlike the old invented grid, CSCL stores full WGS84 `MultiLineString` source coordinates, official street-name strings, road-type codes, traffic directions and numbers of travel lanes. The published city [CSCL metadata](https://github.com/CityOfNewYork/nyc-geo-metadata/blob/main/Metadata/CSCL_Pub.md) documents its native NAD83 State Plane feet source; this particular SODA output is explicitly geographic lon/lat.
+
+**Observed fetch QA:** `tools/nyc/fetch-times-square-cscl.mjs` queried one fixed small bounding box (`-73.9902..-73.9824 longitude`, `40.7548..40.7605 latitude`) from the live official site, selecting only source fields and ordering by `physicalid`. GitHub Actions run [45038506150](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45038506150) fetched **44 valid records, 14 distinct street names, zero rejected geometries**. This is the number returned by that **run**, not a claim of all roads in Manhattan or an immutable city-wide sample.
+
+### Reproduce the visible road-coordinate overlay (no live game requests)
+
+```sh
+node tools/nyc/fetch-times-square-cscl.mjs
+python3 -m http.server 8765
+# open http://localhost:8765/nyc-metric-pilot.html
+```
+
+The bounded fetch produces `artifacts/nyc-metric-pilot/cscl-centerlines.json`; preserve this file and its `queryUrl`/`fetchedUtc` for audit. `assets/nyc/nyc-metric-centerlines.mjs` uses exactly the SAME `wgs84ToLocalMetres` function and reference origin as the existing 118 plotted buildings, drawing the official axes in orange, with no arbitrary game-scale 0.32, roadway smoothing or hand-placement. Browser CI now **requires** a nonempty official street layer to PASS, alongside the measured building model. Failure to fetch means no roadway pass, rather than a synthetic fallback masquerading as source GIS. Public API data may change over time, so a run's audit artifact and timestamp matter.
+
+**Narrow scope:** a `streetwidth` field is retained as source metadata but **not** rendered as an asphalt rectangle or curb. The 2015/2025 [NYC Planimetric Curbs](https://data.cityofnewyork.us/d/5xvt-8cbk), [Sidewalk](https://data.cityofnewyork.us/d/vfx9-tbb6), and roadbed/plaza layers have not yet been pulled and calibrated for this preview. Precise crosswalks, One Times Square island plazas, pedestrian access, road grades and traffic-signal positions still require those layers and a documented source date. CSCL centerline alone cannot assert actual carriageway or pedestrian curb width. This preview does not yet bring the metre scene into gameplay or the aircraft controls.
+
+**Dataset provenance:** NYC Open Data policy, original fields including `physicalid`, road type, `trafdir`, `from_level_code/to_level_code` and `streetwidth` are kept separately; no imagery, Google tiles, proprietary meshes or new paid service was introduced. Files from the fetch live in a CI artifact until separately reviewed/committed — the checked-in PR contains fetch and renderer code, not a claim to have baked a static 44-record snapshot into source control.
