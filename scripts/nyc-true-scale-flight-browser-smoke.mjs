@@ -59,12 +59,60 @@ try{
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   const initial=await page.locator('#scene').screenshot({
     path:out+'/01-true-scale-flythrough.png',timeout:90000});
+  const initialCapturedUTC=new Date().toISOString();
   const png=PNG.sync.read(initial);
   let pixels=0;
   for(let y=45;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
     const i=(y*png.width+x)*4;
     if(png.data[i]>65&&png.data[i+1]>70&&png.data[i+2]>75)pixels++;
   }
+  const camera1=report.initial.cameraRegistration;
+  check(camera1?.schema==='patrol-nyc-metric-camera-v1',
+    'No georeferenced camera evidence in real WebGL scene');
+  check(camera1.eyeENUmeters?.[2]===3.2&&
+    report.initial.streetEyeMetres===3.2&&
+    report.initial.streetClearanceRadiusMetres===1.2,
+    'Registered street camera missing 3.2m eye height / 1.2m clearance');
+  check(camera1.originAltitudeMeters===null&&
+    camera1.eyeAbsoluteAltitudeMeters===null&&
+    camera1.verticalDatum==='unknown',
+    'Unknown vertical datum was silently fabricated');
+  check(camera1.sourceBuildingFids.length>=118&&
+    camera1.viewportPixels.join(',')==='1280,720'&&
+    camera1.sourceStreetFeatures>=35,
+    'Camera source FIDs, street records or viewport incomplete');
+  check(camera1.eyeWGS84LonLat?.length===2&&
+    camera1.eyeWGS84LonLat.every(Number.isFinite),
+    'Registered camera has no finite WGS84 horizontal position');
+  await page.waitForTimeout(180);
+  const camera2=await page.evaluate(()=>({
+    ...window.PatrolMetricFlightQA.cameraRegistration,
+    webglError:window.PatrolMetricFlightQA.glError,
+    errors:[...window.PatrolMetricFlightQA.errors]
+  }));
+  check(camera2.webglError===0&&camera2.errors.length===0,
+    'Registered street-level camera WebGL2 error');
+  const fingerprint=v=>JSON.stringify({
+    origin:v.originWGS84LonLat,eye:v.eyeENUmeters,lonlat:v.eyeWGS84LonLat,
+    yaw:v.yawRadians,pitch:v.pitchRadians,fov:v.verticalFovRadians,
+    viewport:v.viewportPixels,fids:v.sourceBuildingFids,
+    streets:v.sourceStreetFeatures,quality:v.quality,lighting:v.lighting
+  });
+  check(fingerprint(camera1)===fingerprint(camera2),
+    'Registration drift between same-pose camera samples');
+  const repeated=await page.locator('#scene').screenshot({
+    path:out+'/01b-registered-street-eye-repeat.png',timeout:90000});
+  const repeatedCapturedUTC=new Date().toISOString();
+  check(Date.parse(repeatedCapturedUTC)>Date.parse(initialCapturedUTC),
+    'Real screenshot timestamps did not advance between captures');
+  report.registeredEvidence=[
+    {image:'01-true-scale-flythrough.png',
+      sha256:createHash('sha256').update(initial).digest('hex'),
+      capturedUTC:initialCapturedUTC,record:camera1},
+    {image:'01b-registered-street-eye-repeat.png',
+      sha256:createHash('sha256').update(repeated).digest('hex'),
+      capturedUTC:repeatedCapturedUTC,record:camera2}
+  ];
   await page.locator('#aerial').click();
   await page.waitForTimeout(350);
   const sourceAerial=await page.locator('#scene').screenshot({
