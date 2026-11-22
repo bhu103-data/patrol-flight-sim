@@ -20,7 +20,7 @@
 2. `tools/nyc/official_bk02_projection.py` converts EPSG:2263 XY through PROJ to the same DUMBO local east/south metre frame used by the 48 OTI building source. Vertical datum is explicitly unverified.
 3. `tools/nyc/inspect-bk02-source-roi.py` derives the bounded AOI from the 48 current OTI building rings, pads by 25 m, and extracts only original Rhino cached face meshes from roof, facade and footprint surface layers. Original source UUID, face index, raw Z, triangle indices and source bounds are retained. No invented face or roof geometry is generated.
 4. `tools/nyc/dumbo-2014-source-preview.html` renders the extracted original cached meshes in an isolated WebGL2 viewer. Raw 2014 Z is normalized relative to the lowest extracted Z solely for preview; it is not a certified elevation datum.
-5. Python geometry/source tests and Chromium screenshots gate extraction and display. CI uploads only the bounded source-mesh JSON, provenance and screenshots; the 3DM/ZIP are never uploaded or committed.
+5. Python geometry/source tests and Chromium screenshots gate extraction and display. The AOI filters complete original Brep objects by source-bounds intersection; cached face meshes are retained whole rather than clipped to an artificial rectangle, so a boundary-crossing building may extend outside the padded AOI. CI uploads only the bounded source-mesh JSON, provenance and screenshots; the 3DM/ZIP are never uploaded or committed.
 
 ## Accuracy boundaries
 
