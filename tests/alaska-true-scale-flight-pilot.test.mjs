@@ -161,6 +161,8 @@ test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15
   assert.ok(src.includes('decimateIfsarRaster(nativeSource,3)'));
   assert.ok(src.includes('source-native-ifsar5m-lod15m'));
   assert.ok(src.includes("nativeSource.sourceVerticalCrs!=='EPSG:5703'"));
+  assert.ok(src.includes('sourceCollectionStart:nativeSource.collectionStart'));
+  assert.ok(src.includes('sourceVerticalDatumEvidence:nativeSource.verticalDatumEvidence'));
   assert.ok(src.includes('rasterCellWgs84(coarse,170,105)'));
   assert.ok(src.includes('indices=new Uint32Array((n-1)*(m-1)*6)'));
   assert.ok(loader.includes("manifest.sourceVerticalCrs!=='EPSG:5703'"));
@@ -172,5 +174,7 @@ test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15
   assert.ok(loader.includes('assetUrl.origin!==manifestAbsolute.origin'));
   assert.ok(smoke.includes('PATROL_ALASKA_IFSAR5M'));
   assert.ok(smoke.includes('sourceCellCount===1536*2880'));
+  assert.ok(smoke.includes('sourceCollectionStart===1278720000000'));
+  assert.ok(smoke.includes("sourceVerticalDatumEvidence?.includes('EPSG:5703 / GEOID09')"));
   assert.ok(smoke.includes('meshSpacingMeters'));
 });
