@@ -4,7 +4,9 @@ from pathlib import Path
 from shapely.geometry import Polygon
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"/"nyc"))
-from inspect_mn05_support import face_from_cached_mesh,choose_matched_roof
+from inspect_mn05_support import (face_from_cached_mesh,choose_matched_roof,
+    require_feet_model_unit,source_roof_reference_by_fid,
+    anchored_source_height_metres)
 
 class Point:
     def __init__(self,x,y,z):
@@ -70,6 +72,42 @@ class CachedMunicipalRoofTests(unittest.TestCase):
         footprint=[{"fid":123,"heightMetres":31,
             "geometry":Polygon([(0,0),(12,0),(12,12),(0,12)])}]
         self.assertIsNone(choose_matched_roof(source,footprint))
+
+    def test_source_z_requires_explicit_rhino_feet_unit(self):
+        class Settings:
+            ModelUnitSystem=type("Unit",(),{"name":"Feet"})()
+        self.assertEqual(require_feet_model_unit(Settings()),"Feet")
+        Settings.ModelUnitSystem=type("Unit",(),{"name":"Meters"})()
+        with self.assertRaisesRegex(ValueError,"must be Feet"):
+            require_feet_model_unit(Settings())
+
+    def test_relative_source_z_is_anchored_without_claiming_absolute_datum(self):
+        top=anchored_source_height_metres(1000,1000,50,
+            source_vertical_unit_verified=True)
+        lower=anchored_source_height_metres(900,1000,50,
+            source_vertical_unit_verified=True)
+        self.assertAlmostEqual(top,50.35,5)
+        self.assertAlmostEqual(lower,19.87,2)
+        with self.assertRaisesRegex(ValueError,"not verified"):
+            anchored_source_height_metres(900,1000,50)
+        with self.assertRaisesRegex(ValueError,"outside current building height"):
+            anchored_source_height_metres(1006,1000,50,
+                source_vertical_unit_verified=True)
+
+    def test_impossible_historic_roof_relief_is_rejected_per_fid(self):
+        selected=[
+            {"matchedFid":1,"visualRoofHeightMetres":40,
+             "triangles":[[[0,0,100],[1,0,100],[0,1,110]]]},
+            {"matchedFid":1,"visualRoofHeightMetres":40,
+             "triangles":[[[1,1,105],[2,1,105],[1,2,105]]]},
+            {"matchedFid":2,"visualRoofHeightMetres":20,
+             "triangles":[[[0,0,100],[1,0,100],[0,1,400]]]}
+        ]
+        refs,metrics,rejected=source_roof_reference_by_fid(selected)
+        self.assertEqual(refs[1],110)
+        self.assertAlmostEqual(metrics[1]["relativeReliefMetres"],3.048,5)
+        self.assertNotIn(2,refs)
+        self.assertIn(2,rejected)
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
