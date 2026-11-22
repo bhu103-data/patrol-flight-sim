@@ -19,8 +19,10 @@ export function buildNycStreetNetwork({
   // Preserve shader recognition of asphaltA/asphaltB (.25/.28/.30 and
   // .28/.29/.32): these colors still receive the existing CC0 photo,
   // normal and ARM/roughness sampling without touching index.html.
-  const dumboAsphalt=[asphalt,[.222,.250,.271],[.275,.299,.315],
-    [.239,.266,.284]];
+  // Shared base material across adjacent segments: per-block random asphalt
+  // tint created conspicuous rectangular tile seams at low aircraft height.
+  // Weathering is confined to bounded repair decals rather than whole blocks.
+  const dumboAsphalt=asphalt;
   const dumboWornAsphalt=[[.223,.247,.269],[.278,.299,.314],
     [.238,.260,.279]];
   const dumboConcrete=[sidewalk,[.485,.504,.488],[.560,.557,.530],
@@ -312,10 +314,12 @@ export function buildNycStreetNetwork({
     const at=(along,offset=0)=>[
       a[0]+fx*along+nx*offset,a[1]+fz*along+nz*offset
     ];
-    // Asphalt resurfacing is patched in rectangles of different widths,
-    // tones and lengths. The existing CC0 asphalt atlas remains visible
-    // because the tint stays within its WebGL material-key threshold.
-    const passes=lod>=3&&length>17&&hash(i,j,111)>.54?2:1;
+    // An old repair was one sharp-edged rectangular slab per block, with
+    // four dark straight borders. Build a bounded tapered, uneven ribbon
+    // instead; all points remain safely inside the existing road asphalt.
+    // There is no new road/route geometry, physics shape, or texture asset.
+    const passes=hash(i,j,111)>.40?
+      (lod>=3&&length>17&&hash(i,j,112)>.82?2:1):0;
     for(let k=0;k<passes;k++){
       const h=110+k*23;
       const from=length*(k?.56+.07*hash(i,j,h):.11+.13*hash(i,j,h));
@@ -324,32 +328,49 @@ export function buildNycStreetNetwork({
       const widthPatch=width*(.33+.18*hash(i,j,h+2));
       const offset=(hash(i,j,h+3)-.5)*width*.24;
       const slightDrift=(hash(i,j,h+4)-.5)*.18;
-      const start=at(from,offset),end=at(to,offset+slightDrift);
-      slab(start,end,widthPatch,
-        dumboWornAsphalt[Math.floor(hash(i,j,h+5)*dumboWornAsphalt.length)],
-        roadY+.005);
-      // A dark sealant edge reads as a true pavement repair from street
-      // height, while all decals remain below the existing lane markings.
-      for(const edge of [from,to]){
-        const p=at(edge,offset+(edge===from?0:slightDrift));
-        orientedRect(p[0],p[1],widthPatch,.027,[dx,dz],
-          dumboSeam,roadY+.012);
-        stats.dumboTarSeams++;
-      }
-      for(const side of [-1,1]){
-        const sideStart=at(from,offset+side*widthPatch*.49);
-        const sideEnd=at(to,offset+slightDrift+side*widthPatch*.49);
-        slab(sideStart,sideEnd,.026,dumboSeam,roadY+.011);
-        stats.dumboTarSeams++;
+      const patchColor=dumboWornAsphalt[
+        Math.floor(hash(i,j,h+5)*dumboWornAsphalt.length)];
+      const sections=6,seamSide=hash(i,j,h+8)<.5?-1:1;
+      let previous=null;
+      for(let section=0;section<=sections;section++){
+        const t=section/sections,along=from+(to-from)*t;
+        const fade=.06+.94*Math.sin(Math.PI*t);
+        const center=offset+slightDrift*t+
+          (hash(i,j,h+19+section)-.5)*.16*Math.sin(Math.PI*t);
+        const half=widthPatch*.5*fade*
+          (.91+.18*hash(i,j,h+36+section));
+        const left=at(along,center-half),right=at(along,center+half);
+        const current={left,right};
+        if(previous){
+          addQuad(point(previous.left[0],previous.left[1],roadY+.005),
+            point(left[0],left[1],roadY+.005),
+            point(right[0],right[1],roadY+.005),
+            point(previous.right[0],previous.right[1],roadY+.005),
+            patchColor);
+          // Follow only one damaged boundary; no four-sided box outline.
+          if(k===0&&hash(i,j,h+54)>.50){
+            const edgeA=seamSide<0?previous.left:previous.right;
+            const edgeB=seamSide<0?left:right;
+            slab(edgeA,edgeB,.018,dumboSeam,roadY+.013);
+            stats.dumboTarSeams++;
+          }
+        }
+        previous=current;
       }
       stats.dumboSurfaceRepairs++;
     }
-    // Block-length transverse joint, with non-uniform placement/width.
-    const transverse=length*(.23+.51*hash(i,j,83));
-    const cut=at(transverse);
-    orientedRect(cut[0],cut[1],width-.44,.031+.021*hash(i,j,84),
-      [dx,dz],dumboSeam,roadY+.014);
-    stats.dumboTarSeams++;
+    // Rare, kinked transverse maintenance cuts rather than identical
+    // horizontal grid lines on every single city block.
+    if(lod>=3&&hash(i,j,83)>.75){
+      const transverse=length*(.23+.51*hash(i,j,84));
+      const half=(width-.44)*.5;
+      const left=at(transverse-.10,-half);
+      const kink=at(transverse+.15*(hash(i,j,85)-.5),0);
+      const right=at(transverse+.09,half);
+      slab(left,kink,.025,dumboSeam,roadY+.014);
+      slab(kink,right,.024,dumboSeam,roadY+.014);
+      stats.dumboTarSeams+=2;
+    }
     // Irregular branching hairline cracks; no tiny repeated checker pattern.
     // LOD3 only, so the extra line segments cannot saturate distant views.
     if(lod>=3 && length>16 && hash(i,j,135)>.43){
@@ -475,9 +496,9 @@ export function buildNycStreetNetwork({
     const dx=b[0]-a[0],dz=b[1]-a[1],
       normal=[dz/distance,-dx/distance];
     const dumboFinish=inDumboMaterialZone(i,j);
-    const asphaltColor=dumboFinish
-      ?dumboAsphalt[Math.floor(hash(i,j,201)*dumboAsphalt.length)]:asphalt;
-    slab(a,b,width,asphaltColor);
+    // The long base roadway must read as ONE surface, not block-colored
+    // rectangular panels. Keep the original asphalt PBR color-key intact.
+    slab(a,b,width,dumboFinish?dumboAsphalt:asphalt);
     activeRoadSegments.push({a,b,width});
     // Visible resurfacing passes, transverse joints and tar-snakes are
     // surface decals only, all clipped to the previously cleared road.
@@ -514,19 +535,19 @@ export function buildNycStreetNetwork({
       const p=shift(a,b,side*(half+.53));
       // Wider concrete frontage leaves space for a furnishings strip.
       // Keep the same sidewalk footprint; vary only the concrete finish.
-      const concreteColor=dumboFinish?dumboConcrete[
-        Math.floor(hash(i,j,43+side)*dumboConcrete.length)]:sidewalk;
-      slab(p[0],p[1],1.42,concreteColor,paveY);
-      if(dumboFinish && detailBand(...mid)>=2 && distance>10){
+      // Stable frontage tint keeps adjoining sidewalk strips continuous;
+      // finer poured-panel wear remains optional at pedestrian LOD.
+      slab(p[0],p[1],1.42,sidewalk,paveY);
+      if(dumboFinish && detailBand(...mid)>=3 && distance>10){
         // Thin concrete panel tone overlay, spaced by block so that a
         // continuous flat sidewalk acquires individual poured-slab wear.
         // One in three panels is tinted; repeated overlays are avoided.
         const spacing=4.7+1.3*hash(i,j,73);
         const origin=1.9+.7*hash(i,j,74+side);
-        const selector=Math.floor(hash(i,j,75+side)*3);
+        const selector=Math.floor(hash(i,j,75+side)*5);
         for(let k=0,along=origin;along<distance-2.0;
             k++,along+=spacing){
-          if((k+selector)%3!==0)continue;
+          if((k+selector)%5!==0)continue;
           const to=Math.min(distance-1.25,along+spacing-.14);
           if(to-along<1)continue;
           const aa=[a[0]+dx*along/distance,a[1]+dz*along/distance],
@@ -623,11 +644,17 @@ export function buildNycStreetNetwork({
         }
       }
     }
-    if(hash(i,j,9)>.65){
-      const c=[a[0]*.64+b[0]*.36,a[1]*.64+b[1]*.36],
-        d=[a[0]*.42+b[0]*.58,a[1]*.42+b[1]*.58];
-      const p=shift(c,d,(hash(i,j,7)-.5)*2.2);
-      slab(p[0],p[1],.46,patch,roadY+.007);
+    // Former generic .46-wide rectangular overlay looked like a floating
+    // asphalt block. Use two thin, offset wear strokes outside DUMBO.
+    if(!dumboFinish&&hash(i,j,9)>.73&&detailBand(...mid)>=2){
+      const c=[a[0]*.64+b[0]*.36,a[1]*.64+b[1]*.36];
+      const d=[a[0]*.42+b[0]*.58,a[1]*.42+b[1]*.58];
+      const [u,v]=shift(c,d,(hash(i,j,7)-.5)*2.2);
+      const bend=(hash(i,j,8)-.5)*.32;
+      const kink=[(u[0]+v[0])*.5+normal[0]*bend,
+        (u[1]+v[1])*.5+normal[1]*bend];
+      slab(u,kink,.045,patch,roadY+.007);
+      slab(kink,v,.031,patch,roadY+.007);
     }
     const center=[a[0]*.65+b[0]*.35,a[1]*.65+b[1]*.35];
     if(hash(i,j,12)>.68 && !nearOld(...center,13)){
