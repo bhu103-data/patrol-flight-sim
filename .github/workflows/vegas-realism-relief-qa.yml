@@ -63,6 +63,7 @@ jobs:
       - name: Generate six pixel-difference images and A/B diagnostic JSON
         env:
           PATROL_VEGAS_BASELINE_SHA: cc56be0aa0cb41c23a7cd97ea49defeb65b24be1
+          PATROL_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/vegas-baseline-compare.mjs
       - name: Keep screenshot evidence and browser reports
         if: always()

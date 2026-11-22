@@ -67,7 +67,10 @@ const report={
   baselineSha:process.env.PATROL_VEGAS_BASELINE_SHA||'unknown',
   cameraWorldSpaceVerified:true,
   scenicPosePairing:pairing.after,
-  candidateSha:process.env.GITHUB_SHA||'unknown',
+  // GitHub pull_request checkout can be a synthetic test merge commit.
+  // Label the source head separately so artifacts cannot misattribute code.
+  candidateSha:process.env.PATROL_CANDIDATE_HEAD_SHA||process.env.GITHUB_SHA||'unknown',
+  checkoutSha:process.env.GITHUB_SHA||'unknown',
   graphicsProfile:candidate.graphicsProfile,
   browserChannel:candidate.browserChannel,
   baselineLoadMs:baseline.loadMs,candidateLoadMs:candidate.loadMs,
