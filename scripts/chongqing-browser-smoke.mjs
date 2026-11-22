@@ -141,6 +141,30 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
+  // The game renders desktop screenshots above, but its separate mobile
+  // joystick and on-screen flight button must also release this fixed eye.
+  // Use genuine Chromium mouse pointer events on temporarily displayed mobile
+  // controls; this is pointer-path QA, NOT a native touchscreen hardware test.
+  await page.evaluate(()=>{
+    document.getElementById('joystick').style.display='block';
+    document.getElementById('mobile').style.display='grid';
+  });
+  try{
+    await page.locator('#joystick').click({position:{x:58,y:58},timeout:30000});
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'Mobile joystick pointerdown left Digit8 inspection camera active');
+    await page.keyboard.press('8');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Could not re-enter Digit8 after mobile joystick exit');
+    await page.locator('#mobile button[data-key="Space"]').click({timeout:30000});
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'On-screen Space flight button left Digit8 inspection camera active');
+  }finally{
+    await page.evaluate(()=>{
+      document.getElementById('joystick').style.removeProperty('display');
+      document.getElementById('mobile').style.removeProperty('display');
+    });
+  }
   await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
