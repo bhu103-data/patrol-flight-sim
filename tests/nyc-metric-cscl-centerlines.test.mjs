@@ -61,7 +61,7 @@ test('all road geometry uses the same WGS84 metre basis as official buildings',(
  assert.ok([...r.vertexBuffer].every(Number.isFinite));
  assert.equal(r.vertexBuffer[0],0);
  assert.ok(r.vertexBuffer[9]>80 && r.vertexBuffer[9]<90);
- assert.equal(r.vertexBuffer[1],.65);
+ assert.ok(Math.abs(r.vertexBuffer[1]-.65)<.00001);
 });
 
 test('reject unsupported snapshot and invalid polyline parts without synthetic roads',()=>{
@@ -87,10 +87,9 @@ test('off-line bounded fetch rejects missing/empty/mislocated source instead of 
  assert.equal(v.segments.length,20);
  assert.equal(v.sourcePage,'https://data.cityofnewyork.us/d/inkn-q76z');
  assert.match(v.disclaimer,/NOT measured curb/);
- const noData=async()=>({ok:true,json:async()=>[]});
- // Avoid slow retry loops in unit tests: assert source parser directly here.
+ // A source with zero roads cannot accidentally be accepted as geometry.
  assert.equal(normalizeCSCL([]).segments.length,0);
- assert.notEqual(noData,mock);
+ assert.throws(()=>buildMetricCenterlines(wrap([])),/No valid finite/);
 });
 
 test('viewer and CI keep official roads distinct from fake asphalt and actual curbs',()=>{
