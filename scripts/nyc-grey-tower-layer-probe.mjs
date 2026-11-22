@@ -8,7 +8,9 @@ const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,
 const dir='artifacts/nyc-visual-provenance';
 await mkdir(dir,{recursive:true});
 const report={passed:false,errors:[],warnings:[],camera:'44th Street LED Canyon',
-  focusRoi:[600,5,800,408],hypothesis:'unknown',comparison:{},renders:[]};
+  focusRois:{leftWall:[0,0,460,720],centerWall:[460,0,900,720],
+    rightLed:[900,0,1280,720],fullFrame:[0,0,1280,720]},
+  hypothesis:'unknown',comparison:{},renders:[]};
 const check=(ok,why)=>{if(!ok)throw Error(why)};
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
@@ -17,25 +19,31 @@ const browser=await chromium.launch({headless:true,args:[
 ]});
 let page=null;
 const screenshots={};
-const groups=['none','procedural','scenery','gis','hero','landmarks'];
+const groups=['none','procedural','landscape','scenery','gis','street','roadChunks','hero','park','screens','lights','landmarks'];
 function compare(ref,next){
   const a=screenshots[ref],b=screenshots[next];
   check(a&&b&&a.width===b.width&&a.height===b.height,'Incompatible source images');
-  const [x0,y0,x1,y1]=report.focusRoi;
-  let pixels=0,changed24=0,changed45=0,meanAbs=0;
-  for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
-    const i=(y*a.width+x)*4;
-    const diff=[0,1,2].map(k=>Math.abs(a.data[i+k]-b.data[i+k]));
-    meanAbs+=(diff[0]+diff[1]+diff[2])/3;
-    if(Math.max(...diff)>=24)changed24++;
-    if(Math.max(...diff)>=45)changed45++;
-    pixels++;
+  const result={};
+  for(const [region,[x0,y0,x1,y1]] of Object.entries(report.focusRois)){
+    let pixels=0,changed24=0,changed45=0,meanAbs=0;
+    for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
+      const i=(y*a.width+x)*4;
+      const dr=Math.abs(a.data[i]-b.data[i]);
+      const dg=Math.abs(a.data[i+1]-b.data[i+1]);
+      const db=Math.abs(a.data[i+2]-b.data[i+2]);
+      const delta=Math.max(dr,dg,db);
+      meanAbs+=(dr+dg+db)/3;
+      if(delta>=24)changed24++;
+      if(delta>=45)changed45++;
+      pixels++;
+    }
+    result[region]={samples:pixels,
+      changed24Fraction:Number((changed24/pixels).toFixed(4)),
+      changed45Fraction:Number((changed45/pixels).toFixed(4)),
+      meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
+      note:'A/B only; changing hidden meshes can reveal other occluded meshes'};
   }
-  return {samples:pixels,
-    changed24Fraction:Number((changed24/pixels).toFixed(4)),
-    changed45Fraction:Number((changed45/pixels).toFixed(4)),
-    meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
-    note:'A/B only; changing hidden meshes can reveal other occluded meshes'};
+  return result;
 }
 try{
   page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -112,19 +120,26 @@ try{
   for(const group of groups.slice(1))
     report.comparison[group]=compare('44th-none','44th-'+group);
   report.restored=compare('44th-none','44th-restored');
-  report.ranked=Object.entries(report.comparison).sort(
-    (a,b)=>b[1].changed45Fraction-a[1].changed45Fraction).map(
-    ([layer,probe])=>({layer,...probe}));
-  const best=report.ranked[0];
+  report.rankedByRoi=Object.keys(report.focusRois).map(region=>{
+    const ranked=Object.entries(report.comparison).map(([layer,regions])=>({
+      layer,...regions[region]
+    })).sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
+    return {region,ranked};
+  });
+  const left=report.rankedByRoi.find(row=>row.region==='leftWall')?.ranked||[];
+  const center=report.rankedByRoi.find(row=>row.region==='centerWall')?.ranked||[];
+  report.ranked=left;
+  const best=left[0];
   report.hypothesis=best?.changed45Fraction>=.035
-    ?'Layer with largest center-ROI occlusion effect: '+best.layer
-    :'INCONCLUSIVE: no tested mesh group moved enough center-ROI pixels';
-  report.ambiguous=report.restored.changed45Fraction>.025 ||
-    (report.ranked[1]&&report.ranked[1].changed45Fraction>=
-      best.changed45Fraction*.87);
+    ?'Left-wall source layer: '+best.layer
+    :'INCONCLUSIVE: left-wall ROI did not react to tested render groups';
+  report.ambiguous=report.restored.leftWall.changed45Fraction>.025 ||
+    (left[1]&&left[1].changed45Fraction>=best.changed45Fraction*.87);
+  report.centerHypothesis=center[0]?.changed45Fraction>=.035
+    ?'Center-wall source layer: '+center[0].layer:'INCONCLUSIVE';
   check(report.errors.length===0,'Browser errors: '+report.errors.join('; '));
   check(best&&best.changed45Fraction>=.035,
-    'Grey region did not react to any selected render source');
+    'Left-wall ROI did not react to any probed mesh source; another render group remains uninstrumented');
   report.passed=true;
 }catch(e){
   report.errors.push(e.stack||String(e));
