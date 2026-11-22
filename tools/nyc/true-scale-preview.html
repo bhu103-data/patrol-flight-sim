@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PATROL · NYC official metre-scale geometry pilot</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#0b1722;color:#e1edf3;font:14px system-ui,Arial,sans-serif}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+aside{position:absolute;top:16px;left:16px;max-width:370px;background:#101f30e5;padding:15px 18px;border:1px solid #48637b;border-radius:10px;pointer-events:none}
+h1{font-size:18px;margin:0 0 10px}p{margin:6px 0;line-height:1.55}small{color:#b6c4cd}
+#status{color:#9bdef3}strong{color:#ffdd92}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<aside>
+<h1>时代广场 · 官方测绘形体预览</h1>
+<p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
+<p id="status">正在读取官方建筑与道路数据...</p>
+<p>灰色：官方建筑足迹按原始米制屋顶高度挤出；蓝色：官方道路中心线；无伪造车道和立面。</p>
+<small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
+</aside>
+<script type="module">
+const status=document.querySelector('#status');
+const canvas=document.querySelector('#scene');
+const gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
+if(!gl){status.textContent='当前浏览器不支持 WebGL2';throw Error('WebGL2 unavailable');}
+const vert='#version 300 es\nprecision highp float;\nlayout(location=0) in vec3 aPos;\nlayout(location=1) in vec3 aColor;\nlayout(location=2) in vec3 aNormal;\nuniform mat4 uTransform;\nout vec3 vColor;\nout vec3 vNormal;\nvoid main(){gl_Position=uTransform*vec4(aPos,1.0);vColor=aColor;vNormal=aNormal;}';
+const frag='#version 300 es\nprecision highp float;\nin vec3 vColor;\nin vec3 vNormal;\nout vec4 pixel;\nvoid main(){float light=.47+.53*max(dot(normalize(vNormal),normalize(vec3(.45,.87,.28))),0.0);pixel=vec4(pow(vColor*light,vec3(.87)),1.0);}';
+function shader(type,source){
+  const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,shader(gl.VERTEX_SHADER,vert));
+gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,frag));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const uniform=gl.getUniformLocation(prog,'uTransform');
+const position=[],colors=[],normals=[],roadPos=[],roadColors=[],roadNormals=[];
+let triCount=0,roofTriangles=0;
+function addPoint(dstPos,dstColor,dstNorm,p,c,n){
+  dstPos.push(p[0],p[1],p[2]);dstColor.push(...c);dstNorm.push(...n);
+}
+function triangle(a,b,c,color,normal=null){
+  const u=b.map((v,i)=>v-a[i]),v=c.map((w,i)=>w-a[i]);
+  const cross=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+  const len=Math.hypot(...cross)||1,n=normal||cross.map(v=>v/len);
+  for(const p of [a,b,c])addPoint(position,colors,normals,p,color,n);
+  triCount++;
+}
+function cross2(a,b,c){return (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);}
+function signed(poly){return poly.reduce((v,p,i)=>{const q=poly[(i+1)%poly.length];return v+p[0]*q[1]-q[0]*p[1];},0)*.5;}
+function inside(p,a,b,c,sign){
+  return sign*cross2(a,b,p)>=-1e-6&&sign*cross2(b,c,p)>=-1e-6&&sign*cross2(c,a,p)>=-1e-6;
+}
+// True polygon ear clipping, not a triangle fan that falsely fills courtyards.
+function roof(poly,y,color){
+  const ids=poly.map((_,i)=>i),sign=Math.sign(signed(poly))||1;
+  let count=0,guard=0;
+  while(ids.length>3&&guard++<poly.length*poly.length){
+    let clipped=false;
+    for(let i=0;i<ids.length;i++){
+      const ia=ids[(i+ids.length-1)%ids.length],ib=ids[i],ic=ids[(i+1)%ids.length];
+      const a=poly[ia],b=poly[ib],c=poly[ic];
+      if(sign*cross2(a,b,c)<.00001)continue;
+      if(ids.some(idx=>idx!==ia&&idx!==ib&&idx!==ic&&
+        inside(poly[idx],a,b,c,sign)))continue;
+      triangle([a[0],y,a[1]],[b[0],y,b[1]],[c[0],y,c[1]],color,[0,1,0]);
+      count++;ids.splice(i,1);clipped=true;break;
+    }
+    if(!clipped)break;
+  }
+  if(ids.length===3){
+    const [a,b,c]=ids.map(i=>poly[i]);
+    triangle([a[0],y,a[1]],[b[0],y,b[1]],[c[0],y,c[1]],color,[0,1,0]);count++;
+  }
+  if(count<poly.length-2)throw Error('Source roof polygon not triangulated; stop: '+count+'/'+poly.length);
+  return count;
+}
+function meshBuffer(positions,tints,normals){
+  const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+  for(const [slot,data] of [[0,positions],[1,tints],[2,normals]]){
+    const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(slot);gl.vertexAttribPointer(slot,3,gl.FLOAT,false,0,0);
+  }
+  gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
+  return {vao,count:positions.length/3};
+}
+const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
+const sub=(a,b)=>a.map((v,i)=>v-b[i]);
+function norm(a){const k=Math.hypot(...a)||1;return a.map(v=>v/k);}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function lookAt(eye,target){
+  const z=norm(sub(eye,target)),x=norm(cross([0,1,0],z)),y=cross(z,x);
+  return new Float32Array([
+    x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,
+    -dot(x,eye),-dot(y,eye),-dot(z,eye),1
+  ]);
+}
+function perspective(aspect){
+  const f=1/Math.tan(Math.PI/5.6),near=1,far=3500;
+  return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,
+    0,0,2*far*near/(near-far),0]);
+}
+function matMul(a,b){
+  const o=new Float32Array(16);
+  for(let col=0;col<4;col++)for(let row=0;row<4;row++)
+    for(let k=0;k<4;k++)o[col*4+row]+=a[k*4+row]*b[col*4+k];
+  return o;
+}
+let yaw=-.55,pitch=.75,distance=1050,target=[0,48,130],moving=false,last=[0,0];
+canvas.addEventListener('pointerdown',e=>{moving=true;last=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerup',()=>moving=false);
+canvas.addEventListener('pointercancel',()=>moving=false);
+canvas.addEventListener('pointermove',e=>{
+  if(!moving)return;
+  yaw+=(e.clientX-last[0])*.005;
+  pitch=Math.max(.17,Math.min(1.49,pitch+(e.clientY-last[1])*.004));
+  last=[e.clientX,e.clientY];
+});
+canvas.addEventListener('wheel',e=>{e.preventDefault();
+  distance=Math.max(120,Math.min(2400,distance*Math.exp(e.deltaY*.001)));},{passive:false});
+try{
+  const response=await fetch('./source.json');
+  if(!response.ok)throw Error('Missing generated source.json');
+  const source=await response.json();
+  if(source.assetRole!=='GEOREFERENCED_SOURCE_QA_ONLY_NOT_IN_GAME')
+    throw Error('Incorrect provenance or production geometry in preview');
+  if(source.projection?.scaleMetresPerGameUnit!==null)
+    throw Error('Incompatible compressed PATROL coordinate transform');
+  for(const b of source.buildings){
+    if(!Array.isArray(b.outline)||!Number.isFinite(b.heightMeters)||b.heightMeters<=0)
+      throw Error('Invalid official building geometry');
+    const p=b.outline,h=b.heightMeters;
+    const tint=(b.fid%13)/13*.06,wall=[.53+tint,.59+tint,.64+tint],top=[.73,.77,.78];
+    for(let i=0;i<p.length;i++){
+      const a=p[i],q=p[(i+1)%p.length];
+      const a0=[a[0],0,a[1]],b0=[q[0],0,q[1]],a1=[a[0],h,a[1]],b1=[q[0],h,q[1]];
+      triangle(a0,b0,b1,wall);triangle(a0,b1,a1,wall);
+    }
+    roof(p,h,top);roofTriangles+=p.length-2;
+  }
+  for(const road of source.roads){
+    for(const line of road.lines)for(let i=1;i<line.length;i++){
+      const col=/^(y|yes|true|1)$/i.test(road.paperStreet)?[.88,.45,.25]:[.16,.75,.96];
+      for(const p of [line[i-1],line[i]])
+        addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
+    }
+  }
+  const buildings=meshBuffer(position,colors,normals);
+  const streets=meshBuffer(roadPos,roadColors,roadNormals);
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.clearColor(.045,.076,.105,1);
+  function render(){
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const width=Math.max(1,Math.floor(canvas.clientWidth*dpr));
+    const height=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+    gl.viewport(0,0,width,height);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    const eye=[
+      target[0]+distance*Math.cos(pitch)*Math.sin(yaw),
+      target[1]+distance*Math.sin(pitch),
+      target[2]+distance*Math.cos(pitch)*Math.cos(yaw)
+    ];
+    gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,target)));
+    gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
+    gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
+    gl.bindVertexArray(null);
+    requestAnimationFrame(render);
+  }
+  window.geoPilotQA={ready:true,projection:'WGS84-local-east-north-metres',
+    sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
+    buildingTriangles:triCount,streetVertices:streets.count};
+  status.textContent='官方建筑 '+source.counts.buildings+' 栋 · 街道要素 '+source.counts.roadFeatures+
+    ' 条 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
+    ' × '+Math.round(source.boundsMetres[3]-source.boundsMetres[1])+' 米';
+  render();
+}catch(error){
+  window.geoPilotQA={ready:false,error:String(error)};
+  status.textContent='来源/渲染验证失败：'+error.message;
+  throw error;
+}
+</script>
+</body>
+</html>
