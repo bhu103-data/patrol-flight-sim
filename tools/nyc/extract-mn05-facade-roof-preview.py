@@ -231,6 +231,16 @@ def main():
         model = rhino3dm.File3dm.Read(str(SOURCE))
         if model is None:
             raise RuntimeError("Original NYC DCP MN05 model failed to parse")
+        model_units = getattr(getattr(model, "Settings", None), "ModelUnitSystem", None)
+        try:
+            model_units_value = int(model_units)
+        except Exception:
+            model_units_value = None
+        report["sourceModelUnitSystem"] = str(model_units)
+        report["sourceModelUnitSystemValue"] = model_units_value
+        report["sourceVerticalUnitVerified"] = model_units_value == 9
+        if model_units_value != 9:
+            raise RuntimeError("Rhino ModelUnitSystem is not verified Feet (enum 9); cannot compare raw Z span with HEIGHTROOF feet")
         buildings = load_buildings()
         roofs, rejected_roofs = source_roof_patches(buildings)
         facades, facade_stats = source_facade_patches(model, buildings)
