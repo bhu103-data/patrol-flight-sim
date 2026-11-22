@@ -18,6 +18,11 @@ class RoofVerticalReferenceAuditTests(unittest.TestCase):
     def test_local_projection_origin_is_zero(self):
         self.assertEqual(audit.wgs84_to_local_meters(-73.9864883, 40.756421), (0.0, 0.0))
 
+    def test_local_projection_uses_metres_not_degrees_scaled_twice(self):
+        east, north = audit.wgs84_to_local_meters(-73.9854883, 40.756421)
+        self.assertAlmostEqual(east, 84.444, delta=0.15)
+        self.assertAlmostEqual(north, 0.0, delta=0.001)
+
     def test_boundary_inclusive_point_in_ring(self):
         ring = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
         self.assertTrue(audit.point_in_ring(5.0, 5.0, ring))
