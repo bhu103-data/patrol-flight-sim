@@ -13,6 +13,9 @@ const decodeSrc=readFileSync(new URL('../assets/alaska/usgs-dem.js',import.meta.
 const {decodeAlaskaDEM}=await import('data:text/javascript;base64,'+
   Buffer.from(decodeSrc).toString('base64'));
 const dem={...raw,...decodeAlaskaDEM(raw)};
+const actualExtent=JSON.parse(readFileSync(
+  new URL('../assets/alaska/tracy-arm-3dep-actual-extent.json',import.meta.url),'utf8'));
+const correctedDem={...dem,bbox:actualExtent.actualPixelBboxWgs84};
 
 test('flight pilot is reachable but does not replace shipping map or its controls',()=>{
   assert.match(game,/<a href="\.\/tracy-arm-true-scale\.html"/);
@@ -38,25 +41,30 @@ test('GPU terrain mesh uses WGS84-derived real metre east/north with original he
   assert.equal(dem.heights.reduce((a,b)=>Math.max(a,b),0),1836);
   assert.equal((dem.width-1)*(dem.height-1)*2,130050);
 });
-test('north-up terrain spans more than 7.5km E and 8km N, no 90deg rotation',()=>{
-  const [west,south]=rasterCellToLocalEnu(dem,0,0,0);
-  const [east,north]=rasterCellToLocalEnu(dem,255,255,0);
+test('actual ArcGIS WGS84 pixel extent corrected, revealing true 7.7x14.4km DEM footprint',()=>{
+  assert.deepEqual(actualExtent.requestedBboxWgs84,raw.bbox);
+  assert.deepEqual(actualExtent.actualPixelBboxWgs84,[-133.265,57.822,-133.135,57.952]);
+  assert.equal(actualExtent.source,'USGS 3DEP ArcGIS ImageServer exportImage f=json');
+  assert.match(src,/tracy-arm-3dep-actual-extent\.json/);
+  assert.match(src,/const coarse=\{\.\.\.coarseRaw,bbox:correctedBbox,/);
+  const [west,south]=rasterCellToLocalEnu(correctedDem,0,0,0);
+  const [east,north]=rasterCellToLocalEnu(correctedDem,255,255,0);
   assert.ok(east-west>7500&&east-west<7800);
-  assert.ok(north-south>7900&&north-south<8100);
-  const [lon0,lat0]=sourceTileOrigin(dem);
-  const [lonLow,latLow]=rasterCellWgs84(dem,0,0);
-  const [lonHigh,latHigh]=rasterCellWgs84(dem,255,255);
+  assert.ok(north-south>14000&&north-south<14700);
+  const [lon0,lat0]=sourceTileOrigin(correctedDem);
+  const [lonLow,latLow]=rasterCellWgs84(correctedDem,0,0);
+  const [lonHigh,latHigh]=rasterCellWgs84(correctedDem,255,255);
   assert.ok(lonHigh>lonLow&&latHigh>latLow);
   assert.ok(Math.abs(lon0+133.2)<.00001&&Math.abs(lat0-57.887)<.00001);
 });
 test('flight starts from a verified water source location and keeps real dynamic envelope',()=>{
   const [lon,lat]=rasterCellWgs84(dem,170,105);
-  const start=sampleSourceElevationMetres(dem,lon,lat);
-  assert.ok(start<=1,'source DEM launch channel must be on water');
-  const [e,n]=rasterCellToLocalEnu(dem,170,105,0);
+  const start=sampleSourceElevationMetres(correctedDem,lon,lat);
+  assert.ok(start<=3,'corrected source DEM launch GPS belongs on water');
+  const [e,n]=rasterCellToLocalEnu(correctedDem,170,105,0);
   assert.ok(Number.isFinite(e)&&Number.isFinite(n));
   assert.match(src,/spawn=\[e,320,north\]/);
-  assert.match(src,/if\(coarse\.heights\[105\*coarse\.width\+170\]>1\)/);
+  assert.match(src,/if\(sampleSourceElevationMetres\(coarse,spawnLon,spawnLat\)>3\)/);
   assert.match(src,/Math\.max\(Math\.max\(0,surface\)\+18,Math\.min\(3800,pose\.xyz\[1\]\)\)/);
   assert.match(src,/gl\.drawElements\(gl\.TRIANGLES,m\.count,gl\.UNSIGNED_INT,0\)/);
 });
@@ -87,7 +95,7 @@ test('optional 5m tile is source-aligned, leaves default 30m untouched and valid
   const decoder=readFileSync(
     new URL('../assets/alaska/usgs-5m-tile.js',import.meta.url),'utf8');
   assert.match(src,/get\('alaskaDetail'\)==='5m'/);
-  assert.match(src,/decodeAlaskaFiveMetreTile\(await response\.json\(\),coarse\)/);
+  assert.match(src,/decodeAlaskaFiveMetreTile\(await response\.json\(\),coarseRaw\)/);
   assert.match(src,/detailMode='source-5m-local'/);
   assert.match(src,/detailWarning='5m source tile is unavailable\/invalid/);
   assert.match(src,/wgs84ToLocalEnu\(\.\.\.rasterCellWgs84\(dem,col,row\),0,\.\.\.origin\)/);
@@ -97,4 +105,16 @@ test('optional 5m tile is source-aligned, leaves default 30m untouched and valid
   assert.match(decoder,/NoData found in experimental 5m source tile/);
   assert.match(decoder,/Number\(payload\.projectIndexEvidence\?\.dem_gsd_meters\)!==5/);
   assert.match(decoder,/String\(payload\.projectIndexEvidence\?\.vert_crs\)!=='5703'/);
+  assert.match(decoder,/request\.searchParams\.get\('adjustAspectRatio'\)!=='false'/);
+  assert.match(decoder,/payload\.actualBboxVerifiedFromServer\.every/);
+});
+
+test('new USGS 5m extraction explicitly disables ArcGIS auto-bbox expansion',()=>{
+  const builder=readFileSync(
+    new URL('../tools/alaska/build_usgs5m_tracyarm_pilot.py',import.meta.url),'utf8');
+  assert.match(builder,/"adjustAspectRatio": "false"/);
+  assert.match(builder,/metadata_args = \{\*\*args,"f":"json"\}/);
+  assert.match(builder,/actual=\[envelope\.get\(k\) for k in/);
+  assert.match(builder,/max\(abs\(a-b\) for a,b in zip\(actual,bbox\)\)>1e-8/);
+  assert.match(builder,/"originalActualPixelBboxWgs84"/);
 });
