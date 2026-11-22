@@ -30,7 +30,7 @@ export function validateNycMaterialCatalog(catalog,sourceFids=null){
     !validKey(catalog.fallback.atOrAbove90m))
     throw Error('Invalid FID material fallback');
   for(const [fid,entry] of Object.entries(catalog.fidOverrides)){
-    if(!/^[1-9]\\d*$/.test(fid)||!Number.isSafeInteger(Number(fid))||
+    if(!/^[1-9]\d*$/.test(fid)||!Number.isSafeInteger(Number(fid))||
       !entry||!validKey(entry.wall)||
       entry.materialEvidence!=='not-surveyed-art-direction'||
       entry.licenseEvidence!==null)
