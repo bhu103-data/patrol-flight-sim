@@ -87,6 +87,22 @@ test('independent centerline sampling detects missing 2022 paved surface; no fal
   assert.throws(()=>audit2022RoadbedCoverage(null,roadbed,[]));
   assert.throws(()=>audit2022RoadbedCoverage(cscl,roadbed,[],0));
 });
+test('off-envelope CSCL polyline tails are excluded from official 2022 coverage denominator',()=>{
+  // ArcGIS envelope intersect returns an entire modern road segment, including
+  // parts beyond where 2022 roadbed polygons were actually queried.
+  const official2022OnlyInBbox=[{id:120,roadbedVsIntersection:'roadbed',
+    coordinatesMetres:[[[[300,0],[340,0],[340,20],[300,20],[300,0]]]]}];
+  const returnedWholeCsclRoad=[{id:22,name:'7 Avenue',
+    constructedVehicleCandidate:true,lines:[[[320,10],[380,10]]]}];
+  const r=audit2022RoadbedCoverage(returnedWholeCsclRoad,
+    official2022OnlyInBbox,[],2);
+  assert.ok(r.samples>=6&&r.samples<=10,'retain original query ROI samples');
+  assert.ok(r.outsideBboxSamplesDiscarded>15,'discard unqueried road tail');
+  assert.equal(r.coverageFraction,1);
+  assert.equal(r.insideHistoric2022Roadbed,r.samples);
+  assert.deepEqual(r.missed,[]);
+  assert.ok(r.officialSpatialQueryBoundsMetres[2]<340);
+});
 test('historical source stays audit-only, no proprietary map copy or production overlay',async()=>{
   const script=await readFile(new URL(
     '../scripts/nyc-times-plani-real-boundary-probe.mjs',import.meta.url),'utf8');
