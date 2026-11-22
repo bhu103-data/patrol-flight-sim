@@ -26,7 +26,7 @@
 <p class="muted" id="metadata"></p>
 <p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button></p>
 </aside>
 <footer>NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
 <script type="module">
@@ -180,6 +180,23 @@ async function start(){
   document.getElementById('aerial').addEventListener('click',()=>{
     camera={position:[0,340,Math.min(450,span*.55)],yaw:0,pitch:-.40};
   });
+  // Exact NYC 2022 OTI intersection FID 24700 source centroid, in #234's
+  // local east/north metres. Use DCM's identical WGS84 anchor even in
+  // ?roadbed=off, so the A/B camera remains perfectly identical.
+  // Neutral material is a preview; neither this eye nor curb elevations
+  // are claimed to be a surveyed 2026 street-camera pose.
+  const coreSourceFID24700=[4.09,32.58];
+  const [roadCoreOffsetE,roadCoreOffsetN]=wgs84ToMeters(
+    roadSource.originWGS84,massing.origin);
+  const roadCoreX=coreSourceFID24700[0]+roadCoreOffsetE-geometry.center.east;
+  const roadCoreZ=geometry.center.north-
+    (coreSourceFID24700[1]+roadCoreOffsetN);
+  const roadbedFocus=()=>({
+    position:[roadCoreX,70,roadCoreZ+22],yaw:0,pitch:-1.28
+  });
+  document.getElementById('roadbedFocus').addEventListener('click',()=>{
+    camera=roadbedFocus();
+  });
   const keySet=new Set();
   window.addEventListener('keydown',e=>{
     if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();
@@ -212,6 +229,7 @@ async function start(){
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
     roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
     roadbedFullNYCCoverage:false,
+    roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
     sourceRoads:geometry.provenance.streets,
     sourceBuildings:geometry.provenance.buildings,
     renderer:'native WebGL2',usesOriginalAircraftPhysics:false,
