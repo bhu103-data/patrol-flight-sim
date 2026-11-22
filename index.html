@@ -6471,14 +6471,24 @@ const CENTRAL_PARK_SITES=[
     const cross=(a,b,c)=>
       (b[0]-a[0])*(c[1]-a[1])-
       (b[1]-a[1])*(c[0]-a[0]);
+    // 84 Front Street / the Nexus / source BIN 3389054: a 12-story
+    // 2006-built condominium, NOT a generic historic warehouse. The
+    // architect describes yellow brick and green/blue/silver metal panels.
+    // Source building type/materials are verified; individual panel
+    // positions and shades below are original lightweight interpretation.
+    const nexus=source.fid===1080628;
     const brickPalette=[
       [.57,.37,.31],[.47,.30,.29],[.56,.40,.34]];
-    const brick=brickPalette[source.fid%3],stone=[.67,.64,.59],
-      glass=[.13,.24,.31],frame=[.33,.35,.36];
-    let walls=0,windows=0,roofTriangles=0,parapets=0,roofStepFaces=0,facadeBands=0;
-    // Source HEIGHT_ROOF controls the *relative* floor rhythm only;
-    // final PATROL h stays at the existing worker collision roof height.
-    const floors=Math.max(2,Math.min(6,
+    const brick=nexus?[.73,.66,.48]:brickPalette[source.fid%3],
+      stone=nexus?[.77,.78,.76]:[.67,.64,.59],
+      glass=nexus?[.12,.23,.31]:[.13,.24,.31],
+      frame=nexus?[.57,.63,.65]:[.33,.35,.36];
+    const nexusPanels=[[.24,.43,.46],[.34,.48,.42],[.65,.70,.71]];
+    let walls=0,windows=0,roofTriangles=0,parapets=0,roofStepFaces=0,
+      facadeBands=0,metalPanels=0;
+    // FID1080628's 12 stories come from architect documentation, not
+    // interpolated from HEIGHT_ROOF; keep original conservative roof/collider.
+    const floors=nexus?12:Math.max(2,Math.min(6,
       Math.floor(source.roofHeightFt/22)));
     // PATROL_DUMBO_OTI_RECESSED_BAYS_V2 — real wall voids, not overlaid
     // flat glass. Every new face stays inside the old road-cleared proxy.
@@ -6555,7 +6565,13 @@ const CENTRAL_PARK_SITES=[
         let cursor=0;
         for(let j=0;j<bays;j++){
           const left=(j+.22)/bays,right=(j+.78)/bays;
-          strip(cursor,left,low,high);
+          if(nexus && len>3.4 && left-cursor>.05 && (j+row+k)%3!==0){
+            // Raised panel sits in a real polygon-edge spandrel; no box.
+            strip(cursor,left,low,high);
+            strip(cursor+.016,left-.016,low+.035,high-.035,
+              nexusPanels[(j+row+k)%3],12,.046);
+            metalPanels++;
+          }else strip(cursor,left,low,high);
           const glassInset=-.18;
           const tone=((source.fid+k*11+row*7+j*13)%7===0)
             ?[.36,.35,.32]:glass;
@@ -6571,7 +6587,8 @@ const CENTRAL_PARK_SITES=[
             at(right,low,glassInset),at(left,low,glassInset),stone,12);
           addQuad(at(left,high,glassInset),at(right,high,glassInset),
             at(right,high,0),at(left,high,0),brick,12);
-          strip(left-.013,right+.013,high+.015,high+.13,stone,12,.055);
+          strip(left-.013,right+.013,high+.015,high+.13,
+            nexus?nexusPanels[(row+k)%3]:stone,12,.055);
           if((row+j)%2===0){
             const mid=(left+right)*.5;
             strip(mid-.007,mid+.007,low,high,frame,12,glassInset+.012);
@@ -6669,7 +6686,7 @@ const CENTRAL_PARK_SITES=[
     }else roofFaces(ring,roofY,[.33,.35,.34]);
     return {fid:source.fid,ring,roofY,floors,
       walls,windows,doors,windowReveals,roofTriangles,parapets,
-      roofStepDrop,roofStepFaces,roofAreas,facadeBands,
+      roofStepDrop,roofStepFaces,roofAreas,facadeBands,metalPanels,
       originalArea:Math.abs(signed(ring))};
   }
 
