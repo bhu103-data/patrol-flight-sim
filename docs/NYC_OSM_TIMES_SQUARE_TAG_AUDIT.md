@@ -37,7 +37,9 @@ The report counts OSM building ways, relations and building-part features,
 then attempts a conservative join to the existing NYC official footprint
 snapshot. A way is matched only when it is the unique candidate within 8 m
 centroid distance and its area ratio is between 0.5 and 2.0. Ambiguous
-matches are reported, never selected by guesswork.
+matches are reported, never selected by guesswork. The exported artifact
+contains aggregate counts and match-quality ranges only; it does not export
+municipal FID ↔ OSM element-ID pairs or source geometry.
 
 For unique matches and for all building ways separately, the audit counts
 the presence of:
