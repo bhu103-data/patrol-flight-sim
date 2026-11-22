@@ -239,6 +239,42 @@ try{
     'Unsurveyed road bands did not change fixed FID24700 core view: '+
       coreWithoutGuessedRoads);
 
+  // Bounded, original-code surface preview: this is artist-authored
+  // and has NO rights to claim real NYC brick/glass facade truth.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?materials=preview',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  report.materialPreview=await page.evaluate(()=>window.PatrolMetricFlightQA);
+  check(report.materialPreview.materialPreview===true&&
+    report.materialPreview.materialPreviewBuildings===118&&
+    report.materialPreview.materialPreviewWallTriangles>300,
+    'FID material opt-in preview missing or did not bind all 118 buildings');
+  check(report.materialPreview.materialEvidence==='visual-proxy-only-not-as-built',
+    'Artist preview deceptively claims real NYC material evidence');
+  check(report.materialPreview.sourceBuildingCount===report.initial.sourceBuildingCount&&
+    report.materialPreview.streetSegments===report.initial.streetSegments&&
+    report.materialPreview.officialRoadbedTriangles===207&&
+    report.materialPreview.triangles===report.initial.triangles,
+    'Material shader changed measured source geometry or triangle budget');
+  check(report.materialPreview.glError===0,'Material shader WebGL2 error');
+  await page.locator('#aerial').click();
+  await page.waitForTimeout(350);
+  const previewAerial=await page.locator('#scene').screenshot({
+    path:out+'/09-original-material-preview-aerial.png',timeout:90000});
+  const materialImage=PNG.sync.read(previewAerial);
+  check(materialImage.width===a.width&&materialImage.height===a.height,
+    'Material preview screenshot changes the fixed camera framebuffer');
+  let materialsDelta=0;
+  for(let y=180;y<a.height;y+=2)for(let x=2;x<a.width;x+=2){
+    const i=(y*a.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(a.data[i+j]-materialImage.data[i+j])))>18)
+      materialsDelta++;
+  }
+  report.materialPreviewPixelsDifferentOver18=materialsDelta;
+  check(materialsDelta>100,
+    'Original brick/glass/stone previews not visible at same aerial pose: '+
+      materialsDelta);
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
