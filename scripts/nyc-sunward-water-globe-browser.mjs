@@ -263,8 +263,45 @@ try{
    }));
    ensure(runtime.game?.playing&&!runtime.lost&&runtime.webglError===0,
      'NonNYC map or WebGL failure '+map+' '+JSON.stringify(runtime));
-   report.scenes.push({map,form:scene.form,runtime,errors:scene.errors,
-     httpErrors:scene.httpErrors});
+   // A Vegas → Manhattan switch in the SAME WebGL2 page is required:
+   // separately launching NYC cannot reveal stale Earth Sphere Show VAOs.
+   let sameDocumentSwitch=null;
+   if(map==='vegas'){
+     const beforeSwitch=await scene.page.evaluate(()=>window.__patrolSunwaterQA.read());
+     ensure(beforeSwitch.sphereActive===true,
+       'Vegas Sphere Show not initialized, cannot test map-state leakage');
+     await scene.page.evaluate(()=>{
+       const choose=(selector)=>{
+         const el=document.querySelector(selector);
+         if(!el)throw Error('Missing map switch control '+selector);
+         el.checked=true;
+         el.dispatchEvent(new Event('change',{bubbles:true}));
+       };
+       choose('input[name="flightMap"][value="manhattan"]');
+       choose('input[name="aircraft"][value="seaplane"]');
+       choose('input[name="waterStart"]');
+       const form=new FormData(document.getElementById('flightSetup'));
+       if(form.get('flightMap')!=='manhattan'||!form.has('waterStart'))
+         throw Error('Vegas→NYC switch form not committed');
+       document.getElementById('flightSetup').dispatchEvent(
+         new Event('submit',{bubbles:true,cancelable:true}));
+     });
+     await scene.page.waitForFunction(()=>{
+       const overlay=document.getElementById('loadOverlay');
+       const game=window.PatrolSpaceBridge?.getState();
+       return overlay?.classList.contains('done')&&
+         game?.map==='manhattan'&&game.playing;
+     },null,{timeout:150000,polling:500});
+     const afterSwitch=await scene.page.evaluate(()=>window.__patrolSunwaterQA.read());
+     ensure(!afterSwitch.sphereActive && afterSwitch.map==='manhattan' &&
+       afterSwitch.waterborne && !afterSwitch.crashed &&
+       afterSwitch.webglError===0 && !afterSwitch.contextLost,
+       'Vegas Earth/Sphere or floating physics leaked into Manhattan: '+JSON.stringify(afterSwitch));
+     ensure(scene.errors.length===0,'Map switch JS errors '+scene.errors.join('; '));
+     sameDocumentSwitch={beforeSwitch,afterSwitch};
+   }
+   report.scenes.push({map,form:scene.form,runtime,sameDocumentSwitch,
+     errors:scene.errors,httpErrors:scene.httpErrors});
    await scene.page.close();
  }
  const oldSun=before.views.find(v=>v.facing==='sun').shot;
