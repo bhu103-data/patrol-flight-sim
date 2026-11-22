@@ -4,6 +4,7 @@
  * No HTML string substitutions, no guessed curb height or gameplay collision.
  */
 import {readFileSync,writeFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import earcut,{deviation} from 'earcut';
 
 export function buildStreetEdgeMesh(edgeData,roadData){
@@ -77,4 +78,4 @@ export function run(){
   writeFileSync('artifacts/nyc-curb-sidewalk-source/edge-mesh.json',JSON.stringify(output));
   console.log('NYC real sidewalk and curb lowflight overlay',JSON.stringify(output.counts));
 }
-if(process.argv[1]&&import.meta.url==='file://'+process.argv[1])run();
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)run();
