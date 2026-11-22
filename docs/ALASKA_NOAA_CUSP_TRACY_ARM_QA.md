@@ -62,3 +62,27 @@ Of **906 NOAA CUSP shoreline-covered raster cells**, **814** have USGS elevation
 **Conclusion:** this large-scale discrepancy is **not caused by corruption of the baked 3DEP asset, a changed live USGS DEM response, or the baker's south-first row flip**. It is a **mismatch between the 3DEP terrain elevation source/low-height water proxy and historical CUSP / LANDFIRE shoreline interpretation**. The QA does not independently prove which DEM regions are incorrectly assigned land versus missing bathymetry. The game's full water/flight collision logic has not yet been audited in WebGL2. Keep DEM, physics, floats and game shoreline unchanged; investigate a separately sourced shoreline/water mask and terrain-water coupling on an isolated *future* implementation branch with fixed-camera evidence.
 
 The USGS DEM is still valid as the project's documented elevation slice; it must not be marketed as high-precision NOAA hydrographic shoreline or bathymetry. CUSP dates and NOAA mean-high-water vertical datum remain historic and do not grant 2026 shoreline accuracy.
+
+
+## 2026-11-22 — Actual 1m worker rule and 1024-grid float contact QA
+
+**Verified CI:** [Actions run 44991001001](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44991001001), artifact `noaa-cusp-tracy-arm-pr201-results`, ID `14742131261` (7-day retention). Uses genuine NOAA N55W135 clip and embedded USGS 3DEP, no fake test images.
+
+Previous GIS comparisons with a **DEM <=3m** proxy were explicitly diagnostic. Production `index.html` actually uses `measuredHeight(u,v) > 1` metres for dry-land conversion, otherwise `water - 4.5`, then rescales all heights into game-world units. `sampleTerrainHeight()` clamps underwater geometry to `WATER_H=12.2`. Floatplane water taxi, initial takeoff and smooth touchdown call `usableFloatWater()`, which sweeps 25 contact points and checks terrain height <= `WATER_H+0.06`, plus separate docks/boats/obstacles in normal gameplay. Existing regression tests already cover the 25-point footprint and safe departure corridor.
+
+**Measured source raster:** `assets/alaska/tracy-arm-3dep.json` contains **6,111 / 65,536 cells <=1m** (game-threshold source proxy), compared with **6,293 <=3m** (former GIS proxy): difference **182 source cells**. Of 906 NOAA shoreline raster cells, **818** have DEM elevations >1m (versus 814 >3m). These are **raw 256-grid** classifications before interpolation and height quantization.
+
+**Production 1024-grid reproduction:** `tools/alaska/audit_runtime_water_grid.mjs` extracts the actual worker `generateTerrain()` from `index.html` and executes it with `size=1024`, official DEM and real game vertical compression. It reproduces `round(height*255)/255` heightfield packing and CPU bilinear `sampleTerrainHeight()` with underwater clamp. The unquantized and quantized versions each classify **94,372 of 1,048,576** terrain grid cells as <= `WATER_H`.
+
+Using an independent linearly interpolated NOAA CUSP coastline sample every **2 game units** along the 7 segments (**3,502** sampled positions, 0 outside the game span):
+
+| Terrain-only source test | Count | Share of sampled historic shore |
+|---|---:|---:|
+| Runtime terrain at or below water+0.06 | 316 | 9.02% |
+| Runtime terrain above water+0.06 | 3,186 | 90.98% |
+| Actual `usableFloatWater(x,z,0)` 25-point terrain gate accepts | 295 | 8.42% |
+| 25-point terrain gate rejects | 3,207 | 91.58% |
+
+The 25-point test deliberately **does not include dynamic boats or authored dock obstacles**, so the counts are *not* literal safe landing success rates. Historic mean-high-water shoreline lines are not polygons or direct proof of 2026 tidal conditions, and 2-game-unit samples should not be interpreted as independent survey-grade measurements. Nevertheless, this production-logic reproduction confirms that the earlier coast discrepancy **persists after** the actual 1m threshold, 1024-grid interpolation and byte quantization, and is not merely an incorrect 3m QA comparison.
+
+**Disposition:** The game currently has **no NOAA/LANDFIRE water-mask runtime input** and stays linked to 3DEP elevation-only terrain. Do **not** overwrite DEM, coast geometry, collision, float dynamics or city maps using these diagnostic results. Before a potential game-water patch, require an independent legally redistributable *land/water polygon* or a validated shoreline side classification, per-source vintage review, a collision/coast transition design, and live WebGL2 screenshots/map switching/float taxi/FPS tests in an isolated feature branch. The QA and nightly data downloads must not become runtime dependencies.
