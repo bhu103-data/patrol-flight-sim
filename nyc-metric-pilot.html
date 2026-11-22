@@ -25,11 +25,12 @@ a{color:#9ac8ff}strong{color:#ffe3aa}
 <p id="status" role="status">正在加载本地官方数据快照……</p>
 <p id="streetstatus" role="status">官方 CSCL 道路中心线数据：加载中……</p>
 <p id="curbstatus" role="status">官方 Planimetric Curbs 路缘数据：加载中……</p>
+<p id="surfaceStatus" role="status">官方 2022 Roadbed / Sidewalk 多边形：加载中……</p>
 <button id="oblique">斜视视角</button><button id="top">正俯视（北朝上）</button>
 <button id="reset">重置视角</button>
-<p><small>鼠标拖拽旋转 · 滚轮缩放 · 灰色 50 米标尺格网 · <b style="color:#efab50">橙色线 = 官方 CSCL 道路中心线，不代表道路宽度</b> · <b style="color:#41dacc">青绿色线 = 官方 2022 年路缘测绘线，不等同现时路面</b></small></p>
+<p><small>鼠标拖拽旋转 · 滚轮缩放 · 灰色 50 米标尺格网 · <b style="color:#efab50">橙色线 = 官方 CSCL 道路中心线，不代表道路宽度</b> · <b style="color:#41dacc">青绿色线 = 官方 2022 年路缘测绘线，不等同现时路面</b> · <b style="color:#ff71b1">粉色 = 官方 Roadbed 边界</b> · <b style="color:#67e378">绿色 = 官方 Sidewalk 边界</b></small></p>
 <p><strong>注意：这是可核查的建筑几何试验视图，不是纽约地图正式替换。</strong></p>
-<p><small>尚无经核准的路面、建筑入口和真实立面、地面高程、地铁、广告安装结构、真实 GPU 帧耗或飞控碰撞。CSCL 不是路缘测绘；路缘来自独立的历史 NYC Planimetrics 数据，也不保证反映 2026 年改造。平坦零高度基座为示意。</small></p>
+<p><small>已取得历史路面/人行道轮廓（仅画边界，尚未填充道路表面）；尚无建筑入口和真实立面、地面高程、地铁、广告安装结构、真实 GPU 帧耗或飞控碰撞。CSCL 不是路缘测绘；路缘来自独立的历史 NYC Planimetrics 数据，也不保证反映 2026 年改造。平坦零高度基座为示意。</small></p>
 <p><small>数据：<a href="https://data.cityofnewyork.us/d/3g6p-4u5s" target="_blank" rel="noopener">NYC Open Data Building Footprints</a> · 源快照 2026-11-20。</small></p>
 </aside>
 <footer>坐标基准：One Times Square 约 WGS84 (−73.9864883, 40.756421) · x=东 / −z=北 / y=高度米。墙体为中性占位色，不是实测材质。</footer>
@@ -37,6 +38,7 @@ a{color:#9ac8ff}strong{color:#ffe3aa}
 import {buildMetricFootprints} from './assets/nyc/nyc-metric-footprints.mjs';
 import {buildMetricCenterlines} from './assets/nyc/nyc-metric-centerlines.mjs';
 import {buildMetricCurbs} from './assets/nyc/nyc-metric-curbs.mjs';
+import {buildMetricPlanimetricOutlines} from './assets/nyc/nyc-metric-planimetric-outlines.mjs';
 const canvas=document.getElementById('scene'),status=document.getElementById('status');
 const gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){status.textContent='WebGL2 不可用：不能渲染米制试验场景。';
@@ -96,7 +98,8 @@ function perspective(fov,aspect,near,far){
  return new Float32Array([t/aspect,0,0,0,0,t,0,0,0,0,(far+near)*n,-1,
    0,0,2*far*near*n,0]);
 }
-let mesh=null,grid=null,roads=null,curbs=null,streetStats=null,curbStats=null,
+let mesh=null,grid=null,roads=null,curbs=null,roadbed=null,sidewalk=null,
+  streetStats=null,curbStats=null,planimetricStats=null,
   cam={yaw:.65,pitch:.72,distance:740,target:[0,75,-190]};
 const gridSize=50;
 function makeGrid(bounds){
@@ -135,6 +138,10 @@ function render(){
  if(curbs){
    gl.bufferData(gl.ARRAY_BUFFER,curbs,gl.STATIC_DRAW);
    gl.drawArrays(gl.LINES,0,curbs.length/9);
+ }
+ for(const layer of [roadbed,sidewalk])if(layer){
+   gl.bufferData(gl.ARRAY_BUFFER,layer,gl.STATIC_DRAW);
+   gl.drawArrays(gl.LINES,0,layer.length/9);
  }
  gl.bufferData(gl.ARRAY_BUFFER,mesh,gl.STATIC_DRAW);
  gl.drawArrays(gl.TRIANGLES,0,mesh.length/9);
@@ -184,12 +191,40 @@ try{
      '。请先运行 node tools/nyc/fetch-times-square-curbs.mjs';
    console.warn('NYC metric curb probe unavailable; not a curb pass:',error.message);
  }
+ // Raw historical multipolygon outlines: preserve every outer/inner ring;
+ // outlines are NOT a roadbed pavement mesh or verified 2026 sidewalks.
+ try{
+   const files=[
+     ['roadbed','./artifacts/nyc-metric-pilot/roadbed-polygons.json'],
+     ['sidewalk','./artifacts/nyc-metric-pilot/sidewalk-polygons.json']];
+   const stats={};
+   for(const [name,path] of files){
+     const response=await fetch(path,{cache:'no-store'});
+     if(!response.ok)throw Error('missing official '+name+' polygons');
+     const snapshot=await response.json();
+     const layer=buildMetricPlanimetricOutlines(snapshot,{type:name});
+     if(name==='roadbed')roadbed=layer.vertexBuffer;
+     else sidewalk=layer.vertexBuffer;
+     stats[name]=layer.stats;
+   }
+   planimetricStats=stats;
+   document.getElementById('surfaceStatus').textContent=
+     '2022 官方 Roadbed：'+stats.roadbed.records+' 多边形 / '+
+       stats.roadbed.visibleEdges+' 边界段；Sidewalk：'+
+       stats.sidewalk.records+' 多边形 / '+
+       stats.sidewalk.visibleEdges+' 边界段（均非当前铺装与路宽）';
+ }catch(error){
+   document.getElementById('surfaceStatus').textContent=
+     '真实 Roadbed/Sidewalk 多边形尚未通过：'+error.message+
+     '。请运行 node tools/nyc/fetch-times-square-planimetrics.mjs';
+   console.warn('Official roadbed/sidewalk polygons unverified:',error.message);
+ }
  const [minX,minZ,maxX,maxZ]=scene.stats.bounds;
  cam.target=[(minX+maxX)/2,75,(minZ+maxZ)/2];
  cam.distance=Math.max(maxX-minX,maxZ-minZ,400)*1.25;
  window.PatrolNycMetricQA=()=>({
    stats:scene.stats,rejections:scene.rejections,streetStats,curbStats,
-   origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
+   planimetricStats,origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
    webglLost:gl.isContextLost(),camera:cam
  });
  status.textContent=scene.stats.builtFeatures+' / '+scene.stats.inputFeatures+
