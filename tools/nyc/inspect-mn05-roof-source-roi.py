@@ -70,6 +70,13 @@ def inspect():
         previous=json.loads(STATS.read_text())
         if previous.get("imported") is not True:
             raise ValueError("Official previous source probe did not pass")
+        # Pinned exact source obtained from NYC DCP official MN05 on 2026-11-22.
+        # A future municipal update needs an independent metadata review;
+        # never silently present newly changed bytes as the accepted 2014 model.
+        if previous.get("sha256")!="71e6242c55ca7069f67c0bfd8e6d4764c9e6020a361e6bfa77880effe7520bf2":
+            raise ValueError("Original MN05 official ZIP changed from vetted provenance SHA")
+        if previous.get("source3dmSha256")!="b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57":
+            raise ValueError("Original MN05 Rhino model differs from vetted SHA")
         if hashlib.sha256(SOURCE.read_bytes()).hexdigest()!=previous["source3dmSha256"]:
             raise ValueError("Original 2014 3DM source SHA changed before ROI inspection")
         model=rhino3dm.File3dm.Read(str(SOURCE))
