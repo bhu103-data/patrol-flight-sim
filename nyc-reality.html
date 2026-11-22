@@ -106,7 +106,8 @@
       pitch = Math.asin(THREE.MathUtils.clamp(forward.y,-1,1));
       camera.rotation.set(pitch,yaw,0,'YXZ');
     }
-    const aerial = () => setView(115,215,195,25,40,-135);
+    // Survey-style overview: high enough to see the block layout instead of a foreground facade.
+    const aerial = () => setView(250,600,355,0,30,-125);
     // Free placement avoids assuming a particular road centerline is known.
     const street = () => setView(-55,6,40,20,18,-100);
     document.getElementById('aerial').addEventListener('click', aerial);
