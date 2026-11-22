@@ -16,7 +16,7 @@ license and documented 3D-building tags.
 
 - Query: OpenStreetMap Overpass API, restricted to the exact WGS84 bbox
   stored in `assets/nyc/times-square-footprints.json`.
-- Elements: ways and relations tagged `building`; source geometries and
+- Elements: ways and relations tagged `building` or `building:part`; source geometries and
   original tags are read only for the audit.
 - License: Open Database License 1.0 (ODbL).
 - Attribution: © OpenStreetMap contributors.
