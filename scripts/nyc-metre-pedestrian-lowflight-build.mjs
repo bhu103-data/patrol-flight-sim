@@ -15,6 +15,10 @@ export async function build(){
     'artifacts/nyc-oti-pedestrian-source/pedestrian-surfaces.json','utf8'));
   const edges=JSON.parse(readFileSync(
     'artifacts/nyc-curb-sidewalk-source/edges.json','utf8'));
+  const sidewalkDisplay=JSON.parse(readFileSync(
+    'artifacts/nyc-curb-sidewalk-source/sidewalk-display.json','utf8'));
+  const maskReport=JSON.parse(readFileSync(
+    'artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-report.json','utf8'));
   if(pedestrian.schema!=='patrol-nyc-oti-plaza-sidewalk-2022-source-v1'||
      pedestrian.role!=='SOURCE_GEO_REFERENCE_ONLY_NOT_ENABLED_IN_GAME'||
      edges.schema!=='patrol-nyc-oti-sidewalk-curb-metre-source-v1'||
@@ -35,10 +39,27 @@ export async function build(){
   const ids=features=>features.map(f=>f.objectId).sort((a,b)=>a-b);
   if(JSON.stringify(ids(pedestrian.sidewalk))!==JSON.stringify(ids(edges.sidewalks)))
     throw Error('Inconsistent official sidewalk OBJECTIDs between two sources');
+  if(sidewalkDisplay.schema!=='patrol-nyc-sidewalk-visual-mask-v1'||
+     sidewalkDisplay.assetRole!=='VISUAL_ONLY_SOURCE_PRESERVING_DERIVATION'||
+     JSON.stringify(sidewalkDisplay.projection)!==ref||
+     sidewalkDisplay.counts?.sourceFeatures!==edges.sidewalks.length||
+     sidewalkDisplay.counts?.displayFeatures<40||
+     maskReport.schema!=='patrol-nyc-sidewalk-building-visual-mask-audit-v1'||
+     maskReport.sourceGeometryMutated!==false||
+     maskReport.displaySubtractsBuildingsOnly!==true||
+     maskReport.areas?.displayUnionBuildingOverlapSquareMetres>1e-6||
+     Math.abs(maskReport.areas?.sourceUnionBuildingOverlapSquareMetres-
+       maskReport.areas?.maskedPartSumSquareMetres)>.001)
+    throw Error('Missing, altered or building-penetrating visual-only sidewalk mask');
+  const sourceSidewalkIds=ids(edges.sidewalks);
+  const displaySidewalkIds=ids(sidewalkDisplay.sidewalks);
+  if(displaySidewalkIds.some(id=>!sourceSidewalkIds.includes(id))||
+     new Set(displaySidewalkIds).size!==displaySidewalkIds.length)
+    throw Error('Display mask lost or duplicated municipal sidewalk source IDs');
   const positions=[],kinds=[],sourceIds=[],linePositions=[],lineKinds=[],lineIds=[];
   let invalid=0,ringCount=0,polygonCount=0;
   for(const [kind,records,y] of [
-    ['sidewalk',pedestrian.sidewalk,0.10],
+    ['sidewalk',sidewalkDisplay.sidewalks,0.10],
     ['plaza',pedestrian.plaza,0.12]
   ]){
     const seen=new Set();
@@ -111,10 +132,27 @@ export async function build(){
     sources:{plaza:pedestrian.sources.plaza,
       sidewalk:pedestrian.sources.sidewalk,
       curb:edges.sources.curb,curbCut:edges.sources.curbCut},
-    warning:'Viewer-only flat y offsets for depth visibility; NOT actual NYC 2026 elevations, curb ramps, crossing rights, routing or accessibility.',
+    warning:'Viewer-only flat y offsets; sidewalk polygons are a source-preserving VISUAL_ONLY building-footprint mask. NOT actual NYC 2026 elevations, curb ramps, crossing rights, routing or accessibility.',
+    sourceSidewalkMask:{
+      visualOnly:true,originalSourceIntact:maskReport.sourceGeometryMutated===false,
+      maskedSquareMetres:maskReport.areas.maskedPartSumSquareMetres,
+      postMaskBuildingOverlapSquareMetres:
+        maskReport.areas.displayUnionBuildingOverlapSquareMetres,
+      reportSchema:maskReport.schema
+    },
     counts:{
       plazaFeatures:pedestrian.plaza.length,
       sidewalkFeatures:pedestrian.sidewalk.length,
+      displaySidewalkFeatures:sidewalkDisplay.counts.displayFeatures,
+      displaySidewalkPolygons:sidewalkDisplay.counts.displayPolygons,
+      sidewalkSourceClippedAreaSquareMetres:
+        maskReport.areas.sourceClippedPartSumSquareMetres,
+      sidewalkDisplayAreaSquareMetres:
+        maskReport.areas.displayPartSumSquareMetres,
+      sidewalkVisualMaskedSquareMetres:
+        maskReport.areas.maskedPartSumSquareMetres,
+      sidewalkPostMaskBuildingOverlapSquareMetres:
+        maskReport.areas.displayUnionBuildingOverlapSquareMetres,
       curbFeatures:edges.curbs.length,
       curbCutFeatures:edges.curbCuts.length,
       polygons:polygonCount,rings:ringCount,

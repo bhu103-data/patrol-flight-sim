@@ -2,12 +2,15 @@ name: NYC Times Square true-metre street/building source pilot
 
 on:
   pull_request:
-    branches: [qa/nyc-main-merged-candidate-20261122-chat, feat/nyc-tsq-meter-crs-road-source-20261122-chat]
+    branches: [qa/nyc-main-merged-candidate-20261122-chat, feat/nyc-tsq-meter-crs-road-source-20261122-chat, qa/nyc-pedestrian-topology-audit-current-20261122-chat]
     paths:
       - 'scripts/nyc-times-true-scale-pilot.mjs'
       - 'tests/nyc-times-true-scale-pilot.test.mjs'
       - 'tools/nyc/true-scale-preview.html'
       - 'tools/nyc/true-scale-browser-smoke.mjs'
+      - 'tools/nyc/derive_sidewalk_display_mask.py'
+      - 'tools/nyc/official-street-topology-audit.py'
+      - 'tests/nyc-sidewalk-display-mask.test.py'
       - '.github/workflows/nyc-times-true-scale-source.yml'
       - 'assets/nyc/times-square-footprints.json'
       - 'scripts/nyc-times-roadbed-polygon-source.mjs'
@@ -25,7 +28,7 @@ permissions:
 jobs:
   source-pilot:
     runs-on: ubuntu-24.04
-    timeout-minutes: 22
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,15 +48,26 @@ jobs:
           node scripts/nyc-times-pedestrian-plaza-source.mjs
           node scripts/nyc-times-pedestrian-topology-audit.mjs
           node scripts/nyc-times-sidewalk-curb-source.mjs
-          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
           test -s artifacts/nyc-true-scale/source.json
           test -s artifacts/nyc-true-scale/plan.svg
           test -s artifacts/nyc-true-scale/roadbed-mesh.json
-          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
           test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Derive source-preserving sidewalk display mask and audit exact metre topology
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 -m py_compile tools/nyc/official-street-topology-audit.py tools/nyc/derive_sidewalk_display_mask.py
+          python3 tests/nyc-sidewalk-display-mask.test.py
+          python3 tools/nyc/derive_sidewalk_display_mask.py
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-display.json
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-report.json
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
+          test -s artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
+          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
       - name: Install browser for real measured-source WebGL2 acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -74,6 +88,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nyc-true-scale-source-pilot
-          path: artifacts/nyc-true-scale/
+          path: |
+            artifacts/nyc-true-scale/
+            artifacts/nyc-curb-sidewalk-source/topology-audit.json
+            artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+            artifacts/nyc-curb-sidewalk-source/sidewalk-display.json
+            artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-report.json
+            artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-plan.svg
           retention-days: 7
           if-no-files-found: ignore

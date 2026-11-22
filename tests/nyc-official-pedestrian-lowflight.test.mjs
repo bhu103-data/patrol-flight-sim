@@ -18,6 +18,8 @@ test('only real source polygons and curb lines may appear in true metre low-fly 
   assert.match(preview,/gl\.drawArrays\(gl\.LINES,0,curbLines\.count\)/);
   assert.doesNotMatch(preview,/gl\.drawArrays\(gl\.TRIANGLES,0,rowSurface\.count\)/);
   assert.match(preview,/noSurveyedVerticalDatum:true/);
+  assert.match(preview,/遮挡掩膜/);
+  assert.match(preview,/sidewalkDisplayMask:pedestrian\.sourceSidewalkMask/);
   assert.match(preview,/路缘开口/);
   assert.ok(!game.includes('nyc-metre-pedestrian-lowflight-build.mjs'));
   assert.ok(!game.includes('pedestrian-mesh.json'));
@@ -34,6 +36,10 @@ test('upstream source-FID and projection conflicts block rather than guess surfa
   assert.match(builder,/NOT actual NYC 2026 elevations/);
   assert.match(builder,/roadbed\.json/);
   assert.match(builder,/Official pedestrian QA geometry coverage or budget violated/);
+  assert.match(builder,/sidewalk-display\.json/);
+  assert.match(builder,/sidewalk-occlusion-report\.json/);
+  assert.match(builder,/displayUnionBuildingOverlapSquareMetres/);
+  assert.match(builder,/VISUAL_ONLY_SOURCE_PRESERVING_DERIVATION/);
 });
 
 test('source acquisition and real on-off same-camera screenshot are mandatory CI gates',()=>{
@@ -44,9 +50,13 @@ test('source acquisition and real on-off same-camera screenshot are mandatory CI
     'scripts/nyc-metre-pedestrian-lowflight-build.mjs'
   ])assert.ok(workflow.includes('node '+command),command);
   assert.match(workflow,/test -s artifacts\/nyc-true-scale\/pedestrian-mesh\.json/);
+  assert.match(workflow,/python3 tests\/nyc-sidewalk-display-mask\.test\.py/);
+  assert.match(workflow,/python3 tools\/nyc\/derive_sidewalk_display_mask\.py/);
   assert.match(browser,/04-aerial-pedestrian-hidden/);
   assert.match(browser,/05-aerial-pedestrian-visible/);
   assert.match(browser,/if\(offHash===onHash\)throw Error/);
   assert.match(browser,/officialPedestrian2022/);
+  assert.match(browser,/sidewalkDisplayMask/);
+  assert.match(browser,/postMaskBuildingOverlapSquareMetres/);
   assert.match(browser,/gl\.getError\(\)/);
 });
