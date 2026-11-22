@@ -75,3 +75,21 @@ These statistics were independently calculated offline from the actual Actions a
 - Staged isolated QA probes \`tools/alaska/probe_noaa_shoreline.py\`, \`tools/alaska/fetch_noaa_cusp_index.py\`, and \`tools/alaska/clip_noaa_cusp.py\` have **no approved runtime-data integration**. A CI job that has not run successfully is not a fetched dataset.
 
 Source and official metadata: https://www.fisheries.noaa.gov/inport/item/60585 and https://nsde.ngs.noaa.gov/more.html.
+
+
+## 2026-11-22 — NOAA shoreline download trigger status (not yet executed)
+
+**Official NOAA product distinction:** InPort [AK1803-CM-T](https://www.fisheries.noaa.gov/inport/item/60585) describes the project-specific Tracy Arm shoreline compiled from imagery captured 2015-04-22 through 2017-12-07, published in NAD83 (EPSG:4269); the geographical extent envelope only implies potential data overlap. The modern [NSDE CUSP](https://nsde.ngs.noaa.gov/more.html) is a *different*, mixed-source product and may contain non-NOAA source components. Verify each candidate's origins and redistribution conditions before packaging.
+
+**Current NSDE application endpoint evidence:** The public home page served by `https://nsde.ngs.noaa.gov/` embeds these live URL templates:
+- `https://nsde.ngs.noaa.gov/cusp/cuspidx/{z}/{x}/{y}.pbf` — CUSP index, source layer `cuspidx`, feature property `name`.
+- `https://nsde.ngs.noaa.gov/downloads/{name}.zip` — ZIP selected by clicking an index tile.
+- `https://nsde.ngs.noaa.gov/cusp/tiles/{z}/{x}/{y}.pbf` — CUSP shoreline display geometry (visual map source; **not** a verified redistributable GIS export).
+
+For current Tracy Arm AOI `[-133.265,57.851,-133.135,57.923]`, central index tile candidates are `z=9,x=66,y=154`, and `z=10,x=132..133,y=308..309`; adjacent border tiles are intentionally checked by the isolated script `tools/alaska/fetch_noaa_cusp_index.py`. The index payload and indexed ZIP names have **NOT yet been fetched successfully**. Do not infer downloaded source-file names from template URLs.
+
+**Execution barrier:** A dedicated QA workflow `.github/workflows/alaska-noaa-cusp-index.yml` exists only on the unmerged draft branch; despite adding a branch-limited `push` trigger, associated commits currently report only the existing PATROL regression workflow. A stacked [draft #201](https://github.com/bhu103-data/patrol-flight-sim/pull/201) adds a one-file initial-run workflow targeting this branch; regression job [44989374322](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44989374322) succeeded but the NOAA CUSP custom job was **not triggered / no run ID returned**. Until GitHub enables or executes that job, there is no CUSP tile artifact to analyze and no legal clearance of individual CUSP source records.
+
+**Alternative source assessed but excluded from import:** [Alaska DNR Physical_AlaskaCoast](https://arcgis.dnr.alaska.gov/arcgis/rest/services/OpenData/Physical_AlaskaCoast/MapServer/4) exposes official EPSG:3338 coastal GIS polygons, but its specific modifications/redistribution grant has not yet been verified. Keep it research-only until those terms are confirmed.
+
+**Release decision remains unchanged:** Keep #184 and #201 draft/unmerged, retain the current USGS DEM/water physics, do not install candidate CUSP tiles or coarse state polygons as final game coastline, and do not claim browser FPS or coverage statistics without actual downloaded vector features.
