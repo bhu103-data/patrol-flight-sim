@@ -2934,6 +2934,12 @@ const CENTRAL_PARK_SITES=[
         vec3 bitangent=normalize(cross(n,tangent));
         n=normalize(n+(tangent*micro.x+bitangent*micro.y)*.10*near);
         material=mix(material,photographed*vec3(.66,.84,.94),.44*near);
+        // The photo atlas is darker than open-water floe snow in daylight.
+        // Lift ONLY photo-ready floe caps (surface 13) at close range;
+        // retain textured microcontrast, clamp highlights, and leave
+        // glacier surface 12 plus missing-atlas fallback untouched.
+        if(vHarborSurface>12.5)
+          material=min(material*(1.0+.20*near),vec3(.95));
         roughness=mix(roughness,clamp(normalRough.a,.38,.88),.75*near);
       }
       float frostFresnel=pow(1.0-abs(dot(n,normalize(uEye-vWorld))),3.0);
