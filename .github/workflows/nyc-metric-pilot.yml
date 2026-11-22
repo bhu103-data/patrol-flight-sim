@@ -5,6 +5,8 @@ on:
       - "assets/nyc/nyc-metric-footprints.mjs"
       - "tools/nyc/fetch-times-square-cscl.mjs"
       - "tools/nyc/fetch-times-square-curbs.mjs"
+      - "tools/nyc/fetch-times-square-planimetrics.mjs"
+      - "assets/nyc/nyc-metric-planimetric-outlines.mjs"
       - "assets/nyc/nyc-metric-centerlines.mjs"
       - "assets/nyc/times-square-footprints.json"
       - "nyc-metric-pilot.html"
@@ -12,6 +14,7 @@ on:
       - "tests/nyc-metric-footprint-pilot.test.mjs"
       - "tests/nyc-metric-cscl-centerlines.test.mjs"
       - "tests/nyc-metric-curb-source.test.mjs"
+      - "tests/nyc-metric-planimetric-surfaces.test.mjs"
       - ".github/workflows/nyc-metric-pilot.yml"
   workflow_dispatch:
 permissions:
@@ -26,11 +29,13 @@ jobs:
         with:
           node-version: "22"
       - name: Verify geospatial metre geometry without overlays
-        run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs tests/nyc-metric-curb-source.test.mjs
+        run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs tests/nyc-metric-curb-source.test.mjs tests/nyc-metric-planimetric-surfaces.test.mjs
       - name: Pin real public NYC street centrelines as QA artifact (never fabricated)
         run: node tools/nyc/fetch-times-square-cscl.mjs
       - name: Verify independent official NYC 2022 planimetric curb geometry
         run: node tools/nyc/fetch-times-square-curbs.mjs
+      - name: Verify 2022 official Roadbed and Sidewalk source polygons, including all holes
+        run: node tools/nyc/fetch-times-square-planimetrics.mjs
       - name: Install open-source WebGL2 test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
