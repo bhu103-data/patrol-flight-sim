@@ -85,6 +85,10 @@ try:
    metadata["readerVersion"]=str(getattr(rhino3dm,"__version__","unknown"))
    rhino=rhino3dm.File3dm.Read(str(raw_path))
    if rhino is None:raise ValueError("rhino3dm failed to parse official archive model")
+   model_units=getattr(getattr(rhino,"Settings",None),"ModelUnitSystem",None)
+   metadata["modelUnitSystem"]=str(model_units)
+   try:metadata["modelUnitSystemValue"]=int(model_units)
+   except Exception:metadata["modelUnitSystemValue"]=None
    layers=[{"index":i,"name":layer.Name,
             "fullPath":getattr(layer,"FullPath",None)}
            for i,layer in enumerate(rhino.Layers)]
