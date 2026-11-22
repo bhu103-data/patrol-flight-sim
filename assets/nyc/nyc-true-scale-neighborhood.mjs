@@ -82,7 +82,10 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
         poly[ids[2]].map((x,i)=>i===1?roof:x),cap);
       counts.roofTriangles++;
     }
+    const perBuildingCap=Math.max(1,Math.floor(maxWindows/massing.buildings.length));
+    const perEdgeCap=Math.max(1,Math.ceil(perBuildingCap/Math.max(1,poly.length)));
     for(let i=0;i<poly.length;i++){
+      let edgeWindows=0;
       const a=poly[i],b2=poly[(i+1)%poly.length],
             side=length([a[0],a[2]],[b2[0],b2[2]]);
       const face=tint(facade,.88+.12*Math.abs(b2[2]-a[2])/(side||1));
@@ -93,7 +96,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
         continue;
       // Outward vector for CCW source east/north ring; Z is flipped north.
       const dx=b2[0]-a[0],dz=b2[2]-a[2],len=Math.hypot(dx,dz);
-      const out= signed>=0?[dz/len,-dx/len]:[-dz/len,dx/len];
+      const out= signed>=0?[-dz/len,dx/len]:[dz/len,-dx/len];
       // Roof and street podium exclusion is intentional: entrances, windows,
       // curtain-wall layouts and materials here are approximate, not surveyed.
       const groundStart=roof<20?3.0:5.1;
@@ -107,7 +110,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
         bStep=Math.max(1,Math.ceil(bays/30));
       for(let floor=0;floor<floors;floor+=interval){
         for(let bay=0;bay<bays;bay+=bStep){
-          if(counts.facadeWindows>=maxWindows)break;
+          if(counts.facadeWindows>=maxWindows||edgeWindows>=perEdgeCap)break;
           const f=(bay+.5)/bays,mid=[a[0]+dx*f,a[2]+dz*f],
                 w=Math.min(2.65,len/bays*.67),
                 y0=groundStart+floor*4.2,y1=Math.min(roof-1.05,y0+2.65);
@@ -131,7 +134,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
             p(offset+.025,y0+1.28,w/2-.15),
             p(offset+.025,y0+1.28,-w/2+.15),
             [.72,.76,.79]);
-          counts.facadeWindows++;
+          counts.facadeWindows++;edgeWindows++;
         }
       }
     }
