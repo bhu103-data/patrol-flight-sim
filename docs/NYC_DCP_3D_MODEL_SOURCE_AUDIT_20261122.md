@@ -37,16 +37,40 @@ US survey feet) and counts model objects intersecting it.
 
 - Original ZIP and 3DM byte sizes and SHA-256 hashes.
 - Rhino model unit system.
-- Layer names and object counts for building footprint, rooftop, facade,
-  surface roof, surface footprint and surface facade layers.
-- Geometry types and mesh/Brep face counts.
+- Exact DCP layers: Building_FootPrint, Building_RoofTop, Building_Facade,
+  FootPrint Surface, RoofTop Surface and Facade Surface.
+- Geometry types, Brep face counts and cached render-mesh availability.
 - Objects intersecting the Times Square envelope.
 - Any available BIN, DOITT_ID and SOURCE_ID user strings.
-- A bounded sample of object metadata and bounding boxes.
+- A bounded sample of surface objects and their bounding boxes.
 
 Only the compact audit report is uploaded as a GitHub Actions artifact. The raw
 district model is downloaded to the ephemeral runner and is not redistributed
 by this PR.
+
+## First source inspection findings
+
+The initial audit successfully downloaded the official MN05 archive (77 MB
+compressed; 627 MB extracted) and read the 3DM model. The file contains
+233,503 Rhino objects, of which 19,908 intersect the Times Square pilot tile.
+The tile contains 9,383 Brep objects, so the source is substantially richer
+than the 118 simplified extrusions in the current 1:1 scene.
+
+The model's actual layer names are:
+
+- Linework: Building_FootPrint, Building_RoofTop, Building_Facade.
+- Brep surfaces: FootPrint Surface, RoofTop Surface, Facade Surface.
+
+No BIN, DOITT_ID or SOURCE_ID user strings were found on the sampled
+intersecting objects. Any building association therefore needs a deterministic
+spatial/footprint match, not a guessed ID join. The Rhino file reports
+UnitSystem.Feet while the published coordinate reference is EPSG:2263
+(US survey feet); the transform must be verified before export.
+
+The follow-up audit now samples cached Brep render meshes using
+rhino3dm.BrepFace.GetMesh(MeshType.Any). If cached meshes are absent,
+rhino3dm alone cannot mesh these Breps; a separate, license-verified
+tessellation path is required before any geometry can be integrated.
 
 ## Integration gate
 
