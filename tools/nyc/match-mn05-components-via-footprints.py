@@ -177,9 +177,9 @@ def match() -> None:
     roof_data = load_json(ROOF_PATH)
     facade_data = load_json(FACADE_PATH)
     source_hash = footprint_data["source3dmSha256"]
-    if roof_data.get("source3dmSha256") != source_hash:
+    if roof_data.get("source3dmSHA256") != source_hash:
         raise ValueError("Footprint and roof mesh source SHA mismatch")
-    if facade_data.get("source3dmSha256") != source_hash:
+    if facade_data.get("source3dmSHA256") != source_hash:
         raise ValueError("Footprint and facade mesh source SHA mismatch")
 
     footprints = []
