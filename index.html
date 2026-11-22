@@ -10785,7 +10785,7 @@ const CENTRAL_PARK_SITES=[
   const nycVisualProbeOmits=layer=>nycVisualProbeEnabled &&
     selectedMap.city && nycVisualProbeHidden===layer;
   if(nycVisualProbeEnabled){
-    const groups=['none','procedural','scenery','gis','hero','landmarks'];
+    const groups=['none','procedural','landscape','scenery','gis','street','roadChunks','hero','park','screens','lights','landmarks'];
     window.__patrolNycVisualProbe={
       groups,
       setHidden(group){
@@ -10796,9 +10796,15 @@ const CENTRAL_PARK_SITES=[
       stats(){return {
         city:Boolean(selectedMap.city),hidden:nycVisualProbeHidden,
         proceduralTriangles:(backgroundBuildings?.count||0)/3,
+        landscapeTriangles:(landscapeDetails?.count||0)/3,
         sceneryTriangles:(mapScenery?.count||0)/3,
         gisTriangles:(nycGisMesh?.count||0)/3,
+        streetTriangles:(nycStreetMesh?.count||0)/3,
+        roadChunkTriangles:nycRoadDetailChunks.reduce((sum,chunk)=>sum+(chunk.mid?.count||0)+(chunk.near?.count||0),0)/3,
         heroTriangles:(nycHeroScenery?.count||0)/3,
+        parkTriangles:(nycParkMesh?.count||0)/3,
+        screenTriangles:(timesSquareScreens?.count||0)/3,
+        lightTriangles:(mapLights?.count||0)/3,
         landmarkInstances:selectedMap.city?NEW_YORK_LANDMARKS.length:0
       }}
     };
@@ -10820,8 +10826,8 @@ const CENTRAL_PARK_SITES=[
     if(selectedMap.city && nycGisMesh?.count){
       if(!nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
     }
-    if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
-    if(selectedMap.city && nycRoadChunkLevel){
+    if(selectedMap.city && nycStreetMesh?.count && !nycVisualProbeOmits('street'))drawMesh(nycStreetMesh,identity);
+    if(selectedMap.city && nycRoadChunkLevel && !nycVisualProbeOmits('roadChunks')){
       for(const chunk of nycRoadDetailChunks){
         const level=nycRoadChunkLevel(chunk.bounds,camPos);
         if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
@@ -10829,7 +10835,7 @@ const CENTRAL_PARK_SITES=[
       }
     }
     if(selectedMap.city && nycHeroScenery?.count && !nycVisualProbeOmits('hero'))drawMesh(nycHeroScenery,identity);
-    if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
+    if(selectedMap.city && nycParkMesh?.count && !nycVisualProbeOmits('park'))drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
       if(textured){
@@ -10843,7 +10849,7 @@ const CENTRAL_PARK_SITES=[
       }
       gl.uniform1i(uMesh.dcSurface,-1);
     }
-    if(timesSquareScreens?.count){
+    if(timesSquareScreens?.count && !nycVisualProbeOmits('screens')){
       const ready=Boolean(nycLedAtlas && !graphicsCompat && !directRendering);
       gl.uniform1i(uMesh.timesScreen,1);
       gl.uniform1f(uMesh.nyLedReady,ready?1:0);
@@ -10857,7 +10863,7 @@ const CENTRAL_PARK_SITES=[
       gl.uniform1i(uMesh.timesScreen,0);
       gl.uniform1f(uMesh.nyLedReady,0);
     }
-    if(mapLights && mapLights.count){
+    if(mapLights && mapLights.count && !nycVisualProbeOmits('lights')){
       gl.uniform1f(uMesh.dimLights,1);
       drawMesh(mapLights,identity,true);
       gl.uniform1f(uMesh.dimLights,0);
@@ -14751,7 +14757,7 @@ const CENTRAL_PARK_SITES=[
     if (backgroundBuildings || landscapeDetails) {
       const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
       if (backgroundBuildings && !nycVisualProbeOmits('procedural')) drawMeshWithOutline(backgroundBuildings,identity,false,true);
-      if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
+      if (landscapeDetails && !nycVisualProbeOmits('landscape')) drawMeshWithOutline(landscapeDetails,identity);
       for(const hit of buildingHits.values())for(const scar of hit.scars){
         drawMeshWithOutline(scar,identity);
       }
