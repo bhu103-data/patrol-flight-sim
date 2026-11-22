@@ -75,7 +75,7 @@ test('Manhattan hooks only: shared lake masks, cleanups and map overlays',()=>{
   assert.match(city,/city\.parkWaters\|\|\[\]/);
   assert.match(city,/import\('\.\/assets\/nyc\/central-park\.js'\)/);
   assert.match(city,/disposeSceneMesh\(nycParkMesh\)/);
-  assert.match(city,/nycParkMesh\?\.count\)drawMesh\(nycParkMesh,identity\)/);
+  assert.match(city,/nycParkMesh\?\.count && !nycVisualProbeOmits\('park'\)\)drawMesh\(nycParkMesh,identity\)/);
   assert.match(city,/heroEpoch!==nycHeroEpoch/);
   assert.doesNotMatch(city,/findScenerySite\(81,257/);
   assert.match(street,/skippedPark/);

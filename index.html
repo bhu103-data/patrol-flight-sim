@@ -8557,22 +8557,39 @@ const CENTRAL_PARK_SITES=[
             :Promise.resolve(null)
         ]).then(([module,asset,architecture])=>{
           if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
-          const dataMesh=createTriangleMesh();
-          const stats=module.buildTimesSquareGisInfill(asset,{
-            addQuad:(a,b,c,d,color,surface=0)=>
-              dataMesh.addQuad(a,b,c,d,color,surface),
-            addTri:(a,b,c,color,surface=0)=>
-              dataMesh.addTri(a,b,c,color,surface),
-            box:(...args)=>addModelBox(dataMesh.addQuad,...args),
-            ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
-            protectedSites:protectedTimesSites,
-            recessedFacade:architecture?.emitRecessedFacade||null
-          });
-          const uploaded=dataMesh.upload();
+          const buildGisMesh=(skipFids=[])=>{
+            const dataMesh=createTriangleMesh();
+            const stats=module.buildTimesSquareGisInfill(asset,{
+              addQuad:(a,b,c,d,color,surface=0)=>
+                dataMesh.addQuad(a,b,c,d,color,surface),
+              addTri:(a,b,c,color,surface=0)=>
+                dataMesh.addTri(a,b,c,color,surface),
+              box:(...args)=>addModelBox(dataMesh.addQuad,...args),
+              ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
+              protectedSites:protectedTimesSites,
+              recessedFacade:architecture?.emitRecessedFacade||null,
+              skipFids:new Set(skipFids)
+            });
+            return {mesh:dataMesh.upload(),stats};
+          };
+          const built=buildGisMesh(),uploaded=built.mesh,stats=built.stats;
           if(sceneEpoch!==nycHeroEpoch||gl.isContextLost())
             disposeSceneMesh(uploaded);
           else{
             nycGisMesh=uploaded;
+            if(nycVisualProbeEnabled && window.__patrolNycVisualProbe){
+              window.__patrolNycVisualProbe.setGisSkippedFids=ids=>{
+                if(!Array.isArray(ids)||ids.length>128||
+                    !ids.every(Number.isSafeInteger))
+                  throw Error('Invalid diagnostic GIS FID list');
+                if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())
+                  throw Error('Diagnostic GIS FID swap is no longer on the active NYC scene');
+                const next=buildGisMesh(ids),previous=nycGisMesh;
+                nycGisMesh=next.mesh;
+                if(previous)disposeSceneMesh(previous);
+                return next.stats;
+              };
+            }
             if(architecturePilot)
               window.__patrolNycArchitectureQa={...stats.recessedPilot,
                 sourceBuildings:stats.sourceBuildings,roofTriangles:stats.roofTriangles};
@@ -10782,10 +10799,13 @@ const CENTRAL_PARK_SITES=[
   const nycVisualProbeEnabled=new URLSearchParams(location.search)
     .get('nycVisualProbe')==='1';
   let nycVisualProbeHidden='none';
+  // Freeze moving traffic, walkers, signals and environmental noise only for
+  // deterministic, opt-in per-FID WebGL framebuffer comparisons.
+  let nycVisualProbeFrozenSceneryTime=null;
   const nycVisualProbeOmits=layer=>nycVisualProbeEnabled &&
     selectedMap.city && nycVisualProbeHidden===layer;
   if(nycVisualProbeEnabled){
-    const groups=['none','procedural','scenery','gis','hero','landmarks'];
+    const groups=['none','procedural','landscape','scenery','gis','street','roadChunks','hero','park','screens','lights','landmarks'];
     window.__patrolNycVisualProbe={
       groups,
       setHidden(group){
@@ -10793,12 +10813,29 @@ const CENTRAL_PARK_SITES=[
         nycVisualProbeHidden=group;
         return {hidden:group,city:Boolean(selectedMap.city)};
       },
+      freezeSceneryTime(value){
+        if(!nycVisualProbeEnabled||!selectedMap.city||
+           !Number.isFinite(value)||value<0)
+          throw Error('Invalid NYC diagnostic scenery-time freeze');
+        nycVisualProbeFrozenSceneryTime=value;
+        sceneryTime=value;
+        skyElapsed=0;
+        skyClock=0;
+        nyStreetWetness=0;
+        return {frozen:true,sceneryTime,skyElapsed,city:true};
+      },
       stats(){return {
         city:Boolean(selectedMap.city),hidden:nycVisualProbeHidden,
         proceduralTriangles:(backgroundBuildings?.count||0)/3,
+        landscapeTriangles:(landscapeDetails?.count||0)/3,
         sceneryTriangles:(mapScenery?.count||0)/3,
         gisTriangles:(nycGisMesh?.count||0)/3,
+        streetTriangles:(nycStreetMesh?.count||0)/3,
+        roadChunkTriangles:nycRoadDetailChunks.reduce((sum,chunk)=>sum+(chunk.mid?.count||0)+(chunk.near?.count||0),0)/3,
         heroTriangles:(nycHeroScenery?.count||0)/3,
+        parkTriangles:(nycParkMesh?.count||0)/3,
+        screenTriangles:(timesSquareScreens?.count||0)/3,
+        lightTriangles:(mapLights?.count||0)/3,
         landmarkInstances:selectedMap.city?NEW_YORK_LANDMARKS.length:0
       }}
     };
@@ -10820,16 +10857,18 @@ const CENTRAL_PARK_SITES=[
     if(selectedMap.city && nycGisMesh?.count){
       if(!nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
     }
-    if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
+    if(selectedMap.city && nycStreetMesh?.count && !nycVisualProbeOmits('street'))drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycRoadChunkLevel){
-      for(const chunk of nycRoadDetailChunks){
-        const level=nycRoadChunkLevel(chunk.bounds,camPos);
-        if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
-        if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+      if(!nycVisualProbeOmits('roadChunks')){
+        for(const chunk of nycRoadDetailChunks){
+          const level=nycRoadChunkLevel(chunk.bounds,camPos);
+          if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
+          if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+        }
       }
     }
     if(selectedMap.city && nycHeroScenery?.count && !nycVisualProbeOmits('hero'))drawMesh(nycHeroScenery,identity);
-    if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
+    if(selectedMap.city && nycParkMesh?.count && !nycVisualProbeOmits('park'))drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
       if(textured){
@@ -10843,7 +10882,7 @@ const CENTRAL_PARK_SITES=[
       }
       gl.uniform1i(uMesh.dcSurface,-1);
     }
-    if(timesSquareScreens?.count){
+    if(timesSquareScreens?.count && !nycVisualProbeOmits('screens')){
       const ready=Boolean(nycLedAtlas && !graphicsCompat && !directRendering);
       gl.uniform1i(uMesh.timesScreen,1);
       gl.uniform1f(uMesh.nyLedReady,ready?1:0);
@@ -10857,7 +10896,7 @@ const CENTRAL_PARK_SITES=[
       gl.uniform1i(uMesh.timesScreen,0);
       gl.uniform1f(uMesh.nyLedReady,0);
     }
-    if(mapLights && mapLights.count){
+    if(mapLights && mapLights.count && !nycVisualProbeOmits('lights')){
       gl.uniform1f(uMesh.dimLights,1);
       drawMesh(mapLights,identity,true);
       gl.uniform1f(uMesh.dimLights,0);
@@ -11855,8 +11894,10 @@ const CENTRAL_PARK_SITES=[
   }
 
   function sampleFlightEnvironment(dt){
-    skyElapsed+=dt;
-    if(skyTime.value==='auto')skyClock+=dt;
+    if(nycVisualProbeFrozenSceneryTime===null){
+      skyElapsed+=dt;
+      if(skyTime.value==='auto')skyClock+=dt;
+    }
     const day=Math.floor(skyElapsed/ENVIRONMENT_DAY);
     const hour=skyTime.value==='auto'?(skyStartingHour+skyClock*24/ENVIRONMENT_DAY)%24:Number(skyTime.value);
     const season=skySeason.value==='auto'?((day+2)%4):Number(skySeason.value);
@@ -14403,7 +14444,9 @@ const CENTRAL_PARK_SITES=[
       }
     }
 
-    sceneryTime += Math.min(rawDt, 0.12);
+    if(nycVisualProbeFrozenSceneryTime===null)
+      sceneryTime += Math.min(rawDt, 0.12);
+    else sceneryTime=nycVisualProbeFrozenSceneryTime;
     if(scenicViewActive&&sceneryTime>=nextDcView){
       hotelTarget.selectedIndex=(hotelTarget.selectedIndex+1)%DC_SCENIC_VIEWS.length;
       nextDcView=sceneryTime+8;
@@ -14751,7 +14794,7 @@ const CENTRAL_PARK_SITES=[
     if (backgroundBuildings || landscapeDetails) {
       const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
       if (backgroundBuildings && !nycVisualProbeOmits('procedural')) drawMeshWithOutline(backgroundBuildings,identity,false,true);
-      if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
+      if (landscapeDetails && !nycVisualProbeOmits('landscape')) drawMeshWithOutline(landscapeDetails,identity);
       for(const hit of buildingHits.values())for(const scar of hit.scars){
         drawMeshWithOutline(scar,identity);
       }

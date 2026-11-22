@@ -8,7 +8,9 @@ const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,
 const dir='artifacts/nyc-visual-provenance';
 await mkdir(dir,{recursive:true});
 const report={passed:false,errors:[],warnings:[],camera:'44th Street LED Canyon',
-  focusRoi:[600,5,800,408],hypothesis:'unknown',comparison:{},renders:[]};
+  focusRois:{leftWall:[0,0,460,720],centerWall:[460,0,900,720],
+    rightLed:[900,0,1280,720],fullFrame:[0,0,1280,720]},
+  hypothesis:'unknown',comparison:{},renders:[]};
 const check=(ok,why)=>{if(!ok)throw Error(why)};
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
@@ -17,25 +19,31 @@ const browser=await chromium.launch({headless:true,args:[
 ]});
 let page=null;
 const screenshots={};
-const groups=['none','procedural','scenery','gis','hero','landmarks'];
+const groups=['none','procedural','landscape','scenery','gis','street','roadChunks','hero','park','screens','lights','landmarks'];
 function compare(ref,next){
   const a=screenshots[ref],b=screenshots[next];
   check(a&&b&&a.width===b.width&&a.height===b.height,'Incompatible source images');
-  const [x0,y0,x1,y1]=report.focusRoi;
-  let pixels=0,changed24=0,changed45=0,meanAbs=0;
-  for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
-    const i=(y*a.width+x)*4;
-    const diff=[0,1,2].map(k=>Math.abs(a.data[i+k]-b.data[i+k]));
-    meanAbs+=(diff[0]+diff[1]+diff[2])/3;
-    if(Math.max(...diff)>=24)changed24++;
-    if(Math.max(...diff)>=45)changed45++;
-    pixels++;
+  const result={};
+  for(const [region,[x0,y0,x1,y1]] of Object.entries(report.focusRois)){
+    let pixels=0,changed24=0,changed45=0,meanAbs=0;
+    for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
+      const i=(y*a.width+x)*4;
+      const dr=Math.abs(a.data[i]-b.data[i]);
+      const dg=Math.abs(a.data[i+1]-b.data[i+1]);
+      const db=Math.abs(a.data[i+2]-b.data[i+2]);
+      const delta=Math.max(dr,dg,db);
+      meanAbs+=(dr+dg+db)/3;
+      if(delta>=24)changed24++;
+      if(delta>=45)changed45++;
+      pixels++;
+    }
+    result[region]={samples:pixels,
+      changed24Fraction:Number((changed24/pixels).toFixed(4)),
+      changed45Fraction:Number((changed45/pixels).toFixed(4)),
+      meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
+      note:'A/B only; changing hidden meshes can reveal other occluded meshes'};
   }
-  return {samples:pixels,
-    changed24Fraction:Number((changed24/pixels).toFixed(4)),
-    changed45Fraction:Number((changed45/pixels).toFixed(4)),
-    meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
-    note:'A/B only; changing hidden meshes can reveal other occluded meshes'};
+  return result;
 }
 try{
   page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -64,7 +72,8 @@ try{
   await page.waitForFunction(()=>{
     const s=window.__patrolNycVisualProbe?.stats();
     return s?.city && s?.proceduralTriangles>0 &&
-      s?.sceneryTriangles>0;
+      s?.sceneryTriangles>0 && s?.gisTriangles>0 &&
+      typeof window.__patrolNycVisualProbe?.setGisSkippedFids==='function';
   },null,{timeout:60000});
   await page.keyboard.press('h');
   await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
@@ -77,6 +86,12 @@ try{
     'body.patrol-qa-scene-only * {visibility:hidden!important} '+
     'body.patrol-qa-scene-only #glCanvas {visibility:visible!important}'});
   await page.waitForTimeout(1200);
+  const frozen=await page.evaluate(()=>
+    window.__patrolNycVisualProbe.freezeSceneryTime(42));
+  check(frozen.frozen&&frozen.sceneryTime===42&&frozen.city,
+    'Could not freeze the exact Manhattan scenery clock');
+  report.frozenSceneryTime=frozen;
+  await page.waitForTimeout(180);
   report.initial=await page.evaluate(()=>window.__patrolNycVisualProbe.stats());
   check(report.initial.city&&report.initial.proceduralTriangles>0,
     'Did not load live Manhattan background building mesh');
@@ -112,19 +127,112 @@ try{
   for(const group of groups.slice(1))
     report.comparison[group]=compare('44th-none','44th-'+group);
   report.restored=compare('44th-none','44th-restored');
-  report.ranked=Object.entries(report.comparison).sort(
-    (a,b)=>b[1].changed45Fraction-a[1].changed45Fraction).map(
-    ([layer,probe])=>({layer,...probe}));
-  const best=report.ranked[0];
+  const baselineStats=await page.evaluate(()=>{
+    const api=window.__patrolNycVisualProbe;
+    if(typeof api?.setGisSkippedFids!=='function')
+      throw Error('Opt-in per-FID GIS rebuild API is unavailable');
+    return api.setGisSkippedFids([]);
+  });
+  check(Array.isArray(baselineStats.sourceFids)&&baselineStats.sourceFids.length>0,
+    'GIS source FID inventory is unavailable');
+  await page.evaluate(async()=>{
+    await new Promise(resolve=>requestAnimationFrame(()=>
+      requestAnimationFrame(resolve)));
+    const canvas=document.getElementById('glCanvas'),gl=canvas?.getContext('webgl2');
+    if(!gl||gl.isContextLost())throw Error('WebGL2 context unavailable for source FID scan');
+    gl.finish();
+    const data=new Uint8Array(canvas.width*canvas.height*4);
+    gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);
+    window.__patrolNycGisBaseline={width:canvas.width,height:canvas.height,data};
+  });
+  report.gisSourceFids=baselineStats.sourceFids;
+  report.fidScan=await page.evaluate(async ({fids,baselineSourceBuildings})=>{
+    const api=window.__patrolNycVisualProbe,canvas=document.getElementById('glCanvas'),
+      gl=canvas?.getContext('webgl2'),baseline=window.__patrolNycGisBaseline;
+    if(!gl||!baseline||baseline.width!==canvas.width||baseline.height!==canvas.height)
+      throw Error('Source FID baseline framebuffer mismatch');
+    const {width,height,data:before}=baseline,results=[];
+    for(const fid of fids){
+      const stats=api.setGisSkippedFids([fid]);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      gl.finish();
+      if(stats.skippedDiagnosticFids!==1||
+         stats.sourceBuildings!==baselineSourceBuildings-1||
+         stats.sourceFids.includes(fid))
+        throw Error('Per-FID A/B did not remove exactly one rendered source building: '+fid);
+      const after=new Uint8Array(width*height*4);
+      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,after);
+      let pixels=0,changed24=0,changed45=0,meanAbs=0;
+      for(let y=0;y<height;y+=2){
+        const gy=height-1-y;
+        for(let x=0;x<460;x+=2){
+          const i=(gy*width+x)*4;
+          const dr=Math.abs(before[i]-after[i]),
+            dg=Math.abs(before[i+1]-after[i+1]),
+            db=Math.abs(before[i+2]-after[i+2]),delta=Math.max(dr,dg,db);
+          meanAbs+=(dr+dg+db)/3;
+          if(delta>=24)changed24++;
+          if(delta>=45)changed45++;
+          pixels++;
+        }
+      }
+      results.push({fid,sourceBuildings:stats.sourceBuildings,
+        skippedDiagnosticFids:stats.skippedDiagnosticFids,
+        removedExactlyOneSourceBuilding:true,
+        changed24Fraction:Number((changed24/pixels).toFixed(4)),
+        changed45Fraction:Number((changed45/pixels).toFixed(4)),
+        meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
+        glError:gl.getError()});
+    }
+    api.setGisSkippedFids([]);
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    gl.finish();
+    return results.sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
+  },{fids:baselineStats.sourceFids,baselineSourceBuildings:baselineStats.sourceBuildings});
+  const topFid=report.fidScan[0],runnerUp=report.fidScan[1];
+  report.fidScanMargin=topFid&&runnerUp?
+    Number((topFid.changed45Fraction-runnerUp.changed45Fraction).toFixed(4)):null;
+  report.fidScanAmbiguous=!topFid||!runnerUp||
+    report.fidScanMargin<Math.max(.005,topFid.changed45Fraction*.10);
+  report.fidScanHypothesis=report.fidScanAmbiguous
+    ?'INCONCLUSIVE: frozen per-FID A/B does not isolate one dominant building'
+    :'Highest-impact single GIS source FID: '+topFid.fid;
+  report.fidScanTop=report.fidScan.slice(0,10);
+  report.fidScanGlErrors=report.fidScan.filter(x=>x.glError!==0);
+  if(!report.fidScanAmbiguous&&topFid.changed45Fraction>=.01){
+    const topFid=report.fidScan[0].fid;
+    await page.evaluate(fid=>window.__patrolNycVisualProbe.setGisSkippedFids([fid]),topFid);
+    await capture('44th-skip-fid-'+topFid,'none');
+    await page.evaluate(()=>window.__patrolNycVisualProbe.setGisSkippedFids([]));
+    await page.waitForTimeout(650);
+    await capture('44th-fid-scan-restored','none');
+    report.fidScanRestored=compare('44th-none','44th-fid-scan-restored');
+  }
+  report.rankedByRoi=Object.keys(report.focusRois).map(region=>{
+    const ranked=Object.entries(report.comparison).map(([layer,regions])=>({
+      layer,...regions[region]
+    })).sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
+    return {region,ranked};
+  });
+  const left=report.rankedByRoi.find(row=>row.region==='leftWall')?.ranked||[];
+  const center=report.rankedByRoi.find(row=>row.region==='centerWall')?.ranked||[];
+  report.ranked=left;
+  const best=left[0];
   report.hypothesis=best?.changed45Fraction>=.035
-    ?'Layer with largest center-ROI occlusion effect: '+best.layer
-    :'INCONCLUSIVE: no tested mesh group moved enough center-ROI pixels';
-  report.ambiguous=report.restored.changed45Fraction>.025 ||
-    (report.ranked[1]&&report.ranked[1].changed45Fraction>=
-      best.changed45Fraction*.87);
+    ?'Left-wall source layer: '+best.layer
+    :'INCONCLUSIVE: left-wall ROI did not react to tested render groups';
+  report.ambiguous=report.restored.leftWall.changed45Fraction>.025 ||
+    (left[1]&&left[1].changed45Fraction>=best.changed45Fraction*.87);
+  report.centerHypothesis=center[0]?.changed45Fraction>=.035
+    ?'Center-wall source layer: '+center[0].layer:'INCONCLUSIVE';
   check(report.errors.length===0,'Browser errors: '+report.errors.join('; '));
+  check(report.fidScan.length===baselineStats.sourceFids.length && report.fidScan.length>0,
+    'Per-FID GIS occlusion scan did not cover every rendered source FID');
+  check(report.fidScanGlErrors.length===0,'WebGL errors during per-FID GIS scan');
+  check(!report.fidScanAmbiguous,
+    'Frozen per-FID scan is ambiguous; do not attribute the grey wall to one building');
   check(best&&best.changed45Fraction>=.035,
-    'Grey region did not react to any selected render source');
+    'Left-wall ROI did not react to any probed mesh source; another render group remains uninstrumented');
   report.passed=true;
 }catch(e){
   report.errors.push(e.stack||String(e));

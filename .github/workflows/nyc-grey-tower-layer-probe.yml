@@ -5,7 +5,9 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "assets/nyc/nyc-gis-infill.js"
       - "scripts/nyc-grey-tower-layer-probe.mjs"
+      - "tests/nyc-1540-broadway-gis-duplicate.test.mjs"
       - "tests/nyc-grey-tower-layer-probe.test.mjs"
       - ".github/workflows/nyc-grey-tower-layer-probe.yml"
 
@@ -34,7 +36,7 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-layer-probe-http.log 2>&1 &
           sleep 3
           curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
-      - name: Capture six render groups and restored 44th Street camera
+      - name: Capture full-frame render groups and per-FID GIS source A/B scan
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-grey-tower-layer-probe.mjs

@@ -23,10 +23,10 @@ const baselineSource=source.replace(signature,'');
 const compile=txt=>new Function(txt.replace(/^export /gm,'')+
   '\nreturn buildTimesSquareGisInfill;')();
 const oldBuilder=compile(baselineSource),newBuilder=compile(source);
-const run=(build,sites=protectedSites,features=asset.features)=>{
+const run=(build,sites=protectedSites,features=asset.features,skipFids=null)=>{
   const quads=[],triangles=[],boxes=[];
   const result=build({...asset,features},{ground:14.95,bounds:[-34,56,-52,68],
-    protectedSites:sites,
+    protectedSites:sites,skipFids,
     addQuad:(...args)=>quads.push(JSON.stringify(args)),
     addTri:(...args)=>triangles.push(JSON.stringify(args)),
     box:(...args)=>boxes.push(JSON.stringify(args))});
@@ -100,4 +100,22 @@ test('original 1540 custom mesh, billboards and flight pipeline remain intact',(
   assert.match(source,/skippedMisregistered1540/);
   assert.match(source,/named1540AlreadyRendered/);
   assert.doesNotMatch(source,/rec\.fid===1000156.*nycGIS=off/);
+});
+
+test('diagnostic FID skip is opt-in, exact and reports the removed source record',()=>{
+  const record=asset.features.find(r=>r.fid===1000156);
+  assert.ok(record);
+  const baseline=run(newBuilder,[],[record]);
+  const skipped=run(newBuilder,[],[record],new Set([1000156]));
+  assert.equal(baseline.result.sourceBuildings,1);
+  assert.equal(baseline.result.skippedDiagnosticFids,0);
+  assert.deepEqual(baseline.result.sourceFids,[1000156]);
+  assert.equal(skipped.result.sourceBuildings,0);
+  assert.equal(skipped.result.skippedDiagnosticFids,1);
+  assert.deepEqual(skipped.result.sourceFids,[]);
+  assert.deepEqual(skipped.quads,[]);
+  assert.deepEqual(skipped.triangles,[]);
+  assert.deepEqual(skipped.boxes,[]);
+  assert.throws(()=>run(newBuilder,[],[record],[1000156]),
+    /Diagnostic skipFids must be a Set/);
 });

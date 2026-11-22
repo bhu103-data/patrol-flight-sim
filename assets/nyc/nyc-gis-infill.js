@@ -87,9 +87,13 @@ function roof(poly,y,color,addTri){
   }
   return emitted;
 }
-export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites,recessedFacade=null}){
+export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites,recessedFacade=null,skipFids=null}){
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
+  if(skipFids!==null && !(skipFids instanceof Set))
+    throw new TypeError('Diagnostic skipFids must be a Set');
+  if(skipFids && [...skipFids].some(fid=>!Number.isSafeInteger(fid)))
+    throw new TypeError('Diagnostic skipFids contains a non-integer source FID');
   const [west,east,south,north]=bounds;
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
     shopfrontFaces=0,shopfrontQuads=0;
@@ -103,7 +107,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     site.name==='1540 Broadway' && Math.abs(site.x+15)<.01 &&
     Math.abs(site.z-6)<.01 && Math.abs(site.w-13)<.01 &&
     Math.abs(site.d-10)<.01);
-  let skippedMisregistered1540=0;
+  let skippedMisregistered1540=0,skippedDiagnosticFids=0;
   // Opt-in geometry-only architectural QA. Defaults to the previous scene.
   const pilotFids=new Set();
   let pilotFacades=0,pilotWindows=0,pilotQuads=0;
@@ -115,6 +119,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   ];
   for(const rec of asset.features){
     if(pieces>=MAX_PIECES)break;
+    if(skipFids?.has(rec.fid)){skippedDiagnosticFids++;continue;}
     if(rec.fid===1000156 && named1540AlreadyRendered){
       skippedMisregistered1540++;
       continue;
@@ -361,7 +366,8 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
-    skippedMisregistered1540,
+    skippedMisregistered1540,skippedDiagnosticFids,
+    sourceFids:[...sourceFids],
     recessedPilot:{active:typeof recessedFacade==='function',
       facades:pilotFacades,windows:pilotWindows,quads:pilotQuads,
       sourceFids:[...pilotFids],maximumFacades:28,maximumWindows:280,
