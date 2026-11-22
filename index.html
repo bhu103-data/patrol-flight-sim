@@ -3323,7 +3323,7 @@ const CENTRAL_PARK_SITES=[
           q.y+=uWeatherVisual.z*38.0;
           vec2 cell=floor(q), drop=fract(q);
           float seed=weatherHash(cell);
-          float line=(1.0-smoothstep(0.026,0.16,abs(drop.x-seed))*
+          float line=(1.0-smoothstep(0.026,0.16,abs(drop.x-seed)))*
             smoothstep(0.10,0.35,drop.y)*(1.0-smoothstep(0.45,0.82,drop.y));
           scene=mix(scene,vec3(0.61,0.76,0.88),
             line*step(0.35,seed)*uWeatherVisual.x*0.43);
