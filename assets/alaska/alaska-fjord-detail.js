@@ -147,7 +147,10 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     if(touchesShore){stats.iceFloesRejectedShore++;continue;}
     for(let k=0;k<corners;k++){
       const next=(k+1)%corners,a=ring[k],b=ring[next];
-      addTri(center,a,b,top);
+      // Existing Alaska glacier surface 12 reuses bundled CC0 snow PBR.
+      // Only the face tag changes; no extra faces, atlas bytes or collision.
+      // The mesh shader keeps the color-only fallback if the atlas is absent.
+      iceTri(center,a,b,top);
       // Break up the uniform cyan wall at the waterline. Subtle darker facets
       // separate the floe silhouette from bright coastal snow at a distance;
       // no new shoreline geometry, height samples or collision surfaces.
