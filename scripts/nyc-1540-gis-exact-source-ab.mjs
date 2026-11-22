@@ -28,7 +28,7 @@ const report={
   baselineModuleIntercepts:0,
   screenshots:[],
   comparisons:{},
-  errors:[]
+  errors:[],warnings:[]
 };
 const assert=(value,message)=>{if(!value)throw Error(message);};
 const frames={};
@@ -51,6 +51,42 @@ function compare(a,b){
   return {samples:count,changed24Fraction:+(large24/count).toFixed(4),
     changed45Fraction:+(large45/count).toFixed(4),
     meanAbsRgb:+(rgbMean/count).toFixed(2)};
+}
+// Cross-page LED billboard frames are legitimately different. Measure the
+// causal source change ONLY at pixels whose GIS-HIDDEN control remains static
+// across both page launches; also require strong WITHIN-page GIS-toggle effect.
+function compareOnStableControlPixels(){
+  const beforeFull=frames['before-none'],afterFull=frames['after-none'];
+  const beforeHidden=frames['before-gis'],afterHidden=frames['after-gis'];
+  const [x0,y0,x1,y1]=report.roi;
+  let all=0,stable=0,sourceChanged=0,beforeGIS=0,afterGIS=0,cleared=0;
+  const delta=(a,b,i)=>Math.max(
+    Math.abs(a.data[i]-b.data[i]),
+    Math.abs(a.data[i+1]-b.data[i+1]),
+    Math.abs(a.data[i+2]-b.data[i+2]));
+  for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
+    all++;
+    const i=(y*beforeFull.width+x)*4;
+    if(delta(beforeHidden,afterHidden,i)>=24)continue; // independent dynamic ads
+    stable++;
+    const oldDelta=delta(beforeFull,beforeHidden,i);
+    const newDelta=delta(afterFull,afterHidden,i);
+    if(delta(beforeFull,afterFull,i)>=45)sourceChanged++;
+    if(oldDelta>=45)beforeGIS++;
+    if(newDelta>=45)afterGIS++;
+    if(oldDelta>=45&&newDelta<24)cleared++;
+  }
+  const rate=n=>+(n/Math.max(1,stable)).toFixed(4);
+  return {
+    allSamples:all,stableSamples:stable,
+    stableFraction:+(stable/all).toFixed(4),
+    originalGisEffect45InStablePixels:rate(beforeGIS),
+    fixedGisEffect45InStablePixels:rate(afterGIS),
+    sourceChange45InStablePixels:rate(sourceChanged),
+    clearlyUnoccludedSamples:cleared,
+    selection:'same-location baseline/fixed GIS-hidden control RGB max delta < 24',
+    caution:'Nonstable pixels may contain independent LED/ad frames and are excluded'
+  };
 }
 async function runVariant(label,usePreFix){
   const context=await browser.newContext({viewport:{width:1280,height:720},deviceScaleFactor:1});
@@ -160,18 +196,31 @@ try{
   report.comparisons=metrics;
   report.afterToBeforeGisEffect=+(metrics.afterGis.changed45Fraction/
     Math.max(1e-8,metrics.beforeGis.changed45Fraction)).toFixed(4);
-  // A successful source patch should cause a visible 44th Street difference,
-  // while the same rendering with the GIS layer excluded should remain stable.
-  // Fail with report evidence if the source-bound fix did not visibly help.
+  // This is a dynamic game: independent LED/ad frames may change between page
+  // launches even with the sky frozen. Reject their pixels by a GIS-hidden
+  // control mask, and require a strong causal effect in the stable remainder.
+  const stable=compareOnStableControlPixels();
+  metrics.stableControlPixels=stable;
+  if(metrics.noGisControl.changed45Fraction>=.07)
+    report.warnings.push(
+      'Independent GIS-hidden pages differ in ads/animation ('+
+      metrics.noGisControl.changed45Fraction+
+      ' at RGB>=45): raw cross-page change is NOT causal evidence; '+
+      'stable-control-pixel masking is required.');
   assert(metrics.beforeGis.changed45Fraction>.20,
     'Baseline cannot reproduce a significant GIS occluder at this camera');
-  assert(metrics.sourceFix.changed45Fraction>.10,
-    'FID-only source fix did not visibly change the true 44th Street ROI');
   assert(metrics.afterGis.changed45Fraction<
-    metrics.beforeGis.changed45Fraction*.8,
-    'GIS occlusion remains too similar after the FID-specific fix');
-  assert(metrics.noGisControl.changed45Fraction<.07,
-    'The no-GIS control drifted; do not attribute dynamic pixels to a FID');
+    metrics.beforeGis.changed45Fraction*.20,
+    'The corrected GIS layer still strongly occludes the 44th Street camera');
+  assert(stable.stableSamples>=8000&&stable.stableFraction>=.40,
+    'Too few source-matched pixels survive GIS-hidden dynamic background control');
+  assert(stable.originalGisEffect45InStablePixels>=.20,
+    'Stable-control pixels do not reproduce old FID GIS obstruction');
+  assert(stable.fixedGisEffect45InStablePixels<=.05,
+    'Large GIS obstruction remains in stable-control pixels after fix');
+  assert(stable.sourceChange45InStablePixels>=.18&&
+    stable.clearlyUnoccludedSamples>=1500,
+    'Insufficient confirmed FID-dependent improvement on stable-control pixels');
   assert(metrics.beforeRestoration.changed45Fraction<.06&&
     metrics.afterRestoration.changed45Fraction<.06,
     'Within-page time/lighting drift exceeds reliable static screenshot QA');
