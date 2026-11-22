@@ -1,0 +1,76 @@
+name: NYC true-metre official sidewalk curb source QA
+
+on:
+  pull_request:
+    branches: [qa/nyc-real-roadbed-polygons-20261122-chat]
+    paths:
+      - 'scripts/nyc-times-sidewalk-curb-source.mjs'
+      - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
+      - 'docs/NYC_OTI_SIDEWALK_CURB_SOURCE_QA.md'
+      - '.github/workflows/nyc-oti-sidewalk-curb-source.yml'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'scripts/nyc-sidewalk-curb-webgl-preview-build.mjs'
+      - 'tools/nyc/sidewalk-curb-browser-smoke.mjs'
+      - 'tools/nyc/official-street-topology-audit.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-curbs-sidewalks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test source URLs, metric polygon holes and measured curb coordinates
+        run: |
+          node --check scripts/nyc-times-sidewalk-curb-source.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-times-sidewalk-curb-source.test.mjs
+      - name: Download real 2022 NYC street centerline and roadbed polygons
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+      - name: Download genuine sidewalk polygons, curb and curb cut feature lines
+        run: |
+          node scripts/nyc-times-sidewalk-curb-source.mjs
+          test -s artifacts/nyc-curb-sidewalk-source/edges.json
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-curb.svg
+      - name: Audit same-metre official roadbed, sidewalk, building and curb topology
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
+      - name: Install Earcut and free Chromium WebGL2 for source geometry display
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 earcut@3.0.1
+          npx playwright install --with-deps chromium
+      - name: Build true-metre roadway and sidewalk polygons plus unmeasured-height curb lines
+        run: |
+          node --check scripts/nyc-sidewalk-curb-webgl-preview-build.mjs
+          node scripts/nyc-roadbed-polygon-webgl-preview-build.mjs
+          node scripts/nyc-sidewalk-curb-webgl-preview-build.mjs
+          test -s artifacts/nyc-curb-sidewalk-source/edge-mesh.json
+          test -s artifacts/nyc-curb-sidewalk-source/preview.html
+      - name: Serve source geometry preview separate from PATROL flying scene
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-curb-sidewalk-source > /tmp/nyc-curb-source-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify actual 3D WebGL2 screenshot, no graphics errors, interactive orbit
+        run: node tools/nyc/sidewalk-curb-browser-smoke.mjs
+      - name: Upload independent source geometry QA (not a flight map)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-sidewalk-curb-source-qa
+          path: artifacts/nyc-curb-sidewalk-source/
+          retention-days: 7
+          if-no-files-found: ignore
