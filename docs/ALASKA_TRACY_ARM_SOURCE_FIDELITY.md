@@ -1,5 +1,36 @@
 # Tracy Arm source-fidelity audit — not photorealism acceptance
 
+## IMPORTANT 2026-11-22 correction: georeferencing proven wrong in prior renders
+
+USGS 3DEP ImageServer `exportImage?f=json` confirmed that the existing
+256×256 original raster's **ACTUAL** WGS84 pixel extent is
+`[-133.265,57.822,-133.135,57.952]`, **NOT** its historically stored
+requested extent `[-133.265,57.851,-133.135,57.923]`.
+The source covers approximately 7.7 km east-west and **14.4 km north-south**,
+not the previously claimed 7.7×8.0 km. Its old sample spacing is about
+30×56 m, not 30×31 m. Source evidence is pinned in
+`assets/alaska/tracy-arm-3dep-actual-extent.json`.
+The prior area/spacing claims in the archived discussion below are obsolete.
+
+The root cause is the Esri ArcGIS ImageServer default
+`adjustAspectRatio=true` for square output images. The 5m local export
+was also widened in latitude. Source-exact re-registration with ACTUAL
+server extents cut high/low mismatch from **169.129 m RMSE** to
+**2.108 m RMSE (P95 absolute 4.559 m)** across 65,536 cells. The
+same-service source raster was unchanged on fresh export (65,536/65,536
+quantized pixels identical). Never apply a hand-tuned positional shift.
+
+The updated independent flight pilot reads the official true extent,
+while the updated 5m extractor sends `adjustAspectRatio=false`,
+checks USGS returned `f=json` extent and includes source GeoTIFF tags.
+**All historical 5m tile artifacts predating this fix are invalid for
+WGS84 source-geography rendering; the new strict decoder rejects them.**
+Use ONLY the corrected new CI artifact when the new workflow finishes.
+
+The legacy integrated PATROL Alaska map is unchanged; this is a pilot,
+NOT a surveyed current glacier or a finished C185 simulation. Production
+collision/sea/glacier mapping and native GPU acceptance remain OPEN.
+
 The user-facing target is the **actual Tracy Arm terrain, shoreline, ice front,
 near-coast forest and flight behaviour**, not a game scene with more procedural
 texture layers. This draft documents exactly what was measured and what is
