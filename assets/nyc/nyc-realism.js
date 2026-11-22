@@ -253,6 +253,13 @@ export async function loadNycRealism(gl){
   // Keep PBR terrain/street photos independent of the landmark choice.
   const useProceduralLandmarks=typeof location!=='undefined' &&
     new URLSearchParams(location.search).get('nycModels')==='legacy';
+  // Authenticated, fully opt-in real-geometry trial. The staged binary comes
+  // from the reviewed #103 CC0 source, not an invented procedural monument.
+  // The shipped manifest remains disabled, so other maps and default Liberty
+  // keep their original geometry and collider.
+  const libertyCC0Trial=typeof location!=='undefined' &&
+    new URLSearchParams(location.search).get('nycModels')==='libertyCC0';
+  const libertyCC0Sha256='34ed58d06e008adcced5e60376bbcc11d675f3d4ec01434016df92d244f33225';
   const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
     // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
@@ -284,7 +291,15 @@ export async function loadNycRealism(gl){
       if(manifest.schema_version!==1||!manifest.landmarks)return;
       const allowed=new Set(['liberty','trade','empire','chrysler','flatiron','times']);
       await Promise.all(Object.entries(manifest.landmarks).map(async ([kind,spec])=>{
-        if(!allowed.has(kind)||!spec||spec.enabled!==true)return;
+        if(!allowed.has(kind)||!spec)return;
+        // Permit only the named, explicitly requested CC0 Statue asset.
+        // No other disabled / unknown GLB can be auto-activated via a query.
+        const cc0Trial=libertyCC0Trial && kind==='liberty' &&
+          spec.enabled===false && spec.file==='scenario/liberty.glb' &&
+          spec.target_height===31.3;
+        if(!cc0Trial && spec.enabled!==true)return;
+        if(cc0Trial)spec={...spec,enabled:true,min_triangles:15900,
+          license:'Innerscene original Statue of Liberty on pedestal, CC0 1.0; https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f'};
         if(typeof spec.file!=='string' ||
            !/^scenario\/[a-z0-9_-]+\.glb$/.test(spec.file) ||
            !Number.isFinite(spec.target_height)||spec.target_height<10||
@@ -301,12 +316,32 @@ export async function loadNycRealism(gl){
             throw Error('GLB exceeds import limit');
           const bytes=await file.arrayBuffer();
           if(bytes.byteLength>maxBytes)throw Error('GLB exceeds import limit');
+          if(cc0Trial){
+            // A filename or triangle count alone does not establish provenance
+            // or guarantee that the #103 mesh-specific collision bounds apply.
+            if(!globalThis.crypto?.subtle)throw Error('Secure SHA-256 unavailable');
+            const raw=await crypto.subtle.digest('SHA-256',bytes);
+            const digest=Array.from(new Uint8Array(raw),n=>
+              n.toString(16).padStart(2,'0')).join('');
+            if(digest!==libertyCC0Sha256)
+              throw Error('CC0 model SHA-256 differs; keeping original Liberty');
+          }
           // Only Liberty can replace an already loaded mesh. Other downloads
           // and decodes need not wait for the independent fallback request.
           if(kind==='liberty')await modelsReady;
           if(gl.isContextLost())return;
           const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles);
+          if(cc0Trial && (mesh.triangleCount!==15900 ||
+             Math.abs(mesh.dimensions.height-31.3)>0.01 ||
+             Math.abs(mesh.dimensions.width-9.323)>0.04 ||
+             Math.abs(mesh.dimensions.depth-9.323)>0.04)){
+            for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
+            gl.deleteVertexArray(mesh.vao);
+            if(mesh.texture)gl.deleteTexture(mesh.texture);
+            throw Error('CC0 model dimensions changed; keep original collider');
+          }
           mesh.source='scenario';
+          if(cc0Trial)console.info('[PATROL] NYC verified CC0 Liberty trial',mesh.triangleCount);
           if(models[kind]){
             for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
             gl.deleteVertexArray(models[kind].vao);
