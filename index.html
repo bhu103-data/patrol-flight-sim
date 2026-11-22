@@ -1298,7 +1298,16 @@ const CENTRAL_PARK_SITES=[
           // water (1..12m) while rejecting >12m fjord walls, snow and peaks.
           // It is OFF by default, skipped in compat graphics and never
           // changes city terrain, aircraft rules or DEM source assets.
+          // Keep the real C185 spawn, 132-unit eastbound takeoff lane,
+          // authored harbor docks/cabins, and upper glacier strictly on the
+          // original measured DEM even when LF2025 classifies them as water.
+          // The 25-point seaplane clearance rule is unchanged.
+          const protectedFlightLane=east>-64 && east<161 && Math.abs(north+667)<54;
+          const protectedHarbor=Math.hypot(east-151,north+525)<95 ||
+            Math.hypot(east+155,north+610)<40;
+          const protectedGlacier=north>423 && Math.abs(east-130)<71;
           const previewWater=landfirePreview && metres>1 && metres<=12 &&
+            !protectedFlightLane && !protectedHarbor && !protectedGlacier &&
             measuredWaterClass(u,v);
           height[idx]=clamp((metres>1 && !previewWater
             ? water+metres*options.alaskaDEM.verticalScale
