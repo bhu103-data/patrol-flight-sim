@@ -43,6 +43,7 @@ class Geo{
   setIndex(v){this.index=v}
   computeVertexNormals(){}
   rotateX(){return this}
+  rotateZ(){return this}
 }
 class Attr{constructor(array,size){this.array=array;this.itemSize=size}}
 class Mat{constructor(props={}){Object.assign(this,props)}clone(){return new Mat(this)}}
@@ -198,6 +199,18 @@ test('scenic Chongqing facades have real window reveal, glass, mullion and sill 
     assert.equal(group.count,urban.stats.facadePanels);
     assert.ok(group.writes<=group.capacity,'no GPU instance overflow');
   }
+  const courses=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===240);
+  const cornices=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===48);
+  assert.equal(courses.length,1,'one batch of low-poly horizontal stone courses');
+  assert.equal(cornices.length,1,'one batch of stepped roofline cornices');
+  assert.ok(urban.stats.facadeCourses>=20&&urban.stats.facadeCourses<=240,
+    'a few physical floors per close building, not thousands of fake boxes');
+  assert.ok(urban.stats.facadeCornices>=8&&
+    urban.stats.facadeCornices<=urban.stats.facadeBuildings);
+  assert.equal(courses[0].count,urban.stats.facadeCourses);
+  assert.equal(cornices[0].count,urban.stats.facadeCornices);
+  assert.ok(courses[0].writes<=240&&cornices[0].writes<=48,
+    'no new GPU geometry buffer overruns');
   const shops=sceneObjects.filter(m=>m instanceof Instanced&&m.capacity===32);
   assert.equal(shops.length,2,'shared storefront glazing and canopy batches');
   assert.ok(urban.stats.storefronts<=32);
@@ -205,6 +218,8 @@ test('scenic Chongqing facades have real window reveal, glass, mullion and sill 
   // The facade glass is retained for low-detail aircraft views; tiny physical
   // trims and projecting canopies are only drawn in higher-quality scenes.
   urban.setQuality('low');
+  assert.equal(courses[0].visible,true);
+  assert.equal(cornices[0].visible,true);
   assert.equal(groups[0].visible,false);
   assert.equal(groups[1].visible,true);
   assert.equal(groups[2].visible,false);

@@ -85,8 +85,12 @@ async function capture(name){
   check(pixels.width>=640&&pixels.height>=360&&pixels.colorBins>20&&
     pixels.nearBlackFraction<0.985,
     'Blank Chongqing WebGL frame at '+name+': '+JSON.stringify(pixels));
+  const render=state.game.renderMetrics;
+  check(render&&Number.isFinite(render.drawCalls)&&
+    Number.isFinite(render.triangles)&&Number.isFinite(render.pixelRatio),
+    'No live draw/triangle/pixel-ratio counters at '+name);
   screenshots.push({name,width:state.width,height:state.height,
-    altitude:state.game.altitude,pixels});
+    altitude:state.game.altitude,pixels,render});
 }
 let report;
 try{
@@ -123,6 +127,26 @@ try{
   check(['green','amber','red'].includes(signalState.signalAspect),
     'No running three-aspect traffic cycle');
   await capture('03c-signalized-street');
+  // Matched camera in daylight reveals the steel housing/visor outlines
+  // hidden by dark asphalt; verify both scenes use the same pilot position.
+  const signalView=await page.evaluate(()=>window.PatrolSpaceBridge.getState().position);
+  await page.locator('#cqTime').selectOption('day');
+  await page.waitForTimeout(850);
+  const dayView=await page.evaluate(()=>window.PatrolSpaceBridge.getState().position);
+  check(Math.hypot(...signalView.map((v,i)=>v-dayView[i]))<3,
+    'The daytime signal screenshot drifted away from its night camera');
+  await capture('03d-signalized-street-day');
+  // Low-quality keeps moving traffic accessible on software GPUs; inspect
+  // the SAME daylight lens/cornice view in full high detail once, then
+  // revert before the flight ascent to preserve the old smoke budget.
+  await page.locator('#qualityBtn').click(); // low -> auto
+  await page.locator('#qualityBtn').click(); // auto -> high
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .renderMetrics.quality==='high','QA failed to enable high-detail facades');
+  await page.waitForTimeout(2800);
+  await capture('03e-signalized-street-high-detail');
+  await page.locator('#qualityBtn').click(); // high -> low
+  await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());

@@ -916,11 +916,15 @@ function scenicView(key){
   if(key==='Digit6'){
     const x=streetBuild.snapshot().crossingXs[0];
     if(Number.isFinite(x)){
-      const z=riverCenter(x)+250+14*Math.sin(x/115+1);
+      const roadZ=xp=>riverCenter(xp)+250+14*Math.sin(xp/115+1);
+      // Look toward the oncoming westbound traffic from EAST of the light:
+      // the lens fronts physically face +X, unlike the old angle which
+      // photographed the black rear housing over the zebra crossing.
+      const nearX=x+12,nearZ=roadZ(nearX)+3.3;
       destinations.Digit6={
         name:'双向红绿灯与山城街面',
-        pos:[x,ground(x,z)+5.5,z],
-        target:[x+18,ground(x,z)+6.3,z]
+        pos:[nearX,ground(nearX,nearZ)+4.7,nearZ],
+        target:[x-7,ground(x-7,roadZ(x-7))+7.6,roadZ(x-7)-3]
       };
     }
   }
@@ -934,7 +938,7 @@ function scenicView(key){
   jumpQueued=false;
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
-  viewPitch=.23;
+  viewPitch=key==='Digit6'?.12:.23;
   cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
@@ -1373,7 +1377,14 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   hotpotDisplayParts:hotpotDisplay.partCount,
-  hotpotDisplayHeight:hotpotDisplay.topY-hotpotDisplay.groundY
+  hotpotDisplayHeight:hotpotDisplay.topY-hotpotDisplay.groundY,
+  renderMetrics:{
+    fps:Number.isFinite(measuredFPS)?Math.round(measuredFPS*10)/10:null,
+    drawCalls:renderer.info.render.calls,
+    triangles:renderer.info.render.triangles,
+    pixelRatio:renderRatio,
+    quality:qualityMode
+  }
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
