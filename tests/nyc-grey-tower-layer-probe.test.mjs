@@ -53,8 +53,14 @@ test('probe measures left wall, center wall, LED and full-frame regions',()=>{
   assert.match(probe,/typeof window\.__patrolNycVisualProbe\?\.setGisSkippedFids==='function'/);
   assert.match(probe,/await capture\('44th-restored','none'\)/);
   assert.match(probe,/report\.rankedByRoi=/);
-  assert.match(probe,/report\.fidScan=await page\.evaluate/);
-  assert.match(probe,/gl\.readPixels/);
+  assert.match(probe,/const captureFidFrame=async/);
+  assert.match(probe,/page\.locator\('#glCanvas'\)\.screenshot/);
+  assert.match(probe,/const measureStableRoi=/);
+  assert.match(probe,/restoreDrift45Fraction/);
+  assert.match(probe,/stableFraction/);
+  assert.match(probe,/JSON\.stringify\(restoredStats\.sourceFids\)===JSON\.stringify\(sourceFids\)/);
+  assert.match(probe,/report\.fidScanStableGate=/);
+  assert.doesNotMatch(probe,/gl\.readPixels\(/);
   assert.match(probe,/report\.fidScanTop=report\.fidScan\.slice\(0,10\)/);
   assert.match(probe,/44th-skip-fid-/);
   assert.match(probe,/Left-wall source layer:/);
