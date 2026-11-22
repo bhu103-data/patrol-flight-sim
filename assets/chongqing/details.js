@@ -435,8 +435,10 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     obstacles.push({x,z:z-6,w:20,d:16,base:y,top:y+16.1});
     put('stone',x,y+.65,z,21,1.3,25);
     if(openMarket){
-      put(facade,x-9.86,y+7.9,z-6,.28,15.7,16);
-      put(facade,x+9.86,y+7.9,z-6,.28,15.7,16);
+      // Extend sides 0.40 toward the facade; keep their rear at z-14.
+      // Their fronts overlap the real jamb's back by 0.05 game units.
+      put(facade,x-9.86,y+7.9,z-5.8,.28,15.7,16.4);
+      put(facade,x+9.86,y+7.9,z-5.8,.28,15.7,16.4);
       put(facade,x,y+7.9,z-13.84,19.75,15.7,.32);
     }else{
       put(facade,x,y+7.9,z-6,20,15.7,16);
