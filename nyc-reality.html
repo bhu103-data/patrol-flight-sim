@@ -59,7 +59,7 @@
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
     import {auditTimesSquareSnapshot, NYC_REALITY_ORIGIN}
       from './assets/nyc/nyc-reality-projection.mjs';
-    import {fetchOfficialDCM}
+    import {fetchOfficialDCM,chooseOfficialStreetCamera}
       from './assets/nyc/nyc-reality-street-centerlines.mjs';
 
     const canvas = document.getElementById('stage');
@@ -119,7 +119,7 @@
     // Survey-style overview: high enough to see the block layout instead of a foreground facade.
     const aerial = () => setView(250,600,355,0,30,-125);
     // Free placement avoids assuming a particular road centerline is known.
-    const street = () => setView(-55,6,40,20,18,-100);
+    let street = () => setView(-55,6,40,20,18,-100);
     document.getElementById('aerial').addEventListener('click', aerial);
     document.getElementById('street').addEventListener('click', street);
     document.getElementById('grid').addEventListener('click', ev => {
@@ -248,11 +248,14 @@
       try {
         const roads=await fetchOfficialDCM();
         for(const record of roads.records)addOfficialDCMRoad(record);
+        const roadCamera=chooseOfficialStreetCamera(roads.records,'7 Avenue');
+        street=()=>setView(...roadCamera.eye,...roadCamera.look);
         roadStatus.textContent='Official DCM: '+roads.records.length+
           ' records / '+roads.totalLines+' centerline pieces · '+
           roads.builtCount+' marked improved city streets · not lanes or curbs';
         window.PatrolRealityStreetStatus={status:'loaded',count:roads.records.length,
-          lines:roads.totalLines,built:roads.builtCount,origin:roads.origin};
+          lines:roads.totalLines,built:roads.builtCount,origin:roads.origin,
+          streetCamera:roadCamera};
         console.info('[PATROL] NYC official DCM meter centerlines',window.PatrolRealityStreetStatus);
       }catch(err){
         roadStatus.textContent='Official DCM unavailable: '+String(err.message||err);
