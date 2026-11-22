@@ -47,3 +47,18 @@ The DEM low-elevation water proxy and EVC water mask disagree in **9,445 / 65,53
 - A local detailed QA package has the 7-line GeoJSON, source-provenance report, water-class distance comparison, figure, and reproducible scripts.
 
 **Release guardrails:** No runtime import, no asset replacement, no water/collision/floating physics change, no vegetation rendering changes, no claimed WebGL frame-rate result, and no merge of #184/#201 pending independent review.
+
+
+## 2026-11-22 — Live USGS 3DEP source re-download (root-cause narrowing)
+
+**GitHub Actions [run 44990363088](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44990363088) succeeded**, including original Node regressions, NOAA CUSP download/clip and \`tools/alaska/audit_usgs_3dep_live.py\`. Its provenance/diagnostic JSON is under \`3dep-live-qa/usgs-3dep-live-vs-baked.json\` in the NOAA QA artifact.
+
+The exact \`sourceQuery\` embedded in \`assets/alaska/tracy-arm-3dep.json\` was executed again against USGS 3DEP. The returned raw image is a **256×256 Float32 TIFF, 262,982 bytes**, SHA-256 \`e402a8bf8e4b92484e0df01f3e25bd433251b826b8b42d5882ac9c4b4c607136\`, maximum ~1,835.73m.
+
+Running the original baker's south-first flip, nodata handling, nonnegative elevation clamp, rounding and U16 conversion **exactly reproduced every one of the 65,536 baked pixels**: **0 mismatches**, maximum delta **0m**, mean delta **0m**. There are **6,293** low-elevation proxy-water cells (\`<=3m\`) in both the current USGS service and game-baked asset.
+
+Of **906 NOAA CUSP shoreline-covered raster cells**, **814** have USGS elevation **above 3m** both in the live service response and baked asset.
+
+**Conclusion:** this large-scale discrepancy is **not caused by corruption of the baked 3DEP asset, a changed live USGS DEM response, or the baker's south-first row flip**. It is a **mismatch between the 3DEP terrain elevation source/low-height water proxy and historical CUSP / LANDFIRE shoreline interpretation**. The QA does not independently prove which DEM regions are incorrectly assigned land versus missing bathymetry. The game's full water/flight collision logic has not yet been audited in WebGL2. Keep DEM, physics, floats and game shoreline unchanged; investigate a separately sourced shoreline/water mask and terrain-water coupling on an isolated *future* implementation branch with fixed-camera evidence.
+
+The USGS DEM is still valid as the project's documented elevation slice; it must not be marketed as high-precision NOAA hydrographic shoreline or bathymetry. CUSP dates and NOAA mean-high-water vertical datum remain historic and do not grant 2026 shoreline accuracy.
