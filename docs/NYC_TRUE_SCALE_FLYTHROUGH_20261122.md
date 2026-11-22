@@ -158,6 +158,18 @@ original Manhattan scene generation.
 
 ## Georeferenced camera registration — child QA addition
 
+### WGS84 transform spot checks (not camera GCPs)
+
+Three exact vertices from official footprint FIDs 22922, 212747 and 384606
+are checked against independent WGS84 ellipsoidal inverse-geodesic ENU
+reference values. The local tangent transform residual is below 0.004m for
+all three. The source vertices themselves are rounded to 1e-6 degree
+(roughly 0.11m in latitude), so this millimetre-scale math residual does not
+improve or supersede the source coordinate accuracy. These are geodetic
+transform checks, **not** surveyed ground-control points, not photo
+registration residuals, and not evidence that a rendered camera matches a
+real photograph.
+
 The live 1:1 viewer now emits a repeatable camera record containing its
 horizontal WGS84 origin, local east/north/up eye vector, WGS84 eye coordinate,
 yaw/pitch, vertical FOV, viewport, source building FIDs and source street
