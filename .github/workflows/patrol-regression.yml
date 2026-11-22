@@ -20,3 +20,17 @@ jobs:
           node-version: '22'
       - name: Verify all browser-free regression tests
         run: node --test tests/*.test.mjs
+      - name: Audit official Kenney CC0 NYC 3D assets (isolated draft only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-cc0-asset-audit-20261122'
+        run: |
+          python3 tools/nyc/audit_kenney_cc0_sources.py
+          python3 tools/nyc/audit_brooklyn_bridge_ccby.py
+          python3 tools/nyc/audit_polyhaven_pbr.py
+      - name: Preserve original ZIPs and provenance records (isolated draft only)
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-cc0-asset-audit-20261122'
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-nyc-kenney-official-cc0-preflight
+          path: nyc-asset-audit/
+          if-no-files-found: warn
+          retention-days: 7
