@@ -35,8 +35,9 @@ test('eleven NYC cameras include near-field building facades and nonblank PNG ch
  assert.match(script,/PNG\.sync\.read\(bytes\)/);
  assert.match(script,/stats\.colorBins>32/);
  assert.match(script,/stats\.nearBlackFraction<\.97/);
- assert.match(script,/result=\{passed:true,state,bridge,dumbo,liberty,(?:petalwakeQa,)?\s*screenshots,pixels,controlPixels,captureTimings,warnings(?:,flatironImport,flatironAsset:[^}]+)?\}/,
-  'real browser report retains all verified cameras and optional road QA');
+ assert.ok(script.includes('result={passed:true,state,bridge,dumbo,liberty,petalwakeQa,'));
+ assert.ok(script.includes('screenshots,pixels,controlPixels,captureTimings,warnings,flatironImport,'));
+ assert.ok(script.includes('flatironAsset:flatironAssetResponse?'));
  assert.ok(script.includes("page.locator('#glCanvas').screenshot"));
  assert.ok(script.includes('runFlatironImport'));
  assert.ok(script.includes('flatironImport.passed'));
