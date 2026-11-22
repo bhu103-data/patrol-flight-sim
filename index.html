@@ -1957,8 +1957,21 @@ const CENTRAL_PARK_SITES=[
             swell=oceanCascade(xz,uTime,pixel,0)*oceanShoaling(depth);
             chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
             ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
+            // An existing world-space gust field adds bounded crosswind
+            // orientation to optical long/chop normals, never to oceanHeight
+            // or the C185 four-pontoon CPU wave. No new noise evaluations.
+            const bool NYC_CROSSWIND_SHADING = true;
+            vec2 opticalSwell=swell.yz;
+            vec2 opticalChop=chop.yz;
+            if(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL &&
+               NYC_CROSSWIND_SHADING){
+              float turn=clamp((gust-1.0)*0.70,-0.13,0.13)*
+                (1.0-smoothstep(0.48,2.50,pixel));
+              opticalSwell+=turn*vec2(-swell.z,swell.y);
+              opticalChop+=turn*0.45*vec2(-chop.z,chop.y);
+            }
             slope=oceanExposure(xz)*gust*
-              (swell.yz*nycLongSlopeVisibility+chop.yz+ripple.yz*0.75);
+              (opticalSwell*nycLongSlopeVisibility+opticalChop+ripple.yz*0.75);
           }
           if(uAlaska){
             // Suppress artificial parallel bright-ocean wave bands in the
