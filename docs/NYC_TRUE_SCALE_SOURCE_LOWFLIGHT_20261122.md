@@ -1,7 +1,8 @@
 # NYC Times Square — 1:1 official-street low-flight prototype
 
 This **separate** meter-scale view is a first *flyable source-geometry*
-iteration. The original PATROL NYC map uses compressed fictional geometry
+iteration. This independent integration **replaces guessed right-of-way render strips**
+with original NYC OTI 2022 source roadbed polygons in that same metre frame. The original PATROL NYC map uses compressed fictional geometry
 and remains untouched. This is not the final game, not a real street
 surface/crosswalk reconstruction, and absolutely not photogrammetry.
 
@@ -12,6 +13,14 @@ surface/crosswalk reconstruction, and absolutely not photogrammetry.
   retrieved 2026-11-20.
 - Live NYC DCP DCM Street Center Line:
   https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/ArcGIS/rest/services/DCM_Street_Center_Line/FeatureServer/0
+- NYC OTI Roadbed 2022 public planimetric polygons:
+  https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/Roadbed_2022/FeatureServer/20
+  and official capture rules https://github.com/CityOfNewYork/nyc-planimetrics/blob/main/Capture_Rules.md.
+  Existing source-only #244 / parent #234 audits 81 true polygon footprints
+  and 22 intersections, triangulating them with Earcut with hole-area validation.
+  This integration draws that verified 2-D geometry in the opt-in fly-through
+  but **does not pretend it includes 2026 grades, curb ramps or live lanes**.
+- NYC Open Data terms: https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje
 - Existing parent #234 generates two *coincident in metres* source datasets
   `source.json` and `plan.svg`. 2026-11-22 exact run artifact
   14741924171 contained 118 official building outlines, 39 DCM road features,
@@ -40,8 +49,16 @@ surface/crosswalk reconstruction, and absolutely not photogrammetry.
   correct units, intact WebGL2, and zero building interior collisions.
 
 ## What this is NOT
-- No street ROW width is interpreted as pavement width, lane count or curb.
-  The blue lines are actual DCM street centerlines, not road surfaces.
+- The old preview's right-of-way width envelopes are computed only as an
+  independent QA reference; they are **NOT rendered** now that the genuine
+  2022 OTI roadbed polygons are available. Road polygons and intersections
+  have distinguishable muted teal / amber rendering. The blue lines are
+  actual DCM centerlines, not traffic lane markings. Street widths are NOT
+  used to infer curbs, marked lanes, turning rules, elevation or legal driveability.
+- Source imagery dates to 2022; verify 2026 Times Square plaza changes against
+  field and NYC DOT resources before claiming contemporary road truth.
+- If OTI data download, source reprojection or Earcut triangulation fails,
+  CI fails instead of generating invented road rectangles.
 - Buildings are *uniform placeholder masses* with source polygon shapes
   and relative roof heights, not real windows, setbacks or glass facades.
 - No road traffic, signal phases, One Times Square LED screenshot, subway,
@@ -52,10 +69,13 @@ surface/crosswalk reconstruction, and absolutely not photogrammetry.
   **not native GPU performance**.
 
 ## Reproduce
-At repository root with Node 22 and network access to the official DCM service:
+At repository root with Node 22 and network access to official DCM and OTI services:
 ```bash
 node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs
+npm install --no-save --no-audit --no-fund earcut@3.0.2
 node scripts/nyc-times-true-scale-pilot.mjs
+node scripts/nyc-times-roadbed-polygon-source.mjs
+node scripts/nyc-metre-lowflight-roadbed-build.mjs
 cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
 cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
 python3 -m http.server 8765 --directory artifacts/nyc-true-scale
@@ -64,7 +84,8 @@ python3 -m http.server 8765 --directory artifacts/nyc-true-scale
 Install Playwright Chromium to run `node tools/nyc/true-scale-flight-browser-smoke.mjs`.
 
 ## Required milestone before replacing current NYC
-1. Separate open-data streetbeds/curbs, sidewalk polygons and actual plaza.
+1. Keep 2022 OTI roadbed source polygons but add verified CURRENT curb, sidewalk,
+   crossing and plaza boundaries. Do not fake lane counts or current closures.
 2. Measured ground/terrain elevation and horizontal control points; actual
    building HEIGHTROOF is relative, not sea-level.
 3. Source-verifiable external building facade meshes, lawful photo PBR,
