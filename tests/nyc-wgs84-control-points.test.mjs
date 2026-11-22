@@ -43,7 +43,7 @@ test('three official NYC FID vertices agree with independent WGS84 geodesics',()
 
 test('the three transform checks are not mislabeled as surveyed camera GCPs',async()=>{
   const docs=await readFile(new URL('../docs/NYC_TRUE_SCALE_FLYTHROUGH_20261122.md',import.meta.url),'utf8');
-  assert.match(docs,/not camera photo-control points or survey monuments/i);
-  assert.match(docs,/source coordinate rounding/i);
+  assert.match(docs,/not surveyed ground-control points, not photo/i);
+  assert.match(docs,/source vertices themselves are rounded to 1e-6 degree/i);
   assert.match(docs,/absolute altitude remains null/i);
 });
