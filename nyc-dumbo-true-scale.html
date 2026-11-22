@@ -22,13 +22,16 @@ color:#c8d9dd;text-shadow:0 1px 6px black;font-size:13px}
 <canvas id="view" aria-label="WebGL2 true-geographic-coordinate building inspection"></canvas>
 <div id="hud">
 <h1>DUMBO · real geographic metre-space pilot</h1>
-<p>Three independently verified NYC OTI polygons; <b>original WGS84
-positions</b>, uncompressed horizontal metres, source HEIGHT_ROOF converted
-from feet to metres above a diagnostic flat ground.</p>
+<p>Three independently verified NYC OTI polygons <b>and official CSCL road centerlines</b>
+in their actual WGS84 positions, all in one uncompressed horizontal-metre frame.
+Roof HEIGHT_ROOF values convert feet to metres above a diagnostic flat ground.</p>
 <div id="legend">Loading municipal geometry…</div>
-<p><small>Grid = 50 metres. Solid shapes are municipal <em>footprints/roof
-massing only</em>: no sourced street geometry, windows, street textures,
-surrounding buildings or ground elevation. NOT the shipping PATROL NYC world.</small></p>
+<p><small>Grid = 50 metres. Teal ribbons show <em>source centreline locations only</em>
+(1.8-m-wide visual guides, NOT surveyed pavement or curb edges).
+Only source road-type 1/2 level-code 13→13 traces are drawn. Elevated bridge
+and BQE paths are retained in source but NOT falsely flattened onto ground.
+No official ground elevation, bridge deck, traffic or street furnishings.
+NOT the shipping PATROL NYC world.</small></p>
 <p><small>Source: <a target="_blank" rel="noopener" href="https://data.cityofnewyork.us/City-Government/BUILDING/5zhs-2jue">NYC OTI Building Footprints</a>
 · <a href="./index.html">Return to PATROL</a></small></p>
 <p id="error"></p>
@@ -36,12 +39,20 @@ surrounding buildings or ground elevation. NOT the shipping PATROL NYC world.</s
 <div id="footer">Drag: orbit · Scroll: zoom · R: reset · meters, not scaled lots</div>
 <script type="module">
 import {prepareDumboBuildings} from './assets/nyc/dumbo-true-scale-geodesy.js';
+import {prepareDumboCsclStreetNetwork,makeCsclRibbon}
+  from './assets/nyc/dumbo-cscl-true-metre.js';
 
 const canvas=document.querySelector('#view'),label=document.querySelector('#legend'),
   error=document.querySelector('#error');
 const data=await fetch('./assets/nyc/dumbo-oti-true-scale-source.json',
   {cache:'no-cache'}).then(r=>{if(!r.ok)throw Error('Source HTTP '+r.status);return r.json();});
 const scene=prepareDumboBuildings(data);
+const csclSource=await fetch('./assets/nyc/dumbo-cscl-official-snapshot.json',
+  {cache:'no-cache'}).then(r=>{
+  if(!r.ok)throw Error('Verified NYC CSCL source HTTP '+r.status);
+  return r.json();
+});
+const streets=prepareDumboCsclStreetNetwork(csclSource,scene.frame);
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:true});
 if(!gl)throw Error('This diagnostic requires WebGL2.');
 const vert=`#version 300 es
@@ -75,7 +86,7 @@ gl.linkProgram(program);
 if(!gl.getProgramParameter(program,gl.LINK_STATUS))
   throw Error('WebGL link: '+gl.getProgramInfoLog(program));
 const uCamera=gl.getUniformLocation(program,'uCamera');
-const vertex=[],grid=[];
+const vertex=[],grid=[],streetVertices=[];
 const palettes=[[.62,.38,.29],[.48,.53,.58],[.64,.55,.43]];
 const normal=(a,b,c)=>{
   const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
@@ -101,6 +112,13 @@ for(let index=0;index<scene.buildings.length;index++){
     tri(vertex,[a[0],h,a[2]],[c[0],h,c[2]],[bb[0],h,bb[2]],
       wall.map(x=>Math.min(.9,x+.13)));
 }
+for(const edge of streets.groundCenterlines){
+  // Road placement is 1:1 in the existing shared east/north metre frame.
+  // Only its thin 1.8m symbolic centreline guide is authored here.
+  const color=edge.roadwayType===2?[.34,.69,.66]:[.32,.59,.62];
+  for(const [a,b,c] of makeCsclRibbon(edge.metres,1.8))
+    tri(streetVertices,a,b,c,color);
+}
 for(let v=-250;v<=250;v+=50){
   const tone=v===0?[.27,.66,.72]:[.17,.34,.41],y=-.30;
   for(const [a,b] of [
@@ -118,7 +136,7 @@ function vao(values){
   gl.bindVertexArray(null);
   return {vao:v,count:values.length/9};
 }
-const mesh=vao(vertex),gridMesh=vao(grid);
+const mesh=vao(vertex),streetMesh=vao(streetVertices),gridMesh=vao(grid);
 const vecSub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const unit=v=>{const l=Math.hypot(...v)||1;return v.map(x=>x/l);};
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],
@@ -158,6 +176,8 @@ function paint(){
   gl.useProgram(program);
   gl.uniformMatrix4fv(uCamera,false,new Float32Array(cameraMatrix(eye,center,w/h)));
   gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+  gl.bindVertexArray(streetMesh.vao);
+  gl.drawArrays(gl.TRIANGLES,0,streetMesh.count);
   gl.bindVertexArray(gridMesh.vao);gl.drawArrays(gl.LINES,0,gridMesh.count);
   gl.bindVertexArray(null);
   frames++;
@@ -181,7 +201,12 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('resize',refresh);
 const display=scene.buildings.map(b=>
   `FID ${b.fid}: ${b.heightMetres.toFixed(2)}m roof AGL · ${b.roof.areaSquareMetres.toFixed(0)}m² footprint`);
-label.textContent=display.join(' | ');
+label.textContent=streets.acceptedSourceRecordCount+
+  ' source street records / '+streets.segmentCount+
+  ' clipped ground-level centreline pieces; '+
+  streets.excludedSourceRecordCount+
+  ' higher-level/nonstreet records preserved but not ground-rendered. '+
+  display.join(' | ');
 window.PatrolDumboTrueScaleQA={
   ready:true,crs:data.crs,sourceCommit:data.source.originalRepoCommit,
   sourceFids:scene.buildings.map(b=>b.fid),
@@ -192,7 +217,17 @@ window.PatrolDumboTrueScaleQA={
     sourceVertexCount:b.sourceWgs84Ring.length,
     faceCount:b.roof.triangles.length})),
   worldUnits:'metres',sourceSpaceUncompressed:true,
-  getState:()=>({ready:true,frames,meshTriangles:mesh.count/3,gridSegments:gridMesh.count/2,
+  officialStreetSource:'NYC OTI CSCL inkn-q76z',
+  streetSourceRecords:streets.sourceCount,
+  groundStreetRecordCount:streets.acceptedSourceRecordCount,
+  groundStreetEdgeCount:streets.segmentCount,
+  omittedBridgeAndNonstreetRecords:streets.excludedSourceRecordCount,
+  streetNames:streets.names,
+  roadSourceBytes:JSON.stringify(csclSource).length,
+  getState:()=>({ready:true,frames,meshTriangles:mesh.count/3,
+    roadTriangles:streetMesh.count/3,
+    streetSegments:streets.segmentCount,
+    gridSegments:gridMesh.count/2,
     glError:renderError,contextLost:gl.isContextLost(),viewport:[canvas.width,canvas.height],
     camera:{azimuth,elevation,distance}}),
   setCamera:(a,e,d)=>{
