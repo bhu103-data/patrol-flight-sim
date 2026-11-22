@@ -2,6 +2,11 @@ name: C185 real-physics water touchdown browser smoke
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/aircraft/seaplane-water-landing-browser-smoke.mjs'
+      - '.github/workflows/cessna185-water-landing.yml'
+      - 'index.html'
   push:
     branches: [main]
     paths:
@@ -15,13 +20,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: c185-water-touchdown-webgl
+  group: c185-water-touchdown-webgl-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   water-touchdown:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 19
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,7 +44,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Verify water touchdown on Alaska and Manhattan with loaded GLB
+      - name: Verify water touchdown, docking, NYC takeoff and loaded GLB
         run: node tools/aircraft/seaplane-water-landing-browser-smoke.mjs
       - name: Archive water touchdown frames and results
         if: always()

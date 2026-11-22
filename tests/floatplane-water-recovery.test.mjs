@@ -7,10 +7,12 @@ const start=html.indexOf('    if(floatplane && !crash){');
 const end=html.indexOf('    const armorCanLand=',start);
 assert.ok(start>=0&&end>start);
 const tick=new Function('context','with(context){'+html.slice(start,end)+'}');
-function state({afloat=false,valid=()=>true,prev=[0,17,0]}={}){
+function state({afloat=false,valid=()=>true,prev=[0,17,0],nyc=false}={}){
   const c={floatplane:true,crash:false,waterborne:afloat,brakes:false,
     x:1,y:13,z:2,dt:.1,floor:12.2,sceneryTime:0,floatRotate:false,
     prevPos:prev,prevYaw:.2,WATER_H:12.2,FLOAT_CLEARANCE:1.5,
+    selectedMap:{city:nyc},lastTime:1000,sampleTerrainHeight:()=>10,sampleFloatOceanFloor:()=>10,
+    floatOceanPose:()=>({height:.4}),
     plane:{pos:[1,13,2],pitch:-.35,yaw:.4,bank:.25,rollAnim:.4,speed:25,afterburner:true},
     usableFloatWater:valid,explosions:[],impacts:[]};
   c.finishFlight=(...args)=>c.impacts.push(args);
@@ -46,4 +48,16 @@ test('a moving obstruction covering both footprints still triggers a genuine col
   assert.equal(c.waterborne,false);
   assert.equal(c.impacts.length,1);
   assert.equal(c.impacts[0][2],false);
+});
+
+test('NYC water touchdown and blocked taxi rollback follow the same ocean crest',()=>{
+  const landing=state({nyc:true});tick(landing);
+  assert.equal(landing.waterborne,true);
+  assert.deepEqual(landing.plane.pos,[1,14.1,2]);
+  assert.equal(landing.plane.speed,9);
+  const rollback=state({nyc:true,afloat:true,valid:x=>x===0});tick(rollback);
+  assert.equal(rollback.waterborne,true);
+  assert.deepEqual(rollback.plane.pos,[0,14.1,0]);
+  assert.equal(rollback.brakes,true);
+  assert.equal(rollback.impacts.length,0);
 });
