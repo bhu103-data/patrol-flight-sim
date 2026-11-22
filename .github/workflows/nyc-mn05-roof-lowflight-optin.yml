@@ -1,5 +1,12 @@
 name: NYC real 2014 MN05 rooftop in existing 1:1 metre low-flight WebGL2
 on:
+  push:
+    branches: [feat/nyc-mn05-true-scale-flight-roof-optin-20261122-chat]
+    paths:
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/mn05-roof-lowflight-browser-smoke.mjs'
+      - 'tests/nyc-mn05-roof-lowflight-optin.test.mjs'
+      - '.github/workflows/nyc-mn05-roof-lowflight-optin.yml'
   pull_request:
     branches: [feat/nyc-mn05-real-roof-edge-mesh-20261122-chat]
     paths:
