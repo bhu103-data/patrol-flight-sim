@@ -8,6 +8,9 @@ on:
       - 'assets/nyc/nyc-true-scale-neighborhood.mjs'
       - 'assets/nyc/nyc-true-scale-flight.html'
       - 'tests/nyc-mn05-model-import.test.mjs'
+      - 'tests/nyc-mn05-cached-roof-source.test.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
+      - 'tests/nyc-official-mn05-coordinate-frame.test.py'
       - 'scripts/nyc-true-scale-flight-browser-smoke.mjs'
       - '.github/workflows/nyc-mn05-model-import.yml'
   pull_request:
@@ -16,6 +19,9 @@ on:
       - 'assets/nyc/nyc-true-scale-neighborhood.mjs'
       - 'assets/nyc/nyc-true-scale-flight.html'
       - 'tests/nyc-mn05-model-import.test.mjs'
+      - 'tests/nyc-mn05-cached-roof-source.test.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
+      - 'tests/nyc-official-mn05-coordinate-frame.test.py'
       - 'scripts/nyc-true-scale-flight-browser-smoke.mjs'
       - '.github/workflows/nyc-mn05-model-import.yml'
   workflow_dispatch:
