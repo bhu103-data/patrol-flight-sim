@@ -52,8 +52,12 @@ export function createNycHarborFerryLods(gl, decodeGLB, opts={}) {
         spec.tier==='near'?480000:240000);
       if(mesh.triangleCount!==spec.tris ||
          mesh.dimensions.width>6.6||mesh.dimensions.depth>26.5){
+        const measured={triangleCount:mesh.triangleCount,
+          width:mesh.dimensions.width,depth:mesh.dimensions.depth,
+          expectedTriangles:spec.tris};
         releaseMesh(gl,mesh);
-        throw Error('GLB geometry exceeds ferry visual/collision contract');
+        throw Error('GLB geometry exceeds ferry visual/collision contract: '+
+          JSON.stringify(measured));
       }
       if(disposed||gl.isContextLost()){releaseMesh(gl,mesh);return;}
       models.set(spec.tier,mesh);
