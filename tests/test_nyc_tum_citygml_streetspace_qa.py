@@ -8,7 +8,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.nyc.tum_citygml_streetspace_qa import (
+    compare_tum_to_oti_2022,
     current_cscl_comparison,
+    fetch_oti_roadbed_features,
     geometry_positions,
     normalize_direction_code,
     normalize_name,
@@ -233,6 +235,110 @@ class TumCityGmlStreetspaceQaTests(unittest.TestCase):
         self.assertTrue(match["physicalIdCandidateSpatialMismatch"])
         self.assertLess(match["centroidToCurrentCsclDistanceM"], 10.0)
         self.assertEqual(result["tumRoadbedToCurrentCscl"]["physicalIdSpatialMismatchCount"], 1)
+
+
+
+    def test_fetch_oti_roadbed_features_deduplicates_source_object_ids(self):
+        feature = {
+            "type": "Feature",
+            "properties": {"OBJECTID": 123, "SUB_FEATURE_CODE": 350000},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [-73.99, 40.75],
+                    [-73.98, 40.75],
+                    [-73.98, 40.76],
+                    [-73.99, 40.76],
+                    [-73.99, 40.75],
+                ]],
+            },
+        }
+        urls = []
+
+        def fake_fetch(url):
+            urls.append(url)
+            return {
+                "type": "FeatureCollection",
+                "features": [feature, feature],
+            }
+
+        result = fetch_oti_roadbed_features(
+            (-73.991, 40.749, -73.979, 40.761),
+            fetcher=fake_fetch,
+        )
+
+        self.assertEqual(len(urls), 1)
+        self.assertIn("Roadbed_2022/FeatureServer/20/query?", urls[0])
+        self.assertEqual([item["properties"]["OBJECTID"] for item in result], [123])
+
+    def test_tum_oti_crosswalk_compares_roadbeds_and_intersections_in_metres(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            roadbed_path = root / "tum-roadbed.geojson"
+            intersection_path = root / "tum-intersection.geojson"
+            roadbed_polygon = [[
+                [-73.990, 40.750],
+                [-73.988, 40.750],
+                [-73.988, 40.752],
+                [-73.990, 40.752],
+                [-73.990, 40.750],
+            ]]
+            intersection_polygon = [[
+                [-73.987, 40.750],
+                [-73.985, 40.750],
+                [-73.985, 40.752],
+                [-73.987, 40.752],
+                [-73.987, 40.750],
+            ]]
+
+            roadbed_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "properties": {"gml_id": "tum-road-1"},
+                    "geometry": {"type": "Polygon", "coordinates": roadbed_polygon},
+                }],
+            }), encoding="utf-8")
+            intersection_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "properties": {"gml_id": "tum-intersection-1"},
+                    "geometry": {"type": "Polygon", "coordinates": intersection_polygon},
+                }],
+            }), encoding="utf-8")
+
+            oti_features = [
+                {
+                    "type": "Feature",
+                    "properties": {"OBJECTID": 501, "SUB_FEATURE_CODE": 350000},
+                    "geometry": {"type": "Polygon", "coordinates": roadbed_polygon},
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"OBJECTID": 601, "SUB_FEATURE_CODE": 350010},
+                    "geometry": {"type": "Polygon", "coordinates": intersection_polygon},
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"OBJECTID": 701, "SUB_FEATURE_CODE": 350020},
+                    "geometry": {"type": "Polygon", "coordinates": roadbed_polygon},
+                },
+            ]
+
+            result = compare_tum_to_oti_2022(
+                roadbed_path,
+                intersection_path,
+                oti_features,
+                (-73.995, 40.745, -73.980, 40.755),
+            )
+
+        self.assertEqual(result["otiSubtypeCounts"]["roadbed350000"], 1)
+        self.assertEqual(result["otiSubtypeCounts"]["intersection350010"], 1)
+        self.assertAlmostEqual(result["roadbed"]["intersectionOverUnionPercent"], 100.0, places=3)
+        self.assertAlmostEqual(result["intersection"]["intersectionOverUnionPercent"], 100.0, places=3)
+        self.assertEqual(result["roadbed"]["worstCentroidMatches"][0]["tumGmlId"], "tum-road-1")
+        self.assertFalse(result["runtimeImportAllowed"])
 
 
 

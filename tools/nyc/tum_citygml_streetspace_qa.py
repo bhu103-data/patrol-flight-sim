@@ -16,10 +16,12 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 from pyproj import Transformer
 from shapely.geometry import box, shape
-from shapely.ops import transform as transform_geometry
+from shapely.ops import transform as transform_geometry, unary_union
 
 DATASETS = {
     "roadbed": {
@@ -565,6 +567,209 @@ def current_cscl_comparison(
         "bytes": copied_cscl.stat().st_size,
     }
 
+OTI_ROADBED_SOURCE = "https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/Roadbed_2022/FeatureServer/20"
+OTI_ROADBED_TERMS = "https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje"
+OTI_ROADBED_CAPTURE_RULES = "https://github.com/CityOfNewYork/nyc-planimetrics/blob/main/Capture_Rules.md"
+
+
+def fetch_oti_roadbed_features(
+    bbox: tuple[float, float, float, float],
+    fetcher=None,
+) -> list[dict[str, Any]]:
+    """Fetch bounded official 2022 OTI roadbed polygons with stable source IDs."""
+    features: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for offset in range(0, 2000, 200):
+        params = {
+            "where": "1=1",
+            "geometry": ",".join(str(value) for value in bbox),
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326",
+            "outSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": "OBJECTID,SOURCE_ID,SUB_FEATURE_CODE,STATUS",
+            "orderByFields": "OBJECTID",
+            "resultOffset": str(offset),
+            "resultRecordCount": "200",
+            "returnGeometry": "true",
+            "f": "geojson",
+        }
+        url = OTI_ROADBED_SOURCE + "/query?" + urlencode(params)
+        if fetcher is None:
+            with urlopen(url, timeout=45) as response:
+                page = json.loads(response.read().decode("utf-8"))
+        else:
+            page = fetcher(url)
+        if page.get("error"):
+            raise RuntimeError("Official OTI roadbed service error: " + json.dumps(page["error"]))
+        if page.get("type") != "FeatureCollection" or not isinstance(page.get("features"), list):
+            raise RuntimeError("Official OTI roadbed query did not return a GeoJSON FeatureCollection")
+        page_features = page["features"]
+        for feature in page_features:
+            properties = feature.get("properties") or {}
+            object_id = properties.get("OBJECTID")
+            if isinstance(object_id, int) and not isinstance(object_id, bool) and object_id not in seen:
+                seen.add(object_id)
+                features.append(feature)
+        if len(page_features) < 200:
+            break
+        if offset == 1800:
+            raise RuntimeError("OTI roadbed query reached the conservative 2,000-feature cap")
+    if not features:
+        raise RuntimeError("Official OTI Roadbed_2022 query returned no source features")
+    return features
+
+
+def _metric_roi(bbox: tuple[float, float, float, float]):
+    return transform_geometry(WGS84_TO_NYLI.transform, box(*bbox))
+
+
+def _feature_identifier(feature: dict[str, Any], source: str) -> str:
+    properties = feature.get("properties") or {}
+    if source == "TUM":
+        return str(properties.get("gml_id") or properties.get("id") or "unknown")
+    return str(properties.get("OBJECTID") or "unknown")
+
+
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * fraction)))
+    return round(ordered[index], 3)
+
+
+def summarize_polygon_crosswalk(
+    tum_features: list[dict[str, Any]],
+    oti_features: list[dict[str, Any]],
+    bbox: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    """Compare two WGS84 polygon sets in EPSG:32118, clipped to one shared ROI."""
+    roi = _metric_roi(bbox)
+
+    def prepare(features: list[dict[str, Any]], source: str):
+        records = []
+        invalid = empty = zero_area_after_clip = 0
+        for feature in features:
+            geometry_data = feature.get("geometry")
+            if not geometry_data:
+                empty += 1
+                continue
+            geometry = shape(geometry_data)
+            if geometry.is_empty:
+                empty += 1
+                continue
+            if not geometry.is_valid:
+                invalid += 1
+                continue
+            projected = transform_geometry(WGS84_TO_NYLI.transform, geometry)
+            clipped = projected.intersection(roi)
+            if clipped.is_empty or clipped.area <= 1e-6:
+                zero_area_after_clip += 1
+                continue
+            records.append((_feature_identifier(feature, source), clipped))
+        return records, {"invalid": invalid, "empty": empty, "zeroAreaAfterClip": zero_area_after_clip}
+
+    tum_records, tum_quality = prepare(tum_features, "TUM")
+    oti_records, oti_quality = prepare(oti_features, "OTI")
+    if not tum_records:
+        raise RuntimeError("No positive-area TUM polygons remain in the shared ROI")
+    if not oti_records:
+        raise RuntimeError("No positive-area OTI polygons remain in the shared ROI")
+    tum_union = unary_union([geometry for _, geometry in tum_records])
+    oti_union = unary_union([geometry for _, geometry in oti_records])
+    intersection_area = tum_union.intersection(oti_union).area
+    union_area = tum_union.union(oti_union).area
+    tum_area = tum_union.area
+    oti_area = oti_union.area
+
+    nearest_records = []
+    centroid_distances = []
+    polygon_distances = []
+    for tum_id, tum_geometry in tum_records:
+        nearest_id, nearest_geometry = min(
+            oti_records,
+            key=lambda item: tum_geometry.centroid.distance(item[1].centroid),
+        )
+        centroid_distance = tum_geometry.centroid.distance(nearest_geometry.centroid)
+        polygon_distance = tum_geometry.distance(nearest_geometry)
+        centroid_distances.append(centroid_distance)
+        polygon_distances.append(polygon_distance)
+        nearest_records.append({
+            "tumGmlId": tum_id,
+            "nearestOtiObjectId": nearest_id,
+            "centroidDistanceM": round(centroid_distance, 3),
+            "polygonDistanceM": round(polygon_distance, 3),
+            "overlapAreaWithNearestM2": round(tum_geometry.intersection(nearest_geometry).area, 3),
+        })
+
+    return {
+        "tumFeatureCountInRoi": len(tum_records),
+        "otiFeatureCountInRoi": len(oti_records),
+        "tumGeometryQuality": tum_quality,
+        "otiGeometryQuality": oti_quality,
+        "tumUnionAreaM2": round(tum_area, 3),
+        "otiUnionAreaM2": round(oti_area, 3),
+        "intersectionAreaM2": round(intersection_area, 3),
+        "tumCoverageByOtiPercent": round(intersection_area / tum_area * 100, 3) if tum_area else 0.0,
+        "otiCoverageByTumPercent": round(intersection_area / oti_area * 100, 3) if oti_area else 0.0,
+        "intersectionOverUnionPercent": round(intersection_area / union_area * 100, 3) if union_area else 0.0,
+        "tumFeaturesIntersectingOtiUnion": sum(geometry.intersects(oti_union) for _, geometry in tum_records),
+        "otiFeaturesIntersectingTumUnion": sum(geometry.intersects(tum_union) for _, geometry in oti_records),
+        "centroidDistanceM": {
+            "p50": _percentile(centroid_distances, 0.50),
+            "p95": _percentile(centroid_distances, 0.95),
+            "max": round(max(centroid_distances), 3) if centroid_distances else None,
+        },
+        "polygonDistanceM": {
+            "p50": _percentile(polygon_distances, 0.50),
+            "p95": _percentile(polygon_distances, 0.95),
+            "max": round(max(polygon_distances), 3) if polygon_distances else None,
+        },
+        "worstCentroidMatches": sorted(
+            nearest_records, key=lambda item: item["centroidDistanceM"], reverse=True
+        )[:5],
+    }
+
+
+def compare_tum_to_oti_2022(
+    roadbed_path: Path,
+    intersection_path: Path,
+    oti_features: list[dict[str, Any]],
+    bbox: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    tum_roadbeds = json.loads(roadbed_path.read_text(encoding="utf-8")).get("features", [])
+    tum_intersections = json.loads(intersection_path.read_text(encoding="utf-8")).get("features", [])
+    oti_roadbeds = [
+        feature for feature in oti_features
+        if int((feature.get("properties") or {}).get("SUB_FEATURE_CODE", -1)) == 350000
+    ]
+    oti_intersections = [
+        feature for feature in oti_features
+        if int((feature.get("properties") or {}).get("SUB_FEATURE_CODE", -1)) == 350010
+    ]
+    if not oti_roadbeds or not oti_intersections:
+        raise RuntimeError(
+            "OTI Roadbed_2022 query must include both roadbed (350000) and intersection (350010) features"
+        )
+    return {
+        "source": OTI_ROADBED_SOURCE,
+        "terms": OTI_ROADBED_TERMS,
+        "captureRules": OTI_ROADBED_CAPTURE_RULES,
+        "referenceImageryYear": 2022,
+        "projection": "EPSG:32118 — NAD83 / New York Long Island (metres)",
+        "roiBboxWgs84": list(bbox),
+        "otiFetchedFeatureCount": len(oti_features),
+        "otiSubtypeCounts": {
+            "roadbed350000": len(oti_roadbeds),
+            "intersection350010": len(oti_intersections),
+        },
+        "roadbed": summarize_polygon_crosswalk(tum_roadbeds, oti_roadbeds, bbox),
+        "intersection": summarize_polygon_crosswalk(tum_intersections, oti_intersections, bbox),
+        "runtimeImportAllowed": False,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, required=True)
@@ -587,6 +792,7 @@ def main() -> int:
         "bboxWgs84": list(bbox),
         "datasets": [],
         "currentCscl": None,
+        "otiCrosswalk": None,
         "errors": [],
         "warnings": [],
         "sourceRights": {
@@ -674,6 +880,36 @@ def main() -> int:
                 )
     except Exception as error:
         report["errors"].append(f"current CSCL comparison: {error}")
+
+    try:
+        roadbed_path = next(
+            args.output_dir / "geojson" / layer["roiGeoJson"]
+            for dataset in report["datasets"] if dataset["key"] == "roadbed"
+            for layer in dataset["layers"] if layer["featureCount"] > 0
+        )
+        intersection_path = next(
+            args.output_dir / "geojson" / layer["roiGeoJson"]
+            for dataset in report["datasets"] if dataset["key"] == "intersection"
+            for layer in dataset["layers"] if layer["featureCount"] > 0
+        )
+        oti_features = fetch_oti_roadbed_features(bbox)
+        report["otiCrosswalk"] = compare_tum_to_oti_2022(
+            roadbed_path, intersection_path, oti_features, bbox
+        )
+        for category in ("roadbed", "intersection"):
+            summary = report["otiCrosswalk"][category]
+            if summary["tumGeometryQuality"]["invalid"] or summary["otiGeometryQuality"]["invalid"]:
+                report["errors"].append(f"TUM/OTI {category} crosswalk contains invalid source polygons")
+            if summary["intersectionOverUnionPercent"] < 80:
+                report["warnings"].append(
+                    f"TUM/OTI {category} geometry IoU is below 80%; inspect source-vintage or feature-boundary differences"
+                )
+            if summary["tumGeometryQuality"]["zeroAreaAfterClip"] or summary["otiGeometryQuality"]["zeroAreaAfterClip"]:
+                report["warnings"].append(
+                    f"TUM/OTI {category} has source features that only touch the ROI boundary and were excluded from area comparison"
+                )
+    except Exception as error:
+        report["errors"].append(f"TUM/OTI 2022 geometry crosswalk: {error}")
 
     report["status"] = "pass" if not report["errors"] else "fail"
     report_path = args.output_dir / "report.json"

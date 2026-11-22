@@ -11,6 +11,7 @@ Evaluate a larger, source-backed street-space dataset for the separate 1:1 Times
 - Workbench repository: https://github.com/tum-gis/3d-model-new-york-city
 - Source lineage: NYC Open Data Portal. TUM states the dataset is provided for free usage, NYC Open Data terms apply, and copyright remains with the original NYC dataset providers.
 - No SPDX license identifier or CC0 dedication is asserted. Preserve original provider references and attribution.
+- NYC Open Data's FAQ says there are no restrictions on use of Open Data; the NYC Open Data technical standards note that DoITT may require source, version and modification identification when data is republished or incorporated into an application. Preserve TUM's per-object external references, the original NYC agency dataset links, source vintage and any PATROL transformations. See https://www.nyc.gov/opendata/get-started/FAQs and https://cityofnewyork.github.io/opendatatsm/publicpolicies.html.
 
 ## Bounded archives in this QA
 
@@ -71,6 +72,26 @@ Independent review of the retained first-run artifact found 96 TUM roadbed-to-CS
 A narrowly bounded fallback is now added: when a TUM physical-ID candidate is more than 10m from the roadbed centroid, and a same-normalized-name CSCL segment is closer, the comparison selects the closer same-name segment while preserving the original physical-ID candidate distance and mismatch flag. Recalculation against the retained first-run artifact reduces the selected-match centroid distance from p50/p95/max **0.777 / 8.760 / 109.188m** to **0.765 / 3.534 / 8.962m**; all 96 selected matches are then within 10m. The four ID mismatches remain explicitly counted, not hidden. The updated exact-head workflow rerun reproduced these results: run `45064002794` completed successfully and produced artifact `14769743909`. The report status is `pass`, with no errors and three explicit source-quality warnings. The physical-ID fallback, exact-ROI count contract, and current-CSCL comparison are therefore CI-verified on the child PR head.
 
 The 2016-vs-current lane disagreement and the 22/96 roadbed area-attribute outliers remain source-quality warnings. This does not authorize TUM lane routing or runtime geometry import.
+
+## Exact-head TUM 2016 vs OTI 2022 geometry crosswalk
+
+A separate child QA workflow fetched the official NYC OTI `Roadbed_2022/FeatureServer/20` layer for the same ROI and compared it to the TUM CityGML polygons in **EPSG:32118 metres**. Exact-head evidence: PR #326 HEAD `e64740ba`, Actions run `45065035899`, artifact `14770054332`. The source QA, PATROL regression and Cosmos workflows all passed.
+
+The OTI query returned 134 features in the ROI: **96 roadbed (350000)** and **38 intersection (350010)**. TUM returned the same 96 roadbed and 38 intersection features. All compared geometries were valid and non-empty; neither source had zero-area ROI clips.
+
+| Comparison | Roadbed | Intersection |
+|---|---:|---:|
+| TUM union area | 130,376.524 m² | 9,675.012 m² |
+| OTI 2022 union area | 132,484.074 m² | 9,542.823 m² |
+| Intersection area | 122,092.231 m² | 8,781.740 m² |
+| TUM coverage by OTI | 93.646% | 90.767% |
+| OTI coverage by TUM | 92.156% | 92.025% |
+| Intersection over union (IoU) | **86.733%** | **84.148%** |
+| Centroid distance p50 / p95 / max | 0.926 / 4.628 / 9.857 m | 0.926 / 1.433 / 1.841 m |
+
+All 96 TUM roadbeds and all 38 TUM intersections intersect the corresponding OTI union. Polygon-to-nearest-OTI distance is 0m at p50, p95 and max for both classes, indicating that the source polygons touch or overlap even where centroids differ.
+
+**Decision:** OTI 2022 is the newer planimetric source and should be the primary roadbed/intersection shape source for this bounded sample. TUM is useful as a historical semantic/source cross-reference, not as a replacement for the 2022 shapes or as current traffic truth. The high XY overlap does not supply road elevation: OTI is planimetric, while TUM street-space Z is 0m and not terrain-adapted. It does not authorize runtime import, road collision, lane routing or traffic simulation.
 
 ## Known limitations from the source publisher
 
