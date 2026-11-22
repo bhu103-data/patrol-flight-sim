@@ -95,6 +95,11 @@ async function capture(name){
       state.game.hotpotForecourtDrainBars===40 &&
       state.game.hotpotForecourtTriangles<=1700,
       'Missing bounded photographic-stone pavers at the hotpot spawn');
+    check(state.game.hotpotLowerStoneParts===32 &&
+      state.game.hotpotLowerTimberParts===72 &&
+      state.game.hotpotLowerFacadeTriangles<=1500 &&
+      state.game.hotpotLowerFacadeTop<8.55,
+      'Original hotpot masonry/timber relief is missing or blocks upper windows');
 
     check(Number.isFinite(state.game.hotpotTerraceCornerSpread)&&
       state.game.hotpotTerraceCornerSpread<.03,
@@ -127,6 +132,18 @@ try{
   await page.locator('#loading').waitFor({state:'detached',timeout:105000});
   await page.waitForTimeout(900);
   await capture('00-spawn');
+  // Fixed spawn camera in daylight: compare the physical wall/stone shadow
+  // layers with the preexisting dark night shot. No scenic camera teleport.
+  const spawnPosition=await page.evaluate(()=>
+    window.PatrolSpaceBridge.getState().position);
+  await page.locator('#cqTime').selectOption('day');
+  await page.waitForTimeout(800);
+  const litPosition=await page.evaluate(()=>
+    window.PatrolSpaceBridge.getState().position);
+  check(Math.hypot(...litPosition.map((v,i)=>v-spawnPosition[i]))<2,
+    'Daylit hotpot close-up camera moved from original spawn');
+  await capture('00b-spawn-day');
+  await page.locator('#cqTime').selectOption('night');
   for(const [key,name] of [['1','01-hongyadong'],['2','02-raffles'],['3','03-liziba']]){
     await page.keyboard.press(key);
     await page.waitForTimeout(1100);

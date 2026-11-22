@@ -16,6 +16,7 @@ import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 import { buildChongqingHotpotDisplay } from './hotpot-display.js';
 import { buildChongqingHotpotPaving } from './hotpot-forecourt.js';
+import { buildChongqingHotpotLowerFacade } from './hotpot-lower-facade.js';
 import { gradeChongqingHotpotTerrain } from './hotpot-terrace-grade.js';
 
 const canvas = document.getElementById('world');
@@ -409,6 +410,11 @@ sign('重庆老火锅',hotpot.x,shopY+22.9,hotpot.z+29.1,42,7.5,'#dbbb8f','#3028
 // the giant cartoon red ball. Reuse the original courtyard position and lights.
 const hotpotDisplay=buildChongqingHotpotDisplay({
   THREE,scene,ground,x:278,z:hotpot.z+31,stone:pbr.cutStone
+});
+// Existing windows, door quest and collision stay untouched; two instanced
+// PBR wall-relief batches sit in front of the lower street-facing wall.
+const hotpotLowerFacade=buildChongqingHotpotLowerFacade({
+  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
 });
 const potLight=new THREE.PointLight(0xff693c,85,90,2);
 potLight.position.set(hotpot.x,shopY+13,hotpot.z+34);scene.add(potLight);
@@ -1400,6 +1406,10 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   hotpotDisplayParts:hotpotDisplay.partCount,
+  hotpotLowerStoneParts:hotpotLowerFacade.masonryCount,
+  hotpotLowerTimberParts:hotpotLowerFacade.timberCount,
+  hotpotLowerFacadeTriangles:hotpotLowerFacade.totalTriangles,
+  hotpotLowerFacadeTop:hotpotLowerFacade.topY-shopY,
   hotpotForecourtPavers:hotpotPaving.stoneCount,
   hotpotForecourtDrainBars:hotpotPaving.drainBarCount,
   hotpotForecourtTriangles:hotpotPaving.triangleBudget,
