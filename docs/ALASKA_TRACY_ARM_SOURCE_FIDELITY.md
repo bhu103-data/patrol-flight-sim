@@ -27,9 +27,10 @@ quantized pixels identical). Never apply a hand-tuned positional shift.
 The updated independent flight pilot reads the official true extent,
 while the updated 5m extractor sends `adjustAspectRatio=false`,
 checks USGS returned `f=json` extent and includes source GeoTIFF tags.
-**All historical 5m tile artifacts predating this fix are invalid for
-WGS84 source-geography rendering; the new strict decoder rejects them.**
-Use ONLY the corrected new CI artifact when the new workflow finishes.
+**All historical dynamic 5m tile artifacts predating this fix are invalid for
+WGS84 source-geography rendering; the strict decoder rejects them.** The
+source-native OPR IfSAR bundle is now the preferred full-area 5m source; see
+the next section for its source hashes, seam gates and runtime LOD status.
 
 ## 2026-11-22 — source-native full-area 5m IfSAR mosaic and opt-in flight LOD
 
@@ -39,7 +40,7 @@ the original USGS OPR QL5 IfSAR DTM GeoTIFFs from one project/workunit,
 This is the actual bare-earth DTM product, not the IfSAR DSM or radar intensity
 image. USGS describes Alaska 5m 3DEP DEMs as bare-earth terrain models,
 public domain, and seamless within collection projects (not guaranteed across
-different projects). <Cite refs={["turn952681search0","turn952681search1","turn952681search3"]}/>
+different projects). See the [USGS 3DEP products and services](https://www.usgs.gov/3d-elevation-program/about-3dep-products-services), the [5m Alaska DEM collection](https://catalog.data.gov/dataset/5-meter-alaska-digital-elevation-models-dems-usgs-national-map-3dep-downloadable-data-coll), and the [OPR source DEM collection](https://data.usgs.gov/datacatalog/data/USGS%3A1004ada7-1e9f-4fcf-adfb-677868b7317c).
 
 ### Native source evidence
 
