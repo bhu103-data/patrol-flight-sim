@@ -28,6 +28,27 @@ class NpsSurveyMetadataSafetyTests(unittest.TestCase):
             (-132.9, 57.9, -132.8, 57.91), audit.AOI_GAME
         ))
 
+    def test_never_accept_identical_glacier_name_without_geographic_match(self):
+        self.assertFalse(audit.has_study_bbox_candidate([]))
+        self.assertFalse(audit.has_study_bbox_candidate([
+            {"name": "Sawyer.2015.170.2p5m.tif",
+             "intersects_noaa_study_bbox": False}
+        ]))
+        self.assertFalse(audit.has_study_bbox_candidate([
+            {"name": "SouthSawyer.2015.170.2p5m.tif",
+             "intersects_noaa_study_bbox": None}
+        ]))
+        self.assertTrue(audit.has_study_bbox_candidate([
+            {"name": "Sawyer.2003.120.2p5m.tif",
+             "intersects_noaa_study_bbox": False},
+            {"name": "Sawyer.2020.215.2p5m.tif",
+             "intersects_noaa_study_bbox": True},
+        ]))
+        self.assertFalse(audit.overlap(
+            (-158.342865, 56.6082, -135.094727, 68.43901),
+            audit.AOI_NOAA
+        ))
+
     def test_only_expected_nps_endpoints_are_imported(self):
         self.assertEqual(audit.SOURCES, (
             ("Sawyer", "744015"), ("SouthSawyer", "744024")
