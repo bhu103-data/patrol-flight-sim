@@ -8551,6 +8551,9 @@ const CENTRAL_PARK_SITES=[
             disposeSceneMesh(uploaded);
           else{
             nycGisMesh=uploaded;
+            if(architecturePilot)
+              window.__patrolNycArchitectureQa={...stats.recessedPilot,
+                sourceBuildings:stats.sourceBuildings,roofTriangles:stats.roofTriangles};
             console.info('[PATROL] NYC official footprint infill',stats);
           }
         }).catch(error=>console.warn('[PATROL] GIS fallback',error));
