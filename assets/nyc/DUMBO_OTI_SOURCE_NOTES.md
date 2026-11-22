@@ -41,3 +41,47 @@ Deterministic execution of the production helper generated **45/33/51 windows** 
 4. Record additional triangles (not just call count) and software WebGL limitations. **Do not call this 1:1 NYC**.
 
 This tiny pilot does not resolve map-wide uniform building repetition or fully replace synthetic Manhattan / Brooklyn blocks; future work must first solve coordinate and road calibration with a more complete municipal district dataset.
+
+## FID 1080628 — bounded two-tier non-box roof detail (Draft 2026-11-22)
+
+This one-building live-game experiment stacks on #204; it does not adopt the
+48-building metre-scale preview from #243 and does not alter official WGS84
+ring vertices, FID, BIN, or height. **Not a claimed surveyed 3D rooftop.**
+
+- **Sourced planar truth:** `FID 1080628 / BIN 3389054 / HEIGHT_ROOF 121 ft`,
+  12 original WGS84 vertices (11 distinct game vertices after near-duplicate
+  cleanup); original source shape is concave/non-rectangular and preserved.
+  The minified in-game polygon roof has area approximately 59.7244 squared
+  PATROL units, not a rectangular 9×14.42 box cap.
+- **New original roof treatment:** clip the *existing official source polygon*
+  into two nonoverlapping north/south planar fields at `source.target[1]`.
+  Their combined projected area must exactly equal the official source ring
+  after the existing conservative game-envelope projection. Lower one roof
+  field by 0.64 PATROL units, add a true vertical seam wall and a coping plane,
+  and add two actual stone stringcourse faces along each eligible long
+  exterior facade edge. **The clip line and 0.64 drop are authored geometric
+  interpretation, not an official roof-ridge survey or measured real setback.**
+- **Non-regression:** same source WGS84 outline and `HEIGHT_ROOF`, same
+  `matchingDumboOtiPilot` LOD3/normal-graphics/city-only gate, same
+  building collider and no changes to bridges/roads/floatplane/other maps;
+  no new texture, GLB, image source, script dependency or draw call.
+  The two other source FIDs keep their unchanged roof representation.
+- **Capture:** use the workflow `nyc-dumbo-fid1080628-roof.yml` for
+  fixed noon/clear source-verified production flight A-B-B-A at FID roof and
+  OTI street cameras; record framebuffer, first load and rAF p50/p95, plus
+  native WebGL2 PNG screenshots. SwiftShader rAF **does not** demonstrate
+  consumer GPU FPS. Do not approve based only on source or unit tests.
+
+Official additional **2014 survey roof facets** are available from
+[NYC 3-D Building Model](https://data.cityofnewyork.us/d/tnru-abg2)
+and [Brooklyn CD02 Rhino model](https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_bk02.zip),
+but the per-FID roof surfaces have **not yet been extracted, matched and
+validated**. Their model's LOD1.5 generalization omits small appendages.
+**Next geospatial acceptance gate:** extract the specific BIN/roof layers,
+map 2014 projected coordinates to original polygon, check survey date/changes,
+then replace the authored tier if contradicted. NYC's 2014 survey cannot be
+presented as a current 2026 scan.
+
+Data rights: NYC OTI BUILDING_view (City of New York, Open Data Terms,
+https://opendata.cityofnewyork.us/overview/), reviewed in PR #189/#192.
+New roof split/stone detail authored in PATROL; not copied from third-party photos.
