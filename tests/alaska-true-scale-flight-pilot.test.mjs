@@ -36,9 +36,11 @@ test('GPU terrain mesh uses WGS84-derived real metre east/north with original he
   assert.match(src,/points\[i\*3\]=east/);
   assert.match(src,/points\[i\*3\+1\]=elev<=1\?-4:elev/);
   assert.match(src,/points\[i\*3\+2\]=north/);
-  assert.match(src,/indices\.push\(a,c,b,b,c,d\)/);
+  assert.match(src,/indices=new Uint32Array\(\(n-1\)\*\(m-1\)\*6\)/);
+  assert.match(src,/indexOffset\+\+\]=a/);
+  assert.match(src,/indexOffset\+\+\]=d/);
   assert.match(src,/const count=dem\.width\*dem\.height/);
-  assert.match(src,/new Uint32Array\(indexArray\)/);
+  assert.match(src,/indexArray instanceof Uint32Array\?indexArray:new Uint32Array\(indexArray\)/);
   assert.doesNotMatch(src,/ALASKA_DEM_RELIEF_PREVIEW_SCALE|MAP_SPAN\s*=\s*1920|CEILING\s*=\s*100/);
   assert.doesNotMatch(src,/\.js\?v=.*cdn|unpkg\.com|threejs\.org/);
   assert.equal(dem.heights.length,65536);
