@@ -14,6 +14,14 @@ on:
       - 'scripts/nyc-metre-lowflight-roadbed-build.mjs'
       - 'scripts/nyc-times-roadbed-polygon-source.mjs'
       - 'tests/nyc-official-roadbed-lowflight.test.mjs'
+      - 'scripts/nyc-times-pedestrian-plaza-source.mjs'
+      - 'scripts/nyc-times-pedestrian-topology-audit.mjs'
+      - 'scripts/nyc-times-sidewalk-curb-source.mjs'
+      - 'scripts/nyc-metre-pedestrian-lowflight-build.mjs'
+      - 'tests/nyc-times-pedestrian-plaza-source.test.mjs'
+      - 'tests/nyc-times-pedestrian-topology-audit.test.mjs'
+      - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
+      - 'tests/nyc-official-pedestrian-lowflight.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +30,7 @@ permissions:
 jobs:
   fly-source-webgl:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,7 +41,8 @@ jobs:
           node --check tools/nyc/true-scale-flight.mjs
           node --check tools/nyc/true-scale-flight-browser-smoke.mjs
           node --check scripts/nyc-metre-lowflight-roadbed-build.mjs
-          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-official-roadbed-lowflight.test.mjs
+          node --check scripts/nyc-metre-pedestrian-lowflight-build.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-official-roadbed-lowflight.test.mjs tests/nyc-times-pedestrian-plaza-source.test.mjs tests/nyc-times-pedestrian-topology-audit.test.mjs tests/nyc-times-sidewalk-curb-source.test.mjs tests/nyc-official-pedestrian-lowflight.test.mjs
       - name: Install official polygon triangulator (build-time only)
         run: npm install --no-save --no-audit --no-fund earcut@3.0.2
       - name: Fetch actual NYC DCM road geometry, no artificial road fallback
@@ -41,6 +50,12 @@ jobs:
           node scripts/nyc-times-true-scale-pilot.mjs
           node scripts/nyc-times-roadbed-polygon-source.mjs
           node scripts/nyc-metre-lowflight-roadbed-build.mjs
+          node scripts/nyc-times-pedestrian-plaza-source.mjs
+          node scripts/nyc-times-pedestrian-topology-audit.mjs
+          node scripts/nyc-times-sidewalk-curb-source.mjs
+          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
+          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
+          test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
           test -s artifacts/nyc-true-scale/source.json
           test -s artifacts/nyc-true-scale/roadbed-mesh.json
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html

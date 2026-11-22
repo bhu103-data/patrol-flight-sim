@@ -4,6 +4,7 @@
  */
 import {chromium} from 'playwright';
 import {writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--disable-dev-shm-usage',
   '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -22,11 +23,18 @@ try{
     null,{timeout:90000});
   const info=await page.evaluate(()=>({
     ...window.geoPilotQA,
-    getFlight:undefined,setFlight:undefined,resetFlight:undefined
+    getFlight:undefined,setFlight:undefined,resetFlight:undefined,
+    pedestrianVisible:undefined,setPedestrian:undefined
   }));
   if(!info.ready||info.error||info.sourceBuildings<110||info.sourceRoads<25||
      !info.officialRoadbed2022||info.officialRoadbed2022.features<70||
      info.officialRoadbed2022.triangles<7000||!info.noInventedStreetSurface||
+     !info.officialPedestrian2022||
+     info.officialPedestrian2022.plazas<5||
+     info.officialPedestrian2022.sidewalks<40||
+     info.officialPedestrian2022.curb<150||
+     info.officialPedestrian2022.curbCuts<150||
+     !info.officialPedestrian2022.noSurveyedVerticalDatum||
      !info.sourceRoadSpawn||!Number.isFinite(info.sourceRoadSpawn.position[0])||
      !info.streetWidthEnvelopes||
      info.streetWidthEnvelopes.derivedWidthFeatures<20||
@@ -35,9 +43,11 @@ try{
      !/metres/.test(info.projection))throw Error('Invalid official-source view '+JSON.stringify(info));
   const shot=async name=>{
     await page.waitForTimeout(400);
-    await page.locator('#scene').screenshot({path:'artifacts/nyc-true-scale/'+name+'.png',
+    const image=await page.locator('#scene').screenshot({
+      path:'artifacts/nyc-true-scale/'+name+'.png',
       timeout:90000,animations:'allow'});
     shots.push(name);
+    return createHash('sha256').update(image).digest('hex');
   };
   await shot('01-metric-aerial');
   await page.click('#toggleFlight');
@@ -69,6 +79,17 @@ try{
   await page.click('#toggleFlight');
   if((await page.evaluate(()=>window.geoPilotQA.getFlight())).mode)
     throw Error('Failed to restore aerial reference camera');
+  // Same browser + camera A/B. A source surface must visibly change pixels.
+  // No second independent scene load, no randomization/noise confound.
+  await page.click('#pedestrianToggle');
+  if(await page.evaluate(()=>window.geoPilotQA.pedestrianVisible()))
+    throw Error('Official pedestrian source overlay failed to turn OFF');
+  const offHash=await shot('04-aerial-pedestrian-hidden');
+  await page.click('#pedestrianToggle');
+  if(!(await page.evaluate(()=>window.geoPilotQA.pedestrianVisible())))
+    throw Error('Official pedestrian source overlay failed to turn ON');
+  const onHash=await shot('05-aerial-pedestrian-visible');
+  if(offHash===onHash)throw Error('True pedestrian surfaces invisible in fixed-camera A/B');
   const browserInfo=await page.evaluate(()=>{
     const c=document.getElementById('scene'),gl=c.getContext('webgl2');
     return {webgl:!!gl&&!gl.isContextLost(),error:gl.getError(),canvas:[c.width,c.height]};
@@ -79,7 +100,9 @@ try{
   Object.assign(report,{sourceBuildings:info.sourceBuildings,sourceRoads:info.sourceRoads,
     spawn:info.sourceRoadSpawn,initial,climbed,moved,displacement,browserInfo,shots,errors,warnings,
     officialRoadbed2022:info.officialRoadbed2022,
-    caveat:'Actual OTI 2022 planimetric roadbed + original FID roof masses and DCM centrelines; no current surveyed curbs, lanes, facades, elevations or aircraft physics'});
+    officialPedestrian2022:info.officialPedestrian2022,
+    fixedCameraPedestrianAB:{offSha256:offHash,onSha256:onHash,different:offHash!==onHash},
+    caveat:'Actual OTI 2022 flat roadbed/plaza/sidewalk/curb survey-outline sources + FID roof masses + DCM centerlines; no verified 2026 curb heights, lane access, facades, terrain, DOT traffic or aircraft physics'});
 }catch(e){
   report.error=e.stack||String(e);
   report.errors=errors;report.warnings=warnings;report.shots=shots;
