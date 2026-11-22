@@ -86,6 +86,53 @@ try{
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
     'Fallback lost surveyed footprints');
+  // Source-registered eye-height evidence: two UNEDITED canvas PNGs
+  // with full physical camera records for later official street QA.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?qaEyeLevel=1',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA?.cameraRegistration?.frame>=4,
+    null,{timeout:60000});
+  const capture=async name=>{
+    const record=await page.evaluate(()=>({
+      ...window.PatrolMetricFlightQA.cameraRegistration,
+      evidenceMode:window.PatrolMetricFlightQA.evidenceMode,
+      glError:window.PatrolMetricFlightQA.glError,
+      errors:[...window.PatrolMetricFlightQA.errors]
+    }));
+    check(record.schema==='patrol-nyc-metric-camera-v1'&&
+      record.evidenceMode==='source-centreline-eye-height',
+      'Camera register missing from actual eye-level scene');
+    check(record.originWGS84LonLat.length===2&&
+      record.eyeENUmeters.length===3&&record.eyeWGS84LonLat.length===2,
+      'Incomplete georeferenced camera pose');
+    check(record.originAltitudeMeters===null&&
+      record.eyeAbsoluteAltitudeMeters===null&&record.verticalDatum==='unknown',
+      'Unknown vertical datum was silently invented');
+    check(record.eyeENUmeters[2]===1.8,'Eye height is not 1.8m local');
+    check(record.sourceBuildingFids.length>=118,
+      'No official building FIDs in camera registration');
+    check(record.viewportPixels.join(',')==='1280,720',
+      'Unmatched browser render viewport');
+    check(record.glError===0&&record.errors.length===0,
+      'Eye-level WebGL2 context error');
+    const png=await page.locator('#scene').screenshot({
+      path:out+'/'+name,timeout:90000});
+    return {image:name,sha256:createHash('sha256').update(png).digest('hex'),
+      capturedUTC:new Date().toISOString(),record};
+  };
+  const registered1=await capture('03-registered-eye-height.png');
+  await page.waitForTimeout(180);
+  const registered2=await capture('04-registered-eye-height-repeat.png');
+  const normalized=r=>JSON.stringify({
+    position:r.eyeENUmeters,lonlat:r.eyeWGS84LonLat,
+    yaw:r.yawRadians,pitch:r.pitchRadians,fov:r.verticalFovRadians,
+    viewport:r.viewportPixels,sourceFids:r.sourceBuildingFids,
+    quality:r.quality,lighting:r.lighting
+  });
+  check(normalized(registered1.record)===normalized(registered2.record),
+    'Registered evidence camera drifted between live PNG captures');
+  report.registeredEvidence=[registered1,registered2];
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}

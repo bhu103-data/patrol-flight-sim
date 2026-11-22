@@ -86,3 +86,18 @@ test('PATROL launcher routes experimental map to real-source free-flight entry',
   assert.doesNotMatch(page,/https?:\/\/(?:google\.com|maps\.google|cesium\.com)/);
   assert.match(page,/not the original aircraft physics/);
 });
+
+// Camera registration is a source-traceable, read-only QA diagnostic.
+test('1:1 flythrough exposes a stable source camera without fake GPS altitude',async()=>{
+  const script=await readFile(new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  const smoke=await readFile(new URL('../scripts/nyc-true-scale-flight-browser-smoke.mjs',import.meta.url),'utf8');
+  assert.match(script,/const evidenceEye=new URLSearchParams\(location\.search\)/);
+  assert.match(script,/!buildingContains\(massing,site\.position\[0\]/);
+  assert.match(script,/schema:'patrol-nyc-metric-camera-v1'/);
+  assert.match(script,/eyeAbsoluteAltitudeMeters:null/);
+  assert.match(script,/metersToWgs84\(\[east,north\],massing\.origin\)/);
+  assert.match(script,/qa\.cameraRegistration=cameraRegistration\(frames,w,h\)/);
+  assert.match(smoke,/03-registered-eye-height\.png/);
+  assert.match(smoke,/04-registered-eye-height-repeat\.png/);
+  assert.match(smoke,/normalized\(registered1\.record\)===normalized\(registered2\.record\)/);
+});
