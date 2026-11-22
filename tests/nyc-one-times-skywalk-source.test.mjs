@@ -78,5 +78,5 @@ test('no external images, fake measured window counts or new controls',()=>{
   assert(!helper.includes('newYorkMeshes='));
   assert(!helper.includes('setInterval('));
   assert(!helper.includes('solidAt('));
-  assert(helper.includes('NOT a digital twin/as-built BIM'));
+  assert(src.slice(from-900,from).includes('NOT a digital twin/as-built BIM'));
 });
