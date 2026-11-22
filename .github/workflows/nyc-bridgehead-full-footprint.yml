@@ -15,7 +15,7 @@ on:
       - tests/nyc-bridgehead-vehicle-connector.test.mjs
 
 concurrency:
-  group: nyc-bridgehead-full-footprint-qa
+  group: nyc-bridgehead-full-footprint-qa-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
