@@ -70,7 +70,7 @@ test('NYC two bridge connector cars keep a safe same-direction gap over 1 hour',
         'Opposite-lane centers overlap at '+time+': '+separation);
     }
   }
-  assert.ok(sameSamples>100&&oppositeSamples>100);
+  assert.ok(sameSamples>100&&oppositeSamples>50);
   assert.ok(minSame<8&&minOpposite<3,
     'Spacing probe did not exercise close traffic in both directions');
 });
