@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {ORIGIN,BBOX,BUILDING_SOURCE,ROAD_SOURCE,metresPerDegree,toLocalMeters,
-  buildingsInMeters,roadsInMeters,clipLineToBbox,fetchOfficialRoads,makeSvg
+  buildingsInMeters,roadsInMeters,clipLineToBbox,auditSourceRoadBuildingOverlaps,fetchOfficialRoads,makeSvg
 } from '../scripts/nyc-times-true-scale-pilot.mjs';
 
 const asset=JSON.parse(readFileSync(new URL('../assets/nyc/times-square-footprints.json',import.meta.url),'utf8'));
@@ -94,6 +94,17 @@ test('DCM features crossing query bbox are clipped, not used as out-of-area geom
   }]});
   assert.equal(sampled.length,1);
   assert.ok(sampled[0].lines[0].every(p=>p[0]>=west-.002&&p[0]<=east+.002));
+});
+
+test('street lines crossing a source polygon are reported, not silently shifted',()=>{
+  const buildings=[{fid:900,outline:[[0,0],[10,0],[10,10],[0,10]]}];
+  const roads=[{objectId:901,streetName:'Example',lines:[[[-5,5],[15,5]]]}];
+  assert.deepEqual(auditSourceRoadBuildingOverlaps(buildings,roads),[
+    {buildingFid:900,roadObjectId:901,streetName:'Example',overlapMetres:10}
+  ]);
+  assert.deepEqual(auditSourceRoadBuildingOverlaps(buildings,[
+    {objectId:902,streetName:'Clear',lines:[[[-5,-1],[15,-1]]]}
+  ]),[]);
 });
 
 test('network fetching is official-source-only, bounded, and not a fictional fallback',async()=>{

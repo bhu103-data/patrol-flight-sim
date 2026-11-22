@@ -10,6 +10,14 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 aside{position:absolute;top:16px;left:16px;max-width:370px;background:#101f30e5;padding:15px 18px;border:1px solid #48637b;border-radius:10px;pointer-events:none}
 h1{font-size:18px;margin:0 0 10px}p{margin:6px 0;line-height:1.55}small{color:#b6c4cd}
 #status{color:#9bdef3}strong{color:#ffdd92}
+#flightPanel{position:absolute;top:16px;right:16px;max-width:310px;
+background:#0d1c2ce8;padding:14px 16px;border:1px solid #48637b;
+border-radius:10px;line-height:1.5}
+#flightPanel button{background:#28587c;color:white;border:1px solid #67a7cb;
+border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
+#flightPanel button:hover{background:#376f94}
+#flightState{color:#9ce4ca;font-variant-numeric:tabular-nums;font-size:12px}
+#flightPanel small{display:block;font-size:12px}
 </style>
 </head>
 <body>
@@ -18,10 +26,22 @@ h1{font-size:18px;margin:0 0 10px}p{margin:6px 0;line-height:1.55}small{color:#b
 <h1>时代广场 · 官方测绘形体预览</h1>
 <p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
 <p id="status">正在读取官方建筑与道路数据...</p>
-<p>灰色：官方建筑足迹按原始米制屋顶高度挤出；蓝色：官方道路中心线；无伪造车道和立面。</p>
+<p>灰色：官方建筑体量；蓝线：官方 DCM 道路中心线；<strong>绿色：官方 OTI 2022 道路面、黄色：官方 2022 路口面</strong>。不把路权宽度画成猜测的车道；道路面无真实坡度、路缘、2026 车道或材质。无真实建筑外立面。</p>
 <small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
 </aside>
+<section id="flightPanel">
+  <button id="toggleFlight" type="button" disabled>进入真实米制低空穿行</button>
+  <button id="resetFlight" type="button" disabled>返回官方道路起点</button>
+  <p id="flightState">等待官方建筑、道路数据核验...</p>
+  <small>低空模式：W/S 前后 · A/D 平移 · Q/E 下降/上升 · Shift 加速
+  · 鼠标拖动调整方向 · Esc 释放鼠标</small>
+  <small>仅为测绘源场景的碰撞/尺度样板。建筑外墙是中性体量，不是真实外立面；
+  路线为官方中心线，不代表车道或人行道几何。</small>
+</section>
 <script type="module">
+import {spawnOnVerifiedStreet,advanceMetricFlight,metricFlightTarget,
+  hitsBuilding} from './flight.mjs';
+import {buildOfficialStreetWidthEnvelopes} from './street-envelope.mjs';
 const status=document.querySelector('#status');
 const canvas=document.querySelector('#scene');
 const gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
@@ -40,7 +60,7 @@ gl.linkProgram(prog);
 if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
 gl.useProgram(prog);
 const uniform=gl.getUniformLocation(prog,'uTransform');
-const position=[],colors=[],normals=[],roadPos=[],roadColors=[],roadNormals=[];
+const position=[],colors=[],normals=[],roadPos=[],roadColors=[],roadNormals=[],pavementPos=[],pavementColors=[],pavementNormals=[];
 let triCount=0,roofTriangles=0;
 function addPoint(dstPos,dstColor,dstNorm,p,c,n){
   dstPos.push(p[0],p[1],p[2]);dstColor.push(...c);dstNorm.push(...n);
@@ -114,13 +134,54 @@ function matMul(a,b){
   return o;
 }
 let yaw=-.55,pitch=.75,distance=1050,target=[0,48,130],moving=false,last=[0,0];
-canvas.addEventListener('pointerdown',e=>{moving=true;last=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+const toggleFlight=document.querySelector('#toggleFlight');
+const resetFlight=document.querySelector('#resetFlight');
+const flightStateLabel=document.querySelector('#flightState');
+let flyMode=false,flyState=null,flyOrigin=null,buildingData=[],metreBounds=null;
+let flightKeys=Object.create(null),lastFrame=0,lastFlightBlocked=false;
+function resetToOfficialStreet(){
+  if(!flyOrigin)throw Error('No source-derived street spawn');
+  flyState={position:flyOrigin.position.slice(),yaw:flyOrigin.yaw,pitch:0};
+  lastFlightBlocked=false;
+}
+toggleFlight.addEventListener('click',()=>{
+  if(!flyOrigin)return;
+  flyMode=!flyMode;
+  if(flyMode&&!flyState)resetToOfficialStreet();
+  if(!flyMode&&document.pointerLockElement===canvas)document.exitPointerLock();
+  toggleFlight.textContent=flyMode?'返回全景测绘视角':'进入真实米制低空穿行';
+  flightStateLabel.textContent=flyMode?'官方道路低空飞行中':'已返回真实米制建筑全景';
+});
+resetFlight.addEventListener('click',()=>{if(flyOrigin)resetToOfficialStreet();});
+document.addEventListener('keydown',e=>{
+  if(/^(KeyW|KeyS|KeyA|KeyD|KeyE|KeyQ|ShiftLeft|ShiftRight)$/.test(e.code)){
+    flightKeys[e.code]=true;
+    if(flyMode)e.preventDefault();
+  }
+});
+document.addEventListener('keyup',e=>{flightKeys[e.code]=false;});
+window.addEventListener('blur',()=>{flightKeys=Object.create(null);});
+canvas.addEventListener('pointerdown',e=>{
+  moving=true;last=[e.clientX,e.clientY];
+  canvas.setPointerCapture(e.pointerId);
+  if(flyMode&&document.pointerLockElement!==canvas)
+    canvas.requestPointerLock?.();
+});
 canvas.addEventListener('pointerup',()=>moving=false);
 canvas.addEventListener('pointercancel',()=>moving=false);
 canvas.addEventListener('pointermove',e=>{
   if(!moving)return;
-  yaw+=(e.clientX-last[0])*.005;
-  pitch=Math.max(.17,Math.min(1.49,pitch+(e.clientY-last[1])*.004));
+  const dx=flyMode&&document.pointerLockElement===canvas?
+    e.movementX:e.clientX-last[0];
+  const dy=flyMode&&document.pointerLockElement===canvas?
+    e.movementY:e.clientY-last[1];
+  if(flyMode&&flyState){
+    flyState.yaw+=dx*.0034;
+    flyState.pitch=Math.max(-1.4,Math.min(1.4,flyState.pitch-dy*.0034));
+  }else{
+    yaw+=dx*.005;
+    pitch=Math.max(.17,Math.min(1.49,pitch+dy*.004));
+  }
   last=[e.clientX,e.clientY];
 });
 canvas.addEventListener('wheel',e=>{e.preventDefault();
@@ -133,6 +194,13 @@ try{
     throw Error('Incorrect provenance or production geometry in preview');
   if(source.projection?.scaleMetresPerGameUnit!==null)
     throw Error('Incompatible compressed PATROL coordinate transform');
+  // This pilot NEVER imports old PATROL-world compressed positions.
+  buildingData=source.buildings;
+  metreBounds=source.boundsMetres;
+  flyOrigin=spawnOnVerifiedStreet(source,buildingData);
+  resetToOfficialStreet();
+  toggleFlight.disabled=false;resetFlight.disabled=false;
+  flightStateLabel.textContent='已找到真实道路起点：'+flyOrigin.street;
   for(const b of source.buildings){
     if(!Array.isArray(b.outline)||!Number.isFinite(b.heightMeters)||b.heightMeters<=0)
       throw Error('Invalid official building geometry');
@@ -152,23 +220,64 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
+  // Retain old width-envelope data only for QA comparison. Its illustrative
+  // strips must NOT render over real, independently surveyed source polygons.
+  const envelopes=buildOfficialStreetWidthEnvelopes(source);
+  const pavementResponse=await fetch('./roadbed-mesh.json',{cache:'no-store'});
+  if(!pavementResponse.ok)throw Error('Source-verified 2022 OTI roadbed mesh unavailable');
+  const roadbed=await pavementResponse.json();
+  if(roadbed.schema!=='patrol-nyc-lowflight-oti-roadbed-metre-v1'||
+     roadbed.mode!=='SOURCE_VERIFIED_NO_DEFAULT_GAME_CHANGE'||
+     roadbed.year!==2022||
+     JSON.stringify(roadbed.projection)!==JSON.stringify(source.projection)||
+     roadbed.counts?.features<70||
+     roadbed.counts?.triangles<7000||
+     roadbed.positions?.length!==roadbed.counts.triangles*9||
+     roadbed.subtypes?.length!==roadbed.counts.triangles)
+    throw Error('Missing or incompatible official 1:1 OTI pavement geometry');
+  for(let i=0;i<roadbed.positions.length;i+=9){
+    const subtype=roadbed.subtypes[i/9];
+    const color=subtype===350010?[.74,.60,.32]:
+      subtype===350020?[.48,.44,.57]:[.29,.49,.43];
+    for(let j=0;j<9;j+=3){
+      const p=roadbed.positions.slice(i+j,i+j+3);
+      if(!p.every(Number.isFinite))throw Error('Nonfinite source pavement');
+      addPoint(pavementPos,pavementColors,pavementNormals,p,color,[0,1,0]);
+    }
+  }
+  const pavement=meshBuffer(pavementPos,pavementColors,pavementNormals);
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.CULL_FACE);
   gl.clearColor(.045,.076,.105,1);
-  function render(){
+  function render(now=0){
+    const delta=lastFrame?Math.min(.1,(now-lastFrame)/1000):0;
+    lastFrame=now;
+    if(flyMode&&flyState){
+      const next=advanceMetricFlight(flyState,flightKeys,delta,buildingData,metreBounds);
+      lastFlightBlocked=next.blocked;flyState=next;
+      // Browser-runner inspects this live camera and collision result.
+      flightStateLabel.textContent='道路 '+flyOrigin.street+
+        ' · 东 '+flyState.position[0].toFixed(1)+'m 北 '+
+        flyState.position[2].toFixed(1)+'m · 高度 '+
+        flyState.position[1].toFixed(1)+'m'+
+        (lastFlightBlocked?' · 建筑碰撞阻挡':'');
+    }
     const dpr=Math.min(2,window.devicePixelRatio||1);
     const width=Math.max(1,Math.floor(canvas.clientWidth*dpr));
     const height=Math.max(1,Math.floor(canvas.clientHeight*dpr));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
     gl.viewport(0,0,width,height);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    const eye=[
+    const eye=flyMode?flyState.position:[
       target[0]+distance*Math.cos(pitch)*Math.sin(yaw),
       target[1]+distance*Math.sin(pitch),
       target[2]+distance*Math.cos(pitch)*Math.cos(yaw)
     ];
-    gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,target)));
+    const cameraTarget=flyMode?
+      metricFlightTarget(flyState.position,flyState.yaw,flyState.pitch):target;
+    gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,cameraTarget)));
+    gl.bindVertexArray(pavement.vao);gl.drawArrays(gl.TRIANGLES,0,pavement.count);
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
     gl.bindVertexArray(null);
@@ -176,9 +285,25 @@ try{
   }
   window.geoPilotQA={ready:true,projection:'WGS84-local-east-north-metres',
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
-    buildingTriangles:triCount,streetVertices:streets.count};
+    buildingTriangles:triCount,streetVertices:streets.count,
+    streetWidthEnvelopes:envelopes.stats,
+    officialRoadbed2022:{source:roadbed.source,features:roadbed.counts.features,
+      triangles:roadbed.counts.triangles,provenance:'2022 OTI pavement polygon, not current lane or curb'},
+    noInventedStreetSurface:true,
+    sourceRoadSpawn:flyOrigin,
+    metricBounds:metreBounds.slice(),
+    getFlight:()=>({mode:flyMode,position:flyState?.position.slice(),
+      yaw:flyState?.yaw,pitch:flyState?.pitch,blocked:lastFlightBlocked,
+      collision:hitsBuilding(flyState.position,buildingData,1.2),
+      route:flyOrigin.street}),
+    setFlight:(enabled)=>{
+      if(Boolean(enabled)!==flyMode)toggleFlight.click();
+      return flyMode;
+    },
+    resetFlight:()=>{resetToOfficialStreet();return flyState.position.slice();}};
+
   status.textContent='官方建筑 '+source.counts.buildings+' 栋 · 街道要素 '+source.counts.roadFeatures+
-    ' 条 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
+    ' 条 · 2022 OTI 道路面 '+roadbed.counts.features+' 处 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
     ' × '+Math.round(source.boundsMetres[3]-source.boundsMetres[1])+' 米';
   render();
 }catch(error){

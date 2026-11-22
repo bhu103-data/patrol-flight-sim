@@ -152,6 +152,64 @@ export async function fetchOfficialRoads(fetcher=fetch){
   if(result.length<5)throw Error('Official DCM query returned too few intersecting streets: '+result.length);
   return {type:'FeatureCollection',features:result};
 }
+// Flag rather than conceal inconsistent official source layers. Centerlines
+// and building footprints may have differing vintages; never auto-shift either.
+function pointInsideRing(p,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const a=poly[i],b=poly[j];
+    if((a[1]>p[1])!==(b[1]>p[1]) &&
+        p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])
+      inside=!inside;
+  }
+  return inside;
+}
+function roadLengthInsidePolygon(a,b,poly){
+  const r=[b[0]-a[0],b[1]-a[1]];
+  const length=Math.hypot(...r);
+  if(length<1e-8)return 0;
+  const times=[0,1];
+  for(let i=0;i<poly.length;i++){
+    const c=poly[i],d=poly[(i+1)%poly.length],s=[d[0]-c[0],d[1]-c[1]];
+    const den=r[0]*s[1]-r[1]*s[0];
+    if(Math.abs(den)<1e-12)continue;
+    const ca=[c[0]-a[0],c[1]-a[1]];
+    const t=(ca[0]*s[1]-ca[1]*s[0])/den;
+    const u=(ca[0]*r[1]-ca[1]*r[0])/den;
+    if(t>0&&t<1&&u>=0&&u<=1)times.push(t);
+  }
+  times.sort((x,y)=>x-y);
+  let total=0;
+  for(let i=1;i<times.length;i++){
+    const midpoint=(times[i-1]+times[i])/2;
+    if(times[i]-times[i-1]>1e-8&&
+        pointInsideRing([a[0]+r[0]*midpoint,a[1]+r[1]*midpoint],poly))
+      total+=length*(times[i]-times[i-1]);
+  }
+  return total;
+}
+export function auditSourceRoadBuildingOverlaps(buildings,roads,minMetres=.10){
+  const issues=[];
+  for(const building of buildings){
+    const poly=building.outline, xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);
+    const xmin=Math.min(...xs),xmax=Math.max(...xs),
+      ymin=Math.min(...ys),ymax=Math.max(...ys);
+    for(const road of roads){
+      let inside=0;
+      for(const line of road.lines)for(let i=1;i<line.length;i++){
+        const a=line[i-1],b=line[i];
+        if(Math.max(a[0],b[0])<xmin||Math.min(a[0],b[0])>xmax||
+           Math.max(a[1],b[1])<ymin||Math.min(a[1],b[1])>ymax)continue;
+        inside+=roadLengthInsidePolygon(a,b,poly);
+      }
+      if(inside>=minMetres)issues.push({
+        buildingFid:building.fid,roadObjectId:road.objectId,
+        streetName:road.streetName,overlapMetres:round(inside,2)
+      });
+    }
+  }
+  return issues.sort((a,b)=>b.overlapMetres-a.overlapMetres);
+}
 function boundsOf(buildings,roads){
   const points=[
     ...buildings.flatMap(b=>b.outline),
@@ -182,6 +240,7 @@ export async function run(){
   const officialGeo=await fetchOfficialRoads();
   const roads=roadsInMeters(officialGeo);
   const bboxLocal=boundsOf(buildings,roads).map(v=>round(v,2));
+  const overlaps=auditSourceRoadBuildingOverlaps(buildings,roads);
   const packageData={
     schema:'patrol-nyc-times-square-metre-source-pilot-v1',
     assetRole:'GEOREFERENCED_SOURCE_QA_ONLY_NOT_IN_GAME',
@@ -198,13 +257,16 @@ export async function run(){
     counts:{inputBuildingRecords:source.features.length,buildings:buildings.length,
       omittedBuildings:source.features.length-buildings.length,roadFeatures:roads.length,
       roadLines:roads.reduce((n,r)=>n+r.lines.length,0)},
-    boundsMetres:bboxLocal,buildings,roads
+    boundsMetres:bboxLocal,sourceRoadBuildingOverlapAudit:{
+      requiresReview:overlaps.length>0,issues:overlaps
+    },buildings,roads
   };
   mkdirSync('artifacts/nyc-true-scale',{recursive:true});
   writeFileSync('artifacts/nyc-true-scale/source.json',JSON.stringify(packageData,null,2));
   writeFileSync('artifacts/nyc-true-scale/plan.svg',makeSvg(buildings,roads));
   console.log('NYC 1:1 source pilot',JSON.stringify({
     counts:packageData.counts,boundsMetres:bboxLocal,
+    roadBuildingOverlaps:overlaps,
     origin:ORIGIN,source:ROAD_SOURCE,readyForDefaultGame:false}));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
