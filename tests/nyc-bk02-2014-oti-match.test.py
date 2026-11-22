@@ -40,6 +40,19 @@ class BK02OtiMatchTest(unittest.TestCase):
                 self.assertLessEqual(row["centroidDistanceM"],1.0)
             if not row["assignedOneToOne"]:
                 self.assertNotEqual(row["matchStatus"],"high-confidence-footprint-match")
+    def test_registration_offset_is_stable_but_never_applied_automatically(self):
+        d=self.data["translationDiagnostic"]
+        self.assertGreaterEqual(d["sampleCount"],20)
+        self.assertTrue(-3.60<d["sourceMinusOtiMedianEastM"]<-3.40)
+        self.assertTrue(.35<d["sourceMinusOtiMedianSouthM"]<.55)
+        self.assertLess(d["sourceMinusOtiMadEastM"],.02)
+        self.assertLess(d["sourceMinusOtiMadSouthM"],.02)
+        self.assertGreater(d["medianIoUAfterCandidateTranslation"],.95)
+        self.assertGreater(d["highConfidenceAfterCandidateTranslation"],20)
+        self.assertFalse(d["appliedToSourceMesh"])
+        for row in self.data["matches"]:
+            if row["postShiftFootprintIoU"] is not None:
+                self.assertTrue(0<=row["postShiftFootprintIoU"]<=1)
     def test_relative_height_comparison_is_not_promoted_to_absolute_elevation(self):
         for row in self.data["matches"]:
             evidence=row["sourceHeightEvidence"]
