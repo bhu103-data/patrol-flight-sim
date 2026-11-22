@@ -1,5 +1,7 @@
 name: NYC 2014 MN05 authentic roof + facade cached-mesh pilot
 on:
+  push:
+    branches: [qa/nyc-mn05-roof-match-uniqueness-20261122-chat]
   pull_request:
     branches: [qa/nyc-mn05-roof-surface-true-metre-bounds-20261122-chat]
     paths:
