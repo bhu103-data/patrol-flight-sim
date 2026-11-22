@@ -11,6 +11,12 @@ export function decodeAlaskaFiveMetreTile(payload,parent){
      payload.axis!=='x=east, z=north, south-first raster rows' ||
      payload.width!==256||payload.height!==256||
      payload.metresPerInteger!==.1||payload.noDataInt16!==-32768||
+     payload.adjustAspectRatio!==false||
+     !Array.isArray(payload.actualBboxVerifiedFromServer)||
+     payload.actualBboxVerifiedFromServer.length!==4||
+     !payload.actualBboxVerifiedFromServer.every(Number.isFinite)||
+     !payload.actualBboxVerifiedFromServer.every((v,i)=>
+       Math.abs(v-payload.bbox[i])<1e-8)||
      !Array.isArray(payload.parentCoarseCellCentres)||
      payload.parentCoarseCellCentres.join(',')!==EXPECTED_COLS.join(',')||
      payload.sourceUrl!=='https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'||
@@ -22,16 +28,28 @@ export function decodeAlaskaFiveMetreTile(payload,parent){
     throw Error('Unverified experimental Tracy Arm high-resolution tile');
   validateTracyArmRaster(payload);
   validateTracyArmRaster(parent);
+  // Explicit server f=json verification is mandatory: with default auto-
+  // aspect a 256x256 TIFF silently expands the latitude bounds, and the
+  // historical source raster was previously mislabelled as its request bbox.
+  const request=new URL(payload.sourceQuery);
+  if(request.searchParams.get('adjustAspectRatio')!=='false'||
+     request.searchParams.get('bboxSR')!=='4326'||
+     request.searchParams.get('imageSR')!=='4326'||
+     request.searchParams.get('size')!=='256,256')
+    throw Error('USGS 5m TIFF was not explicitly exported at WGS84 bbox');
   const [west,south,east,north]=parent.bbox;
   if(payload.bbox[0]<=west||payload.bbox[1]<=south||
      payload.bbox[2]>=east||payload.bbox[3]>=north)
     throw Error('High-resolution tile escapes known USGS source extent');
+  // This is a validation of the requested historic bbox grid, NOT a claim
+  // that the legacy 30m TIFF pixel centres were truly at those coordinates.
+  // The old TIFF has a different ArcGIS effective latitude extent.
   for(const [col,row,targetCol,targetRow] of [[0,0,150,85],[255,255,190,125]]){
     const expected=rasterCellWgs84(parent,targetCol,targetRow);
     const actual=rasterCellWgs84(payload,col,row);
     if(Math.abs(actual[0]-expected[0])>1e-7||
        Math.abs(actual[1]-expected[1])>1e-7)
-      throw Error('High-resolution tile not aligned with original 30m cell centres');
+      throw Error('High-resolution tile request anchor mismatch (historical stored bbox only)');
   }
   const [sx,sy]=payload.sampleSpacingApproxMeters||[];
   if(!(sx>4.4&&sx<5.3&&sy>4.4&&sy<5.3))
