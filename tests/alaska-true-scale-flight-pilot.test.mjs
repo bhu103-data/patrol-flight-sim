@@ -74,4 +74,7 @@ test('materials are reused from already-bundled CC0 rather than unsourced scener
   assert.match(src,/vec3 ice=atlasColor\(1\.0,n\)/);
   assert.match(src,/photoReady=false/);
   assert.match(src,/if\(uPhoto\)/);
+  assert.match(src,/textureGrad\(uAlbedo,atlasUV/);
+  assert.match(src,/vec2 ddxX=dFdx\(px\),ddyX=dFdy\(px\)/);
+  assert.doesNotMatch(src,/return texture\(uAlbedo,atlasUV\)/);
 });
