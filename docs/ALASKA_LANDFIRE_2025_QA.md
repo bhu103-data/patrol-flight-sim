@@ -53,3 +53,25 @@ The 11,209 → 5,192 reduction comprises **5,837 cells outside the existing scen
 No authored asset represents a photogrammetric Sitka spruce or true individual tree location. Before optionally integrating a vegetation mask, test candidate gating with terrain height/slope, keep the existing 940-tree scene cap and glacier/harbor exclusions, preserve compatibility and map disposal, and capture fixed-camera WebGL2 screenshots/FPS on representative hardware.
 
 This PR should remain **draft / unmerged** until the shoreline discrepancy is reconciled and runtime tests have been completed.
+
+
+## 2026-11-22 — Additional real-data disagreement diagnostics
+
+These statistics were independently calculated offline from the actual Actions artifact \`alaska-real-gis-safe-forest-qa.zip\`, reprojecting \`LANDFIRE_EVC_AOI.tif\` to the exact same 256×256 EPSG:4326/south-first grid as \`qa/dem_water.southfirst.u8.gz\`. Distances are **image-cell** distances to the shoreline of **either** product, not horizontal positional errors or a surveyed tidal datum.
+
+- 9,445 water classification mismatches (14.4119% of 65,536 cells).
+- **8,522/9,445 (90.2%)** are within 8 image cells of at least one dataset's coastline.
+- **923** disagreements are farther than 8 image cells from both shorelines.
+- A brute-force integer translation of the LANDFIRE water layer over offsets in [-10,+10]×[-10,+10] cells did not resolve disagreement: the best **overlap-normalized** mismatch rate remained about **13.99%** versus **14.41%** unshifted. These rates are computed on different valid overlap extents and must not be misrepresented as direct coastline positional accuracy.
+
+**Interpretation:** A one-off image flip/translation is not a sufficient cure; shoreline geometry/classification/vintage/vertical-datum and terrain-product differences need independent adjudication. Do NOT replace physics water/shoreline or invent a surveyed coast.
+
+### NOAA official alternatives, verified network outcome
+
+- The documented NGS AK1803-CM-T project exists and has NGS-derived, older project shoreline; its NSDE distribution is not a verified direct per-project ZIP yet.
+- The current NOAA NSDE home page \`https://nsde.ngs.noaa.gov/\` is accessible and references official CUSP vector index at \`/cusp/cuspidx/{z}/{x}/{y}.pbf\` with project/tile downloads under \`/downloads/{name}.zip\`. Index-name resolution and individual archive retrieval must be **measured**, not guessed.
+- The **NOAA CUSP Alaska composite ZIP** \`https://geodesy.noaa.gov/dist_shoreline/Alaska.zip\` is a different product from project-specific NGS AK1803. GitHub Actions HEAD verification on run \`44988250654\`: **138,630,643 bytes**, HTTP 200, modified 2026-11-10. It includes multiple contemporary sources; verify per-feature provenance/reuse conditions before *redistributing* any derived geometry.
+- NGS WFS/WMS \`/GeoServer/NSDE/ows\` endpoints tested via both \`www.ngs.noaa.gov\` and \`geodesy.noaa.gov\` returned HTTP 404; do not claim WFS data acquired.
+- Staged isolated QA probes \`tools/alaska/probe_noaa_shoreline.py\`, \`tools/alaska/fetch_noaa_cusp_index.py\`, and \`tools/alaska/clip_noaa_cusp.py\` have **no approved runtime-data integration**. A CI job that has not run successfully is not a fetched dataset.
+
+Source and official metadata: https://www.fisheries.noaa.gov/inport/item/60585 and https://nsde.ngs.noaa.gov/more.html.
