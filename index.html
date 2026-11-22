@@ -10817,7 +10817,9 @@ const CENTRAL_PARK_SITES=[
           [cy,0,-sy],[0,1,0],[sy,0,cy],1),false,false,false);
       }
     }
-    if(selectedMap.city && nycGisMesh?.count && !nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
+    if(selectedMap.city && nycGisMesh?.count){
+      if(!nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
+    }
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycRoadChunkLevel){
       for(const chunk of nycRoadDetailChunks){
