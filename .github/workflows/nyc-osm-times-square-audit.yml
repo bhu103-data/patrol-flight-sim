@@ -1,0 +1,36 @@
+name: NYC OSM Times Square building-tag source audit (no game import)
+
+on:
+  pull_request:
+    paths:
+      - "assets/nyc/times-square-footprints.json"
+      - "scripts/nyc-osm-times-square-audit.mjs"
+      - "tests/nyc-osm-times-square-audit.test.mjs"
+      - "docs/NYC_OSM_TIMES_SQUARE_TAG_AUDIT.md"
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax and offline fixture tests
+        run: |
+          node --check scripts/nyc-osm-times-square-audit.mjs
+          node --test tests/nyc-osm-times-square-audit.test.mjs
+      - name: Fetch bounded OSM tags and audit source coverage
+        run: node scripts/nyc-osm-times-square-audit.mjs
+      - name: Upload ODbL-attributed summary report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-osm-times-square-tag-audit
+          path: artifacts/nyc-osm-times-square-audit/report.json
+          retention-days: 7
+          if-no-files-found: warn
