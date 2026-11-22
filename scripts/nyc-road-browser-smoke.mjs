@@ -4,9 +4,11 @@
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import {visibleHarborSkyFraction,MIN_HARBOR_SKY_FRACTION} from './nyc-harbor-sky-qa.mjs';
+import {runFlatironImport} from '../tools/nyc/run-flatiron-import.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const base=(process.env.PATROL_BASE_URL||'http://127.0.0.1:8765').replace(/\/$/,'');
 const out='artifacts/nyc';await mkdir(out,{recursive:true});
+const flatironImport=await runFlatironImport(out+'/flatiron-dcp-import');
 const errors=[],warnings=[];
 const browser=await chromium.launch({headless:true,args:[
  '--no-sandbox','--disable-dev-shm-usage','--ignore-gpu-blocklist',
@@ -14,6 +16,10 @@ const browser=await chromium.launch({headless:true,args:[
  '--enable-unsafe-swiftshader'
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+const flatironAssetResponsePromise=flatironImport.passed
+ ? page.waitForResponse(response=>response.url().includes('/assets/nyc/scenario/flatiron.glb'),{timeout:45000}).catch(()=>null)
+ : Promise.resolve(null);
+let flatironAssetResponse=null;
 page.on('pageerror',error=>errors.push(error.message));
 page.on('console',message=>{if(message.type()==='error')warnings.push(message.text());});
 page.on('requestfailed',req=>{
@@ -210,6 +216,9 @@ try{
   const load=document.getElementById('loadOverlay');
   return title?.hidden&&load?.classList.contains('done');
  },null,{timeout:120000});
+ flatironAssetResponse=await flatironAssetResponsePromise;
+ if(flatironImport.passed)check(flatironAssetResponse?.ok(),
+  'Official Flatiron GLB did not load through the existing scenario loader');
  // PATROL_NYC_QA_DAYLIGHT_LOCK_V1: a nine/ten-camera SwiftShader tour
  // can consume most of the game's 240-second day-night cycle. Freeze the
  // *test browser only* at noon, clear summer daylight for repeatable
@@ -481,8 +490,21 @@ try{
    'Times Square camera failed: '+JSON.stringify(view));
   await capture(name);
  }
-
-
+ if(flatironImport.passed){
+  await page.locator('#hotelTarget').selectOption({label:'Flatiron Building'});
+  await page.locator('#hotelZoom').evaluate(el=>{
+   el.value='42';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(1600);
+  const flatironView=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const label=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {label,webgl:Boolean(gl&&!gl.isContextLost()),error:gl?.getError()??null};
+  });
+  check(flatironView.label==='Flatiron Building'&&flatironView.webgl&&flatironView.error===0,
+   'Imported Flatiron camera failed: '+JSON.stringify(flatironView));
+  await capture('11-flatiron-dcp-import.png');
+ }
 
  // Matched diagnostic control: use the engine's existing GIS-off switch
  // rather than guessing which Times Square geometry owns a flat wall.
@@ -518,11 +540,15 @@ try{
   await capture('10-times-square-no-gis.png',{control:true});
  }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
+ check(!flatironImport.requested||flatironImport.passed,
+  'Official Flatiron model import failed: '+JSON.stringify(flatironImport));
  result={passed:true,state,bridge,dumbo,liberty,petalwakeQa,
-  screenshots,pixels,controlPixels,captureTimings,warnings};
+  screenshots,pixels,controlPixels,captureTimings,warnings,flatironImport,
+  flatironAsset:flatironAssetResponse?{status:flatironAssetResponse.status(),url:flatironAssetResponse.url()}:null};
 }catch(e){
  result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
-   captureTimings,errors,warnings};
+   captureTimings,errors,warnings,flatironImport,
+   flatironAsset:flatironAssetResponse?{status:flatironAssetResponse.status(),url:flatironAssetResponse.url()}:null};
  // Avoid another potentially stalled screenshot when the failure itself was
  // a SwiftShader capture timeout. Partial completed images stay in artifacts.
  if(!pendingShot)try{
