@@ -38,6 +38,40 @@ function mappedLine(line){
   const points=line.map(p=>toLocalMeters(p).map(v=>round(v)));
   return points.every(p=>p.every(Number.isFinite))?points:null;
 }
+/**
+ * ArcGIS intersects returns entire crossing street segments; clip only the
+ * *preview* coordinates to our WGS84 query envelope. Never warp/stretch data.
+ * Liang-Barsky preserves exact inside geometry and splits disjoint pieces.
+ */
+export function clipLineToBbox(points){
+  const [x0,y0]=toLocalMeters([BBOX[0],BBOX[1]]);
+  const [x1,y1]=toLocalMeters([BBOX[2],BBOX[3]]);
+  const output=[];let active=[];
+  function flush(){if(active.length>=2)output.push(active);active=[];}
+  for(let i=0;i<points.length-1;i++){
+    const a=points[i],b=points[i+1];
+    const dx=b[0]-a[0],dy=b[1]-a[1];
+    let lo=0,hi=1,inside=true;
+    for(const [p,q] of [[-dx,a[0]-x0],[dx,x1-a[0]],
+                         [-dy,a[1]-y0],[dy,y1-a[1]]]){
+      if(Math.abs(p)<1e-12){if(q<0){inside=false;break;}continue;}
+      const t=q/p;
+      if(p<0)lo=Math.max(lo,t);
+      else hi=Math.min(hi,t);
+      if(lo>hi){inside=false;break;}
+    }
+    if(!inside){flush();continue;}
+    const start=[round(a[0]+lo*dx),round(a[1]+lo*dy)];
+    const end=[round(a[0]+hi*dx),round(a[1]+hi*dy)];
+    if(Math.hypot(start[0]-end[0],start[1]-end[1])<.001)continue;
+    if(active.length&&Math.hypot(active.at(-1)[0]-start[0],
+      active.at(-1)[1]-start[1])>.005)flush();
+    if(!active.length)active.push(start);
+    active.push(end);
+    if(hi<1-1e-10)flush();
+  }
+  flush();return output;
+}
 export function buildingsInMeters(snapshot){
   if(!Array.isArray(snapshot?.features))throw Error('Missing vetted NYC building FIDs');
   const ids=new Set(),out=[];
@@ -66,7 +100,7 @@ export function roadsInMeters(geojson){
     const shape=f.geometry;
     if(shape?.type!=='LineString'&&shape?.type!=='MultiLineString')continue;
     const lines=(shape.type==='LineString'?[shape.coordinates]:shape.coordinates)
-      .map(mappedLine).filter(Boolean);
+      .map(mappedLine).filter(Boolean).flatMap(clipLineToBbox);
     if(!lines.length)continue;
     ids.add(id);
     const widthRaw=String(p.Streetwidth??'').trim();
@@ -161,7 +195,8 @@ export async function run(){
       'Official 3-D massing, terrain, glass facades and traffic not yet integrated',
       'Some DCM records may represent paper/record streets',
       'Existing compressed PATROL coordinates intentionally NOT used'],
-    counts:{buildings:buildings.length,roadFeatures:roads.length,
+    counts:{inputBuildingRecords:source.features.length,buildings:buildings.length,
+      omittedBuildings:source.features.length-buildings.length,roadFeatures:roads.length,
       roadLines:roads.reduce((n,r)=>n+r.lines.length,0)},
     boundsMetres:bboxLocal,buildings,roads
   };
