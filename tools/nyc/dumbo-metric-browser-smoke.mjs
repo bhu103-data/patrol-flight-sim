@@ -109,6 +109,12 @@ try{
  await page.waitForFunction('window.__metricFly?.getState().enabled===true');
  const spawnState=await page.evaluate(()=>window.__metricFly.getState());
  assert.equal(spawnState.position[1],9.5);
+ assert.equal(spawnState.sourcePhysicalId,56482);
+ assert.equal(spawnState.streetName,'FRONT ST');
+ assert.ok(spawnState.openAheadMetres>=20,
+  'viewing direction must be source bearing with sufficient 3D swept clearance');
+ assert.ok(Math.abs(spawnState.headingRadians)>1,
+  'source Front St is east-west and must not face into a generic building wall');
  assert.equal(spawnState.cameraOnly,true);
  assert.equal(spawnState.realC185Physics,false);
  assert.equal(spawnState.conflictRoadsDriveable,false);
