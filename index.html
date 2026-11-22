@@ -6569,7 +6569,7 @@ const CENTRAL_PARK_SITES=[
             // Raised panel sits in a real polygon-edge spandrel; no box.
             strip(cursor,left,low,high);
             strip(cursor+.016,left-.016,low+.035,high-.035,
-              nexusPanels[(j+row+k)%3],12,.046);
+              nexusPanels[(j+row+k)%3],4,.046);
             metalPanels++;
           }else strip(cursor,left,low,high);
           const glassInset=-.18;
@@ -6587,8 +6587,11 @@ const CENTRAL_PARK_SITES=[
             at(right,low,glassInset),at(left,low,glassInset),stone,12);
           addQuad(at(left,high,glassInset),at(right,high,glassInset),
             at(right,high,0),at(left,high,0),brick,12);
+          // Reuse existing physically shaded metal paint tag 4, NOT
+          // Brooklyn surface 12 whose brick/mortar shader is incorrect
+          // for glass-adjacent aluminum cladding on 84 Front Street.
           strip(left-.013,right+.013,high+.015,high+.13,
-            nexus?nexusPanels[(row+k)%3]:stone,12,.055);
+            nexus?nexusPanels[(row+k)%3]:stone,nexus?4:12,.055);
           if((row+j)%2===0){
             const mid=(left+right)*.5;
             strip(mid-.007,mid+.007,low,high,frame,12,glassInset+.012);
