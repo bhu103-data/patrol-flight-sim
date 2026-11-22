@@ -44,7 +44,7 @@ export function makeChongqingMarketTileRoof(THREE){
 export function makeChongqingMarketOpenFacade(THREE,{doorSide=-1,variant=0}={}){
   // 0.04 overlap of side wall inner faces at x=±9.72 prevents daylight seams.
   const vertices=[],uvs=[],indices=[],front=0,back=-.43,edge=9.76;
-  let frontQuads=0;
+  let frontQuads=0,lowerStoryIndexEnd=0;
   const quad=(a,b,c,d,face='side')=>{
     const start=vertices.length/3;
     // Each perpendicular reveal needs its own UV plane: without this,
@@ -91,12 +91,21 @@ export function makeChongqingMarketOpenFacade(THREE,{doorSide=-1,variant=0}={}){
       if(active.some(o=>cx>o.left&&cx<o.right&&cy>o.bottom&&cy<o.top))continue;
       if(x1-x0>1e-6&&y1-y0>1e-6)block(x0,x1,y0,y1);
     }
+    // Keep exactly two contiguous material groups. One group per box
+    // would issue hundreds of draw calls on each of the 3 nearby shops.
+    if(low<1)lowerStoryIndexEnd=indices.length;
   }
   const geo=new THREE.BufferGeometry();
   geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
   geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
   geo.setIndex(indices);geo.computeVertexNormals();
-  geo.userData={marketOpenings:openings,frontQuads,wallThickness:-back};
+  // Story separation is material-only: physical openings, index count,
+  // outward normals and the original 0.43-unit jamb depth are unchanged.
+  geo.addGroup(0,lowerStoryIndexEnd,0);
+  geo.addGroup(lowerStoryIndexEnd,indices.length-lowerStoryIndexEnd,1);
+  geo.userData={marketOpenings:openings,frontQuads,wallThickness:-back,
+    lowerStoryTriangles:lowerStoryIndexEnd/3,
+    upperStoryTriangles:(indices.length-lowerStoryIndexEnd)/3};
   return geo;
 }
 
@@ -178,7 +187,14 @@ export function buildChongqingMarketFronts({
     const geometry=makeChongqingMarketOpenFacade(THREE,{
       doorSide,variant:site.id==='tea-lane'?0:site.id==='stone-stair'?1:2
     });
-    const frontWall=new THREE.Mesh(geometry,timberMat);
+    // The old all-dark-wood facade hid actual window and stair geometry
+    // even in the camera-clear daylight screenshot. Chongqing district
+    // chronicles describe timber upper levels and mixed lower storefront
+    // finishes; keep lower facades distinct while reusing licensed CC0
+    // masonry (stone-stair) or lighter carved timber (the other two).
+    // Indexed geometry uses ONLY two contiguous material groups per wall.
+    const groundFinish=site.id==='stone-stair'?stoneMat:trimMat;
+    const frontWall=new THREE.Mesh(geometry,[groundFinish,timberMat]);
     frontWall.position.set(x,earth,z+2.78);
     frontWall.castShadow=true;frontWall.receiveShadow=true;
     scene.add(frontWall);facades.push(frontWall);
@@ -321,7 +337,8 @@ export function buildChongqingMarketFronts({
     sites:sites.length,posts:sites.length*2,
     galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
-    meshes:10,batchDraws:7,interiorBackings:interiors.count,
+    meshes:10,batchDraws:7,facadeMaterialDraws:facades.length*2,
+    interiorBackings:interiors.count,
     // 6 downstairs windows × (3 timber counters/shelves + 1 partition)
     // + 12 upstairs shutters + 6 staggered upper timber slats.
     interiorFittings:sites.length*14,

@@ -11,6 +11,9 @@ const {CHONGQING_MARKET_SITES,makeChongqingMarketTileRoof,
 class Geo{
   setAttribute(key,attribute){this[key]=attribute}
   setIndex(indices){this.index=indices}
+  addGroup(start,count,materialIndex){
+    (this.groups??=[]).push({start,count,materialIndex});
+  }
   // Browser Three.js returns an Index BufferAttribute with .count.
   // Keep the raw array too so geometry/orientation assertions remain usable.
   getIndex(){return {count:this.index.length}}
@@ -107,6 +110,36 @@ test('real gallery deck, posts, roof, glass and bracing use seven bounded batche
   assert.notEqual(objects[0].visible,false,'load-bearing timber remains');
   result.setQuality('normal');
   assert.equal(objects[4].visible,true);
+});
+
+test('two per-story facade groups preserve openings while highlighting distinct CC0 finishes',()=>{
+  const {facades,objects,result}=generated();
+  const [, ,stone,,trim]=objects;
+  assert.equal(result.stats.facadeMaterialDraws,6,
+    'one material draw for each of two stories per facade');
+  assert.equal(facades.length,3);
+  for(let i=0;i<facades.length;i++){
+    const facade=facades[i],g=facade.geometry;
+    assert.equal(g.groups.length,2,'single bounded draw per distinct story');
+    const [lower,upper]=g.groups;
+    assert.deepEqual([lower.start,lower.materialIndex],[0,0]);
+    assert.equal(upper.materialIndex,1);
+    assert.equal(upper.start,lower.count,'no overlapping or missing triangles');
+    assert.equal(upper.start+upper.count,g.index.length,
+      'groups cover exactly the physical 3D facade triangles');
+    assert.equal(g.userData.lowerStoryTriangles,lower.count/3);
+    assert.equal(g.userData.upperStoryTriangles,upper.count/3);
+    assert.ok(lower.count>0&&upper.count>0&&
+      lower.count%3===0&&upper.count%3===0,
+      'both building stories have real indexed wall meshes');
+    assert.equal(g.userData.marketOpenings.length,7,
+      'two material groups must not fill any door/window hole');
+    assert.equal(facade.material.length,2);
+    assert.equal(facade.material[1],objects[0].material,
+      'upper storey and timber supports share the original wood surface');
+    assert.equal(facade.material[0],i===1?stone.material:trim.material,
+      'central stone-stair shop uses stone; its neighbors have lighter carved wood');
+  }
 });
 
 test('all 21 panes sit behind physical jambs with varied projecting sashes and sills',()=>{

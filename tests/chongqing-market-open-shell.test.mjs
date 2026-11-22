@@ -18,6 +18,9 @@ const {makeChongqingMarketOpenFacade}=await import(
 class FacadeGeometry {
   setAttribute(k,a){this[k]=a}
   setIndex(a){this.index=a}
+  addGroup(start,count,materialIndex){
+    (this.groups??=[]).push({start,count,materialIndex});
+  }
   computeVertexNormals(){}
 }
 const facadeThree={
@@ -66,6 +69,14 @@ test('real open facades overlap side walls and rear walls without daylight crack
   const facadeHalfWidth=Math.max(...verts.filter((_,i)=>i%3===0).map(Math.abs));
   const frontBack=2.78-facade.userData.wallThickness;
   assert.equal(facade.index.length/3,624,'unchanged 3D wall triangle budget');
+  assert.equal(facade.groups.length,2,'two real material groups per facade');
+  assert.equal(facade.groups[0].start,0);
+  assert.equal(facade.groups[0].materialIndex,0);
+  assert.equal(facade.groups[1].materialIndex,1);
+  assert.equal(facade.groups[0].count,facade.groups[1].start);
+  assert.equal(facade.groups[1].start+facade.groups[1].count,
+    facade.index.length,'two groups must cover entire original wall');
+
   const {draws,ground}=generated();
   for(const x of [236,284,332]){
     const z=345,base=ground(x,z);
