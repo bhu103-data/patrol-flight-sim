@@ -4,6 +4,7 @@ on:
     paths:
       - "assets/nyc/nyc-metric-footprints.mjs"
       - "tools/nyc/fetch-times-square-cscl.mjs"
+      - "tools/nyc/fetch-times-square-curbs.mjs"
       - "assets/nyc/nyc-metric-centerlines.mjs"
       - "assets/nyc/times-square-footprints.json"
       - "nyc-metric-pilot.html"
@@ -27,6 +28,8 @@ jobs:
         run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs
       - name: Pin real public NYC street centrelines as QA artifact (never fabricated)
         run: node tools/nyc/fetch-times-square-cscl.mjs
+      - name: Verify independent official NYC 2022 planimetric curb geometry
+        run: node tools/nyc/fetch-times-square-curbs.mjs
       - name: Install open-source WebGL2 test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
