@@ -1,6 +1,12 @@
 name: Alaska NOAA CUSP indexed shoreline QA
 
 on:
+  push:
+    branches:
+      - codex/alaska-official-gis-aoi-fetch-20261122
+    paths:
+      - '.github/workflows/alaska-noaa-cusp-index.yml'
+      - 'tools/alaska/fetch_noaa_cusp_index.py'
   pull_request:
     paths:
       - '.github/workflows/alaska-noaa-cusp-index.yml'
