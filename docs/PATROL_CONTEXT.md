@@ -27,6 +27,7 @@ Visual reference: Saltline's rainy harbor mood may guide wet asphalt, cold-gray 
 - The detailed historical checkpoint is in `docs/ACTIVE_FLIGHT_SIM_HANDOFF.md`; consult it only when the selected task needs older PR/test evidence.
 - Previously recorded merged baseline includes NYC roof/setback work and browser smoke coverage. Recheck current `main`, open PRs and Actions before relying on any PR number or commit.
 - Existing NYC Scenario integration files include `assets/nyc/scenario-manifest.json`, `assets/nyc/nyc-realism.js`, and `assets/nyc/scenario/*.glb`; never enable a missing or unreviewed model.
+- Extracted Gemini and Claude research notes are preserved in `docs/AI_AGENT_HANDOFF_2026-11-22.md`; they are leads, not verified implementation evidence.
 - GitHub-verified on 2026-11-22: draft PR `#255` (`feat/nyc-one-times-skywalk-20261122-chat`, head `6d84be4544c8b02938ab53a7c3a4817c234d761f`) adds an opt-in One Times Square north Skywalk to the live flight map. It is open, mergeable and unmerged. Reported WebGL/Node checks are green, but native GPU performance and protrusion collision remain unverified.
 - GitHub-verified on 2026-11-22: draft PR `#256` (`feat/nyc-liberty-cc0-optin-lod-20261122-chat`, head `10cfa432fbd77350e66a66d45da1550b3d5cfb10`) adds opt-in Liberty CC0 GLB LOD/rollback using a pinned 15,900-triangle asset. It is open, mergeable, unmerged and stacked on unmerged parent work; native GPU and manually flown low-altitude collision remain unverified.
 
