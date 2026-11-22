@@ -30,6 +30,12 @@ export function buildChongqingHotpotLowerFacade({
       });
     }
   }
+  // A shallow crowning cap visually joins the masonry and the timber below
+  // the windows; it is wall relief, not a curb or walkable step.
+  stoneParts.push({
+    x:shopX,y:shopFloor+3.045,z:frontZ+.09,
+    w:70.8,h:.36,d:.34,tint:0xd3d6d2
+  });
   // Six clearly articulated wood-batten bays, behind pre-existing massive
   // load-bearing posts at x = shopX-30..shopX+30. No intrusion into windows
   // beginning around floor+9, and no imaginary cut-outs in the solid core.
