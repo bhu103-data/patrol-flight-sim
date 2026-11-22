@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildOverpassQuery,polygonMetrics,analyzeOsmFeatures,OSM_LICENSE,OSM_ATTRIBUTION
+  buildOverpassQuery,polygonMetrics,analyzeOsmFeatures,fetchOverpass,OSM_LICENSE,OSM_ATTRIBUTION
 } from '../scripts/nyc-osm-times-square-audit.mjs';
 
 const rect=(cx,cy,dx=.0001,dy=.0001)=>[
@@ -69,4 +69,22 @@ test('multiple overlapping candidate outlines are flagged ambiguous, not guessed
   assert.equal(report.join.uniqueMatches,0);
   assert.equal(report.join.ambiguousFids.length,1);
   assert.deepEqual(report.join.ambiguousFids[0].candidateOsmIds,[456,457]);
+});
+
+test('Overpass fallback records the endpoint that actually returned data',async()=>{
+  let calls=0;
+  const result=await fetchOverpass('bounded-query',{
+    endpoints:['https://first.invalid','https://second.invalid'],
+    timeoutMs:100,
+    fetchImpl:async(url,options)=>{
+      calls++;
+      assert.equal(options.method,'POST');
+      assert.match(String(options.body),/data=bounded-query/);
+      if(calls===1)return {ok:false,status:503};
+      return {ok:true,json:async()=>({elements:[{type:'way',id:1}]})};
+    }
+  });
+  assert.equal(calls,2);
+  assert.equal(result.endpoint,'https://second.invalid');
+  assert.equal(result.data.elements.length,1);
 });
