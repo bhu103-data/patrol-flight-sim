@@ -62,6 +62,24 @@ async function capture(name){
   }
   const pixels={width:png.width,height:png.height,colorBins:colorBins.size,
     nearBlackFraction:nearBlack/Math.max(1,sampled)};
+  if(name==='00-spawn'){
+    // The original oversized red sphere covered ~36% of this fixed ROI.
+    // A real open hotpot should leave the restaurant storefront visible.
+    let red=0,total=0;
+    for(let y=100;y<335;y+=4)for(let x=540;x<790;x+=4){
+      const offset=(y*png.width+x)*4;
+      const r=png.data[offset],g=png.data[offset+1],bl=png.data[offset+2];
+      if(r>90&&r>g*1.6&&r>bl*1.7)red++;
+      total++;
+    }
+    pixels.hotpotRedDomeFraction=red/Math.max(1,total);
+    check(pixels.hotpotRedDomeFraction<.18,
+      'Oversized red hotpot sphere still hides spawn storefront: '+
+        pixels.hotpotRedDomeFraction);
+    check(state.game.hotpotDisplayParts>=17&&state.game.hotpotDisplayParts<=25&&
+      state.game.hotpotDisplayHeight<=2.5,
+      'Grounded open hotpot display missing from live game');
+  }
   // Conservative limits: reject empty/noise frames without treating this as
   // a geometry realism score. Keep night scenes and dark river areas valid.
   check(pixels.width>=640&&pixels.height>=360&&pixels.colorBins>20&&
