@@ -5050,7 +5050,7 @@ const CENTRAL_PARK_SITES=[
     const radius=actor.laneOffset??1.07;
     const period=2*(actor.route.total+Math.PI*radius);
     const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
-      (actor.signalQueueSlot??0)*5.5;
+      (actor.signalQueueSlot??0)*6.05;
     const speed=actor.pace;
     let now=0,distance=actor.offset;
     for(let count=0;count<256 && now<time;count++){
@@ -5200,7 +5200,7 @@ const CENTRAL_PARK_SITES=[
           signalized:true,signalQueueSlot:j,
           // Equal-speed headway keeps the two bridge connector cars from
           // overtaking a stopped vehicle after long sessions. Both retain
-          // their separate 5.5-unit signal stop/queue slots.
+          // their separate 6.05-unit signal stop/queue slots.
           route:connector,offset:connector.total*(.18-j*.02),
           pace:5.0,livery:j});
       }
