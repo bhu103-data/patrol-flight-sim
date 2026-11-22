@@ -1,4 +1,5 @@
-name: NYC 2014 authentic MN05 baked Brep rooftop mesh extraction
+name: NYC 2014 authentic MN05 roof and facade Brep mesh extraction
+# Runs on the stacked facade child only when the original source/mesh files change
 on:
   pull_request:
     paths:
@@ -31,13 +32,12 @@ jobs:
       - name: Independently test source saved mesh faces, quad splitting and georeferenced FID match
         run: |
           python -m py_compile tools/nyc/extract-mn05-cached-roof-mesh.py
+          python -m py_compile tools/nyc/inspect_mn05_support.py
+          python -m py_compile tools/nyc/inspect_mn05_facade_support.py
+          python -m py_compile tools/nyc/extract-mn05-cached-facade-mesh.py
           python tests/nyc-mn05-cached-roof-source.test.py
+          python tests/nyc-mn05-cached-facade-source.test.py
           python tests/nyc-official-mn05-coordinate-frame.test.py
-          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
-            python -m py_compile tools/nyc/inspect_mn05_facade_support.py
-            python -m py_compile tools/nyc/extract-mn05-cached-facade-mesh.py
-            python tests/nyc-mn05-cached-facade-source.test.py
-          fi
       - name: Obtain immutable original NYC DCP MN05 2014 3DM, never modified
         run: |
           PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
@@ -46,11 +46,8 @@ jobs:
         run: |
           PATROL_KEEP_MN05=1 python tools/nyc/extract-mn05-cached-roof-mesh.py
           test -s artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
-          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
-            python tools/nyc/extract-mn05-cached-facade-mesh.py
-            test -s artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
-          fi
-          rm -f artifacts/nyc-official-mn05/mn05-source.3dm
+          python tools/nyc/extract-mn05-cached-facade-mesh.py
+          test -s artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
           test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
       - uses: actions/setup-node@v4
         with:
@@ -74,10 +71,8 @@ jobs:
           test -s artifacts/nyc-official-mn05/roof-browser-report.json
           test -s artifacts/nyc-official-mn05/municipal-roof-off.png
           test -s artifacts/nyc-official-mn05/municipal-roof-on.png
-          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
-            test -s artifacts/nyc-official-mn05/facade-off.png
-            test -s artifacts/nyc-official-mn05/facade-on.png
-          fi
+          test -s artifacts/nyc-official-mn05/facade-off.png
+          test -s artifacts/nyc-official-mn05/facade-on.png
       - name: Publish bounded 2014 original-mesh evidence, not 627MB Rhino source
         if: always()
         uses: actions/upload-artifact@v4

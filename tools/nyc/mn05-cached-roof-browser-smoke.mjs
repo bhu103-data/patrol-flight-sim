@@ -29,7 +29,10 @@ try{
       canvas:[canvas.width,canvas.height]};
   });
   if(!qa.ready||qa.error||qa.sourceTriangles<10||qa.matchedFids<3||
+     qa.sourceFacadeTriangles<50||qa.matchedFacadeFids<3||
      qa.displayOnly!==true||qa.originalZDatumVerified!==false||
+     qa.sourceModelUnitSystem!=='Feet'||qa.sourceZReliefPreserved!==true||
+     qa.maxSourceRoofReliefMetres<.1||
      qa.contextLost||qa.glError!==0||qa.canvas[0]!==1280)
     throw Error('Actual original municipal rooftop WebGL evidence invalid '+JSON.stringify(qa));
   const toggle=page.locator('#showActualRoofs');
@@ -43,6 +46,36 @@ try{
   const onQA=await page.evaluate(()=>window.mn05RoofQA.trianglesDrawn());
   if(offQA!==0||onQA!==qa.sourceTriangles)
     throw Error('Roof source mesh is not actually toggling in WebGL draw path');
+  // Isolate true facade geometry: disable roof triangles for both frames.
+  await toggle.uncheck();
+  const facadeToggle=page.locator('#showActualFacades');
+  await facadeToggle.uncheck();
+  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+  const facadeOff=await page.locator('canvas').screenshot({path:out+'facade-off.png'});
+  const facadeOffQA=await page.evaluate(()=>window.mn05RoofQA.facadeTrianglesDrawn());
+  await facadeToggle.check();
+  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+  const facadeOn=await page.locator('canvas').screenshot({path:out+'facade-on.png'});
+  const facadeOnQA=await page.evaluate(()=>window.mn05RoofQA.facadeTrianglesDrawn());
+  if(facadeOffQA!==0||facadeOnQA!==qa.sourceFacadeTriangles)
+    throw Error('Original municipal facade meshes are not toggling in WebGL draw path');
+  const facadeA=PNG.sync.read(facadeOff),facadeB=PNG.sync.read(facadeOn);
+  if(facadeA.width!==facadeB.width||facadeA.height!==facadeB.height)
+    throw Error('Facade A/B source screenshots not same camera framebuffer');
+  let facadeChanged=0,facadeTotal=0,facadeSum=0;
+  for(let i=0;i<facadeA.data.length;i+=4){
+    const d=(Math.abs(facadeA.data[i]-facadeB.data[i])+
+      Math.abs(facadeA.data[i+1]-facadeB.data[i+1])+
+      Math.abs(facadeA.data[i+2]-facadeB.data[i+2]))/3;
+    facadeSum+=d;facadeTotal++;
+    if(d>6)facadeChanged++;
+  }
+  report.facadeGraphics={facadeOffTriangles:facadeOffQA,
+    facadeOnTriangles:facadeOnQA,pixelDeltaOver6:facadeChanged,
+    changedPercent:100*facadeChanged/facadeTotal,
+    meanRgbDelta:facadeSum/facadeTotal};
+  if(facadeChanged<75||report.facadeGraphics.changedPercent<.005)
+    throw Error('Genuine municipal facade source did not visibly change WebGL canvas');
   const a=PNG.sync.read(off),b=PNG.sync.read(on);
   if(a.width!==b.width||a.height!==b.height)
     throw Error('A/B source screenshots not same camera framebuffer');
