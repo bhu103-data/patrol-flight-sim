@@ -72,7 +72,8 @@ try{
   await page.waitForFunction(()=>{
     const s=window.__patrolNycVisualProbe?.stats();
     return s?.city && s?.proceduralTriangles>0 &&
-      s?.sceneryTriangles>0;
+      s?.sceneryTriangles>0 && s?.gisTriangles>0 &&
+      typeof window.__patrolNycVisualProbe?.setGisSkippedFids==='function';
   },null,{timeout:60000});
   await page.keyboard.press('h');
   await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
