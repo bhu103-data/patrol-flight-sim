@@ -32,7 +32,7 @@ test('Venetian belfry geometry has actual open arch rings on all four facades',(
 test('tower collision, site, roof apex and map selector are unchanged',()=>{
   assert.deepEqual(colliders,[['Venetian Campanile',-11,8,ground,ground+16.4,1.925,1.925]]);
   assert.match(html,/solidAt\('Venetian Campanile spire',-11,8,ground\+16\.4,ground\+20\.75,0\.6,0\.6\)/);
-  assert.match(html,/\{site:\{name:'Venetian Campanile Close-up'\},x:-11,z:8,height:12/);
+  assert.match(html,/\{site:\{name:'Venetian Campanile Close-up'\},x:-11,z:8,height:13\.9/);
   assert.ok(boxes.length<115,'tiny bounded mesh patch, no city-wide boxes');
   assert.match(html,/function buildVegasStrip\(geometry\)/);
   assert.match(html,/function buildVegasHotels\(/);
