@@ -4,7 +4,7 @@
  */
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
-const sha='6d50bfda4b2d3837e550751ede49b200b140bc72';
+const sha='38a9be192ca14cf5d47f6991d050b4093357f044';
 const root='http://127.0.0.1:8765/';
 mkdirSync('artifacts',{recursive:true});
 function qaDocument(input,output){
@@ -118,7 +118,8 @@ try{
   for(const key of Object.keys(result.old)){
     const b=result.old[key],n=result.updated[key];
     const drift=Math.hypot(...b.pose.position.map((x,i)=>x-n.pose.position[i]));
-    if(drift>.01||Math.abs(b.pose.yaw-n.pose.yaw)>.005)
+    if(drift>.01||Math.abs(b.pose.yaw-n.pose.yaw)>.005||
+       Math.abs(b.pose.pitch-n.pose.pitch)>.005)
       throw Error('Mismatch '+key+' camera: '+drift);
     if(b.canvas.lost||n.canvas.lost)throw Error('Lost WebGL2 context');
     result[key]={cameraDrift:drift,baselineFps:b.timing.observedFps,

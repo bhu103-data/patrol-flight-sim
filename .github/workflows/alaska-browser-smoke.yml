@@ -47,7 +47,7 @@ jobs:
         run: node tools/alaska/smoke_browser.mjs
       - name: Capture same-camera Alaska aurora, sky and water with RAF pacing
         run: |
-          git show 6d50bfda4b2d3837e550751ede49b200b140bc72:index.html > alaska-aurora-base.html
+          git show 38a9be192ca14cf5d47f6991d050b4093357f044:index.html > alaska-aurora-base.html
           node tools/alaska/compare_realtime_aurora.mjs
       - uses: actions/upload-artifact@v4
         if: always()
