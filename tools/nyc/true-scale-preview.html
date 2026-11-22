@@ -246,6 +246,16 @@ try{
     }
   }
   const pavement=meshBuffer(pavementPos,pavementColors,pavementNormals);
+  // Measured street edges are an explicit QA option, not a new default map.
+  // Use dynamic import so existing unmodified low-flight artifacts work without
+  // the extra source file and without fetching third-party geodata in-browser.
+  let measuredEdges=null;
+  if(new URLSearchParams(window.location.search).get('realEdges')==='1'){
+    const {createMeasuredEdgeLayer}=await import('./edge-layer.mjs');
+    measuredEdges=await createMeasuredEdgeLayer({
+      sourceProjection:source.projection,meshBuffer,addPoint
+    });
+  }
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
   gl.enable(gl.DEPTH_TEST);
@@ -278,6 +288,7 @@ try{
       metricFlightTarget(flyState.position,flyState.yaw,flyState.pitch):target;
     gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,cameraTarget)));
     gl.bindVertexArray(pavement.vao);gl.drawArrays(gl.TRIANGLES,0,pavement.count);
+    measuredEdges?.draw(gl);
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
     gl.bindVertexArray(null);
@@ -290,6 +301,14 @@ try{
     officialRoadbed2022:{source:roadbed.source,features:roadbed.counts.features,
       triangles:roadbed.counts.triangles,provenance:'2022 OTI pavement polygon, not current lane or curb'},
     noInventedStreetSurface:true,
+    officialStreetEdges2022:measuredEdges?{
+      sourceOnly:measuredEdges.sourceOnly,year:measuredEdges.sourceYear,
+      sidewalkFeatures:measuredEdges.sidewalkFeatures,
+      sidewalkTriangles:measuredEdges.sidewalkTriangles,
+      curbFeatures:measuredEdges.curbFeatures,
+      curbCuts:measuredEdges.curbCuts,
+      curbLineVertices:measuredEdges.curbLineVertices
+    }:null,
     sourceRoadSpawn:flyOrigin,
     metricBounds:metreBounds.slice(),
     getFlight:()=>({mode:flyMode,position:flyState?.position.slice(),
@@ -305,6 +324,8 @@ try{
   status.textContent='官方建筑 '+source.counts.buildings+' 栋 · 街道要素 '+source.counts.roadFeatures+
     ' 条 · 2022 OTI 道路面 '+roadbed.counts.features+' 处 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
     ' × '+Math.round(source.boundsMetres[3]-source.boundsMetres[1])+' 米';
+  if(measuredEdges)status.textContent+=' · 2022 OTI 人行道 '+measuredEdges.sidewalkFeatures+
+    ' 处 · 路缘 '+measuredEdges.curbFeatures+' 段 · 路缘缺口 '+measuredEdges.curbCuts+' 处';
   render();
 }catch(error){
   window.geoPilotQA={ready:false,error:String(error)};
