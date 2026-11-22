@@ -120,3 +120,28 @@ the exact PR head. Execute real Chromium WebGL2 near/mid/far A/B and
 cross-map low-graphics QA. If missing GLBs, wrong faces, fallback unexpectedly
 activated, ship/water collision changes or browser visual defects occur,
 keep #258 Draft and fix on this isolated branch only.
+
+
+## NYC harbor 2026-11-22 — verified progress and hard release gate
+
+This checkpoint is factual status **as of GitHub CI #45040331892 being queued**. Do not infer an unobserved success.
+
+### Successfully executed and checked
+- Stage job in [run 45039081978](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039081978) completed successfully and committed the exact three derived CC0 GLBs + provenance JSON into this isolated branch. This was the ONLY one-off write-token stage and has been removed from the new CI configuration; future QA is read-only.
+- [Node run 45039731347](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45039731347): **473/473** passed. Real production \`buildShipMesh\` instrumentation reported **cruise 7341 / ferry 3090 / cargo 2373 triangles**. Existing actual hulls remain the collision authority; only ferry visual is optionally replaced.
+- The original tevy car ferry GLB bounds were inspected at native scale: approx **20.101 × 28.235 × 92.102 metres (X/Y/Z)**. Normalized to game height 7.5 units, rendered width ~5.34 and depth ~24.47 units, bounded by the existing ferry width 6.6 and length 26 game units. This is a visual scaling proof, not a full true-metre geography match.
+- Discovered a **production GLB decoder constraint**: \`decodeGLB()\` checks POSITION float *components* (not vertices) and normally limits to **240,000 floats**, insufficient for LOD0's **52,069 × 9 = 468,621** floats. Feature branch now allows up to 480,000 **only for SHA/length-verified \`near\` ferry GLB**, while every other NYC landmark retains the existing default 240,000. A regression ensures this isolated cap. LOD1 needs 177,975 floats; LOD2 49,302, both fit without an exception.
+- \`assets/nyc/nyc-harbor-ferry-lods.js\` selects near under 140 game units, mid 140–379, far >=380, with deliberate cheap visual fallback on failed file or context, same-origin URL and asset SHA checks, GPU VAO/VBO/texture cleanup on map switch, and original procedural ship rendering if no decoded tier exists.
+- Additional tests in \`tests/nyc-harbor-ferry-lods.test.mjs\` use the real bundled GLB binaries and mock GPU to verify hashes, per-tier selection, 404 fallback and cleanup. The last previously completed 473-test run precedes the *near-only* decoder bound patch; the next full run must pass on the **final branch head** before accepting it.
+
+### Browser QA present but NOT YET ACCEPTED
+- \`tools/nyc/smoke_cc0_ferry_webgl.mjs\` creates a temporary in-memory test HTML fixture and uses genuine Chromium SwiftShader WebGL2. It checks the opt-in NYC ferry near/mid/far draw counts with screenshots and default NYC, \`graphics=compat\`, Alaska and Chongqing no-download behavior. The temporary camera fixture does NOT ship in the public \`index.html\`.
+- A scoped **read-only** browser job \`nyc-ferry-cc0-real-webgl\` in existing \`.github/workflows/patrol-regression.yml\` runs on PR #258 only, with artifacts \`artifacts/nyc/ferry-lod\`. It was created because the broad 10-camera NYC workflow is behind a concurrency queue.
+- Latest [run 45040331892](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45040331892) was queued during this checkpoint. **Do not report actual browser render pass, cross-map QA, GPU FPS, boat visual accuracy or merge authorization until the real logs and nonblank PNG artifacts are checked.**
+- [PR #258](https://github.com/bhu103-data/patrol-flight-sim/pull/258) remains DRAFT, open, unmerged, base \`main\`; only the scoped NYC source code and audit files are changed. No physical ferry/ship collision, routes, floatplane movement or other maps are intentionally changed.
+
+### Required follow-up
+1. Verify final-head Node and real browser job status. If near tier fails in GLB decoder, inspect exact error and fix only staged source or ferry-specific parser; do not globally raise other landmark budgets.
+2. Open the artifact and inspect actual near/mid/far screenshots at fixed camera; verify glTF Base Color, hull orientation, waterline, bridge clearance and LOD selection. Cross-map default/compat/Alaska/Chongqing must trigger zero ferry asset fetches.
+3. Test real hardware WebGL2 frame pacing and first-load, if available. SwiftShader frame timing cannot stand in for hardware FPS.
+4. Keep draft/unmerged if any screenshot, collision or legal issue remains. No false claims of survey-grade NYC ferry reproduction.
