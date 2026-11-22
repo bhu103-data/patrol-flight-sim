@@ -25,7 +25,14 @@ try{
   });
   if(stats.error||!stats.ready||stats.contextLost||stats.glError||
      stats.sourceBuildings<100||stats.sourceRoads<20||
-     stats.buildingTriangles<300||stats.streetVertices<100){
+     stats.buildingTriangles<300||stats.streetVertices<100||
+     stats.officialRoadbed2022?.features<70||
+     stats.officialRoadbed2022?.triangles<7000||
+     stats.officialPedestrian2022?.plazas<5||
+     stats.officialPedestrian2022?.sidewalks<40||
+     stats.officialPedestrian2022?.curb<150||
+     stats.officialPedestrian2022?.curbCuts<150||
+     !stats.officialPedestrian2022?.noSurveyedVerticalDatum){
     throw Error('Real metre WebGL source preview failed '+JSON.stringify(stats));
   }
   await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
