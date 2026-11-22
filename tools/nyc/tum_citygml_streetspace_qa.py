@@ -116,7 +116,7 @@ def summarize_geojson(path: Path) -> dict[str, Any]:
 
 
 def ogrinfo_json(source_path: Path) -> dict[str, Any]:
-    result = run_command(["ogrinfo", "-json", "-ro", "-so", str(source_path)])
+    result = run_command(["ogrinfo", "-json", "-ro", "-so", "-al", str(source_path)])
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as error:
