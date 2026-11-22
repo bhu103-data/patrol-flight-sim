@@ -47,8 +47,11 @@ scene -Z true north; the source airborne function has +Z north. The
 \`cameraYaw=PI-physicsYaw\` transform preserves exact direction while
 all source FIDs and all actual OTI geometry remain unrotated.
 
-A swept aircraft flight path is sampled every **0.25 metre** (and
-four 1.2m lateral/longitudinal clearance probes plus center) against
+A swept aircraft flight path is sampled every **0.25 metre** with
+source-geometry 3-D hull sample points: C185 half-span **5.461m**,
+half-length **3.90525m**, rolled/pitched wingtip positions, nose/tail and
+four intermediate hull corners, each with five clearance probes at 1.2m
+in the current viewer, against
 original OTI building polygon prisms and HEIGHTROOF metre values.
 A collision rejects movement and stops speed rather than flying through
 a facade or teleporting to an invented safe building. Vertical model
