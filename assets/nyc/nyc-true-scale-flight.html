@@ -328,7 +328,8 @@ async function start(){
     stats.historicalRoofTriangles+' original 2014 roof triangles / '+
     stats.historicalFacadeTriangles+' original 2014 facade triangles';
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
-    ' illustrative windows · '+stats.historicalRoofFids+' 2014 roof FIDs / '+
+    ' illustrative windows ('+stats.historicalSourceFacadeWindows+
+    ' placed on exposed 2014 source faces) · '+stats.historicalRoofFids+' 2014 roof FIDs / '+
     stats.historicalFacadeFids+' 2014 facade FIDs · '+stats.triangles+' triangles · '+
     '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
   const qa=window.PatrolMetricFlightQA={
@@ -342,6 +343,8 @@ async function start(){
     historical2014FacadeTriangles:stats.historicalFacadeTriangles,
     historical2014RoofFids:stats.historicalRoofFids,
     historical2014FacadeFids:stats.historicalFacadeFids,
+    historical2014SourceFacadeWindows:stats.historicalSourceFacadeWindows,
+    historical2014SourceFacadeWindowFids:stats.historicalSourceFacadeWindowFidList,
     historical2014CollisionEnabled:false,
     historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,
     historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,

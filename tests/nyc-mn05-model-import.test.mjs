@@ -46,6 +46,9 @@ test('original 2014 source meshes enter the same 1:1 WebGL vertex buffer',()=>{
  assert.equal(geometry.counts.historicalFacadeTriangles,asset.facadeTriangles.length);
  assert.equal(geometry.counts.historicalRoofFids,asset.counts.roofFids);
  assert.equal(geometry.counts.historicalFacadeFids,asset.counts.facadeFids);
+ assert.ok(geometry.counts.historicalSourceFacadeWindows>=100);
+ assert.ok(geometry.counts.historicalSourceFacadeWindowFidList.includes(212747));
+ assert.ok(geometry.counts.facadeWindows>=geometry.counts.historicalSourceFacadeWindows);
  assert.ok(geometry.counts.triangles>geometry.counts.historicalRoofTriangles+
    geometry.counts.historicalFacadeTriangles);
  assert.ok(geometry.interleaved.every(Number.isFinite));

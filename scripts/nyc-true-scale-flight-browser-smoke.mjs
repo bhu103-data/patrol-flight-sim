@@ -69,6 +69,9 @@ try{
     report.initial.historical2014SourceRhinoSha256===
       'b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57',
     'Historical model was incorrectly promoted to collision or absolute elevation');
+  check(report.initial.historical2014SourceFacadeWindows>=100&&
+    report.initial.historical2014SourceFacadeWindowFids.includes(212747),
+    'Matched 2014 facade source faces did not receive bounded illustrative window infill');
   check(report.initial.trueFacadeVerified===false,
     'A bounded historical facade subset must not be called complete facade verification');
   const initial=await page.locator('#scene').screenshot({
@@ -129,6 +132,8 @@ try{
     offTriangles:await focusOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles),
     onRoofTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014RoofTriangles),
     onFacadeTriangles:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014FacadeTriangles),
+    sourceFacadeWindows:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindows),
+    sourceFacadeWindowFids:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindowFids),
     changedCanvasPixelsOver6:historicalChangedPixels,
     sameCanvasViewport:true,cameraPositionErrorMetres:cameraPositionError,
     cameraAngleErrorRadians:cameraAngleError,

@@ -81,7 +81,9 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
     officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
-    historicalRoofTriangles:0,historicalFacadeTriangles:0,historicalRoofFids:0,historicalFacadeFids:0};
+    historicalRoofTriangles:0,historicalFacadeTriangles:0,historicalRoofFids:0,historicalFacadeFids:0,
+    historicalSourceFacadeWindows:0,historicalSourceFacadeWindowFids:0,
+    historicalSourceFacadeWindowFidList:[]};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -135,7 +137,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       quad([a[0],0,a[2]],[b2[0],0,b2[2]],
         [b2[0],roof,b2[2]],[a[0],roof,a[2]],face);
       counts.wallTriangles+=2;
-      if(!detail||sourceFacadeFids.has(Number(b.fid))||side<4.2||roof<8||counts.facadeWindows>=maxWindows)
+      if(!detail||side<4.2||roof<8||counts.facadeWindows>=maxWindows)
         continue;
       // Outward vector for CCW source east/north ring; Z is flipped north.
       const dx=b2[0]-a[0],dz=b2[2]-a[2],len=Math.hypot(dx,dz);
@@ -208,6 +210,117 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       tri(raised[0],raised[1],raised[2],[.50,.44,.36]);
       counts.historicalFacadeTriangles++;
     }
+    // MN05 facade surfaces are real, but their saved meshes do not include
+    // surveyed window locations or textures. Add restrained illustrative
+    // window infill only on source faces exposed outside the current 2022
+    // footprint wall; faces inside the footprint use the wall's normal window
+    // pass above. This preserves the original 2014 surfaces and avoids
+    // drawing windows behind them.
+    const facadeGroups=new Map();
+    for(const row of historicalMesh.facadeTriangles){
+      const fid=Number(row.matched2022BuildingFid),uuid=String(row.sourceUuid||'');
+      if(!uuid)continue;
+      const key=fid+'|'+uuid;
+      if(!facadeGroups.has(key))facadeGroups.set(key,[]);
+      facadeGroups.get(key).push(row);
+    }
+    const dot3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+    const cross3=(a,b)=>[
+      a[1]*b[2]-a[2]*b[1],
+      a[2]*b[0]-a[0]*b[2],
+      a[0]*b[1]-a[1]*b[0]
+    ];
+    const norm3=a=>{
+      const n=Math.hypot(...a)||1;
+      return a.map(x=>x/n);
+    };
+    const insideTriangle2D=(p,a,b,c)=>{
+      const cross2=(u,v,q)=>(v[0]-u[0])*(q[1]-u[1])-
+        (v[1]-u[1])*(q[0]-u[0]);
+      const x=cross2(a,b,p),y=cross2(b,c,p),z=cross2(c,a,p);
+      return !((x<-.0001||y<-.0001||z<-.0001)&&
+        (x>.0001||y>.0001||z>.0001));
+    };
+    const sourceWindowFids=new Set();
+    let sourceWindowBudget=Math.min(1800,Math.max(0,maxWindows-counts.facadeWindows));
+    if(detail&&sourceWindowBudget>0){
+      for(const rows of facadeGroups.values()){
+        if(sourceWindowBudget<=0)break;
+        const fid=Number(rows[0].matched2022BuildingFid),building=buildingByFid.get(fid);
+        if(!building)continue;
+        const worldTriangles=rows.map(row=>row.vertices.map(v=>sourcePoint(v)));
+        const worldPoints=worldTriangles.flat();
+        if(worldPoints.length<6)continue;
+        const rawPoints=rows.flatMap(row=>row.vertices);
+        const centerE=rawPoints.reduce((sum,p)=>sum+p[0],0)/rawPoints.length+historicalOffsetE;
+        const centerN=rawPoints.reduce((sum,p)=>sum+p[1],0)/rawPoints.length+historicalOffsetN;
+        const centerHeight=rawPoints.reduce((sum,p)=>sum+p[2],0)/rawPoints.length;
+        // A source face inside the footprint is covered by the current wall;
+        // its illustrative windows are already placed on that outer wall.
+        if(buildingContains(massing,centerE,centerN,centerHeight)!==null)continue;
+        const rawNormals=worldTriangles.map(([a,b,c])=>{
+          const u=b.map((v,i)=>v-a[i]),w=c.map((v,i)=>v-a[i]);
+          return norm3(cross3(u,w));
+        });
+        const referenceNormal=rawNormals[0];
+        const alignedNormals=rawNormals.map(n=>dot3(n,referenceNormal)<0?
+          n.map(v=>-v):n);
+        if(alignedNormals.some(n=>dot3(n,referenceNormal)<.96))continue;
+        let normal=norm3(alignedNormals.reduce((sum,n)=>sum.map((v,i)=>v+n[i]),[0,0,0]));
+        if(Math.abs(normal[1])>.12)continue;
+        const footprintCenter=building.footprintMeters.reduce(
+          (sum,p)=>[sum[0]+p[0]/building.footprintMeters.length,
+            sum[1]+p[1]/building.footprintMeters.length],[0,0]);
+        const faceCenter=point([centerE,centerN],centerHeight);
+        const buildingCenter=point(footprintCenter,0);
+        const outward=[faceCenter[0]-buildingCenter[0],0,faceCenter[2]-buildingCenter[2]];
+        if(Math.hypot(outward[0],outward[2])<.5)continue;
+        if(dot3(normal,outward)<0)normal=normal.map(v=>-v);
+        const tangent=norm3([-normal[2],0,normal[0]]);
+        const up=norm3(cross3(tangent,normal));
+        const plane=worldPoints.reduce((sum,p)=>sum+dot3(p,normal),0)/worldPoints.length;
+        if(Math.max(...worldPoints.map(p=>Math.abs(dot3(p,normal)-plane)))>.15)continue;
+        const project=p=>[dot3(p,tangent),dot3(p,up)];
+        const triangles2=worldTriangles.map(tri=>tri.map(project));
+        const projected=triangles2.flat();
+        const minS=Math.min(...projected.map(p=>p[0]));
+        const maxS=Math.max(...projected.map(p=>p[0]));
+        const minH=Math.min(...projected.map(p=>p[1]));
+        const maxH=Math.max(...projected.map(p=>p[1]));
+        if(maxS-minS<3.2||maxH-minH<5)continue;
+        const winW=1.55,winH=2.25,stepS=3.05,stepH=3.65;
+        const startS=minS+.78+winW/2,endS=maxS-.78-winW/2;
+        const startH=minH+1.05+winH/2,endH=maxH-.85-winH/2;
+        if(endS<startS||endH<startH)continue;
+        const at=(s,h,offset)=>[
+          normal[0]*(plane+offset)+tangent[0]*s+up[0]*h,
+          normal[1]*(plane+offset)+tangent[1]*s+up[1]*h,
+          normal[2]*(plane+offset)+tangent[2]*s+up[2]*h
+        ];
+        let faceWindows=0;
+        for(let s=startS;s<=endS+.0001;s+=stepS){
+          for(let h=startH;h<=endH+.0001;h+=stepH){
+            if(sourceWindowBudget<=0||counts.facadeWindows>=maxWindows)break;
+            const s0=s-winW/2,s1=s+winW/2,h0=h-winH/2,h1=h+winH/2;
+            const corners=[[s0,h0],[s0,h1],[s1,h1],[s1,h0]];
+            if(!corners.every(c=>triangles2.some(t=>insideTriangle2D(c,t[0],t[1],t[2]))))continue;
+            const shade=(Math.floor(s/stepS)+Math.floor(h/stepH)+fid)%3;
+            const glass=shade===0?[.17,.30,.38]:
+              shade===1?[.20,.35,.43]:[.24,.39,.46];
+            quad(at(s0,h0,.065),at(s0,h1,.065),at(s1,h1,.065),at(s1,h0,.065),
+              [.16,.22,.28]);
+            quad(at(s0+.10,h0+.10,.105),at(s0+.10,h1-.10,.105),
+              at(s1-.10,h1-.10,.105),at(s1-.10,h0+.10,.105),glass,1);
+            counts.facadeWindows++;
+            counts.historicalSourceFacadeWindows++;
+            sourceWindowBudget--;faceWindows++;
+          }
+        }
+        if(faceWindows)sourceWindowFids.add(fid);
+      }
+    }
+    counts.historicalSourceFacadeWindowFids=sourceWindowFids.size;
+    counts.historicalSourceFacadeWindowFidList=[...sourceWindowFids].sort((a,b)=>a-b);
     counts.historicalRoofFids=sourceRoofFids.size;
     counts.historicalFacadeFids=sourceFacadeFids.size;
   }
