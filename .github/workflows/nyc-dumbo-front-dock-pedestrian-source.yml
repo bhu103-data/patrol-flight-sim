@@ -1,0 +1,35 @@
+name: NYC DUMBO Front Dock official pedestrian boundary source QA
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/collect-front-dock-pedestrian-source.mjs'
+      - 'tests/nyc-dumbo-front-dock-pedestrian-source.test.mjs'
+      - 'docs/NYC_DUMBO_FRONT_DOCK_PEDESTRIAN_SOURCE.md'
+      - '.github/workflows/nyc-dumbo-front-dock-pedestrian-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  city-sidewalk-curb-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source program syntax and fail-closed geometry tests
+        run: |
+          node --check tools/nyc/collect-front-dock-pedestrian-source.mjs
+          node --test tests/nyc-dumbo-front-dock-pedestrian-source.test.mjs
+      - name: Fetch bounded 2022 SIDEWALK CURB CURB_CUT from official NYC OTI
+        timeout-minutes: 11
+        run: node tools/nyc/collect-front-dock-pedestrian-source.mjs
+      - name: Upload original municipal geometries and source audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-front-dock-official-sidewalk-curb-2022-source
+          path: artifacts/nyc-dumbo-front-dock-pedestrian-source/
+          if-no-files-found: warn
+          retention-days: 14
