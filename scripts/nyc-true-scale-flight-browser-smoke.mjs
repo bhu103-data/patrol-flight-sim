@@ -26,7 +26,7 @@ try{
   await page.locator('#startFlight').click({force:true});
   await page.waitForURL(/assets\/nyc\/nyc-true-scale-flight\.html/,{timeout:20000});
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
-    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:90000});
   report.initial=await page.evaluate(()=>({
     ...window.PatrolMetricFlightQA,
     glVersion:document.querySelector('#scene')?.getContext('webgl2')?.getParameter(
@@ -37,14 +37,25 @@ try{
   check(report.initial.sourceStreetCount>=35,'DCM street lines not displayed');
   check(report.initial.streetSegments>=80,'Official source geometry incomplete');
   check(report.initial.metresPerWorldUnit===1,'Wrong scene geographic scale');
-  check(report.initial.coreRoadbedGeometryVerified===true&&
-    report.initial.officialRoadbedPolygons===11&&
-    report.initial.officialRoadbedIntersections===3&&
-    report.initial.officialRoadbedTriangles===207&&
-    report.initial.roadbedReferenceYear===2022,
-    'Official OTI 2022 source polygons missing from 1:1 flythrough');
+  check(report.initial.fullOfficialSurfacesLoaded===true&&
+    report.initial.fullOfficialSurfacesSchema==='patrol-nyc-oti-2022-full-surfaces-v1',
+    'Full official OTI 2022 surface overlay did not load in the live viewer');
+  const full=report.initial.fullOfficialSurfaceCounts;
+  check(full?.roadbedFeatures>=70&&full?.roadbedIntersections>=20&&
+    full?.roadbedTriangles>=8000&&full?.sidewalkFeatures>=40&&
+    full?.plazaFeatures>=5&&full?.curbFeatures>=150&&
+    full?.curbCutFeatures>=150&&full?.curbSegments>=2000&&
+    full?.curbCutSegments>=1000,
+    'Official OTI roadbed/sidewalk/plaza/curb coverage below the verified tile');
+  check(report.initial.roadbedReferenceYear===2022&&
+    report.initial.roadbedFullNYCCoverage===false&&
+    report.initial.noSurveyedVerticalDatum===true&&
+    report.initial.sourceDataStoredInRepository===false,
+    '2022 source vintage, incomplete geographic coverage or unknown vertical datum was misrepresented');
+  check(report.initial.illustrativeStreetBandsEnabled===false,
+    'Guessed DCM-width asphalt bands remain under the full official roadbed mesh');
   check(report.initial.trueRoadbedVerified===false,
-    '11 central roadbed polygons are NOT a full city roadbed verification');
+    'Times Square source tile must not be described as full NYC roadbed verification');
   check(report.initial.spawnFromOfficialStreet===true,
     'Free-flight spawn is not on an accepted official Seventh Avenue centerline');
   check(report.initial.safeStreetCandidateCount>=1,
@@ -67,14 +78,38 @@ try{
   }
   await page.locator('#aerial').click();
   await page.waitForTimeout(350);
+  const surfaceOnCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
   const sourceAerial=await page.locator('#scene').screenshot({
-    path:out+'/03-2022-source-roadbed-aerial.png',timeout:90000
+    path:out+'/03-2022-oti-full-surfaces-aerial-on.png',timeout:90000
   });
+  await page.locator('#otiRoadbed').uncheck({force:true});
+  await page.locator('#otiPedestrian').uncheck({force:true});
+  await page.locator('#otiCurbs').uncheck({force:true});
+  await page.waitForTimeout(350);
+  const surfaceOffCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
+  check(surfaceOnCamera.every((v,i)=>Math.abs(v-surfaceOffCamera[i])<1e-8),
+    'OTI surface visibility toggle moved the camera');
+  const surfaceOffPng=await page.locator('#scene').screenshot({
+    path:out+'/04-2022-oti-full-surfaces-aerial-off.png',timeout:90000
+  });
+  const surfaceOnPng=PNG.sync.read(sourceAerial),surfaceOffPngData=PNG.sync.read(surfaceOffPng);
+  let surfaceDiff=0;
+  for(let y=230;y<surfaceOnPng.height;y+=2)for(let x=2;x<surfaceOnPng.width;x+=2){
+    const i=(y*surfaceOnPng.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(
+      surfaceOnPng.data[i+j]-surfaceOffPngData.data[i+j])))>18)surfaceDiff++;
+  }
+  report.fullSurfaceToggleDifferencePixelsOver18=surfaceDiff;
+  check(surfaceDiff>300,'Official OTI full road/pedestrian overlays are not visible in the same camera');
+  await page.locator('#otiRoadbed').check({force:true});
+  await page.locator('#otiPedestrian').check({force:true});
+  await page.locator('#otiCurbs').check({force:true});
+  await page.waitForTimeout(250);
   await page.locator('#roadbedFocus').click();
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.camera?.[1]===70,
     null,{timeout:45000});
   const sourceCore=await page.locator('#scene').screenshot({
-    path:out+'/05-source-roadbed-FID24700-core.png',timeout:90000
+    path:out+'/05-full-oti-roadbed-FID24700-core.png',timeout:90000
   });
   report.sourceCoreCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
   check(report.initial.roadbedFocusFID===24700,
@@ -122,31 +157,35 @@ try{
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
     'Fallback lost surveyed footprints');
-  check(report.fallback.officialRoadbedPolygons===11,
-    'Quality fallback must retain official roadbed shape');
+  check(report.fallback.fullOfficialSurfacesLoaded===true&&
+    report.fallback.officialRoadbedPolygons>=70&&
+    report.fallback.sidewalkFeatures>=40,
+    'Low-detail quality mode lost the complete official OTI surface geometry');
   // Controlled on/off comparison: same camera, same FOV, source-given
   // building/centreline geometry, only 11 actual 2022 roadbed polygons differ.
-  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?roadbed=off',
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?surfaces=off&roadbed=off',
     {waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
     window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
   report.sourceOff=await page.evaluate(()=>window.PatrolMetricFlightQA);
-  check(report.sourceOff.officialRoadbedPolygons===0&&
-    report.sourceOff.coreRoadbedGeometryVerified===false,
-    'Source polygon A/B-off view still using new official geometry');
+  check(report.sourceOff.fullOfficialSurfacesLoaded===false&&
+    report.sourceOff.officialRoadbedPolygons===0&&
+    report.sourceOff.coreRoadbedGeometryVerified===false&&
+    report.sourceOff.illustrativeStreetBandsEnabled===true,
+    'Explicit no-source comparison must contain no official surface mesh and retain labelled illustrative bands');
   check(report.sourceOff.sourceBuildingCount===report.initial.sourceBuildingCount&&
     report.sourceOff.streetSegments===report.initial.streetSegments,
     'Source roadbed A/B switch accidentally changed buildings or DCM routing');
   await page.locator('#aerial').click();
   await page.waitForTimeout(350);
   const sourceOffAerial=await page.locator('#scene').screenshot({
-    path:out+'/04-old-invented-roadbands-aerial.png',timeout:90000
+    path:out+'/06-illustrative-dcm-width-bands-aerial.png',timeout:90000
   });
   await page.locator('#roadbedFocus').click();
   await page.waitForFunction(()=>window.PatrolMetricFlightQA?.camera?.[1]===70,
     null,{timeout:45000});
   const sourceOffCore=await page.locator('#scene').screenshot({
-    path:out+'/06-old-roadbands-FID24700-core.png',timeout:90000
+    path:out+'/07-illustrative-dcm-width-bands-FID24700-core.png',timeout:90000
   });
   report.sourceOffCoreCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
   check(report.sourceCoreCamera.every((v,i)=>
@@ -205,8 +244,8 @@ try{
   check(report.c185Before.airborneSubset===true&&
     report.c185Before.completePhysics===false&&
     report.c185Before.nativePhysics===false&&
-    report.c185Before.sourceRoadbed===11,
-    'Do not claim full native aircraft physics or lose exact OTI source geometry');
+    report.c185Before.sourceRoadbed>=70,
+    'Do not claim full native aircraft physics or lose full OTI source geometry');
   const cockpitBefore=await page.locator('#scene').screenshot({
     path:out+'/07-c185-source-airborne-cockpit-before.png',timeout:90000
   });
