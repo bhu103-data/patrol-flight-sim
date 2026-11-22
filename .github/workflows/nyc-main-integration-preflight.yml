@@ -1,0 +1,91 @@
+name: NYC bridgehead vs latest main - read-only merge preflight
+
+on:
+  push:
+    branches:
+      - qa/nyc-main-integration-preflight-20261122-chat
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  merge-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Attempt 3-way merge in isolated CI worktree without pushing
+        id: merge
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/nyc-integration-preflight
+          echo "Integration base: $(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD)" = "6aee03e32cd06967451007d15d5fd9502f92de36"
+          git fetch --no-tags origin qa/nyc-bridgehead-swept-hull-intervals-20261121-chat
+          echo "Candidate: $(git rev-parse FETCH_HEAD)"
+          test "$(git rev-parse FETCH_HEAD)" = "69d6395f74178fc9dffc2b63d77dac98a6c2ca13"
+          git config user.name 'PATROL Integration Preflight'
+          git config user.email 'qa-noreply@example.invalid'
+          set +e
+          git merge --no-commit --no-ff FETCH_HEAD > artifacts/nyc-integration-preflight/merge-output.txt 2>&1
+          status=$?
+          set -e
+          git status --porcelain > artifacts/nyc-integration-preflight/status.txt
+          git diff --name-only --diff-filter=U > artifacts/nyc-integration-preflight/unmerged.txt
+          git ls-files -u > artifacts/nyc-integration-preflight/unmerged-stages.txt
+          git diff --check > artifacts/nyc-integration-preflight/diff-check.txt 2>&1 || true
+          echo "merge_exit=$status" >> "$GITHUB_OUTPUT"
+          echo "unmerged_count=$(wc -l < artifacts/nyc-integration-preflight/unmerged.txt)" >> "$GITHUB_OUTPUT"
+          MERGE_RC="$status" python3 - <<'PY'
+          import json, pathlib, os
+          out=pathlib.Path('artifacts/nyc-integration-preflight')
+          paths=out.joinpath('unmerged.txt').read_text().splitlines()
+          data={'base_commit':'6aee03e32cd06967451007d15d5fd9502f92de36',
+                'candidate_commit':'69d6395f74178fc9dffc2b63d77dac98a6c2ca13',
+                'merge_exit':int(os.environ['MERGE_RC']),
+                'conflicting_paths':paths,'conflict_blocks':{}}
+          with (out/'conflict-excerpts.txt').open('w') as f:
+            for path in paths:
+              content=pathlib.Path(path).read_text(errors='replace').splitlines()
+              blocks=[]; i=0
+              while i<len(content):
+                if not content[i].startswith('<<<<<<< '):
+                  i+=1;continue
+                start=i+1;j=i+1
+                while j<len(content) and not content[j].startswith('>>>>>>> '):
+                  j+=1
+                block=content[i:min(j+1,len(content))]
+                blocks.append({'line':start,'length':len(block),
+                  'excerpt':block[:12]+(['...(omitted)...'] if len(block)>24 else [])+block[-12:] if len(block)>24 else block})
+                i=j+1
+              data['conflict_blocks'][path]=blocks
+              f.write(f'{path}: {len(blocks)} textual conflict regions\n')
+              for b in blocks:
+                f.write(f"  around line {b['line']} ({b['length']} lines)\n")
+                f.write('\n'.join('    '+line for line in b['excerpt'])+'\n')
+          (out/'merge-preflight.json').write_text(json.dumps(data,indent=2))
+          print(json.dumps({k:v for k,v in data.items() if k!='conflict_blocks'},indent=2))
+          PY
+          if [ "$status" -ne 0 ]; then
+            echo 'Three-way merge is not clean. Do not merge to main.' >&2
+            exit 1
+          fi
+      - name: Node regression on exact merged worktree (only if no conflicts)
+        if: steps.merge.outputs.merge_exit == '0'
+        run: node --test
+      - name: Upload conflict locations and merge report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-main-three-way-merge-preflight
+          path: artifacts/nyc-integration-preflight/
+          retention-days: 7
+          if-no-files-found: warn
