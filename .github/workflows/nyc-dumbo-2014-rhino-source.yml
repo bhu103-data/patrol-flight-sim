@@ -41,6 +41,8 @@ jobs:
       - name: Extract only original roof/facade/footprint cached meshes inside 48-building DUMBO AOI
         run: |
           python tools/nyc/inspect-bk02-source-roi.py
+          test ! -e artifacts/nyc-official-bk02/bk02-source.3dm
+          test ! -e artifacts/nyc-official-bk02/bk02-source.zip
           python tests/nyc-bk02-source-mesh.test.py
       - name: Prepare isolated source viewer and install pinned browser harness
         run: |
