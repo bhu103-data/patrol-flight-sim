@@ -17,6 +17,7 @@ import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
 import { buildChongqingHotpotDisplay } from './hotpot-display.js';
 import { buildChongqingHotpotPaving } from './hotpot-forecourt.js';
 import { buildChongqingHotpotLowerFacade } from './hotpot-lower-facade.js';
+import { buildChongqingHotpotUpperWindows } from './hotpot-upper-windows.js';
 import { gradeChongqingHotpotTerrain } from './hotpot-terrace-grade.js';
 
 const canvas = document.getElementById('world');
@@ -414,6 +415,12 @@ const hotpotDisplay=buildChongqingHotpotDisplay({
 // Existing windows, door quest and collision stay untouched; two instanced
 // PBR wall-relief batches sit in front of the lower street-facing wall.
 const hotpotLowerFacade=buildChongqingHotpotLowerFacade({
+  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
+});
+// Rebuild the repeated street-facing window rhythm with physically layered
+// reveal/backing, variable glass, inset muntins and timber jamb depth.
+// Decorative only; does not cut the aircraft/player collision shell.
+const hotpotUpperWindows=buildChongqingHotpotUpperWindows({
   THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
 });
 const potLight=new THREE.PointLight(0xff693c,85,90,2);
@@ -1406,6 +1413,11 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   hotpotDisplayParts:hotpotDisplay.partCount,
+  hotpotUpperWindowBays:hotpotUpperWindows.bays,
+  hotpotUpperWindowFrameParts:hotpotUpperWindows.frameCount,
+  hotpotUpperWindowTriangles:hotpotUpperWindows.triangles,
+  hotpotUpperWindowDepth:hotpotUpperWindows.depth,
+  hotpotUpperWindowMaxX:hotpotUpperWindows.maxX,
   hotpotLowerStoneParts:hotpotLowerFacade.masonryCount,
   hotpotLowerTimberParts:hotpotLowerFacade.timberCount,
   hotpotLowerFacadeTriangles:hotpotLowerFacade.totalTriangles,
