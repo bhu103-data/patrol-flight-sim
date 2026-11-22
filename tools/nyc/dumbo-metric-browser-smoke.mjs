@@ -28,6 +28,14 @@ try{
  assert.equal(stats.webgl2,true);assert.equal(stats.error,0);
  assert.equal(stats.contextLost,false);
  assert.ok(stats.triangles>500&&stats.triangles<4000);
+ assert.equal(stats.roadTriangles,553,'rounded 2022 roadbed geometry is visible, 24 degenerate source triangles excluded');
+ assert.equal(stats.buildingTriangles,1669,'original 48-building source geometry must be unchanged');
+ assert.equal(stats.triangles,stats.roadTriangles+stats.buildingTriangles);
+ assert.equal(stats.roadbed.year,2022);
+ assert.equal(stats.roadbed.sourceTriangles,577);
+ assert.equal(stats.roadbed.skippedDegenerate,24);
+ assert.ok(Math.abs(stats.roadbed.originalAreaM2-3714.73)<.25);
+ assert.match(stats.roadbed.note,/no lane directions/);
  assert.ok(stats.spanMeters[0]>100&&stats.spanMeters[1]>100);
  assert.equal(errors.length,0,'No page errors allowed: '+errors.join('; '));
  const image=await page.screenshot({path:output+'/01-oti-metric-oblique.png'});
