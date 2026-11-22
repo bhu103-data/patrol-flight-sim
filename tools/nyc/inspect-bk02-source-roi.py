@@ -73,8 +73,7 @@ def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name):
     for k,(lo,hi) in enumerate(((bbox.Min.X,bbox.Max.X),
                                 (bbox.Min.Y,bbox.Max.Y),
                                 (bbox.Min.Z,bbox.Max.Z))):
-        vals=vertices[k::3]
-        if min(vals)<lo-1.0 or max(vals)>hi+1.0:
+        if raw_bounds[k]<lo-1.0 or raw_bounds[k+3]>hi+1.0:
             raise ValueError("Cached mesh escaped original Rhino Brep bounds")
     return {"kind":kind,"layer":layer_name,"sourceObjectUUID":source_uuid,
       "brepFaceIndex":face_index,"vertices":vertices,"triangles":triangles,
