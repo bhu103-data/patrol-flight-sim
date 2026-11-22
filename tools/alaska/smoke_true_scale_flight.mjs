@@ -36,15 +36,19 @@ try{
      start.triangles!==130050||
      (fine?(start.detailMode!=='source-5m-local'||start.terrainPeak<500||start.terrainPeak>1000):
        (start.detailMode!=='coarse-30m'||start.terrainPeak!==1836))||
-     start.detailWarning||start.gpuErrors.length||!start.bounds||!start.photoReady)
+     start.detailWarning||start.gpuErrors.length||!start.bounds||!start.photoReady||!start.officialSourceExtentCorrected)
     throw Error('Wrong active georeferenced 3D source terrain '+JSON.stringify(start));
   const width=start.bounds.maxE-start.bounds.minE,
     height=start.bounds.maxN-start.bounds.minN;
   if(fine?(width<1150||width>1250||height<1200||height>1300||
      start.sourceSpacingMeters.some(x=>x<=4.4||x>=5.3)):
-    (width<7500||width>7900||height<7900||height>8200))
+    (width<7500||width>7900||height<14000||height>14700))
     throw Error('Source geometry is not corresponding verified metre-scale tile '+
       JSON.stringify({width,height,spacing:start.sourceSpacingMeters}));
+  if(!fine && (start.bbox[1]!==57.822||start.bbox[3]!==57.952))
+    throw Error('Coarse 30m source pixels not at USGS actual export extent');
+  if(fine && start.sourceSpacingMeters.some(x=>x<=4.4||x>=5.3))
+    throw Error('5m source actual resolution differs from declared request');
   if(Math.abs(start.origin[0]+133.2)>.001||Math.abs(start.origin[1]-57.887)>.001)
     throw Error('Incorrect true source WGS84 origin');
   await page.screenshot({path:'artifacts/'+prefix+'-start.png'});
