@@ -66,12 +66,11 @@ function instrument(src){
  '      state.sun=[...environment.sun];state.moon=[...environment.moon];',
  '      state.sunClock=skyTime.value;state.skyWeather=skyWeather.value;',
  '      state.skySeason=skySeason.value;',
- '      // Fixed FBO pixel density in diagnostic only; disables adaptive visual
-      // resolution as a confounder in independent scene loads.
-      if(Math.abs(resScale-0.55)>0.00001){
-        resScale=0.55;scaleCeiling=0.55;resizeTargets();
-      }
-      camPos=[...eye];camUp=[0,1,0];',
+ '      // Fixed FBO pixel density in this test only.',
+ '      if(Math.abs(resScale-0.55)>0.00001){',
+ '        resScale=0.55;scaleCeiling=0.55;resizeTargets();',
+ '      }',
+ '      camPos=[...eye];camUp=[0,1,0];',
  '      // Moon close-frame looks slightly above horizon; sun/anti both use',
  '      // precisely the same 11.0-m downward angle and camera elevation.',
  '      camLook=state.facing==="moon"?',
