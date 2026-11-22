@@ -65,8 +65,23 @@ jobs:
       - name: Independently audit measured roadbed, sidewalk, curb and building topology
         run: |
           python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 -m py_compile tools/nyc/official-street-topology-audit.py
           python3 tools/nyc/official-street-topology-audit.py
           test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
+          test -s artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("artifacts/nyc-curb-sidewalk-source")
+          audit = json.loads((root / "topology-audit.json").read_text())
+          geo = json.loads((root / "topology-conflicts.geojson").read_text())
+          records = audit["allSidewalkBuildingSourceConflicts"]
+          assert records and len(records) == audit["counts"]["sidewalkBuildingFeaturePairs"]
+          assert len(geo["features"]) == len(records)
+          assert all("centroidLonLat" in r and "componentSpansMetres" in r for r in records)
+          print("NYC overlap detail QA", len(records), "feature pairs;",
+                len(geo["features"]), "WGS84 conflict geometries")
+          PY
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -91,6 +106,7 @@ jobs:
           path: |
             artifacts/nyc-true-scale/
             artifacts/nyc-curb-sidewalk-source/topology-audit.json
+            artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
             artifacts/nyc-curb-sidewalk-source/edges.json
             artifacts/nyc-roadbed-source/roadbed.json
           retention-days: 7
