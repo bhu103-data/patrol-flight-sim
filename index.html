@@ -14,7 +14,7 @@
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
   #glCanvas{image-rendering:auto;}
   #hudCanvas{pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;}
-  #flightMap{position:absolute;top:14px;left:14px;z-index:16;width:min(190px,37vw);
+  #flightMap{position:absolute;top:46px;left:14px;z-index:16;width:min(190px,37vw);
     padding:6px;background:rgba(14,10,24,.88);border:1px solid #a97458;color:#ffd699;}
   #flightMap.expanded{width:min(440px,70vw,68vh);}
   #flightMapCanvas{position:static;width:100%;height:auto;aspect-ratio:1;image-rendering:pixelated;}
@@ -45,12 +45,18 @@
   #skyPanel{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px 10px;
     padding:10px;background:#142334eb;border:1px solid #a8c6dc90;border-radius:6px;min-width:233px;}
   #skyStatus{grid-column:1/-1;color:#e6d4ab;font-variant-numeric:tabular-nums;}
+  #fpsCounter{position:absolute;top:12px;left:14px;z-index:19;pointer-events:none;
+    font:11px 'Share Tech Mono',monospace;letter-spacing:.2px;line-height:17px;
+    color:#e4f2ff;background:#0c2338c9;border:1px solid #96bac988;
+    border-radius:4px;padding:3px 7px;font-variant-numeric:tabular-nums;}
+  #skyAzimuth{width:100%;min-width:0;accent-color:#f4c480;}
+  #skyAzimuthValue{color:#f6d5a4;font-variant-numeric:tabular-nums;}
   #hotelViewButton,#bridgeShortcutButton,#centralParkShortcutButton,#hotelViews button,#hotelViews select{
     border:1px solid #96bac988;border-radius:4px;background:#234151;color:#eff7fb;
     padding:5px 8px;font:inherit;cursor:pointer;
   }
   #hotelViews{
-    position:absolute;top:14px;left:14px;z-index:17;width:min(288px,calc(100vw - 28px));
+    position:absolute;top:46px;left:14px;z-index:17;width:min(288px,calc(100vw - 28px));
     display:grid;grid-template-columns:auto minmax(90px,1fr);align-items:center;gap:7px 10px;
     padding:10px 12px;color:#f2f8fa;font:12px system-ui,sans-serif;background:#172b38e8;
     border:1px solid #b9d7e479;border-radius:7px;
@@ -177,6 +183,7 @@
 </head>
 <body>
 <div id="wrap">
+  <output id="fpsCounter" aria-label="Frame rate and internal WebGL resolution" hidden>FPS -- · --×--</output>
   <canvas id="glCanvas" tabindex="-1"></canvas>
   <canvas id="hudCanvas"></canvas>
   <section id="flightMap" aria-label="Flight map" hidden>
@@ -268,7 +275,10 @@
     <section id="skyPanel" aria-label="Flight environment" hidden>
       <label for="skyTime">Time</label>
       <select id="skyTime"><option value="auto">Day–Night Cycle</option><option value="7">Morning</option>
-        <option value="12">Noon</option><option value="18.5">Dusk</option><option value="0">Midnight</option></select>
+        <option value="12">Noon</option><option value="18.5">Dusk</option><option value="19">Golden Hour</option><option value="0">Midnight</option></select>
+      <label for="skyAzimuth">Sun azimuth <output id="skyAzimuthValue" for="skyAzimuth">Auto</output></label>
+      <input id="skyAzimuth" type="range" min="-1" max="359" step="1" value="-1"
+        aria-label="Sun azimuth: Auto follows solar time; 0 north, 90 east, 180 south, 270 west">
       <label for="skySeason">Season</label>
       <select id="skySeason"><option value="auto">Season Cycle</option><option value="0">Spring</option>
         <option value="1">Summer</option><option value="2">Autumn</option><option value="3">Winter</option></select>
@@ -319,6 +329,7 @@
   'use strict';
 
   const glCanvas = document.getElementById('glCanvas');
+  const fpsCounter=document.getElementById('fpsCounter');
   const hudCanvas = document.getElementById('hudCanvas');
   const hudCtx = hudCanvas.getContext('2d');
   const loadOverlay = document.getElementById('loadOverlay');
@@ -1573,6 +1584,7 @@ const CENTRAL_PARK_SITES=[
     uniform vec3 uMoon;
     uniform vec4 uAtmosphere;
     uniform vec4 uClimate;
+    uniform float uCloudSteps;
     vec3 sunDirection() { return uSun; }
     const float WATER_H = 12.2;
     uniform float uTerrainScale;
@@ -1598,9 +1610,17 @@ const CENTRAL_PARK_SITES=[
     }
 
     float cloudDensity(vec2 xz) {
-      vec2 p = xz * 0.013 + vec2(uTime * 0.0045, uTime * 0.0018);
-      float n = vnoise(p) * 0.55 + vnoise(p * 2.13 + 7.1) * 0.30 + vnoise(p * 4.4 - 3.4) * 0.15;
-      return smoothstep(0.65-uAtmosphere.z*0.32,0.87-uAtmosphere.z*0.30,n);
+      // Broad low-frequency cloud forms, but let the middle octave break
+      // up very wide cloud shelves rather than turning the sky into a slab.
+      // Three noise fetches, the existing drift and seven volume samples.
+      vec2 p = xz * 0.011 + vec2(uTime * 0.0041, uTime * 0.0016);
+      float large=vnoise(p);
+      float middle=vnoise(p*2.23+7.1);
+      float fine=vnoise(p*4.4-3.4);
+      float n=large*0.59+middle*0.29+fine*0.12;
+      float coverage=smoothstep(0.647-uAtmosphere.z*0.32,
+        0.865-uAtmosphere.z*0.30,n);
+      return coverage*mix(0.56,1.0,smoothstep(0.24,0.71,middle));
     }
 
     vec4 sampleMap(vec2 xz) {
@@ -1776,7 +1796,27 @@ const CENTRAL_PARK_SITES=[
       float up=clamp(rd.y,0.0,1.0);
       float sunAmt=max(dot(rd,sunDirection()),0.0);
       float day=uAtmosphere.x, twilight=uAtmosphere.y, cloud=uAtmosphere.z;
-      vec3 dayColor=mix(vec3(0.64,0.77,0.86),vec3(0.21,0.47,0.73),pow(up,0.53));
+      // Lightweight Tidewater/Hillaire-inspired atmosphere: angular
+      // Rayleigh and forward Mie scattering, not a compute-based LUT.
+      float mu=clamp(dot(rd,sunDirection()),-1.0,1.0);
+      float rayleighPhase=0.75*(1.0+mu*mu);
+      const float mieG=0.70;
+      float miePhase=(1.0-mieG*mieG)/
+        pow(max(0.14,1.0+mieG*mieG-2.0*mieG*mu),1.5);
+      float horizonAir=1.0-smoothstep(0.02,0.62,up);
+      float airMass=1.0/max(0.16,rd.y+0.14);
+      float extinction=1.0-exp(-airMass*(0.055+0.08*uAtmosphere.w));
+      vec3 dayColor=mix(vec3(0.64,0.77,0.86),vec3(0.20,0.46,0.75),
+        pow(up,0.53));
+      vec3 molecularTint=vec3(0.22,0.48,0.79)*rayleighPhase;
+      dayColor=mix(dayColor,molecularTint,0.23*(1.0-horizonAir));
+      dayColor=mix(dayColor,vec3(0.69,0.76,0.80),extinction*0.21);
+      vec3 aerosolTint=mix(vec3(1.0,0.64,0.38),vec3(1.0,0.91,0.78),
+        smoothstep(0.025,0.30,uSun.y));
+      float forwardScatter=min(0.57,miePhase*0.055)
+        *(0.45+0.55*horizonAir)*(1.0-cloud*0.74)
+        *(1.0-uAtmosphere.w*0.51)*smoothstep(-0.09,0.12,uSun.y);
+      dayColor+=aerosolTint*forwardScatter;
       vec3 nightColor=mix(vec3(0.085,0.10,0.17),vec3(0.017,0.026,0.065),sqrt(up));
       if(uVegas)nightColor+=vec3(0.14,0.083,0.075)*pow(1.0-up,3.0);
       vec3 horizon=mix(nightColor,dayColor,day);
@@ -1788,12 +1828,18 @@ const CENTRAL_PARK_SITES=[
       float seed=hash12(floor(stars));
       vec2 center=vec2(0.35+0.27*seed,0.28+0.32*hash12(floor(stars)+19.0));
       float star=(1.0-smoothstep(0.07,0.15,length(fract(stars)-center)))*step(0.972,seed);
-      horizon+=vec3(0.66,0.74,0.92)*star*(1.0-day)*(1.0-cloud)*smoothstep(0.01,0.20,rd.y);
+      // A luminous sunset is not a starry night. Fade stars in only after
+      // the actual solar elevation is below the civil-twilight horizon.
+      float starVisibility=1.0-smoothstep(-0.14,-0.04,uSun.y);
+      horizon+=vec3(0.66,0.74,0.92)*star*starVisibility*
+        (1.0-cloud)*smoothstep(0.01,0.20,rd.y);
       if(uAlaska)horizon+=alaskaAurora(rd);
       float openness=(1.0-cloud*0.88)*(1.0-uAtmosphere.w*0.7);
       horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*smoothstep(-0.08,0.04,uSun.y)*0.40;
-      float solarRadius=0.0125+0.0025*(1.0-smoothstep(0.02,0.24,uSun.y));
-      float solarEdge=1.0-smoothstep(0.94,1.07,sqrt(max(0.0,2.0*(1.0-sunAmt)))/solarRadius);
+      // Smaller solar disk with a soft silhouette at fixed browser resolution.
+      float solarRadius=0.0058+0.0010*(1.0-smoothstep(0.02,0.24,uSun.y));
+      float solarEdge=1.0-smoothstep(0.82,1.18,
+        sqrt(max(0.0,2.0*(1.0-sunAmt)))/solarRadius);
       float solarCenter=sqrt(clamp(1.0-(2.0*(1.0-sunAmt))/(solarRadius*solarRadius),0.0,1.0));
       vec3 solarTint=mix(vec3(1.0,0.49,0.22),vec3(1.0,0.96,0.85),smoothstep(0.015,0.28,uSun.y));
       solarTint*=mix(0.82,1.0,solarCenter);
@@ -1935,10 +1981,31 @@ const CENTRAL_PARK_SITES=[
           )*0.38;
           vec2 slope = wind * gust * (swell.yz + chop.yz + noiseSlope) + ripple.yz * mix(0.35, 0.72, openWater);
           if(hasOceanCascades()){
-            swell=oceanCascade(xz,uTime,pixel,0)*oceanShoaling(depth);
-            chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
-            ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
-            slope=oceanExposure(xz)*gust*(swell.yz+chop.yz+ripple.yz*0.75);
+            // Shading-only low-frequency domain warp. Perturb the repeated
+            // parallel normals using *existing* slope/noise samples; the
+            // shared CPU buoyancy oceanHeight and geometry remain unchanged.
+            // Filter the warp at distance so small waves cannot alias.
+            vec2 oceanNormalXZ=xz;
+            if(uManhattan){
+              float warpFade=1.0-smoothstep(0.45,1.85,pixel);
+              float warpScale=mix(0.65,1.85,harborExposure)*warpFade;
+              oceanNormalXZ+=warpScale*vec2(
+                (noiseH-0.5)*1.65+noiseSlope.y*11.0,
+                (0.5-noiseH)*1.05-noiseSlope.x*11.0);
+            }
+            swell=oceanCascade(oceanNormalXZ,uTime,pixel,0)*oceanShoaling(depth);
+            chop=oceanCascade(oceanNormalXZ,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
+            ripple=oceanCascade(oceanNormalXZ,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
+            // Break the overly regular parallel bright bands with the
+            // existing low-frequency gust and three previously evaluated
+            // noise derivatives; filter fine normals at flight distance.
+            // Height/foam timing, seaplane float pose and collision stay put.
+            float swellShear=mix(0.79,1.19,clamp((gust-0.82)/0.36,0.0,1.0));
+            float smallWavePatch=mix(0.80,1.20,noiseH);
+            float patchLod=1.0-smoothstep(0.22,1.28,pixel);
+            slope=oceanExposure(xz)*gust*(swell.yz*swellShear+
+              (chop.yz+ripple.yz*0.75)*smallWavePatch)
+              +noiseSlope*patchLod*(0.31+0.20*openWater);
           }
           if(uAlaska){
             // Suppress artificial parallel bright-ocean wave bands in the
@@ -2003,10 +2070,17 @@ const CENTRAL_PARK_SITES=[
           vec3 sunTint = mix(vec3(1.0,0.56,0.27), vec3(1.0,0.95,0.82), smoothstep(0.02,0.3,uSun.y));
           vec3 H = normalize(uSun + V + vec3(0.0,0.00001,0.0));
           float ndl = max(dot(wn,uSun),0.0), ndh=max(dot(wn,H),0.0), vdh=max(dot(V,H),0.0);
-          float alpha2 = max(roughness*roughness,0.0012);
+          // Pixel-scale GGX filtering. Drop world-space micro-glint noise
+          // when projected waves become subpixel to avoid long-range shimmer.
+          float alpha2=max(roughness*roughness,max(0.0012,pixelAngle*pixelAngle*0.48));
           float ggx = waterDGGX(ndh,alpha2) * waterVSmith(ndl,ndv,alpha2) * waterFresnel(vdh) * ndl;
-          float facetSparkle = mix(0.78,1.24,vnoise(xz*1.8+vec2(uTime*0.13,-uTime*0.09)));
-          float glitter = min(ggx * facetSparkle, 18.0) * mix(0.075,0.12,localDetail);
+          float sparkleMip=1.0-smoothstep(0.16,0.88,pixel);
+          float facetSparkle=1.0;
+          if(sparkleMip>0.015){
+            float detail=vnoise(xz*1.1+vec2(uTime*0.075,-uTime*0.062));
+            facetSparkle=mix(1.0,0.81+0.38*detail,sparkleMip);
+          }
+          float glitter = min(ggx * facetSparkle, 13.0) * mix(0.070,0.115,localDetail);
           if (uManhattan) glitter *= mix(0.76, 1.0, harborExposure);
           float moonGlint = pow(max(dot(wn, normalize(uMoon - rd + vec3(0.0,0.00001,0.0))), 0.0), 80.0);
           waterCol += sunTint * glitter * clearSky * sunAbove * litFactor;
@@ -2031,7 +2105,13 @@ const CENTRAL_PARK_SITES=[
             float shoalPhase = depth * 6.4 - uTime * 1.65 + breakup * 4.2 + swell.x * 1.7;
             float pulse = sin(shoalPhase) * 0.72 + sin(shoalPhase*0.47+1.9)*0.28;
             float lace = smoothstep(0.55,0.78,vnoise(xz*0.58+vec2(uTime*0.08,0.0)));
-            shore = smoothstep(0.36, 0.88, pulse) * (1.0 - smoothstep(0.04, 1.9, depth))
+            // Foam follows descending wave crests instead of appearing
+            // under an incoming unbroken lip; sections vary along shore.
+            float postCrest=smoothstep(0.04,0.68,-cos(shoalPhase));
+            float coastalPatch=vnoise(vec2(xz.x*0.13+uTime*0.014,xz.y*0.08));
+            float brokenFront=mix(0.28,1.0,smoothstep(0.32,0.72,coastalPatch));
+            shore = smoothstep(0.36, 0.88, pulse) * postCrest
+                  * (1.0 - smoothstep(0.04, 1.9, depth)) * brokenFront
                   * mix(0.22, 0.72, breakup) * mix(0.45, 1.0, openWater) * mix(0.45,1.0,lace);
             if (uManhattan) shore *= 0.62 + 0.25 * localDetail;
             float caustic = pow(0.5 + 0.5 * sin(3.4*xz.x + 2.1*xz.y + uTime*1.2 + ripple.x*50.0)
@@ -2363,16 +2443,29 @@ const CENTRAL_PARK_SITES=[
           tEnter = max(0.5, tEnter);
           tExit = min(hitDist, min(tExit, 440.0));
           if (tExit > tEnter) {
-            float steps = 7.0;
+            // Under a low render-resolution budget skip redundant ray samples.
+            // Optical depth is renormalized for 4/5/7 step modes.
+            float steps = clamp(uCloudSteps,4.0,7.0);
             float dt = (tExit - tEnter) / steps;
+            float opticalWeight=7.0/steps;
             float accum = 0.0;
             vec3 cloudColAccum = vec3(0.0);
             for (int c = 0; c < 7; c++) {
+              if(float(c)>=steps)break;
               float tc = tEnter + (float(c) + 0.5) * dt;
               vec3 cp = ro + rd * tc;
               float d = cloudDensity(cp.xz);
               if (d > 0.01) {
                 float hFrac = clamp((cp.y - cloudBase()) / (cloudTop() - cloudBase()), 0.0, 1.0);
+                // Cloud silhouettes fade into the base and the rounded top;
+                // denser cells hold a taller crown. No extra ray steps.
+                // Density-shaped cloud crowns are lower near feathered
+                // edges, taller in dense centers, with no extra noise.
+                float cloudCrown=smoothstep(0.18,0.85,d);
+                float cloudPeak=0.54+0.36*cloudCrown;
+                float cloudEnvelope=smoothstep(0.0,0.11,hFrac)*
+                  (1.0-smoothstep(cloudPeak-0.13,cloudPeak+0.07,hFrac));
+                d*=cloudEnvelope;
                 // Stepped peach/violet cloud shading
                 float shadeBand = floor((hFrac * 0.75 + (1.0 - d) * 0.35) * 3.0) / 2.0;
                 vec3 cShadow = vec3(0.52, 0.36, 0.56);
@@ -2380,7 +2473,17 @@ const CENTRAL_PARK_SITES=[
                 vec3 cLight = vec3(1.0, 0.82, 0.66);
                 vec3 cCol = shadeBand < 0.5 ? mix(cShadow, cMid, shadeBand * 2.0) : mix(cMid, cLight, (shadeBand - 0.5) * 2.0);
 
-                if (naturalLight()) cCol = mix(vec3(0.64,0.71,0.77),vec3(0.96,0.98,0.99),hFrac*0.7+(1.0-d)*0.3);
+                if (naturalLight()) {
+                  // Preserve the same seven cloud samples, but let cloud tops
+                  // reflect a little forward-scattered, low-sun warm light.
+                  vec3 neutral=mix(vec3(0.64,0.71,0.77),vec3(0.96,0.98,0.99),
+                    hFrac*0.7+(1.0-d)*0.3);
+                  float golden=smoothstep(-0.08,0.0,uSun.y)*
+                    (1.0-smoothstep(0.10,0.32,uSun.y));
+                  float forward=max(dot(rd,uSun),0.0);
+                  cCol=neutral*mix(vec3(1.0),vec3(1.09,0.78,0.61),
+                    golden*(0.24+0.33*forward*forward));
+                }
                 if(uVegas) cCol = mix(vec3(0.37,0.30,0.45),vec3(0.73,0.49,0.49),hFrac*0.8+(1.0-d)*0.2);
 
                 // Plane shadow cast onto clouds
@@ -2391,7 +2494,8 @@ const CENTRAL_PARK_SITES=[
                 }
 
                 cCol = applyFog(mix(cCol*vec3(0.26,0.31,0.44),cCol,uAtmosphere.x), rd, tc);
-                float alpha = d * mix(0.25,0.72,uAtmosphere.z) * (1.0 - accum);
+                float alpha = min(0.88,d*mix(0.25,0.72,uAtmosphere.z)*
+                  opticalWeight) * (1.0 - accum);
                 cloudColAccum += cCol * alpha;
                 accum += alpha;
                 if (accum > 0.94) break;
@@ -10879,6 +10983,14 @@ const CENTRAL_PARK_SITES=[
 
   const smoothScenery = () => Boolean(selectedMap.city || selectedMap.alaska || selectedMap.vegas || selectedMap.dc || selectedMap.chongqing);
 
+  // Only simplify the volumetric cloud ray integration once resolution has
+  // already dropped; normal full-resolution flights keep all seven samples.
+  function cloudStepsForScale(scale,direct){
+    if(direct||scale<0.68)return 4;
+    if(scale<0.82)return 5;
+    return 7;
+  }
+
   function resizeTargets() {
     if(gl.isContextLost())return;
     const viewWidth = Math.max(1, window.innerWidth);
@@ -11499,6 +11611,11 @@ const CENTRAL_PARK_SITES=[
   const skySeason = document.getElementById('skySeason');
   const skyWeather = document.getElementById('skyWeather');
   const skyStatus = document.getElementById('skyStatus');
+  const skyAzimuth = document.getElementById('skyAzimuth');
+  const skyAzimuthValue = document.getElementById('skyAzimuthValue');
+  skyAzimuth.addEventListener('input',()=>{
+    skyAzimuthValue.textContent=skyAzimuth.value==='-1'?'Auto':skyAzimuth.value+'°';
+  });
   const nyStreetQuality = document.getElementById('nyStreetQuality');
   let nyStreetWetness = 0.0;
   let skyElapsed=0, skyClock=0, skyStartingHour=14;
@@ -11519,6 +11636,17 @@ const CENTRAL_PARK_SITES=[
     toggleSkyPanel(false);
     skySettings.hidden=false;
     nyStreetWetness=0.0;
+  }
+
+  // Rotate only the compass bearing. Elevation keeps latitude/time/season,
+  // and the original automatic solar path remains the default.
+  function orientSunAzimuth(sun, value){
+    if(value==='-1')return sun;
+    const degrees=Number(value);
+    if(!Number.isFinite(degrees)||degrees<0||degrees>359)return sun;
+    const bearing=degrees*Math.PI/180;
+    const radius=Math.hypot(sun[0],sun[2]);
+    return [Math.sin(bearing)*radius,sun[1],Math.cos(bearing)*radius];
   }
 
   function sampleFlightEnvironment(dt){
@@ -11549,7 +11677,7 @@ const CENTRAL_PARK_SITES=[
         Math.cos(latitude)*s-Math.sin(latitude)*c];
     };
     const hourAngle=(hour-12)*Math.PI/12;
-    const sun=horizontal(hourAngle);
+    const sun=orientSunAzimuth(horizontal(hourAngle),skyAzimuth.value);
     const phase=(0.42+skyElapsed/(ENVIRONMENT_DAY*8))%1;
     const moon=horizontal(hourAngle-phase*Math.PI*2);
     const daylight=clamp((sun[1]+0.11)/0.31,0,1);
@@ -11568,6 +11696,7 @@ const CENTRAL_PARK_SITES=[
     if (loading || (!flying && !crash)) return;
     setScenicView(false);
     skySettings.hidden=true;
+    fpsCounter.hidden=true;
     toggleSkyPanel(false);
     crash = null;
     crashOverlay.hidden = true;
@@ -12877,6 +13006,10 @@ const CENTRAL_PARK_SITES=[
       renderVerified=false;
       frameCheckPending=true;
       flying = true;
+      fpsCounter.hidden=false;
+      fpsCounter.textContent='FPS -- · --×--';
+      fpsWindowSeconds=0;
+      fpsWindowFrames=0;
       glCanvas.focus({ preventScroll: true });
       resetFlightEnvironment();
       lastTime = null;
@@ -13043,6 +13176,7 @@ const CENTRAL_PARK_SITES=[
     uWorld = {
     sun:gl.getUniformLocation(worldProg,'uSun'), moon:gl.getUniformLocation(worldProg,'uMoon'),
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
+    cloudSteps:gl.getUniformLocation(worldProg,'uCloudSteps'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
@@ -13129,6 +13263,7 @@ const CENTRAL_PARK_SITES=[
 
   // Main Simulation & Render Loop
   let lastTime = null;
+  let fpsWindowSeconds=0,fpsWindowFrames=0;
   let slowFrames = 0;
   let lastScaleAdjustment = -Infinity;
   let trailAccum = 0;
@@ -14050,6 +14185,19 @@ const CENTRAL_PARK_SITES=[
     const dt = Math.min(rawDt, 0.05);
     const time = now * 0.001;
 
+    // Display measured requestAnimationFrame cadence, not a fabricated GPU
+    // benchmark. Update the small text only about once a second.
+    if(rawDt>0 && rawDt<1 && !document.hidden && !frameCheckPending){
+      fpsWindowSeconds+=rawDt;
+      fpsWindowFrames++;
+      if(fpsWindowSeconds>=0.9){
+        const fps=Math.round(fpsWindowFrames/fpsWindowSeconds);
+        fpsCounter.textContent='FPS '+fps+' · '+fboW+'×'+fboH;
+        fpsWindowSeconds=0;
+        fpsWindowFrames=0;
+      }
+    }
+
     // Keep all scene effects and raise resolution only after stable frames.
     if (rawDt > 0 && !document.hidden && !frameCheckPending) {
       const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
@@ -14282,6 +14430,7 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
     gl.uniform4fv(uWorld.climate,environment.climate);
+    gl.uniform1f(uWorld.cloudSteps,cloudStepsForScale(resScale,directRendering));
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
@@ -14606,6 +14755,7 @@ const CENTRAL_PARK_SITES=[
 
     if (crash && crash.age >= 1.15) {
       flying = false;
+      fpsCounter.hidden=true;
       skySettings.hidden=true;
       crashDetail.textContent = crash.reason;
       crashOverlay.hidden = false;
