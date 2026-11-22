@@ -147,7 +147,19 @@ def original_cached_face_mesh(mesh,bbox,roof_id,brep_face_index):
     raw_indices=[]
     invalid_faces=0
     for face in mesh.Faces:
-        a,b,c,d=int(face.A),int(face.B),int(face.C),int(face.D)
+        # rhino3dm Python MeshFace enumeration exposes raw index *tuples*
+        # in 8.35, whereas some bindings expose A/B/C/D properties.
+        # This is actual source topology; never fabricate face indices.
+        if isinstance(face,(tuple,list)):
+            indexes=[int(k) for k in face]
+        else:
+            indexes=[int(getattr(face,key)) for key in ("A","B","C","D")]
+        if len(indexes)==3:
+            a,b,c=indexes;d=c
+        elif len(indexes)==4:
+            a,b,c,d=indexes
+        else:
+            raise ValueError("Unexpected original 2014 Rhino mesh face arity")
         source_triangles=[(a,b,c)]
         if d!=c:source_triangles.append((a,c,d))
         for triplet in source_triangles:
