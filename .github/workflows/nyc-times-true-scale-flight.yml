@@ -11,6 +11,9 @@ on:
       - '.github/workflows/nyc-times-true-scale-flight.yml'
       - 'scripts/nyc-times-true-scale-pilot.mjs'
       - 'assets/nyc/times-square-footprints.json'
+      - 'scripts/nyc-metre-lowflight-roadbed-build.mjs'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'tests/nyc-official-roadbed-lowflight.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -29,11 +32,17 @@ jobs:
         run: |
           node --check tools/nyc/true-scale-flight.mjs
           node --check tools/nyc/true-scale-flight-browser-smoke.mjs
-          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs
+          node --check scripts/nyc-metre-lowflight-roadbed-build.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-true-scale-street-envelope.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-official-roadbed-lowflight.test.mjs
+      - name: Install official polygon triangulator (build-time only)
+        run: npm install --no-save --no-audit --no-fund earcut@3.0.2
       - name: Fetch actual NYC DCM road geometry, no artificial road fallback
         run: |
           node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          node scripts/nyc-metre-lowflight-roadbed-build.mjs
           test -s artifacts/nyc-true-scale/source.json
+          test -s artifacts/nyc-true-scale/roadbed-mesh.json
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
