@@ -59,7 +59,8 @@ test('exact three gallery shells retain sides/back but no opaque original front 
 });
 
 test('real open facades overlap side walls and rear walls without daylight cracks',()=>{
-  assert.match(marketSource,/frontWall\\.position\\.set\\(x,earth,z\\+2\\.78\\)/);
+  assert.ok(marketSource.includes('frontWall.position.set(x,earth,z+2.78)'),
+    'actual facade must stay anchored at original z+2.78 front plane');
   const facade=makeChongqingMarketOpenFacade(facadeThree);
   const verts=facade.position.array;
   const facadeHalfWidth=Math.max(...verts.filter((_,i)=>i%3===0).map(Math.abs));
