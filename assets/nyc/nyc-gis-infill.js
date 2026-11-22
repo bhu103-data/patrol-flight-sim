@@ -99,6 +99,16 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     [19.7,26.3,-51.6,-43.4],[-10.8,6.6,32.7,49.4]
   ];
   for(const rec of asset.features){
+    // PATROL_NYC_TIMES_FID941790_GHOST_DUPLICATE_V1:
+    // The north-tip 2 Times Square site is already an authored polygon using
+    // its municipal FID, billboard, and scene collision proxy. The GIS
+    // supplement projects a *second* tiny 941790 tower at x~-2,z~66 instead
+    // of the curated game's x=4,z=61. Skip only this visual duplicate when
+    // that named site exists. Source GIS without that site remains usable.
+    // Do not dedupe all nine site/FID mismatches: FID 1000156 carries the
+    // camera-facing 44th Street facade, and bulk removal would erase it.
+    if(rec.fid===941790 && protectedSites.some(
+      site=>site.name==='2 Times Square'))continue;
     if(pieces>=MAX_PIECES)break;
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
         !(rec.heightFt>0&&rec.heightFt<2500)||!Array.isArray(rec.rings?.[0])||
