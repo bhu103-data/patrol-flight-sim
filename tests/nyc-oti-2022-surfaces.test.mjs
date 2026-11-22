@@ -88,10 +88,11 @@ test('sidewalk, plaza, curb and curb-cut remain separate display-only layers',()
   assert.ok(mesh.pedestrianInterleaved.length>0);
   assert.ok(mesh.curbInterleaved.length>0);
   const ys=(arr)=>Array.from(arr).filter((_,i)=>i%10===1);
-  assert.ok(ys(mesh.pedestrianInterleaved).includes(.10));
-  assert.ok(ys(mesh.pedestrianInterleaved).includes(.12));
-  assert.ok(ys(mesh.curbInterleaved).includes(.16));
-  assert.ok(ys(mesh.curbInterleaved).includes(.18));
+  const hasY=(values,y)=>values.some(v=>Math.abs(v-y)<1e-5);
+  assert.ok(hasY(ys(mesh.pedestrianInterleaved),.10));
+  assert.ok(hasY(ys(mesh.pedestrianInterleaved),.12));
+  assert.ok(hasY(ys(mesh.curbInterleaved),.16));
+  assert.ok(hasY(ys(mesh.curbInterleaved),.18));
   assert.equal(mesh.noSurveyedVerticalDatum,true);
   assert.equal(mesh.noGameplaySemantics,true);
   assert.equal(mesh.sourceDataStoredInRepository,false);
