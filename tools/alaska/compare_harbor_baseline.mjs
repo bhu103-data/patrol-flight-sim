@@ -5,7 +5,7 @@
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 const root='http://127.0.0.1:8765';
-const baselineSha='25e734e024a6df6deaf172b0447c8f0ba10c9daf';
+const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
 // Add the SAME QA-only camera hook to both documents in temporary copies.
  // Neither the actual game source nor the benchmark geometry is changed.
  function cameraQAPage(input,output){
