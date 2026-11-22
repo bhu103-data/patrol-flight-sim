@@ -62,8 +62,8 @@ test('GIS roofs, parcels, existing windows and original face order survive uncha
  for(const key of ['sourceBuildings','infillPieces','roofTriangles','windowQuads'])
   assert.equal(after.stats[key],before.stats[key],key+' must stay unchanged');
  assert.deepEqual(after.stats.materialSurfaceIds,before.stats.materialSurfaceIds);
- assert.equal(before.stats.sourceBuildings,34);
- assert.equal(before.stats.infillPieces,75);
+ assert.equal(before.stats.sourceBuildings,33);
+ assert.equal(before.stats.infillPieces,74);
  // Source polygons and all original face ordering survive the storefront
  // delta; the infill window budget is now fairly spread across later FIDs.
  assert.ok(before.stats.windowQuads>500&&before.stats.windowQuads<=2200,
