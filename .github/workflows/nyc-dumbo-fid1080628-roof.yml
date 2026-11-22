@@ -40,8 +40,8 @@ jobs:
       - name: Recover EXACT parent before state without touching main
         shell: bash
         run: |
-          git cat-file -e 91fb2191040e088ec26b2cd884aedffc0e5e6171^{commit}
-          git worktree add --detach /tmp/patrol-roof-before 91fb2191040e088ec26b2cd884aedffc0e5e6171
+          git cat-file -e c93c6d1fa9c5f9a24eae6cc0cf5a764523dfaffb^{commit}
+          git worktree add --detach /tmp/patrol-roof-before c93c6d1fa9c5f9a24eae6cc0cf5a764523dfaffb
       - name: Install free browser and PNG decoder
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
