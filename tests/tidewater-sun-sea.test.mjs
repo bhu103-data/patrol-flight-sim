@@ -60,9 +60,12 @@ test('twilight cloud warm-light gate retains existing fixed seven ray-march step
 
 test('cloud masses favor broad scales with a feathered and density-shaped ceiling',()=>{
  const density=between('    float cloudDensity(vec2 xz) {','    vec4 sampleMap(vec2 xz) {');
- assert.match(density,/xz \* 0\.009/);
- assert.match(density,/vnoise\(p\) \* 0\.66/);
- assert.match(density,/vnoise\(p \* 4\.4 - 3\.4\) \* 0\.09/);
+ assert.match(density,/xz \* 0\.011/);
+ assert.match(density,/float large=vnoise\(p\)/);
+ assert.match(density,/float middle=vnoise\(p\*2\.23\+7\.1\)/);
+ assert.match(density,/float fine=vnoise\(p\*4\.4-3\.4\)/);
+ assert.match(density,/float n=large\*0\.59\+middle\*0\.29\+fine\*0\.12/);
+ assert.match(density,/return coverage\*mix\(0\.56,1\.0,smoothstep\(0\.24,0\.71,middle\)\)/);
  assert.equal((density.match(/vnoise\(/g)||[]).length,3,
    'keep cloud density at three spatial-noise calls');
  const cloud=between('      \/\/ Cumulus cloud layer below cruise altitude',

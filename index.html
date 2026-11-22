@@ -1603,12 +1603,17 @@ const CENTRAL_PARK_SITES=[
     }
 
     float cloudDensity(vec2 xz) {
-      // Broader connected cloud masses with low-frequency-dominant detail.
-      // Still exactly three noise fetches and the same advected wind field.
-      vec2 p = xz * 0.009 + vec2(uTime * 0.0037, uTime * 0.0015);
-      float n = vnoise(p) * 0.66 + vnoise(p * 2.23 + 7.1) * 0.25
-              + vnoise(p * 4.4 - 3.4) * 0.09;
-      return smoothstep(0.635-uAtmosphere.z*0.32,0.865-uAtmosphere.z*0.30,n);
+      // Broad low-frequency cloud forms, but let the middle octave break
+      // up very wide cloud shelves rather than turning the sky into a slab.
+      // Three noise fetches, the existing drift and seven volume samples.
+      vec2 p = xz * 0.011 + vec2(uTime * 0.0041, uTime * 0.0016);
+      float large=vnoise(p);
+      float middle=vnoise(p*2.23+7.1);
+      float fine=vnoise(p*4.4-3.4);
+      float n=large*0.59+middle*0.29+fine*0.12;
+      float coverage=smoothstep(0.647-uAtmosphere.z*0.32,
+        0.865-uAtmosphere.z*0.30,n);
+      return coverage*mix(0.56,1.0,smoothstep(0.24,0.71,middle));
     }
 
     vec4 sampleMap(vec2 xz) {
