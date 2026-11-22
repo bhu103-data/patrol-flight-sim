@@ -1,0 +1,93 @@
+name: NYC Empire State CC0 GLB import and WebGL2 acceptance
+
+on:
+  push:
+    branches:
+      - feat/nyc-empire-state-cc0-20261122-chat
+    paths:
+      - '.github/workflows/nyc-empire-cc0-import.yml'
+      - 'tools/nyc/import_empire_cc0.py'
+      - 'tools/verify-empire-browser.mjs'
+      - 'tools/scenario_model_preview.html'
+      - 'tests/nyc-empire-cc0-asset.test.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nyc-empire-cc0-import-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  import-and-accept:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download and audit the exact CC0 source; vendor only if compatible
+        run: python tools/nyc/import_empire_cc0.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run complete PATROL Node regression suite
+        run: node --test tests/*.test.mjs
+
+      - name: Install free Chromium WebGL2 preview runner
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Serve the exact branch candidate locally
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-empire-cc0-http.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/tools/scenario_model_preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Render the imported Empire GLB with PATROL's production decoder
+        run: node tools/verify-empire-browser.mjs
+
+      - name: Upload source audit, actual WebGL screenshot and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-empire-state-cc0-glb-review
+          path: |
+            artifacts/empire-cc0-import-audit.json
+            artifacts/empire-generated-glb-webgl.png
+            artifacts/empire-webgl-audit.json
+            artifacts/empire-webgl-failure.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Commit only the audited model and provenance to this draft branch
+        if: success()
+        env:
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/nyc/scenario/empire-state-cc0.glb \
+            assets/nyc/scenario-manifest.json \
+            assets/nyc/THIRD_PARTY_NOTICES.md \
+            docs/NYC_EMPIRE_STATE_CC0_IMPORT.md
+          if git diff --cached --quiet; then
+            echo "No asset/provenance changes; the existing pinned model is already audited."
+            exit 0
+          fi
+          git commit -m "Import audited CC0 Empire State GLB"
+          git push origin "HEAD:${TARGET_REF}"
