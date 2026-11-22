@@ -24,8 +24,8 @@ COARSE=ROOT/"assets/alaska/tracy-arm-3dep.json"
 OUT=ART/"alaska-tracyarm-ifsar5m"
 OUT.mkdir(parents=True,exist_ok=True)
 EXPECTED={
- "USGS_OPR_Alaska_Mid_Accuracy_DEM_Summer_2015_DTM_N5745W13315P.tif":89998420,
  "USGS_OPR_Alaska_Mid_Accuracy_DEM_Summer_2015_DTM_N5745W13330P.tif":99018238,
+ "USGS_OPR_Alaska_Mid_Accuracy_DEM_Summer_2015_DTM_N5745W13315P.tif":89998420,
 }
 NODATA_OUT=-9999.0
 QUANT=.1
@@ -113,7 +113,11 @@ def main():
   download(candidate["url"],tif_path,expected_size)
   xml_url=candidate["url"][:-4]+".xml"
   xml_path=OUT/(filename[:-4]+".xml")
-  download(xml_url,xml_path,10486 if "N5745" in filename else 10486)
+  xml_name=filename[:-4]+".xml"
+  xml_meta=next((x for x in native["objects"] if x["file"]==xml_name),None)
+  if not xml_meta or not isinstance(xml_meta.get("size"),int):
+   raise RuntimeError("Native OPR per-tile XML metadata missing from official listing: "+xml_name)
+  download(xml_url,xml_path,xml_meta["size"])
   report["sourceTiles"].append({
     "file":filename,"url":candidate["url"],"expectedBytes":expected_size,
     "bytes":tif_path.stat().st_size,"sha256":sha256(tif_path),
@@ -213,15 +217,22 @@ def main():
  old_interp=bilinear(old,XX,YY)
  new_sample=dst[np.ix_(rows,cols)].astype(np.float64)
  valid_sample=(new_sample!=NODATA_OUT)
+ def edge_comparison(side):
+  if side=="west":rr=np.arange(TARGET_HEIGHT);cc=np.zeros(TARGET_HEIGHT,dtype=np.int64)
+  elif side=="east":rr=np.arange(TARGET_HEIGHT);cc=np.full(TARGET_HEIGHT,TARGET_WIDTH-1,dtype=np.int64)
+  elif side=="south":rr=np.zeros(TARGET_WIDTH,dtype=np.int64);cc=np.arange(TARGET_WIDTH)
+  else:rr=np.full(TARGET_WIDTH,TARGET_HEIGHT-1,dtype=np.int64);cc=np.arange(TARGET_WIDTH)
+  lon=west+(cc+.5)*(east-west)/TARGET_WIDTH
+  lat=south+(rr+.5)*(north-south)/TARGET_HEIGHT
+  ox=(lon-OW)/(OE-OW)*256-.5;oy=(lat-OS)/(ON-OS)*256-.5
+  old_edge=bilinear(old,ox,oy)
+  new_edge=dst[rr,cc]
+  mask=valid[rr,cc]
+  return dist(new_edge[mask]-old_edge[mask])
  report["legacy30mComparison"]={
    "sampleStep":4,"verticalDatumCompatibility":"not independently established; do not blend based on this comparison",
    "native5mMinusLegacy30m":dist((new_sample-old_interp)[valid_sample]),
-   "edges":{
-     "west":dist(dst[valid,0] if False else dst[:,0][valid[:,0]]-old_interp[:,0][valid_sample[:,0]]),
-     "east":dist(dst[:,-1][valid[:,-1]]-old_interp[:,-1][valid_sample[:,-1]]),
-     "south":dist(dst[0,:][valid[0,:]]-old_interp[0,:][valid_sample[0,:]]),
-     "north":dist(dst[-1,:][valid[-1,:]]-old_interp[-1,:][valid_sample[-1,:]])
-   }
+   "edges":{side:edge_comparison(side) for side in ("west","east","south","north")}
  }
  # Reproject output is north-first; runtime geodesy module expects south-first.
  south_first=dst[::-1,:]
