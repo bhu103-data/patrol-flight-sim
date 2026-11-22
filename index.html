@@ -5091,19 +5091,21 @@ const CENTRAL_PARK_SITES=[
     return distance;
   }
 
+  function bridgeheadResolvedTravel(actor,time){
+    const desired=bridgeheadSignalTravel(actor,time);
+    if(!actor.bridgeheadLeader)return desired;
+    const leader=bridgeheadSignalTravel(actor.bridgeheadLeader,time);
+    // Keep 9 route units behind the designated lead vehicle, even after
+    // thousands of seconds of faster sedan progress around this loop.
+    return Math.min(desired,leader-9.0);
+  }
+
   function bridgeheadTrafficPose(actor,time){
     const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
     const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
-    let traveled=actor.signalized?bridgeheadSignalTravel(actor,time):time*pace+offset;
-    // Enforce long-run leader/follower ordering on the looping connector.
-    // Independent 5.0 / 5.6 paces eventually produced an actual oriented
-    // car-envelope overlap after ~1935 s. Never allow the sedan to lap the
-    // lead taxi: min of two monotone progress clocks stays monotone even
-    // through red stops, U-turns, frame skips and map camera culling.
-    if(actor.signalized&&actor.bridgeheadLeader){
-      const leaderTravel=bridgeheadSignalTravel(actor.bridgeheadLeader,time);
-      traveled=Math.min(traveled,leaderTravel-9.0);
-    }
+    // Analytic car-following shares the SAME resolved travel as browser QA.
+    // Min of monotone progress clocks prevents backward motion or overtaking.
+    const traveled=actor.signalized?bridgeheadResolvedTravel(actor,time):time*pace+offset;
     const phase=((traveled%period)+period)%period;
     const first=route.points[0],last=route.points.at(-1);
     const tangent=(a,b)=>{
