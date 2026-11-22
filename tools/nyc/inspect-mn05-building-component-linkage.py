@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import importlib.util
 import json
 import math
 import pathlib
@@ -20,10 +21,17 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from official_mn05_projection import mn05_stateplane_to_metric
 
+MESH_HELPER_PATH = HERE / "inspect-mn05-roof-source-roi.py"
+MESH_HELPER_SPEC = importlib.util.spec_from_file_location("mn05_roof_source_mesh_helper", MESH_HELPER_PATH)
+MESH_HELPER = importlib.util.module_from_spec(MESH_HELPER_SPEC)
+MESH_HELPER_SPEC.loader.exec_module(MESH_HELPER)
+original_cached_face_mesh = MESH_HELPER.original_cached_face_mesh
+
 ROOT = pathlib.Path("artifacts/nyc-official-mn05")
 SOURCE = ROOT / "mn05-source.3dm"
 PROBE = ROOT / "mn05-probe.json"
 OUTPUT = ROOT / "mn05-building-component-linkage.json"
+FOOTPRINT_MESH_OUTPUT = ROOT / "times-square-original-footprint-mesh.json"
 EXPECTED_ZIP_SHA = "71e6242c55ca7069f67c0bfd8e6d4764c9e6020a361e6bfa77880effe7520bf2"
 EXPECTED_MODEL_SHA = "b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57"
 ROI_METRES = (-315.0, -175.0, 380.0, 530.0)
@@ -149,6 +157,10 @@ def inspect() -> None:
         "sourceLinkageAccepted": False,
         "errors": [],
     }
+    footprint_mesh_patches = []
+    footprint_mesh_triangles = 0
+    footprint_mesh_vertices = 0
+    footprint_mesh_degenerate = 0
     try:
         previous = json.loads(PROBE.read_text())
         if previous.get("imported") is not True:
@@ -217,6 +229,19 @@ def inspect() -> None:
                 counters[role]["roiObjectsWithUserStrings"] += 1
             if hasattr(geom, "Faces"):
                 counters[role]["roiBreps"] += 1
+                if role == "footprint":
+                    for face_index, face in enumerate(geom.Faces):
+                        cached = face.GetMesh(rhino3dm.MeshType.Any)
+                        patch = original_cached_face_mesh(
+                            cached, bbox, str(attrs.Id), face_index)
+                        if patch is None:
+                            counters[role]["footprintCachedMeshMissing"] += 1
+                            continue
+                        patch["sourceObjectIndex"] = object_index
+                        footprint_mesh_patches.append(patch)
+                        footprint_mesh_triangles += patch["triangleCount"]
+                        footprint_mesh_vertices += patch["vertexCount"]
+                        footprint_mesh_degenerate += patch["degenerateSourceTrianglesRejected"]
             rows.append({"role": role, "groupIds": groups})
             if len(report["attributeSamples"][role]) < SAMPLE_PER_ROLE:
                 report["attributeSamples"][role].append({
@@ -243,6 +268,11 @@ def inspect() -> None:
             role: dict(counters[role])
             for role in ("footprint", "roof", "facade")
         }
+        report["footprintMeshPatches"] = len(footprint_mesh_patches)
+        report["footprintMeshTriangles"] = footprint_mesh_triangles
+        report["footprintMeshVertices"] = footprint_mesh_vertices
+        report["footprintMeshDegenerateTrianglesRejected"] = footprint_mesh_degenerate
+        report["footprintMeshAccepted"] = len(footprint_mesh_patches) > 100 and footprint_mesh_triangles > 100
         report["groupLinkage"] = summarize_group_roles(rows)
         report["sourceLinkageAccepted"] = all(
             counters[role]["roiObjects"] > 100
@@ -259,9 +289,22 @@ def inspect() -> None:
         report["errors"].append(f"{type(exc).__name__}: {exc}")
     finally:
         OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+        FOOTPRINT_MESH_OUTPUT.write_text(json.dumps({
+            "schema": "nyc-mn05-2014-footprint-surface-mesh-v1",
+            "source3dmSha256": EXPECTED_MODEL_SHA,
+            "sourceVintage": "2014",
+            "roiMetres": ROI_METRES,
+            "counts": {
+                "sourceFootprintMeshPatches": len(footprint_mesh_patches),
+                "sourceFootprintTriangles": footprint_mesh_triangles,
+                "sourceFootprintVertices": footprint_mesh_vertices,
+                "degenerateSourceTrianglesRejected": footprint_mesh_degenerate,
+            },
+            "sourceFootprintMeshPatches": footprint_mesh_patches,
+        }, ensure_ascii=False, separators=(",", ":")))
         print(json.dumps({k: v for k, v in report.items()
                           if k != "attributeSamples"}, ensure_ascii=False, indent=2))
-    if report["errors"] or not report["sourceLinkageAccepted"]:
+    if report["errors"] or not report["sourceLinkageAccepted"] or not report.get("footprintMeshAccepted"):
         raise SystemExit(1)
 
 
