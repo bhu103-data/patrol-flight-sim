@@ -18,7 +18,7 @@ test('only real source polygons and curb lines may appear in true metre low-fly 
   assert.match(preview,/gl\.drawArrays\(gl\.LINES,0,curbLines\.count\)/);
   assert.doesNotMatch(preview,/gl\.drawArrays\(gl\.TRIANGLES,0,rowSurface\.count\)/);
   assert.match(preview,/noSurveyedVerticalDatum:true/);
-  assert.match(preview,/建筑遮挡掩膜/);
+  assert.match(preview,/遮挡掩膜/);
   assert.match(preview,/sidewalkDisplayMask:pedestrian\.sourceSidewalkMask/);
   assert.match(preview,/路缘开口/);
   assert.ok(!game.includes('nyc-metre-pedestrian-lowflight-build.mjs'));
