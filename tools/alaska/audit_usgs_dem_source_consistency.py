@@ -16,6 +16,7 @@ import json
 import math
 import pathlib
 import urllib.request
+import urllib.parse
 from datetime import datetime,timezone
 import numpy as np
 import tifffile
@@ -38,6 +39,36 @@ def fetch_usgs_tiff(url):
     if arr.shape!=(256,256) or arr.dtype.kind!="f":
         raise RuntimeError("Wrong exact-USGS original TIFF dtype/shape: "+str((arr.shape,arr.dtype)))
     return arr[::-1].astype(np.float64)
+
+
+def export_metadata(request_url, adjust=None):
+    """Ask ArcGIS for the ACTUAL export envelope; never trust requested bbox."""
+    parts=urllib.parse.urlsplit(request_url)
+    q=urllib.parse.parse_qs(parts.query)
+    q["f"]=["json"]
+    if adjust is not None:q["adjustAspectRatio"]=[str(adjust).lower()]
+    check_url=urllib.parse.urlunsplit(
+        (parts.scheme,parts.netloc,parts.path,urllib.parse.urlencode(q,doseq=True),""))
+    req=urllib.request.Request(check_url,headers={
+        "Accept":"application/json",
+        "User-Agent":"PATROL-tracy-arm-actual-extent-QA/1.0"})
+    with urllib.request.urlopen(req,timeout=40) as r:
+        response=json.loads(r.read(250_000))
+    if "error" in response:raise RuntimeError("ArcGIS export metadata error "+str(response["error"]))
+    envelope=response.get("extent") or {}
+    key=["xmin","ymin","xmax","ymax"]
+    if not all(k in envelope and isinstance(envelope[k],(int,float)) for k in key):
+        raise RuntimeError("ArcGIS omitted actual export extent, no georeference proof")
+    sr=envelope.get("spatialReference") or {}
+    wkid=sr.get("latestWkid",sr.get("wkid"))
+    if wkid!=4326:raise RuntimeError("Unexpected ArcGIS output spatial reference "+str(wkid))
+    bbox=[float(envelope[k]) for k in key]
+    return {
+        "url":check_url,"actualBbox":bbox,"spatialReference":sr,
+        "width":response.get("width"),"height":response.get("height"),
+        "adjustAspectRatio":adjust,
+        "publishedByServer":True
+    }
 
 def distribution(a):
     a=np.asarray(a,dtype=np.float64)
@@ -119,6 +150,62 @@ def main():
     report["secondBestCoarsePixelShiftDiagnostic"]=shifts[1]
     report["rmseImprovementVsOriginal"]=round(
       report["fineMinusBakedCoarse"]["rmse"]-shifts[0]["rmse"],3)
+    # ArcGIS official REST: adjustAspectRatio defaults TRUE. With a 256²
+    # output but WGS84 bbox of unequal horizontal/vertical degree extents, the
+    # server may EXPAND the actual output bbox around the request centre.
+    # The old asset stores requested bbox only, so its pixels can be mapped to
+    # the wrong latitudes. This can mimic a source-product/epoch offset.
+    try:
+      o_export=export_metadata(old_meta["sourceQuery"])
+      f_export=export_metadata(fine_meta["sourceQuery"])
+      o_false=export_metadata(old_meta["sourceQuery"],False)
+      f_false=export_metadata(fine_meta["sourceQuery"],False)
+      report["arcgisActualExportExtents"]={
+         "coarseDefault":o_export,
+         "fineDefault":f_export,
+         "coarseDisableAutoAspect":o_false,
+         "fineDisableAutoAspect":f_false
+      }
+      CO=o_export["actualBbox"];FI=f_export["actualBbox"]
+      fx=FI[0]+(np.arange(256)+.5)*(FI[2]-FI[0])/256
+      fy=FI[1]+(np.arange(256)+.5)*(FI[3]-FI[1])/256
+      AX,AY=np.meshgrid((fx-CO[0])/(CO[2]-CO[0])*256-.5,
+        (fy-CO[1])/(CO[3]-CO[1])*256-.5)
+      report["fineMinusCoarseUsingActualArcgisExtents"]=distribution(
+         fine-bilinear(old,AX,AY))
+      report["actualExtentDifferenceFromRequested"]={
+        "coarse":{
+          "west":round(CO[0]-OW,9),"south":round(CO[1]-OS,9),
+          "east":round(CO[2]-OE,9),"north":round(CO[3]-ON,9)
+        },
+        "fine":{
+          "west":round(FI[0]-FW,9),"south":round(FI[1]-FS,9),
+          "east":round(FI[2]-FE,9),"north":round(FI[3]-FN,9)
+        }
+      }
+      report["arcgisAspectExplainsMostMisregistration"]=(
+        report["fineMinusCoarseUsingActualArcgisExtents"]["rmse"] <
+           report["fineMinusBakedCoarse"]["rmse"]*.4)
+    except Exception as error:
+      report["arcgisActualExportExtents"]={"error":str(error),
+        "verified":False}
+      report["arcgisAspectExplainsMostMisregistration"]=False
+    # Up to 12 original 30m pixels; these are purely correlation diagnostics
+    # and NEVER authorized fixes for an official georeferencing mismatch.
+    sampled=(slice(None,None,3),slice(None,None,3))
+    xsmall,ysmall=X[sampled],Y[sampled]
+    fsmall=fine[sampled]
+    broad=[]
+    for dy in range(-12,13):
+      for dx in range(-12,13):
+        offset=fsmall-bilinear(old,xsmall+dx,ysmall+dy)
+        broad.append((float(np.sqrt(np.mean(offset*offset))),dx,dy))
+    broad.sort()
+    report["expandedBestCoarseShiftDiagnostic"]={
+      "rmseSampled":round(broad[0][0],3),
+      "dx30mPixels":broad[0][1],"dy30mPixels":broad[0][2],
+      "searchLimited":any(abs(a)==12 for a in broad[0][1:])
+    }
     # Fresh source at the identical original ImageServer resolution/coordinates.
     try:
       fresh=fetch_usgs_tiff(old_meta["sourceQuery"])
@@ -148,7 +235,9 @@ def main():
     print("SOURCE-REGISTRATION AUDIT "+
       json.dumps({k:report[k] for k in [
         "fineMinusBakedCoarse","bestCoarsePixelShiftDiagnostic",
-        "rmseImprovementVsOriginal","freshOriginalSource","stitchGate"]}),
+        "rmseImprovementVsOriginal","freshOriginalSource","stitchGate",
+        "arcgisActualExportExtents","fineMinusCoarseUsingActualArcgisExtents",
+        "expandedBestCoarseShiftDiagnostic"] if k in report}),
       flush=True)
 
 if __name__=="__main__":
