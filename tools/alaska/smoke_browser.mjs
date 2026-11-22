@@ -65,8 +65,8 @@ try{
   }
   mkdirSync('artifacts',{recursive:true});
   await page.screenshot({path:'artifacts/alaska-live-webgl.png'});
-  if(!glacierDetailLogs.some(m=>/seracs:\s*28/.test(m) && /iceStrata:\s*62/.test(m))){
-    throw new Error('Glacier serac and strata geometry not confirmed in live WebGL pass: '+
+  if(!glacierDetailLogs.some(m=>/seracs:\s*28/.test(m) && /iceStrata:\s*62/.test(m) &&\n     /glacierFacets:\s*112/.test(m))){
+    throw new Error('Glacier serac, strata and 3-D facade facets not confirmed in live WebGL pass: '+
       glacierDetailLogs.join(' | '));
   }
   const villageLine=villageLogs.find(m=>m.includes('[PATROL] Alaska surveyed village'));
