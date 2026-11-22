@@ -32,9 +32,11 @@ small{display:block;font-size:12px;color:#bbc8d7;margin-top:6px}
 <small>Drag to orbit · Scroll to zoom · 50-meter coordinate grid (not roads)</small>
 <small><b>Limit:</b> source-derived LOD1 massing only. Actual traffic lanes, road widths, photographed facades, ground elevation, LED artwork and surveyed camera registration are NOT included. This is an isolated QA preview, not the playable NYC map.</small>
 <small>Source: NYC Open Data Building Footprints, existing Times Square HEIGHTROOF snapshot. No proprietary imagery or meshes.</small>
+<small>Optional QA mode <code>?roadbed=1</code>: gray = symmetrically estimated constructed CSCL paved-width band; orange = non-vehicular centerline marker. **NOT surveyed curb/roadbed shape or playable traffic.**</small>
 </div>
 <script type="module">
 import {buildMetricMassing} from './assets/nyc/times-square-metric-massing.js';
+import {buildCsclRoadbedQaPreview} from './assets/nyc/nyc-cscl-roadbed-qa-preview.js';
 const canvas=document.getElementById('scene'),status=document.getElementById('status');
 let gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
 if(!gl){status.textContent='WebGL2 unavailable; this pilot requires a WebGL2 browser.';throw Error('WebGL2 required');}
@@ -96,6 +98,18 @@ for(let p=-450;p<=500;p+=50){
   push(-450,p);push(500,p);
 }
 const grid=asBuffers(new Float32Array(gridP),new Float32Array(gridN),new Float32Array(gridC));
+let roadbedMesh=null,roadbedStats=null;
+if(new URLSearchParams(location.search).get('roadbed')==='1'){
+  const response=await fetch('./artifacts/nyc-cscl-roadbed/roadbed-candidate-lines.json');
+  if(!response.ok)throw Error('Read-only CSCL audit artifact absent: HTTP '+response.status);
+  const source=await response.json();
+  const preview=buildCsclRoadbedQaPreview(source);
+  if(preview.stats.vehicleRoads<20||preview.stats.nonVehicleLines<1||
+    preview.stats.unverifiedVehicleWidth>0)
+    throw Error('CSCL roadbed QA incomplete; do not render guessed road widths');
+  roadbedMesh=asBuffers(preview.positions,preview.normals,preview.colors);
+  roadbedStats=preview.stats;
+}
 const v3=(x,y,z)=>[x,y,z],normalize=a=>{
   const len=Math.hypot(...a)||1;return a.map(x=>x/len);
 },sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),
@@ -153,11 +167,15 @@ function render(){
   const vp=mul(perspective(Math.PI/3,w/h,.5,2400),viewMatrix(eye,target,[0,1,0]));
   gl.useProgram(program);gl.uniformMatrix4fv(vpUniform,false,new Float32Array(vp));
   gl.bindVertexArray(grid.vao);gl.drawArrays(gl.LINES,0,grid.count);
+  if(roadbedMesh){
+    gl.bindVertexArray(roadbedMesh.vao);gl.drawArrays(gl.TRIANGLES,0,roadbedMesh.count);
+  }
   gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   gl.bindVertexArray(null);frames++;
   window.__patrolMetricQa={
     ready:true,renderer:gl.getParameter(gl.RENDERER),webgl2:!gl.isContextLost(),
     errors:gl.getError(),stats:geometry.stats,bounds:geometry.bounds,
+    csclQa:roadbedStats,
     frame:frames,eye,target,canvas:[canvas.width,canvas.height]
   };
 }
@@ -165,6 +183,9 @@ window.addEventListener('resize',render);
 preset('fly');
 status.textContent=geometry.stats.renderedBuildings+' source buildings · '+
   geometry.stats.totalTriangles.toLocaleString()+' triangles · '+geometry.stats.skippedBuildings+
-  ' skipped (holes/invalid) · 1 world unit = 1 meter';
+  ' skipped (holes/invalid) · 1 world unit = 1 meter' +
+  (roadbedStats?' · '+roadbedStats.vehicleRoads+
+    ' real-source motorized width bands; '+roadbedStats.nonVehicleLines+
+    ' NONvehicle centerline markers (not curb/roadbed geometry)':'');
 </script>
 </body></html>
