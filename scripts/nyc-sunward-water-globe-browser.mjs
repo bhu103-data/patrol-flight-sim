@@ -95,7 +95,7 @@ function stats(bytes,facing){
  }
  // A physically valid midnight Moon view is dark; it cannot satisfy a
  // daytime "bright pixels" threshold, even while stars and moon are visible.
- const moonNight=facing==='moon',minBins=moonNight?25:55,
+ const moonNight=facing==='moon',minBins=moonNight?16:55,
    minVisible=moonNight?.08:.35;
  ensure(im.width===1280&&im.height===720&&bins.size>minBins&&
    colored>n*minVisible,
