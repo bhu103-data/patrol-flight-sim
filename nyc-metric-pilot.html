@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PATROL · Times Square 1:1 metres · Geographic pilot only</title>
+<style>
+:root{font:14px/1.5 system-ui,"Segoe UI",sans-serif;color:#f1f5fa;background:#101821}
+*{box-sizing:border-box}body{margin:0;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh;touch-action:none}
+aside{position:fixed;top:16px;left:16px;max-width:400px;padding:15px 17px;border-radius:10px;
+ background:#101c2ded;border:1px solid #52677d88;box-shadow:0 8px 30px #0009}
+h1{font-size:17px;margin:0 0 8px}p{margin:5px 0}
+small{color:#b6c7d9}button{margin:9px 6px 0 0;background:#243b55;color:inherit;
+ border:1px solid #7d98b5;padding:6px 12px;border-radius:6px;cursor:pointer}
+button:hover{background:#375679}
+#status{font-variant-numeric:tabular-nums;font-size:13px;color:#b6dfff}
+footer{position:fixed;bottom:14px;right:16px;background:#101c2dcc;
+padding:8px 12px;border-radius:7px;color:#e1e9f2;max-width:390px}
+a{color:#9ac8ff}strong{color:#ffe3aa}
+</style></head>
+<body>
+<canvas id="scene" aria-label="WebGL2 NYC official footprint mesh in 1:1 metric coordinates"></canvas>
+<aside>
+<h1>Times Square · 1:1 米制建筑样板</h1>
+<p>纽约官方建筑足迹 + HEIGHTROOF 屋顶高度，统一 WGS84 → 本地 ENU 米制坐标。无游戏原有的 0.32× 压缩。</p>
+<p id="status" role="status">正在加载本地官方数据快照……</p>
+<button id="oblique">斜视视角</button><button id="top">正俯视（北朝上）</button>
+<button id="reset">重置视角</button>
+<p><small>鼠标拖拽旋转 · 滚轮缩放 · 每条灰线间隔 50 米（仅标尺，不代表真实道路）</small></p>
+<p><strong>注意：这是可核查的建筑几何试验视图，不是纽约地图正式替换。</strong></p>
+<p><small>未接入官方道路宽度/路缘石、建筑入口和真实立面、地面高程、地铁、灯光广告、真实 GPU 帧耗或飞控碰撞。平坦零高度基座为示意。</small></p>
+<p><small>数据：<a href="https://data.cityofnewyork.us/d/3g6p-4u5s" target="_blank" rel="noopener">NYC Open Data Building Footprints</a> · 源快照 2026-11-20。</small></p>
+</aside>
+<footer>坐标基准：One Times Square 约 WGS84 (−73.9864883, 40.756421) · x=东 / −z=北 / y=高度米。墙体为中性占位色，不是实测材质。</footer>
+<script type="module">
+import {buildMetricFootprints} from './assets/nyc/nyc-metric-footprints.mjs';
+const canvas=document.getElementById('scene'),status=document.getElementById('status');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
+if(!gl){status.textContent='WebGL2 不可用：不能渲染米制试验场景。';
+ throw Error('WebGL2 unavailable');}
+const vs=`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec3 aColor;
+uniform mat4 uProjection;
+uniform mat4 uView;
+out vec3 vColor;
+void main(){
+ vec3 L=normalize(vec3(-0.44,0.87,0.23));
+ float lighting=0.31+0.69*max(dot(normalize(aNormal),L),0.0);
+ vColor=aColor*lighting;
+ gl_Position=uProjection*uView*vec4(aPos,1.0);
+}
+`;
+const fs=`#version 300 es
+precision highp float;
+in vec3 vColor;
+out vec4 color;
+void main(){color=vec4(vColor,1.0);}
+`;
+function shader(type,source){
+ const obj=gl.createShader(type);gl.shaderSource(obj,source);gl.compileShader(obj);
+ if(!gl.getShaderParameter(obj,gl.COMPILE_STATUS))
+   throw Error(gl.getShaderInfoLog(obj));return obj;
+}
+const program=gl.createProgram();
+gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));
+gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+ throw Error(gl.getProgramInfoLog(program));
+gl.useProgram(program);
+const projectionLocation=gl.getUniformLocation(program,'uProjection');
+const viewLocation=gl.getUniformLocation(program,'uView');
+const buffer=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+for(let i=0;i<3;i++){
+ gl.enableVertexAttribArray(i);
+ gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);
+}
+const norm=v=>{const l=Math.hypot(...v)||1;return v.map(x=>x/l)};
+const subtract=(a,b)=>a.map((x,i)=>x-b[i]);
+const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],
+ a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function view(eye,target){
+ const f=norm(subtract(target,eye)),s=norm(cross(f,[0,1,0])),u=cross(s,f);
+ return new Float32Array([s[0],u[0],-f[0],0,s[1],u[1],-f[1],0,
+   s[2],u[2],-f[2],0,-dot(s,eye),-dot(u,eye),dot(f,eye),1]);
+}
+function perspective(fov,aspect,near,far){
+ const t=1/Math.tan(fov/2),n=1/(near-far);
+ return new Float32Array([t/aspect,0,0,0,0,t,0,0,0,0,(far+near)*n,-1,
+   0,0,2*far*near*n,0]);
+}
+let mesh=null,grid=null,cam={yaw:.65,pitch:.72,distance:740,target:[0,75,-190]};
+const gridSize=50;
+function makeGrid(bounds){
+ const [xmin,zmin,xmax,zmax]=bounds,pad=60;
+ const l=Math.floor((xmin-pad)/gridSize)*gridSize,
+  r=Math.ceil((xmax+pad)/gridSize)*gridSize,
+  n=Math.floor((zmin-pad)/gridSize)*gridSize,
+  s=Math.ceil((zmax+pad)/gridSize)*gridSize,items=[];
+ function point(x,z){items.push(x,-.25,z,0,1,0,.20,.28,.34)}
+ for(let x=l;x<=r;x+=gridSize){point(x,n);point(x,s);}
+ for(let z=n;z<=s;z+=gridSize){point(l,z);point(r,z);}
+ return new Float32Array(items);
+}
+function render(){
+ if(!mesh)return;
+ const dpr=Math.min(window.devicePixelRatio||1,1.5);
+ const width=Math.round(canvas.clientWidth*dpr),height=Math.round(canvas.clientHeight*dpr);
+ if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+ gl.viewport(0,0,width,height);
+ gl.clearColor(.045,.075,.105,1);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
+ const pitch=Math.max(.02,Math.min(1.56,cam.pitch)),radius=cam.distance;
+ const eye=[cam.target[0]+radius*Math.sin(cam.yaw)*Math.cos(pitch),
+  cam.target[1]+radius*Math.sin(pitch),
+  cam.target[2]+radius*Math.cos(cam.yaw)*Math.cos(pitch)];
+ gl.uniformMatrix4fv(projectionLocation,false,perspective(Math.PI/3,width/height,.1,5000));
+ gl.uniformMatrix4fv(viewLocation,false,view(eye,cam.target));
+ gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ gl.bufferData(gl.ARRAY_BUFFER,grid,gl.STATIC_DRAW);
+ gl.drawArrays(gl.LINES,0,grid.length/9);
+ gl.bufferData(gl.ARRAY_BUFFER,mesh,gl.STATIC_DRAW);
+ gl.drawArrays(gl.TRIANGLES,0,mesh.length/9);
+ requestAnimationFrame(render);
+}
+try{
+ const response=await fetch('./assets/nyc/times-square-footprints.json',{cache:'no-store'});
+ if(!response.ok)throw Error('Official snapshot HTTP '+response.status);
+ const asset=await response.json();
+ const scene=buildMetricFootprints(asset);
+ if(scene.stats.builtFeatures<100)throw Error('Unexpectedly low source footprint count');
+ mesh=scene.vertexBuffer;grid=makeGrid(scene.stats.bounds);
+ const [minX,minZ,maxX,maxZ]=scene.stats.bounds;
+ cam.target=[(minX+maxX)/2,75,(minZ+maxZ)/2];
+ cam.distance=Math.max(maxX-minX,maxZ-minZ,400)*1.25;
+ window.PatrolNycMetricQA=()=>({
+   stats:scene.stats,rejections:scene.rejections,
+   origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
+   webglLost:gl.isContextLost(),camera:cam
+ });
+ status.textContent=scene.stats.builtFeatures+' / '+scene.stats.inputFeatures+
+   ' 栋官方建筑轮廓可显示 · '+scene.stats.rejectedFeatures+
+   ' 栋含孔洞/多环等未建模 · 最高屋顶 '+scene.stats.maxHeightMetres.toFixed(1)+
+   ' m · '+scene.stats.triangles+' 三角形（包括墙面）';
+ requestAnimationFrame(render);
+}catch(e){status.textContent='加载失败：'+e.message;throw e;}
+let dragging=false,last=[0,0];
+canvas.addEventListener('pointerdown',e=>{dragging=true;last=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointerup',()=>dragging=false);
+canvas.addEventListener('pointermove',e=>{
+ if(!dragging)return;
+ cam.yaw+=(e.clientX-last[0])*.004;
+ cam.pitch=Math.min(1.56,Math.max(.04,cam.pitch+(e.clientY-last[1])*.003));
+ last=[e.clientX,e.clientY];
+});
+canvas.addEventListener('wheel',e=>{e.preventDefault();cam.distance=Math.max(80,Math.min(2000,cam.distance*Math.exp(e.deltaY*.001)));},{passive:false});
+document.querySelector('#oblique').onclick=()=>{cam.yaw=.65;cam.pitch=.72};
+document.querySelector('#top').onclick=()=>{cam.yaw=0;cam.pitch=1.56};
+document.querySelector('#reset').onclick=()=>{
+ cam.yaw=.65;cam.pitch=.72;cam.distance=740;
+};
+</script></body></html>
