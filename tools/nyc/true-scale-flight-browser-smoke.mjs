@@ -26,6 +26,10 @@ try{
   }));
   if(!info.ready||info.error||info.sourceBuildings<110||info.sourceRoads<25||
      !info.sourceRoadSpawn||!Number.isFinite(info.sourceRoadSpawn.position[0])||
+     !info.streetWidthEnvelopes||
+     info.streetWidthEnvelopes.derivedWidthFeatures<20||
+     info.streetWidthEnvelopes.missingWidthRecords<8||
+     info.streetWidthEnvelopes.triangles<30||
      !/metres/.test(info.projection))throw Error('Invalid official-source view '+JSON.stringify(info));
   const shot=async name=>{
     await page.waitForTimeout(400);
