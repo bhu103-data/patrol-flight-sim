@@ -61,7 +61,7 @@ in vec3 vNormal;
 in float vWater;
 uniform vec3 uCamera;
 uniform float uTime;
-uniform sampler2D uAlbedo;
+uniform highp sampler2DArray uAlbedo;
 uniform bool uPhoto;
 out vec4 fragColor;
 vec3 atlasColor(float tile,vec3 n){
@@ -79,10 +79,10 @@ vec3 atlasColor(float tile,vec3 n){
   if(a.y>=a.x&&a.y>=a.z){uv=py;du=ddxY;dv=ddyY;}
   else if(a.x>=a.z){uv=px;du=ddxX;dv=ddyX;}
   else{uv=pz;du=ddxZ;dv=ddyZ;}
-  uv=clamp(fract(uv),vec2(.008),vec2(.992));
-  vec2 atlasUV=vec2((tile+uv.x)/4.0,uv.y);
-  return textureGrad(uAlbedo,atlasUV,
-    vec2(du.x*.25,du.y),vec2(dv.x*.25,dv.y)).rgb;
+  // Each source tile is a SEPARATE 256² array layer, with its own mip chain.
+  // The former 1024×256 packed atlas bled snow/rock colors across adjacent
+  // tile mip levels, producing the regularly spaced white cliff grid.
+  return textureGrad(uAlbedo,vec3(uv,tile),du,dv).rgb;
 }
 void main(){
   vec3 n=normalize(vNormal);
@@ -149,16 +149,34 @@ async function loadLocalCC0Atlas(){
     await photo.decode();
     if(photo.naturalWidth!==1024||photo.naturalHeight!==256)
       throw Error('Unexpected photographic atlas dimensions');
+    // Reuse one bundled 1024×256 Poly Haven CC0 atlas, but isolate its four
+    // 256×256 material swatches into independently mipmapped texture-array
+    // layers. GPU bytes stay ~1MB before mips; there are no external fetches.
     const t=gl.createTexture();
+    if(!t)throw Error('WebGL2 photo-array texture allocation failed');
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D,t);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,photo);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA8,256,256,4,0,
+      gl.RGBA,gl.UNSIGNED_BYTE,null);
+    const tile=document.createElement('canvas');
+    tile.width=256;tile.height=256;
+    const ctx=tile.getContext('2d',{willReadFrequently:false});
+    if(!ctx)throw Error('Photo tile canvas unavailable');
+    for(let layer=0;layer<4;layer++){
+      ctx.clearRect(0,0,256,256);
+      ctx.drawImage(photo,layer*256,0,256,256,0,0,256,256);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,layer,256,256,1,
+        gl.RGBA,gl.UNSIGNED_BYTE,tile);
+    }
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+    const uploadError=gl.getError();
+    if(uploadError!==gl.NO_ERROR)
+      throw Error('Photo-array GL upload failure '+uploadError);
     photoTexture=t;photoReady=true;
   }catch(error){
     console.warn('Tracy Arm source-scale CC0 photographic fallback',error);
@@ -274,7 +292,7 @@ function draw(frameTime){
   gl.uniform3fv(uCamera,new Float32Array(pose.xyz));
   gl.uniform1f(uTime,elapsed);
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D,photoTexture);
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY,photoTexture);
   gl.uniform1i(uAlbedo,0);
   gl.uniform1i(uPhoto,photoReady);
   for(const m of [land,sea]){
@@ -358,7 +376,7 @@ window.PatrolTrueScaleQA=()=>({
   terrainPeak:dem?.heights.reduce((h,y)=>Math.max(h,y),0)||0,
   bounds:bounds?{...bounds}:null,origin:origin?[...origin]:null,
   camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
-  gpuErrors:[...glErrors],lastFrameSeconds,photoReady
+  gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array'
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
 </script>
