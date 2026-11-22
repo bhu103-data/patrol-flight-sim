@@ -13,6 +13,8 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
   // Append instrumentation after the five canonical glacier log fields.
   stats.iceFloesRejectedShore=0;
+  stats.floeCapTriangles=0;
+  stats.floeCapMaxRelief=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
   const lift=(p,y)=>[p[0],p[1]+y,p[2]];
   // Surface 12 requests Alaska's PBR ice photo/normal/roughness shader.
@@ -145,12 +147,34 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
         !isWater((point[0]+east)*.5,(point[2]+north)*.5);
     });
     if(touchesShore){stats.iceFloesRejectedShore++;continue;}
+    // The former exactly level triangle fan looked like a polygonal plate
+    // despite its CC0 snow photo. A bounded, asymmetric inner ridge makes
+    // three shallow facets per original wedge, all inside the SAME perimeter.
+    // Side vertices and waterline remain untouched: cosmetic top relief only.
+    // Center displacement is small relative to the surveyed-water-safe radius,
+    // so no extra shoreline / physics sampling or overhanging ice is needed.
+    const relief=.09+Math.min(.20,radius*.048)*
+      (.70+.30*hash(i*31+19));
+    const crown=[
+      center[0]+(hash(i*53+11)-.5)*radius*.15,
+      center[1]+relief*(.64+.14*hash(i*71+23)),
+      center[2]+(hash(i*61+29)-.5)*radius*.11
+    ];
+    const ridge=ring.map((point,k)=>[
+      crown[0]+(point[0]-crown[0])*.47,
+      center[1]+relief*(.43+.42*hash(i*67+k*13+7)),
+      crown[2]+(point[2]-crown[2])*.47
+    ]);
+    stats.floeCapMaxRelief=Math.max(stats.floeCapMaxRelief,relief);
     for(let k=0;k<corners;k++){
       const next=(k+1)%corners,a=ring[k],b=ring[next];
-      // Floe-only surface 13 shares the existing CC0 glacier PBR atlas,
-      // but mirrors its UV repeat to prevent straight periodic tile seams.
-      // All positions/triangle counts and the color fallback stay unchanged.
-      addTri(center,a,b,top,13);
+      // Floe-only surface 13 keeps the parent's mirror-repeat CC0 atlas.
+      // Four shared planar bands form a continuous center/rim surface;
+      // these three triangles replace ONE perfectly flat top triangle.
+      addTri(crown,ridge[k],ridge[next],top,13);
+      addTri(ridge[k],a,b,top,13);
+      addTri(ridge[k],b,ridge[next],top,13);
+      stats.floeCapTriangles+=3;
       // Break up the uniform cyan wall at the waterline. Subtle darker facets
       // separate the floe silhouette from bright coastal snow at a distance;
       // no new shoreline geometry, height samples or collision surfaces.
