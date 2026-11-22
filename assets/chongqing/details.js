@@ -168,7 +168,16 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const sections=Math.floor((w-8)/7);
     put('terra',hongX,y+10.45,z,w+15,1.1,33);
     put('carved',hongX,y+9.15,front+1,w+5,.72,1.25);
-    put('amber',hongX,y+10.1,front+3,w+7,.19,.3);
+    // PATROL_CQ_HONGYADONG_STAGGERED_GALLERIES_V1: break the former
+    // eleven identical full-width illuminated bands into individual tenant
+    // awnings. Deterministic offsets avoid flashing/repeats during flight.
+    // All strips share the existing instanced warm lamp pool.
+    for(let segment=0;segment<5;segment++){
+      if((segment+level*2)%5===1)continue;
+      const step=(w+7)/5;
+      put('amber',hongX+(segment-2)*step,y+10.1,front+3,
+        step*.77,.17,.3);
+    }
     put('timber',hongX,y+2.1,front+3.6,w+8,.85,2);
     put('carved',hongX,y+6.45,front+4.6,w+9,.45,1.1);
     // A balconied gallery, with warm restaurant interiors instead of a single flat face.
@@ -183,7 +192,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
         put('lattice',x,y+5.6+n*1.38,front+.37,3.88,.105,.15);
       }
       put('terra',x,y+5.5,front+.27,.28,5.8,.19);
-      if(j%2===0){
+      if((j+level)%3===0){
         lantern(x,y+8.45,front+5.5,1.05);
         beam('timber',[x,y+8.8,front],[x,y+7.5,front+4],.33);
       }
@@ -195,7 +204,13 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     // from the Jialing River (negative z), not the inland side of the hillside.
     const waterfront=z-12.2;
     put('carved',hongX,y+1.85,waterfront-4.7,w+7,.75,10.6);
-    put('amber',hongX,y+9.55,waterfront-6.5,w+8,.22,.42);
+    // River-facing gallery has its own irregular, offset lit rhythm.
+    for(let section=0;section<5;section++){
+      if((section+level*3)%5===3)continue;
+      const step=(w+8)/5;
+      put('amber',hongX+(section-2)*step,y+9.55,
+        waterfront-6.5,step*.72,.20,.42);
+    }
     put('timber',hongX,y+6.5,waterfront-6.9,w+7,.48,.57);
     for(let j=0;j<sections;j++){
       const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
@@ -209,7 +224,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       put('carved',x,y+2.8,waterfront-2.5,4.8,.39,.7);
       put('carved',x,y+8.9,waterfront-3.1,5.6,.5,.8);
       put('timber',x,y+3.65,waterfront-7.2,.38,3.7,.45);
-      if(j%2===0){
+      if((j+level*2)%3===0){
         lantern(x,y+8.0,waterfront-5.6,1.05);
         beam('timber',[x,y+9,waterfront-1],[x,y+7.8,waterfront-4.9],.32);
       }
