@@ -416,12 +416,13 @@ def main():
    "encoding":report["runtimeAsset"]["encoding"]
  }
  (ART/"alaska-tracyarm-ifsar5m-manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
- report["status"]="native-5m-mosaic-verified; optional-true-scale-renderer-integration-next"
+ report["status"]="native-5m-mosaic-verified; opt-in-15m-LOD-flight-renderer-implemented; C185-integration-not-accepted"
  report["notYetProven"]=[
    "No post-2025 landslide LiDAR/DEM is included; source acquisition dates are 2010-2012.",
-   "Native NAVD88 GEOID09 heights must not be treated as WGS84 ellipsoid height.",
-   "This is a 5m source grid; current flight renderer may resample it to its own mesh resolution.",
-   "Default production Alaska map and C185 physics have not been changed."
+   "NAVD88/GEOID09 values are not WGS84 ellipsoid heights; absolute aircraft altitude conversion is not enabled.",
+   "The opt-in full-area renderer uses a 3x3 median 15m mesh LOD from the original 5m source grid.",
+   "The 5m runtime manifest and base64 payload are generated as a CI artifact and staged only in the disposable QA checkout.",
+   "Default production Alaska map, C185 collision, water physics and other maps have not been changed."
  ]
  (ART/"alaska-tracyarm-ifsar5m-report.json").write_text(json.dumps(report,indent=2)+"\n")
  print("PASS native IfSAR 5m mosaic "+json.dumps({
