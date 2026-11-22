@@ -39,3 +39,9 @@ Code is original in this PR; no third-party image, mesh, Tripo asset, audio, or 
 - The updated bridge now models a **central lower roadway and two separate raised side roadways**, open-pylon steel towers and a bounded catenary/sag rather than a single elevated center slab and over-tall towers. GPU budgets and current MTA car mesh stay unchanged; no new GLB asset is enabled.
 
 This project and authors are credited for the dimensional selection and control data. The geometry scripting and primitive construction in PATROL remain independently authored.
+
+## Top-face lighting and normal regression
+- The lower street deck, both subway track-bed slabs and the two upper side roads use upward-facing flat normals. In earlier versions, the original quad winding produced **downward normals** for the northern track bed and for the newly raised roadway quads. WebGL deliberately renders double-sided geometry, but directional lighting still consumes the wrong face normal.
+- The bridge builder now tests each normal's Y component and reverses any downward horizontal quad at generation, before the single shared native mesh is uploaded.
+- `tests/nyc-manhattan-bridge-subway.test.mjs` checks the real 330 generated horizontal quads are nondegenerate, up-facing and planar; no changes to GIS, city roads or aircraft shaders.
+- Same-camera Chrome WebGL2 screenshots are still required after this fix. The sampled software-renderer screenshot duration is not a reliable production FPS benchmark.

@@ -60,7 +60,17 @@ function build({box,addQuad,beam}){
   let beams=0,boxes=0,quads=0;
   const B=(a,b,w,color)=>{beam(a,b,w,color);beams++};
   const X=(x,y,z,w,h,d,color)=>{box(x,y,z,w,h,d,color);boxes++};
-  const Q=(a,b,c,d,color)=>{addQuad(a,b,c,d,color);quads++};
+  // All Q calls are horizontal road/track slabs. The original construction
+  // wound the +Z-side roadway downward, producing inverted face normals.
+  // Native mesh shading uses those normals even with back-face culling disabled.
+  const Q=(a,b,c,d,color)=>{
+    const ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+    if(!Number.isFinite(ny)||Math.abs(ny)<1e-9)
+      throw Error('Degenerate Manhattan Bridge road or rail quad');
+    if(ny>0)addQuad(a,b,c,d,color);
+    else addQuad(d,c,b,a,color);
+    quads++;
+  };
   // Two side trackways and a higher, recessed roadway. No rails on Brooklyn Bridge.
   for(let x=SPEC.west;x<SPEC.east;x+=3.5){
     const nx=Math.min(x+3.5,SPEC.east);

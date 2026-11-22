@@ -103,3 +103,20 @@ test('engineering tower and deck proportions are derived from credited control d
   assert.ok(h.cableMid>h.upper,'cable must clear raised road in compressed scene');
   assert.ok(h.anchorage<game.deck,'anchorage descends toward real river-edge datum');
 });
+
+test('every horizontal track bed and upper/lower road top faces point UP',()=>{
+  const seen=[];
+  rail.build({
+    box:()=>{},beam:()=>{},
+    addQuad:(a,b,c,d)=>{
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      assert.ok(normalY>1e-9,
+        'inverted track/road top normal makes the sunlit bridge look dark');
+      const yy=[a[1],b[1],c[1],d[1]];
+      assert.ok(yy.every(v=>Math.abs(v-yy[0])<1e-8),
+        'bridge top quads must be horizontal');
+      seen.push(normalY);
+    }
+  });
+  assert.ok(seen.length>300,'covered both trackways plus the separated road decks');
+});
