@@ -171,9 +171,9 @@ try{
       const key='  const NYC_SCENIC_VIEWS=[';
       assert(instrumented.includes(key),'NYC scenic views marker missing');
       assert(instrumented.split(key).length===2,'NYC scenic view anchor ambiguous');
-      instrumented=instrumented.replace(key,key+\`\n    {name:'Bridge Signal QA · Close',x:253,z:-345.51,
+      instrumented=instrumented.replace(key,key+`\n    {name:'Bridge Signal QA · Close',x:253,z:-345.51,
       height:4.05,bearing:-90,radius:13,rise:2.3,
-      detail:'Test-only west-facing view of active bridge signal'},\`);
+      detail:'Test-only west-facing view of active bridge signal'},`);
     }
     await route.fulfill({response,body:instrumented});
     result.probeInjected=true;
