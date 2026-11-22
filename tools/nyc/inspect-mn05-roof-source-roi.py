@@ -114,6 +114,72 @@ def source_trim_loop_points(loop):
     return chain
 
 
+MESH_OUT=FOLDER/"times-square-original-roof-mesh.json"
+MAX_SOURCE_ROOFS=2500
+MAX_SOURCE_TRIANGLES=150000
+MAX_SOURCE_VERTICES=250000
+
+def original_cached_face_mesh(mesh,bbox,roof_id,brep_face_index):
+    """Transform only real Rhino-cached tessellation, retaining source face IDs.
+
+    The cached Rhino render mesh approximates a Brep: the source provided its
+    vertices and faces. These are NOT new procedural roof shapes. Its z is
+    preserved in raw 2014 StatePlane-model foot units until vertical datum is
+    independently certified. Never add these z values to a 2022 ground y=0.
+    """
+    if mesh is None:return None
+    count=len(mesh.Vertices)
+    nfaces=len(mesh.Faces)
+    if count<3 or nfaces<1 or count>12000 or nfaces>20000:
+        raise ValueError("Unexpected official MN05 cached roof mesh complexity")
+    points=[]
+    source_bounds=[math.inf,math.inf,math.inf,-math.inf,-math.inf,-math.inf]
+    for v in mesh.Vertices:
+        x,y,z=float(v.X),float(v.Y),float(v.Z)
+        if not all(math.isfinite(t) for t in (x,y,z)):
+            raise ValueError("Non-finite official roof mesh vertex")
+        source_bounds=[
+            min(source_bounds[0],x),min(source_bounds[1],y),min(source_bounds[2],z),
+            max(source_bounds[3],x),max(source_bounds[4],y),max(source_bounds[5],z)]
+        east,north=mn05_stateplane_to_metric(x,y)
+        points.append([round(east,4),round(north,4),round(z,4)])
+    raw_indices=[]
+    invalid_faces=0
+    for face in mesh.Faces:
+        a,b,c,d=int(face.A),int(face.B),int(face.C),int(face.D)
+        source_triangles=[(a,b,c)]
+        if d!=c:source_triangles.append((a,c,d))
+        for triplet in source_triangles:
+            if min(triplet)<0 or max(triplet)>=count:
+                raise ValueError("Original Rhino source face index outside vertex pool")
+            p,q,r=[points[i] for i in triplet]
+            u=[q[j]-p[j] for j in range(3)]
+            v=[r[j]-p[j] for j in range(3)]
+            cross=(u[1]*v[2]-u[2]*v[1],
+                   u[2]*v[0]-u[0]*v[2],
+                   u[0]*v[1]-u[1]*v[0])
+            if math.hypot(*cross)<1e-5:
+                invalid_faces+=1
+                continue
+            raw_indices.extend(triplet)
+    if not raw_indices:return None
+    for j in range(3):
+        if source_bounds[j] < (bbox.Min.X,bbox.Min.Y,bbox.Min.Z)[j]-1.0 or (
+            source_bounds[j+3] > (bbox.Max.X,bbox.Max.Y,bbox.Max.Z)[j]+1.0):
+            raise ValueError("Cached Rhino source mesh exceeds its Brep source bounds")
+    return {
+        "sourceObjectUUID":roof_id,
+        "brepFaceIndex":brep_face_index,
+        "vertices":[t for p in points for t in p],
+        "sourceTriangles":raw_indices,
+        "vertexCount":len(points),
+        "triangleCount":len(raw_indices)//3,
+        "degenerateSourceTrianglesRejected":invalid_faces,
+        "sourceFootBounds":[round(x,3) for x in source_bounds],
+    }
+
+
+
 def inspect():
     report={"source":"NYC DCP official 2014 Manhattan MN05, 2018 archive",
        "sourceEPSG":"EPSG:2263 NY Long Island NAD83 US survey ft",
@@ -122,7 +188,10 @@ def inspect():
        "sourceFootBounds":[MINX,MINY,MAXX,MAXY],
        "sourceVerticalDatumVerified":False,
        "meshAccepted":False,
-       "roofSamples":[],"layerStats":{},"errors":[]}
+       "roofSamples":[],"layerStats":{},"errors":[],
+       "sourceMeshStats":{},"meshOutput":str(MESH_OUT),
+       "sourceVerticalStatus":"UNKNOWN (raw 2014 Rhino Z retained in feet)",
+       "sourceCachedMeshMeaning":"Rhino-authored cached display tessellation; not exact NURBS or 2026 surveyed roof"}
     try:
         previous=json.loads(STATS.read_text())
         if previous.get("imported") is not True:
@@ -148,6 +217,10 @@ def inspect():
         report["facadeLayers"]=[layer_names[i] for i in sorted(facade_indices)]
         counter=collections.Counter()
         admitted=[]
+        source_roof_meshes=[]
+        source_triangles=0
+        source_vertices=0
+        source_degenerate_triangles=0
         for i,obj in enumerate(model.Objects):
             idx=obj.Attributes.LayerIndex
             if idx not in roof_indices and idx not in facade_indices:continue
@@ -164,6 +237,31 @@ def inspect():
                 continue
             counter[kind+"InsideROI"]+=1
             if kind=="facade":continue
+            if len(source_roof_meshes)>=MAX_SOURCE_ROOFS:
+                raise ValueError("Too many official 2014 source rooftop faces in pilot")
+            if hasattr(geom,"Faces"):
+                for j,face in enumerate(geom.Faces):
+                    try:
+                        cached=face.GetMesh(rhino3dm.MeshType.Any)
+                        mesh_record=original_cached_face_mesh(
+                            cached,bbox,str(obj.Attributes.Id),j)
+                        if mesh_record is None:
+                            counter["roofCachedMeshMissing"]+=1
+                            continue
+                        source_triangles+=mesh_record["triangleCount"]
+                        source_vertices+=mesh_record["vertexCount"]
+                        source_degenerate_triangles+=mesh_record["degenerateSourceTrianglesRejected"]
+                        if source_triangles>MAX_SOURCE_TRIANGLES or source_vertices>MAX_SOURCE_VERTICES:
+                            raise ValueError("True source roof tessellation exceeds bounded WebGL source mesh budget")
+                        source_roof_meshes.append(mesh_record)
+                        counter["roofCachedMeshFacesAccepted"]+=1
+                    except ValueError:
+                        raise
+                    except Exception as err:
+                        counter["roofCachedMeshExtractionExceptions"]+=1
+                        if counter["roofCachedMeshExtractionExceptions"]<=4:
+                            report["errors"].append(
+                                f"Cached Rhino roof mesh extraction: {type(err).__name__}: {err}")
             if len(admitted)>=80:continue
             sourceBBox=[a.X,a.Y,a.Z,b.X,b.Y,b.Z]
             mid=[(a.X+b.X)*.5,(a.Y+b.Y)*.5]
@@ -213,23 +311,48 @@ def inspect():
             admitted.append(result)
         report["layerStats"]=dict(counter)
         report["roofSamples"]=admitted
-        report["readyForBoundedMeshConversion"]=counter["roofInsideROI"]>0 and any(
+        report["exactPolylineTrimBoundaryDetected"]=any(
             any(boundary.get("isExactSourcePolyline") for face in entry.get("faces",[])
                 for boundary in face.get("boundaries",[]))
             for entry in admitted)
+        report["sourceMeshStats"]={
+            "cachedSourceRooftopMeshPatches":len(source_roof_meshes),
+            "actualSourceTriangles":source_triangles,
+            "actualSourceVertices":source_vertices,
+            "degenerateSourceTrianglesRejected":source_degenerate_triangles,
+            "roiRoofBreps":counter["roofInsideROI"],
+            "roiFacadeBreps":counter["facadeInsideROI"]}
+        report["readyForBoundedMeshConversion"]=(
+            len(source_roof_meshes)>50 and source_triangles>100
+            and source_vertices>150 and counter["roofInsideROI"]>100)
+        if report["readyForBoundedMeshConversion"]:
+            MESH_OUT.write_text(json.dumps({
+                "schema":"patrol-mn05-authentic-2014-cached-roof-mesh-qa-v1",
+                "role":"ORIGINAL_2014_MUNICIPAL_ROOF_CACHED_MESH_NOT_2026_PATROL_GAME",
+                "source3dmSHA256":previous["source3dmSha256"],
+                "sourceCRS":"EPSG:2263 (US survey feet)",
+                "viewerCRS":"WGS84 local east/north metres",
+                "originLonLat":[-73.9864883,40.756421],
+                "roofZInterpretation":"RAW_2014_RHINO_SOURCE_FOOT_UNKNOWN_VERTICAL_DATUM",
+                "sourceRooftop3dMeshPatches":source_roof_meshes,
+                "counts":report["sourceMeshStats"]
+            },separators=(",",":")))
+            report["meshAccepted"]=True
         report["scannedSourceObjects"]=len(model.Objects)
     except Exception as err:
         report["errors"].append(f"{type(err).__name__}: {err}")
     finally:
         SOURCE.unlink(missing_ok=True)
+        if not report["meshAccepted"]:
+            MESH_OUT.unlink(missing_ok=True)
         OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2))
         print(json.dumps({k:v for k,v in report.items() if k!="roofSamples"},
                          ensure_ascii=False,indent=2))
     if report["errors"] or report["layerStats"].get("roofInsideROI",0)==0:
         raise SystemExit(1)
     if not report["readyForBoundedMeshConversion"]:
-        # Explicitly unresolved: no valid polygon boundary yet. This is a
-        # negative result for mesh acceptance, not license to fabricate.
+        # Genuine source cached roof meshes were not found within budget;
+        # do not silently substitute a flat box or synthetic roof.
         raise SystemExit(2)
 
 
