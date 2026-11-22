@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - qa/nyc-main-integration-preflight-20261122-chat
+  pull_request:
+    paths:
+      - .github/workflows/nyc-main-integration-preflight.yml
   workflow_dispatch:
 
 permissions:
@@ -17,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
