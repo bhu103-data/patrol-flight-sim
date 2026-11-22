@@ -3851,6 +3851,99 @@ const CENTRAL_PARK_SITES=[
     return {quads,windows,litWindows,outlinePoints:plan.length};
   }
 
+  // PATROL_NYC_SKYWALK_2026_SOURCE_PILOT
+  // One Times Square: 2026 installed north-facing cantilever and glass skywalk.
+  // DeSimone engineering: 55 ft north projection, steel truss, 19th floor.
+  // One Times Square 2026: 360-degree viewing deck and exterior glass walkway.
+  // REF https://www.desimone.com/projects/one-times-square-redevelopment
+  // REF https://onetimessquare.com/press-release/one-times-square-launches-times-square-skywalk-experience
+  // This only reproduces the documented FEATURES and cantilever projection
+  // RELATIVE TO the existing 337-ft survey roof height and compressed map.
+  // Unverified transverse width, railing heights, floor spacing, corner
+  // locations and finish are artist-authored; NOT a digital twin/as-built BIM.
+  // Physically collidable flight geometry is NOT changed by this optional
+  // visual pilot. It remains OFF until camera and hardware QA are reviewed.
+  function buildOneTimesSkywalk(addTri,addQuad){
+    const sourceRoofFeet=337,realCantileverFeet=55,gameRoofHeight=30.9;
+    const northProjection=realCantileverFeet*gameRoofHeight/sourceRoofFeet;
+    const zBack=6.68,zNose=zBack+northProjection;
+    // Legacy game billboard strip ends at Y=26.28. Keep the new skywalk
+    // above the OLD simulated sign stack until that is source-rebuilt.
+    const floor=27.22,deckDepth=.22;
+    const steel=[.31,.36,.40],edging=[.55,.62,.65],
+      glass=[.27,.44,.53],under=[.21,.26,.30];
+    let triangles=0,beams=0,panes=0;
+    const tri=(a,b,c,color,material=0)=>{
+      addTri(a,b,c,color,material);triangles++;
+    };
+    const quad=(a,b,c,d,color,material=0)=>{
+      addQuad(a,b,c,d,color,material);triangles+=2;
+    };
+    const beam=(a,b,width,color)=>{
+      addRideBeam((p,q,r,s,tint)=>quad(p,q,r,s,tint),a,b,width,color);
+      beams++;
+    };
+    // Six-sided corner-relieved exterior profile instead of a single
+    // stretched rectangular roof cuboid. North is +Z in this map.
+    const deck=[
+      [-3.65,zBack-.55],[2.40,zBack-.55],[2.70,zNose-.68],
+      [2.15,zNose],[-3.10,zNose],[-3.65,zNose-.68]
+    ];
+    const point=(i,y)=>[deck[i][0],y,deck[i][1]];
+    for(let i=1;i<deck.length-1;i++){
+      tri(point(0,floor),point(i+1,floor),point(i,floor),edging);
+      tri(point(0,floor-deckDepth),point(i,floor-deckDepth),
+        point(i+1,floor-deckDepth),under);
+    }
+    for(let i=0;i<deck.length;i++){
+      const j=(i+1)%deck.length;
+      quad(point(i,floor-deckDepth),point(j,floor-deckDepth),
+        point(j,floor),point(i,floor),steel);
+    }
+    // Two longitudinal trusses with upper/lower chords and zigzag web.
+    // They sit over the existing legacy LED stack, not through it.
+    for(const x of [-2.74,1.55]){
+      beam([x,floor-.40,zBack-.32],[x,floor-.40,zNose-.42],.13,under);
+      beam([x,floor-.10,zBack-.32],[x,floor-.10,zNose-.42],.10,edging);
+      for(let i=0;i<4;i++){
+        const u=i/4,v=(i+1)/4;
+        const z0=zBack-.32+u*(northProjection-.10),
+          z1=zBack-.32+v*(northProjection-.10);
+        beam([x,floor-.40,z0],[x,floor-.10,z1],.075,steel);
+      }
+      beam([x,floor-.48,zBack-.32],[x,floor-.22,zNose-.42],.075,under);
+    }
+    // Transparent-looking NYC PBR material class 10 is reflective but the
+    // existing single-pass game shader is NOT physically transmissive.
+    // Retain glass visual hints and real steel post depth without claiming
+    // an accurate transparent optical model.
+    const railingTop=floor+1.04;
+    for(let edge=1;edge<5;edge++){
+      const a=deck[edge],b=deck[edge+1],
+        length=Math.hypot(a[0]-b[0],a[1]-b[1]);
+      const sections=Math.max(1,Math.ceil(length/1.7));
+      for(let k=0;k<=sections;k++){
+        const t=k/sections;
+        const x=a[0]+(b[0]-a[0])*t,z=a[1]+(b[1]-a[1])*t;
+        beam([x,floor,z],[x,railingTop,z],.060,edging);
+      }
+      beam([a[0],railingTop,a[1]],[b[0],railingTop,b[1]],.07,steel);
+      for(let k=0;k<sections;k++){
+        const v=k/sections,w=(k+1)/sections,
+          A=[a[0]+(b[0]-a[0])*v,a[1]+(b[1]-a[1])*v],
+          B=[a[0]+(b[0]-a[0])*w,a[1]+(b[1]-a[1])*w];
+        quad([A[0],floor+.11,A[1]],[B[0],floor+.11,B[1]],
+          [B[0],railingTop-.11,B[1]],[A[0],railingTop-.11,A[1]],glass,10);
+        panes++;
+      }
+    }
+    // No runtime texture, GL buffer or draw call: shared landmark batch.
+    return {enabled:true,sourceRoofFeet,realCantileverFeet,
+      northProjectionGameUnits:northProjection,deckY:floor,
+      vertexBudget:triangles*3,triangles,beams,panes,newTextures:0,
+      addedDrawCalls:0,origin:'2026 architect/structural engineer'};
+  }
+
   function buildNewYorkLandmark(kind) {
     const {addTri,addQuad,upload}=createTriangleMesh(),lights=createTriangleMesh();
     const light=(...args)=>addModelBox(lights.addQuad,...args);
@@ -4051,6 +4144,16 @@ const CENTRAL_PARK_SITES=[
       if(sourceMesh.roof!==originalFootprint.length-2)
         throw Error('One Times Square footprint triangulation failure');
       box(0.28,30.9,-0.75,3.0,1.1,3.0,copper);
+      // Active flight-map landmark mesh, NOT a detached WebGL preview.
+      // Query ?nycSkywalk=on enables an isolated, source-informed 2026
+      // observation deck in the real One Times Square scenic/flyby views.
+      const skywalkEnabled=!graphicsCompat &&
+        new URLSearchParams(location.search).get('nycSkywalk')==='on';
+      window.PatrolNycSkywalkQA=skywalkEnabled
+        ?buildOneTimesSkywalk(addTri,addQuad)
+        :{enabled:false,triangles:0,beams:0,panes:0,
+          newTextures:0,addedDrawCalls:0};
+
       let oneTimesCreativeBase=1;
       try{
         const adKey='patrol.nyc.oneTimes.nextCreative';
