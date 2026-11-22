@@ -136,7 +136,8 @@ try{
   await page.waitForTimeout(1100);
   const closeState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(closeState.marketOpenFacades===3 &&
-    closeState.marketOpenFacadeTriangles===1872,
+    closeState.marketOpenFacadeTriangles===1872 &&
+    closeState.marketDetailInspect===true,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
   await page.locator('#qualityBtn').click(); // high -> low
@@ -145,6 +146,8 @@ try{
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(starting.avatarFlying,'Scenic shortcut 2 must enable flying');
+  check(starting.marketDetailInspect===false,
+    'Other viewpoints must return to ordinary third-person flight camera');
   const before=starting.altitude;
   // Software SwiftShader may render at only a few FPS; the game's fixed
   // maximum physics step deliberately slows simulated time at that rate.
