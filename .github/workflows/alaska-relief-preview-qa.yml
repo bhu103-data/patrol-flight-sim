@@ -28,8 +28,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate Windows D3D11 GPU benchmark JavaScript syntax (not a GPU result)
-        run: node --check tools/alaska/benchmark_relief_windows_gpu.mjs
+      - name: Validate hardware benchmark syntax and original/preview injection anchors (NO GPU)
+        run: |
+          node --check tools/alaska/benchmark_relief_windows_gpu.mjs
+          node tools/alaska/benchmark_relief_windows_gpu.mjs --validate-only
       - name: Install pinned Chromium WebGL QA
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
