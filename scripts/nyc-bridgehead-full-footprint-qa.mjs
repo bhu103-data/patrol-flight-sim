@@ -14,6 +14,22 @@ const result={passed:false,errors,screenshots,renderer:'unverified',probeInjecte
 const assert=(ok,message)=>{if(!ok)throw Error(message);};
 const injection=String.raw`
   // Test-only closure access; this string never enters the repository's index.
+  window.__patrolBridgeheadQaSetHold = time => {
+    if(time===null){
+      window.__patrolBridgeheadQaHoldTime=null;
+      nextDcView=sceneryTime+8;
+      return;
+    }
+    if(!Number.isFinite(time)||time<0||time>=32)
+      throw Error('Invalid test-only signal phase time');
+    window.__patrolBridgeheadQaHoldTime=time;
+    // Disable scheduled scenic-camera rotation while capturing matched frames.
+    nextDcView=Number.POSITIVE_INFINITY;
+  };
+  window.__patrolBridgeheadQaSignal = () => ({
+    time:sceneryTime,state:bridgeheadSignalState(sceneryTime),
+    green:bridgeheadSignalGreen(sceneryTime)
+  });
   window.__patrolBridgeheadQa = () => {
     const cars=cityTraffic.filter(a=>a.bridgehead);
     const rows=cars.map(actor=>{
@@ -155,7 +171,15 @@ try{
     assert(html.includes(marker),'Production traffic entry missing');
     assert(html.split(marker).length===2,'Traffic injection marker is ambiguous');
     assert(!html.includes('__patrolBridgeheadQa'),'Probe name already in production');
-    await route.fulfill({response,body:html.replace(marker,injection+marker)});
+    const tick='    sceneryTime += Math.min(rawDt, 0.12);';
+    assert(html.split(tick).length===2,'Scene clock injection marker missing/ambiguous');
+    // Test transport only: restore fixed scenery time after each animation tick.
+    // Production index.html is not rewritten on disk or in Git.
+    const clockHook=tick+'\n'+
+      '    if(Number.isFinite(window.__patrolBridgeheadQaHoldTime))'+
+      'sceneryTime=window.__patrolBridgeheadQaHoldTime;';
+    const instrumented=html.replace(marker,injection+marker).replace(tick,clockHook);
+    await route.fulfill({response,body:instrumented});
     result.probeInjected=true;
   });
   const response=await page.goto(base+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
@@ -184,6 +208,10 @@ try{
   });
   assert(state.webgl2&&state.error===0,'Native WebGL2 not healthy: '+JSON.stringify(state));
   assert(state.probe==='function','Runtime traffic probe not installed');
+  assert(await page.evaluate(()=>
+    typeof window.__patrolBridgeheadQaSetHold==='function'&&
+    typeof window.__patrolBridgeheadQaSignal==='function'),
+  'Test-only signal controls not installed');
   result.renderer='ANGLE SwiftShader / software WebGL2';
   result.webgl=state;
   const traffic=await page.evaluate(()=>window.__patrolBridgeheadQa());
@@ -247,6 +275,47 @@ try{
     }
     screenshots.push({name,label,view});
   }
+  // Three actual WebGL2 frames from the SAME bridgehead scenic camera.
+  // Capture with a test-only fixed scene clock, not a mocked signal renderer.
+  await page.locator('#hotelTarget').selectOption({label:'Brooklyn Bridge · Deck View'});
+  await page.waitForTimeout(500);
+  result.signalFrames=[];
+  try{
+    for(const [expected,time,name] of [
+      ['red',4,'03-bridgehead-signal-red.png'],
+      ['green',18,'04-bridgehead-signal-green.png'],
+      ['amber',30.5,'05-bridgehead-signal-amber.png']
+    ]){
+      await page.evaluate(value=>window.__patrolBridgeheadQaSetHold(value),time);
+      await page.waitForTimeout(250);
+      const actual=await page.evaluate(()=>{
+        const canvas=document.getElementById('glCanvas');
+        const gl=canvas?.getContext('webgl2');
+        const signal=window.__patrolBridgeheadQaSignal();
+        return {...signal,webgl2:!!gl&&!gl.isContextLost(),
+          glError:gl?.getError(),
+          label:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent};
+      });
+      assert(actual.state===expected&&Math.abs(actual.time-time)<1e-6&&
+        actual.webgl2&&actual.glError===0&&actual.label==='Brooklyn Bridge · Deck View',
+        'Real three-phase WebGL2 frame did not match actual controller: '+
+        JSON.stringify({expected,time,actual}));
+      await page.evaluate(()=>document.body.classList.add('patrol-bridge-qa'));
+      try{
+        await page.locator('#glCanvas').screenshot({
+          path:out+'/'+name,timeout:90000,animations:'allow'
+        });
+      }finally{
+        await page.evaluate(()=>document.body.classList.remove('patrol-bridge-qa'));
+      }
+      result.signalFrames.push({name,expected,actual});
+      screenshots.push({name,label:actual.label,view:actual});
+    }
+  }finally{
+    await page.evaluate(()=>window.__patrolBridgeheadQaSetHold(null));
+  }
+  assert(result.signalFrames.length===3,
+    'Missing same-camera RGB signal-phase evidence');
   assert(errors.length===0,'Browser exceptions/assets: '+errors.join('; '));
   result.passed=true;
 }catch(error){
