@@ -47,8 +47,29 @@ try{
   const visibility=colored/(png.width*png.height);
   if(visibility<.02||light<1000)throw Error('Official source polygons not visible');
   report.screenshots.push('plaza-sidewalk-roadbed-real-metre.png');
+  const audit=JSON.parse(await readFile(output+'/centreline-surface-topology.json','utf8'));
+  const follow=await page.goto(url.replace('pedestrian-roadbed-overlay.svg',
+    'broadway-unclassified-segments.svg'),{waitUntil:'load'});
+  if(!follow?.ok())throw Error('Broadway source gap overlay HTTP unavailable');
+  const gaps=await page.locator('#broadway-unclassified-segments line').count();
+  const expected=audit.broadwayUncovered.portions
+    .filter(x=>x.lengthMeters>=.05).length;
+  if(gaps!==expected||gaps<1)throw Error(
+    'Broadway actual-source gap geometry mismatch '+gaps+' vs '+expected);
+  const gapPixels=PNG.sync.read(await page.locator('svg').screenshot(
+    {path:output+'/broadway-source-gap-overlay.png'}));
+  let red=0;
+  for(let i=0;i<gapPixels.data.length;i+=4){
+    const r=gapPixels.data[i],g=gapPixels.data[i+1],b=gapPixels.data[i+2];
+    if(r>185&&g<145&&b<180)red++;
+  }
+  if(red<30)throw Error('Broadway uncovered source segments not visible');
+  report.screenshots.push('broadway-source-gap-overlay.png');
   report.metrics={count,pixels:{width:png.width,height:png.height,
     coloredFraction:visibility,lightPixels:light},
+    BroadwayGap:{sourceLengthMeters:audit.broadwayUncovered.lengthMeters,
+      renderedSegments:gaps,highlightedPixels:red,
+      caveat:'Unclassified against official 2022 roadbed and plaza, NOT a 2026 traffic closure'},
     caveat:'Web/SVG source outline QA; no in-game road/sidewalk collisions or hardware FPS'};
   if(report.errors.length)throw Error(report.errors.join('; '));
   report.passed=true;
