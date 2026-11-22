@@ -1,0 +1,57 @@
+name: Alaska calving facade matched WebGL2 A-B QA
+
+on:
+  pull_request:
+    branches: [feat/alaska-calving-face-facet-depth-20261122-chat]
+    paths:
+      - 'tools/alaska/compare_calving_facets.mjs'
+      - '.github/workflows/alaska-calving-matched-qa.yml'
+      - 'assets/alaska/alaska-fjord-detail.js'
+      - 'index.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alaska-calving-matched:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'qa/alaska-calving-facets-matched-webgl-20261122'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate QA syntax and the existing Alaska mesh assertions
+        run: |
+          node --check tools/alaska/compare_calving_facets.mjs
+          node --test tests/alaska-fjords.test.mjs tests/alaska-usgs-dem.test.mjs
+      - name: Install Chromium and PNG decoder
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unmodified PATROL game and QA-only copies
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/patrol-calving-a-b-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Compare exact baseline and PR mesh with fixed camera and shader phase
+        env:
+          PATROL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git show 38a9be192ca14cf5d47f6991d050b4093357f044:index.html > alaska-calving-baseline.html
+          git show 38a9be192ca14cf5d47f6991d050b4093357f044:assets/alaska/alaska-fjord-detail.js > alaska-calving-baseline-detail.js
+          node tools/alaska/compare_calving_facets.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alaska-calving-matched-webgl-ab
+          path: artifacts/alaska-calving-*
+          retention-days: 7
+          if-no-files-found: ignore
