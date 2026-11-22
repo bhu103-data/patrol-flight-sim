@@ -27,6 +27,7 @@ jobs:
             inst/extdata/nyc_osm_areas.parquet
             inst/COPYRIGHTS
           sparse-checkout-cone-mode: false
+          token: ''
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
