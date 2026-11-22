@@ -50,6 +50,13 @@ Visual reference: Saltline's rainy harbor mood may guide wet asphalt, cold-gray 
 - Reproduce from both sun-facing and opposite flight directions using the same exposure and camera altitude.
 - Trace view vector, reflection/refraction, normal/tangent space, environment map, sky/space visibility and map-state LOD selection.
 - Fix the cause, then verify harbor vessels, seaplane contact and non-NYC maps.
+- Local-only QA on 2026-11-22 compared `6d50bfd` with water-clamp state `9fcea63` at the same 1280×720 harbor camera, fixed shader time, cloud `0.16`, twilight `0`, and solar elevations 1°/4°/15° in both directions. Intel Iris Xe D3D11 rendered all 12 cases with zero browser errors and about 16.70 ms median frame interval; artifacts are in `artifacts/water-qa-20261122/` and the compact report is `docs/WATER_REFLECTION_LOCAL_QA_2026-11-22.md`.
+- The clamp does not pass visual acceptance: the large curved horizon/globe-like band remains in both states, while the opposite-direction water ROI changes more than the sun-visible direction. Treat the source-text test as static coverage only, not proof of a visual fix.
+- Follow-up diagnostics on 2026-11-22 isolated sky, reflected-sky, fog and sphere paths with solid-color modes. At the fixed 1° camera, replacing only reflected-sky color preserved the curved Fresnel boundary but removed the false white globe. Fog produced no matching contour and the Manhattan scene had no sphere hit. Root cause: the water environment term sampled the solar/lunar discs and then added a second GGX glint.
+- Commit `f882e26` on branch `codex/water-horizon-duplicate-fix-20261122` keeps the visible sky discs, excludes them from the water environment sample, retains the dedicated GGX glint, and reduces its clipping cap. Diagnostic modes are URL-opt-in; normal URLs remain on mode zero.
+- Six fixed-camera final captures (1°/4°/15° × sun-facing/opposite) ran on Intel Iris Xe D3D11 with no context loss, about 16.60–16.70 ms median and 16.80–16.90 ms P95 frame interval. The broad duplicate globe is gone; the real sun streak remains. Evidence is local in `artifacts/water-diag-20261122/` in the diagnostic worktree. Targeted tests `water-diagnostic-modes.test.mjs` and `tidewater-water-viewfix.test.mjs` pass (3/3).
+- A local, uncommitted combination with ferry state `de2059f` merged without textual conflict and loaded Manhattan with both code paths at 1280×720 and no console/page errors. Runtime coexistence is smoke-verified only; ferry wake/contact and manual flight remain unverified.
+- Windows sees Intel Iris Xe and NVIDIA MX450 as healthy, but the browser selected Intel. Do not claim MX450 evidence until `UNMASKED_RENDERER_WEBGL` identifies NVIDIA.
 
 ### D — Cross-map samples
 
@@ -72,7 +79,7 @@ Visual reference: Saltline's rainy harbor mood may guide wet asphalt, cold-gray 
 
 ## Next action
 
-Central QA must first compare draft PRs `#253` and `#256` for duplicated Liberty runtime work and identify the single safe merge lineage. Then run a native-GPU, manually flown near-island collision/LOD check for that chosen lineage; do not enable the manifest or merge either draft before this evidence exists.
+For the selected water item, verify commit `f882e26` with the ferry/wake and seaplane water-contact paths, then run one Alaska and one Las Vegas map-switch smoke. Keep the diagnostic switch opt-in and judge completion only from game screenshots, frame timing, WebGL state and flight behavior.
 
 ## Compact handoff template
 
