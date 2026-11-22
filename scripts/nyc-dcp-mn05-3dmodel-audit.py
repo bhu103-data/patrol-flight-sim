@@ -121,7 +121,7 @@ def inspect(model_path: Path, report_path: Path):
             total_mesh_vertices += geometry.Vertices.Count
             total_mesh_faces += geometry.Faces.Count
         elif geometry_type == "Brep":
-            total_brep_faces += geometry.Faces.Count
+            total_brep_faces += len(geometry.Faces)
         elif geometry_type in ("Curve", "PolylineCurve", "NurbsCurve"):
             total_curve_objects += 1
 
@@ -160,7 +160,7 @@ def inspect(model_path: Path, report_path: Path):
                 "userStrings": keys,
                 "meshVertices": geometry.Vertices.Count if geometry_type == "Mesh" else None,
                 "meshFaces": geometry.Faces.Count if geometry_type == "Mesh" else None,
-                "brepFaces": geometry.Faces.Count if geometry_type == "Brep" else None,
+                "brepFaces": len(geometry.Faces) if geometry_type == "Brep" else None,
             })
 
     layers = []
