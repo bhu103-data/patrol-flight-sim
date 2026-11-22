@@ -424,10 +424,18 @@ export function buildNycStreetNetwork({
   // Production NYC opt-in: SOURCE-derived 2022 geometry, not a standalone preview.
   // Verify/build before skipping the two old fictional DUMBO asphalt strips.
   // Rejected source geometry leaves conventional streets intact.
-  const officialFrontDock=buildDumboFrontDockRoad(frontDockRoadbed,{
-    addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
-    streetY,waterY,detailBand
-  });
+  let officialFrontDock;
+  try{
+    officialFrontDock=buildDumboFrontDockRoad(frontDockRoadbed,{
+      addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
+      streetY,waterY,detailBand
+    });
+  }catch(error){
+    // Invalid or stale Open Data cannot take down all Manhattan streets.
+    console.warn('[PATROL] DUMBO OTI roadway safe fallback',error);
+    officialFrontDock={enabled:false,officialTriangles:0,
+      reason:'source validation failed; original streets preserved'};
+  }
   stats.officialFrontDock=officialFrontDock;
   const replaceFrontDock=officialFrontDock.enabled;
   // Unified surface-road generation. Positions align with the EXISTING
