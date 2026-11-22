@@ -20,6 +20,9 @@ jobs:
           node-version: '22'
       - name: Verify all browser-free regression tests
         run: node --test tests/*.test.mjs
+      - name: Count production NYC harbor ship meshes (NYC ferry PR only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: node tools/nyc/audit_existing_ships.mjs
       - name: Audit official CC0 ferry GLBs, LODs and source permission (NYC ferry PR only)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
         run: python3 tools/nyc/audit_cc0_ferry_lods.py
