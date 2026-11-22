@@ -1,0 +1,47 @@
+name: NYC true-metre official sidewalk curb source QA
+
+on:
+  pull_request:
+    branches: [qa/nyc-real-roadbed-polygons-20261122-chat]
+    paths:
+      - 'scripts/nyc-times-sidewalk-curb-source.mjs'
+      - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
+      - 'docs/NYC_OTI_SIDEWALK_CURB_SOURCE_QA.md'
+      - '.github/workflows/nyc-oti-sidewalk-curb-source.yml'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-curbs-sidewalks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test source URLs, metric polygon holes and measured curb coordinates
+        run: |
+          node --check scripts/nyc-times-sidewalk-curb-source.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-times-sidewalk-curb-source.test.mjs
+      - name: Download real 2022 NYC street centerline and roadbed polygons
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+      - name: Download genuine sidewalk polygons, curb and curb cut feature lines
+        run: |
+          node scripts/nyc-times-sidewalk-curb-source.mjs
+          test -s artifacts/nyc-curb-sidewalk-source/edges.json
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-curb.svg
+      - name: Upload independent source geometry QA (not a flight map)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-sidewalk-curb-source-qa
+          path: artifacts/nyc-curb-sidewalk-source/
+          retention-days: 7
+          if-no-files-found: ignore
