@@ -9,7 +9,18 @@ const DCP_URL = 'https://www.nyc.gov/assets/planning/download/zip/data-maps/open
 const OTI_URL = 'https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/BUILDING_view/FeatureServer/0/query?where=BIN%3D1016278&outFields=BIN%2CBASE_BBL%2CDOITT_ID%2CHEIGHT_ROOF%2CGROUND_ELEVATION%2CLAST_EDITED_DATE%2CLAST_STATUS_TYPE&outSR=2263&returnGeometry=true&f=pjson';
 
 export async function runFlatironImport(artifactRoot='artifacts/nyc/flatiron-dcp-import') {
-  if (!existsSync(REQUEST)) return {requested:false, passed:false};
+  if (!existsSync(REQUEST)) {
+    const glbPath='assets/nyc/scenario/flatiron.glb';
+    const manifestPath='assets/nyc/scenario-manifest.json';
+    let enabled=false;
+    try {
+      const manifest=JSON.parse(await readFile(manifestPath,'utf8'));
+      const spec=manifest?.landmarks?.flatiron;
+      enabled=Boolean(spec?.enabled)&&spec?.file==='scenario/flatiron.glb';
+    } catch {}
+    const alreadyImported=existsSync(glbPath)&&enabled;
+    return {requested:false,passed:alreadyImported,alreadyImported};
+  }
   await mkdir(artifactRoot,{recursive:true});
   const tempRoot=join(tmpdir(),'patrol-flatiron-dcp-import');
   const sourceRoot=join(tempRoot,'source');
