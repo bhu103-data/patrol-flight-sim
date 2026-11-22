@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "assets/nyc/nyc-dcm-centerlines-sample.json"
+      - "assets/nyc/nyc-oti-roadbed-core-2022.json"
       - "assets/nyc/nyc-true-scale-*.mjs"
       - "assets/nyc/nyc-true-scale-flight.html"
       - "assets/nyc/times-square-metered-massing.mjs"

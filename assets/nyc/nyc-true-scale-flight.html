@@ -24,11 +24,11 @@
 <h1>Times Square | 1:1 official-data flythrough</h1>
 <p id="status">Loading the repository's original NYC footprint subset…</p>
 <p class="muted" id="metadata"></p>
-<p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; procedurally authored windows, facade colours and road widths are NOT actual surveyed materials, pavement, current-year buildings or a complete NYC digital twin.</p>
+<p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button></p>
 </aside>
-<footer>NYC OTI + DCM source data · metres · flythrough pilot · authored facade textures</footer>
+<footer>NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
 <script type="module">
 import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
@@ -118,9 +118,19 @@ async function start(){
   const roadsResponse=await fetch('./nyc-dcm-centerlines-sample.json',{cache:'no-cache'});
   if(!roadsResponse.ok)throw Error('NYC DCM source HTTP '+roadsResponse.status);
   const roadSource=await roadsResponse.json();
-  const qualityLow=new URLSearchParams(location.search).get('quality')==='low';
+  const params=new URLSearchParams(location.search);
+  const qualityLow=params.get('quality')==='low';
+  // Only the experimental NYC TRUE-SCALE free-flight loads this original
+  // 2022 OTI slice. ?roadbed=off retains the prior source-centreline bands
+  // for controlled screenshots. The normal PATROL aircraft map is untouched.
+  const roadbedOff=params.get('roadbed')==='off';
+  const roadbedResponse=roadbedOff?null:
+    await fetch('./nyc-oti-roadbed-core-2022.json',{cache:'no-cache'});
+  if(roadbedResponse&&!roadbedResponse.ok)
+    throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
+  const roadbed=roadbedResponse?await roadbedResponse.json():null;
   const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200});
+    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -136,9 +146,9 @@ async function start(){
   // Spawn from a REAL official Seventh Avenue DCM centreline, not an
   // arbitrary point that can start inside a source-derived skyscraper.
   const [eOffset,nOffset]=wgs84ToMeters(roadSource.originWGS84,massing.origin);
-  // Eye height is measured above the flat experimental ground plane.
-  // Use a 1.2 m cross-shaped clearance probe against REAL OTI footprints;
-  // a 65 m aerial-camera collision test must not certify street-level safety.
+  // Preserve the independent parent #267 street-eye camera fix.
+  // Sweep margin against real municipal building footprint planes;
+  // a 65m airborne eye cannot prove street-level collision clearance.
   const streetEyeMetres=3.2,streetClearanceMetres=1.2;
   const safeOffsets=[[0,0],[streetClearanceMetres,0],[-streetClearanceMetres,0],
     [0,streetClearanceMetres],[0,-streetClearanceMetres]];
@@ -170,6 +180,23 @@ async function start(){
   document.getElementById('aerial').addEventListener('click',()=>{
     camera={position:[0,340,Math.min(450,span*.55)],yaw:0,pitch:-.40};
   });
+  // Exact NYC 2022 OTI intersection FID 24700 source centroid, in #234's
+  // local east/north metres. Use DCM's identical WGS84 anchor even in
+  // ?roadbed=off, so the A/B camera remains perfectly identical.
+  // Neutral material is a preview; neither this eye nor curb elevations
+  // are claimed to be a surveyed 2026 street-camera pose.
+  const coreSourceFID24700=[4.09,32.58];
+  const [roadCoreOffsetE,roadCoreOffsetN]=wgs84ToMeters(
+    roadSource.originWGS84,massing.origin);
+  const roadCoreX=coreSourceFID24700[0]+roadCoreOffsetE-geometry.center.east;
+  const roadCoreZ=geometry.center.north-
+    (coreSourceFID24700[1]+roadCoreOffsetN);
+  const roadbedFocus=()=>({
+    position:[roadCoreX,70,roadCoreZ+22],yaw:0,pitch:-1.28
+  });
+  document.getElementById('roadbedFocus').addEventListener('click',()=>{
+    camera=roadbedFocus();
+  });
   const keySet=new Set();
   window.addEventListener('keydown',e=>{
     if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();
@@ -186,15 +213,23 @@ async function start(){
   });
   const stats=geometry.counts;
   status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
-    ' municipal streets / '+stats.streetSegments+' audited source line segments · free flight camera';
+    ' municipal streets / '+stats.streetSegments+' source line segments · '+
+    stats.officialRoadbedPolygons+' OTI 2022 true roadbed polygons · free flight camera';
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
     ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
-    massing.skipped.multiRing+' building courtyard records excluded';
+    massing.skipped.multiRing+' building courtyard records excluded · '+
+    stats.officialRoadbedTriangles+' official source pavement triangles';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
-    trueRoadbedVerified:false,trueFacadeVerified:false,
+    trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
+    officialRoadbedPolygons:stats.officialRoadbedPolygons,
+    officialRoadbedIntersections:stats.officialRoadbedIntersections,
+    officialRoadbedTriangles:stats.officialRoadbedTriangles,
+    roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
+    roadbedFullNYCCoverage:false,
+    roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
     sourceRoads:geometry.provenance.streets,
     sourceBuildings:geometry.provenance.buildings,
     renderer:'native WebGL2',usesOriginalAircraftPhysics:false,
