@@ -9,12 +9,12 @@ const game=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const {createNycHarborFerryLods}=await import('data:text/javascript;base64,'+
   Buffer.from(src).toString('base64'));
 const facts=[
-  ['far','lod2',505076,5478,'7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b'],
-  ['mid','lod1',2176996,19775,'c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91'],
-  ['near','lod0',5936236,52069,'143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288']
+  ['far','lod2',505076,5478,5502,'7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b'],
+  ['mid','lod1',2176996,19775,19827,'c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91'],
+  ['near','lod0',5936236,52069,52121,'143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288']
 ];
 const blobs=new Map();
-for(const [tier,lod,bytes,tris,sha] of facts){
+for(const [tier,lod,bytes,sourceTris,drawTris,sha] of facts){
   const data=readFileSync(new URL('../assets/nyc/harbor/tevy-ro-ro-'+lod+'.glb',import.meta.url));
   assert.equal(data.length,bytes);
   assert.equal(createHash('sha256').update(data).digest('hex'),sha);
@@ -24,8 +24,8 @@ for(const [tier,lod,bytes,tris,sha] of facts){
   const triangleCount=(doc.meshes||[]).flatMap(m=>m.primitives||[])
     .filter(p=>(p.mode??4)===4).reduce((n,p)=>n+
       doc.accessors[p.indices??p.attributes.POSITION].count/3,0);
-  assert.equal(triangleCount,tris);
-  blobs.set(tier,{data,tris});
+  assert.equal(triangleCount,sourceTris);
+  blobs.set(tier,{data,tris:drawTris,sourceTris});
 }
 
 const tick=()=>new Promise(resolve=>setTimeout(resolve,12));
@@ -44,14 +44,15 @@ test('source-authorized near ferry fits the special GLB float budget while other
   assert.match(decoder,/decodeGLB\(gl,buffer,targetHeight,maxPositionFloats=240000\)/);
   assert.match(decoder,/maxPositionFloats>480000/);
   assert.match(src,/spec\.tier==='near'\?480000:240000/);
-  assert.equal(52069*9,468621);
-  assert.ok(468621<480000 && 468621>240000);
-  assert.ok(19775*9<=240000 && 5478*9<=240000);
+  assert.equal(52121*9,469089);
+  assert.ok(469089<480000 && 469089>240000);
+  assert.ok(19827*9<=240000 && 5502*9<=240000);
 });
 
 test('real converted CC0 ferry assets have pinned hashes and expected native LOD budgets',()=>{
   assert.equal(facts.length,3);
-  assert.equal(blobs.get('near').tris,52069);
+  assert.equal(blobs.get('near').sourceTris,52069);
+  assert.equal(blobs.get('near').tris,52121);
   assert.ok(blobs.get('near').data.length<8*1024*1024);
 });
 test('real same-origin ferry LODs load far/mid/near and dispose resources',async()=>{
