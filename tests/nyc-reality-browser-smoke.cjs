@@ -66,6 +66,9 @@ function pixels(buf){
     assert.ok(state.roads.built>0&&state.roads.built<state.roads.count,
       'Built vs recorded source status disappeared');
     assert.match(state.roadStatus,/not lanes or curbs/);
+    assert.equal(state.roads.streetCamera.streetName,'7 Avenue');
+    assert.ok(state.roads.streetCamera.objectId>0);
+    assert.equal(state.roads.streetCamera.eye[1],2.3);
     assert.equal(state.error,'');
     report.state=state;
     await page.addStyleTag({content:'#panel,#status{visibility:hidden!important}'});
