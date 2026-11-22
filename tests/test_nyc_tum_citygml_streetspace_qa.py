@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.nyc.tum_citygml_streetspace_qa import (
+    current_cscl_comparison,
     geometry_positions,
     normalize_direction_code,
     normalize_name,
@@ -75,6 +76,83 @@ class TumCityGmlStreetspaceQaTests(unittest.TestCase):
         self.assertEqual(normalize_name("W 44 ST"), "WEST 44 STREET")
         self.assertEqual(normalize_name("7 AVE"), "7 AVENUE")
         self.assertEqual(normalize_name("AVE OF THE AMERICAS"), "AVENUE OF THE AMERICAS")
+
+
+    def test_current_cscl_comparison_exposes_exact_roi_feature_count(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            roadbed_path = root / "roadbed.geojson"
+            cscl_path = root / "current-cscl.geojson"
+            output_dir = root / "out"
+
+            roadbed_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "properties": {
+                        "name": "BROADWAY",
+                        "physical_id": "4216",
+                        "traffic_direction": "A",
+                        "number_total_lanes": 2,
+                        "street_width_meter": 10.0,
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [-73.9885, 40.7540],
+                            [-73.9875, 40.7540],
+                            [-73.9875, 40.7550],
+                            [-73.9885, 40.7550],
+                            [-73.9885, 40.7540],
+                        ]],
+                    },
+                }],
+            }), encoding="utf-8")
+            cscl_path.write_text(json.dumps({
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "stname_label": "BROADWAY",
+                            "trafdir": "TF",
+                            "physicalid": "4216",
+                            "number_total_lanes": "2",
+                            "streetwidth": "32.8084",
+                        },
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                [-73.9890, 40.7545],
+                                [-73.9870, 40.7545],
+                            ],
+                        },
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"stname_label": "WEST 44 ST"},
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                [-73.9910, 40.7545],
+                                [-73.9905, 40.7545],
+                            ],
+                        },
+                    },
+                ],
+            }), encoding="utf-8")
+
+            result = current_cscl_comparison(
+                roadbed_path,
+                cscl_path,
+                output_dir,
+                (-73.9900, 40.7530, -73.9800, 40.7600),
+                0.005,
+            )
+
+        self.assertEqual(result["featureCountInMatchBuffer"], 2)
+        self.assertEqual(result["featureCountIntersectingExactRoi"], 1)
+        self.assertNotIn("featureCount", result)
 
 
 if __name__ == "__main__":
