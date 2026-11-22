@@ -232,14 +232,33 @@ try{
   await page.locator('#resumeFlight').click({force:true});
   const before=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
   await page.locator('#glCanvas').focus();
+  // High-latency software WebGL may take >4 s to produce *one* game frame.
+  // A fixed 1100ms keypress can observe ZERO simulation updates and give a
+  // false negative. Hold key until the real aircraft state changes, with a
+  // hard bound; no mocked motion or hand-edited state can satisfy this test.
+  const controlStarted=Date.now();
+  let movementObserved=false;
   await page.keyboard.down('w');
-  await page.waitForTimeout(1100);
-  await page.keyboard.up('w');
+  try{
+    await page.waitForFunction(beforeState=>{
+      const after=window.PatrolSpaceBridge?.getState?.();
+      if(!after?.playing||!beforeState?.position)return false;
+      return Math.hypot(...after.position.map((v,i)=>v-beforeState.position[i]))>.02 &&
+        Math.abs(after.pitch-beforeState.pitch)>.005;
+    },before,{polling:250,timeout:25000});
+    movementObserved=true;
+  }catch(error){
+    console.warn('[central-3d] Flight control not observed within 25s',
+      String(error).slice(0,300));
+  }finally{
+    await page.keyboard.up('w');
+  }
+  const heldMs=Date.now()-controlStarted;
   const after=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
   const positionDelta=before?.position&&after?.position
     ?Math.hypot(...before.position.map((v,i)=>v-after.position[i])):0;
   const pitchDelta=Math.abs((after?.pitch||0)-(before?.pitch||0));
-  report.crossMap.flightControl={before,after,positionDelta,pitchDelta,input:'KeyW 1100ms'};
+  report.crossMap.flightControl={before,after,positionDelta,pitchDelta,input:'KeyW held until real movement or 25000ms',heldMs,movementObserved};
   check(before?.playing&&after?.playing&&positionDelta>.02,
     'Real flight no longer responds/moves after Scenic Views '+JSON.stringify(report.crossMap.flightControl));
   // Unchanged launcher cross-map regression. Chongqing has a separate HTML entry;
