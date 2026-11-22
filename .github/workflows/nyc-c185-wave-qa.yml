@@ -54,6 +54,10 @@ jobs:
         env:
           PATROL_COMPARE_MODE: crosswind
         run: node tools/aircraft/nyc-water-crest-compare.mjs
+      - name: Quantify independent-load A/A water-image variability (no shader difference)
+        env:
+          PATROL_COMPARE_MODE: repeat-baseline
+        run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
         uses: actions/upload-artifact@v4
