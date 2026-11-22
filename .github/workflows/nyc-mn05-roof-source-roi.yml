@@ -1,11 +1,17 @@
-name: NYC official 2014 MN05 rooftop Brep bounded-ROI geometry
+name: NYC official 2014 MN05 rooftop Brep and cached-mesh topology QA
 on:
+  push:
+    branches:
+      - 'qa/nyc-mn05-roof-topology-acceptance-20261122-chat'
   pull_request:
     paths:
       - 'tools/nyc/inspect-mn05-roof-source-roi.py'
-      - 'tools/nyc/mn05-actual-roofs-source-preview.html'
+      - 'tools/nyc/actual-roofs-source-preview.html'
+      - 'tools/nyc/mn05_mesh_topology.py'
       - 'scripts/nyc-mn05-source-roof-browser-smoke.mjs'
       - 'tests/nyc-official-2014-roof-mesh-source.test.py'
+      - 'tests/nyc-mn05-mesh-topology-unit.test.py'
+      - 'tests/nyc-mn05-roof-mesh-topology.test.py'
       - 'tools/nyc/probe-official-mn05-rhino.py'
       - 'tools/nyc/official_mn05_projection.py'
       - '.github/workflows/nyc-mn05-roof-source-roi.yml'
@@ -15,18 +21,21 @@ permissions:
 jobs:
   scoped-roof-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 28
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate Rhino source topology inspector and install 2026 supported Brep loop API
+      - name: Validate source inspectors and independent mesh topology unit tests
         run: |
           python -m py_compile tools/nyc/probe-official-mn05-rhino.py
           python -m py_compile tools/nyc/inspect-mn05-roof-source-roi.py
+          python -m py_compile tools/nyc/mn05_mesh_topology.py
+          python -m py_compile tests/nyc-mn05-roof-mesh-topology.test.py
           python -m pip install --no-cache-dir --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2
           python tests/nyc-official-mn05-coordinate-frame.test.py
+          python tests/nyc-mn05-mesh-topology-unit.test.py
       - name: Obtain ORIGINAL official NYC DCP MN05 3DM in bounded single-job temporary area
         run: |
           PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
@@ -37,6 +46,10 @@ jobs:
           test -s artifacts/nyc-official-mn05/times-square-roof-source-roi.json
           test -s artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
           python tests/nyc-official-2014-roof-mesh-source.test.py
+      - name: Independently validate all 1403 mesh patches and sampled Brep loop membership
+        run: |
+          python tests/nyc-mn05-roof-mesh-topology.test.py
+          test -s artifacts/nyc-official-mn05/times-square-roof-mesh-topology.json
       - name: Install free browser and run actual cached rooftop WebGL QA
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -48,15 +61,16 @@ jobs:
             sleep 1
           done
           node scripts/nyc-mn05-source-roof-browser-smoke.mjs
-      - name: Upload source evidence and polygon boundary diagnosis, never the 627MB source model
+      - name: Upload original source, topology and WebGL evidence only, never the 627MB source model
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nyc-2014-mn05-real-roof-brep-roi-QA
+          name: nyc-2014-mn05-roof-source-and-topology-QA
           path: |
             artifacts/nyc-official-mn05/mn05-probe.json
             artifacts/nyc-official-mn05/times-square-roof-source-roi.json
             artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+            artifacts/nyc-official-mn05/times-square-roof-mesh-topology.json
             artifacts/nyc-official-mn05/2014-real-roof-source-aerial.png
             artifacts/nyc-official-mn05/2014-real-roof-source-rotated.png
             artifacts/nyc-official-mn05/source-roof-browser-report.json
