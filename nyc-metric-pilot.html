@@ -77,11 +77,38 @@ if(!gl.getProgramParameter(program,gl.LINK_STATUS))
 gl.useProgram(program);
 const projectionLocation=gl.getUniformLocation(program,'uProjection');
 const viewLocation=gl.getUniformLocation(program,'uView');
-const buffer=gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
-for(let i=0;i<3;i++){
- gl.enableVertexAttribArray(i);
- gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);
+// Municipal GIS layers are immutable per page load. Never re-upload
+// whole source polygons on each RAF; WebGL2 VAOs retain attribute layouts.
+const gpuLayers=[];
+let uploadBytes=0;
+function addStaticLayer(name,vertices,mode){
+ if(!vertices||vertices.length===0)return;
+ if(vertices.length%9!==0)throw Error('Invalid interleaved GIS layer: '+name);
+ uploadBytes+=vertices.byteLength;
+ if(uploadBytes>32*1024*1024)
+   throw Error('Source geometry exceeds 32 MiB WebGL buffer safety budget');
+ const vao=gl.createVertexArray(),vbo=gl.createBuffer();
+ if(!vao||!vbo)throw Error('Unable to allocate static GIS WebGL2 layer '+name);
+ gl.bindVertexArray(vao);
+ gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+ gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.STATIC_DRAW);
+ for(let i=0;i<3;i++){
+   gl.enableVertexAttribArray(i);
+   gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);
+ }
+ gl.bindVertexArray(null);
+ gpuLayers.push({name,vao,mode,count:vertices.length/9});
+}
+function uploadStaticScene(){
+ addStaticLayer('scale-grid',grid,gl.LINES);
+ addStaticLayer('official-CSCL',roads,gl.LINES);
+ addStaticLayer('historic-curbs',curbs,gl.LINES);
+ addStaticLayer('official-roadbed-borders',roadbed,gl.LINES);
+ addStaticLayer('official-sidewalk-borders',sidewalk,gl.LINES);
+ addStaticLayer('source-building-massing',mesh,gl.TRIANGLES);
+ if(gpuLayers.length<6)throw Error('Incomplete official GIS source layers');
+ if(gl.getError()!==gl.NO_ERROR)
+   throw Error('WebGL2 source buffer upload error');
 }
 const norm=v=>{const l=Math.hypot(...v)||1;return v.map(x=>x/l)};
 const subtract=(a,b)=>a.map((x,i)=>x-b[i]);
@@ -128,23 +155,11 @@ function render(){
   cam.target[2]+radius*Math.cos(cam.yaw)*Math.cos(pitch)];
  gl.uniformMatrix4fv(projectionLocation,false,perspective(Math.PI/3,width/height,.1,5000));
  gl.uniformMatrix4fv(viewLocation,false,view(eye,cam.target));
- gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
- gl.bufferData(gl.ARRAY_BUFFER,grid,gl.STATIC_DRAW);
- gl.drawArrays(gl.LINES,0,grid.length/9);
- if(roads){
-   gl.bufferData(gl.ARRAY_BUFFER,roads,gl.STATIC_DRAW);
-   gl.drawArrays(gl.LINES,0,roads.length/9);
+ for(const layer of gpuLayers){
+   gl.bindVertexArray(layer.vao);
+   gl.drawArrays(layer.mode,0,layer.count);
  }
- if(curbs){
-   gl.bufferData(gl.ARRAY_BUFFER,curbs,gl.STATIC_DRAW);
-   gl.drawArrays(gl.LINES,0,curbs.length/9);
- }
- for(const layer of [roadbed,sidewalk])if(layer){
-   gl.bufferData(gl.ARRAY_BUFFER,layer,gl.STATIC_DRAW);
-   gl.drawArrays(gl.LINES,0,layer.length/9);
- }
- gl.bufferData(gl.ARRAY_BUFFER,mesh,gl.STATIC_DRAW);
- gl.drawArrays(gl.TRIANGLES,0,mesh.length/9);
+ gl.bindVertexArray(null);
  requestAnimationFrame(render);
 }
 try{
@@ -222,9 +237,11 @@ try{
  const [minX,minZ,maxX,maxZ]=scene.stats.bounds;
  cam.target=[(minX+maxX)/2,75,(minZ+maxZ)/2];
  cam.distance=Math.max(maxX-minX,maxZ-minZ,400)*1.25;
+ uploadStaticScene();
  window.PatrolNycMetricQA=()=>({
    stats:scene.stats,rejections:scene.rejections,streetStats,curbStats,
-   planimetricStats,origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
+   planimetricStats,staticGpu:{layers:gpuLayers.length,uploadBytes,
+     drawCallsPerFrame:gpuLayers.length,perFrameReuploads:false},origin:asset.bboxWGS84,renderer:gl.getParameter(gl.RENDERER),
    webglLost:gl.isContextLost(),camera:cam
  });
  status.textContent=scene.stats.builtFeatures+' / '+scene.stats.inputFeatures+
