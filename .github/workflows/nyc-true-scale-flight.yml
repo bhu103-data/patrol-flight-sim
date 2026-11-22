@@ -6,6 +6,12 @@ on:
     paths:
       - "assets/nyc/nyc-dcm-centerlines-sample.json"
       - "assets/nyc/nyc-oti-roadbed-core-2022.json"
+      - "assets/nyc/nyc-oti-surface-runtime.mjs"
+      - "assets/nyc/earcut.mjs"
+      - "assets/nyc/EARCUT-LICENSE.txt"
+      - "tests/nyc-oti-surface-runtime.test.mjs"
+      - "scripts/nyc-oti-surfaces-browser-smoke.mjs"
+      - ".github/workflows/nyc-oti-surfaces-runtime.yml"
       - "assets/nyc/nyc-c185-metre-airborne.mjs"
       - "tests/nyc-metric-c185-airborne.test.mjs"
       - "assets/nyc/nyc-true-scale-*.mjs"
@@ -23,7 +29,7 @@ permissions:
 jobs:
   nyc-metre-flythrough:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,13 +37,17 @@ jobs:
           node-version: "22"
       - name: Syntax and source-coordinate/geometry QA
         run: |
+          node --check assets/nyc/earcut.mjs
+          node --check assets/nyc/nyc-oti-surface-runtime.mjs
           node --check assets/nyc/nyc-true-scale-neighborhood.mjs
+          node --check scripts/nyc-oti-surfaces-browser-smoke.mjs
+          node --check tests/nyc-oti-surface-runtime.test.mjs
           node --check assets/nyc/nyc-c185-metre-airborne.mjs
           node -e "const fs=require('node:fs');const h=fs.readFileSync('assets/nyc/nyc-true-scale-flight.html','utf8');const m=h.match(/<script type=\"module\">([\\s\\S]*?)<\\/script>/);if(!m)throw Error('NYC inline module not found');fs.writeFileSync('/tmp/nyc-true-scale-inline.mjs',m[1]);"
           node --check /tmp/nyc-true-scale-inline.mjs
           node --check scripts/nyc-true-scale-flight-browser-smoke.mjs
           node --check tests/nyc-true-scale-flythrough.test.mjs
-          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-metric-c185-airborne.test.mjs
+          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-metric-c185-airborne.test.mjs tests/nyc-oti-surface-runtime.test.mjs
       - name: Install free WebGL test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
@@ -52,6 +62,18 @@ jobs:
         env:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-true-scale-flight-browser-smoke.mjs
+      - name: Fetch full OTI 2022 roadbed plaza sidewalk layers and run same-camera browser A/B
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-oti-surfaces-browser-smoke.mjs
+      - name: Upload full OTI source counts and same-camera WebGL2 screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-oti-full-surfaces-runtime-qa
+          path: artifacts/nyc-oti-surfaces-runtime/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Upload actual WebGL2 screenshots, source counts, camera movement and errors
         if: always()
         uses: actions/upload-artifact@v4
