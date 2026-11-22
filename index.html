@@ -4699,6 +4699,58 @@ const CENTRAL_PARK_SITES=[
     return runs;
   }
 
+  // PATROL_NYC_TIMES_SIGNAL_V1 — original model informed by NYC DOT, NOT
+  // actual W 44 St signal timing or a mapped cabinet/pole location.
+  // Seventh Avenue is southbound in the authored Times Square route.
+  const NYC_TIMES_SEVENTH={
+    intersection:'7 Av / W 44 St (game-space approximation)',
+    stopDistance:47.8,cycleSeconds:90,lpiSeconds:7,
+    greenEnds:40,amberEnds:44,walkEnds:16
+  };
+  function timesSeventhSignalPhase(seconds){
+    const cycle=NYC_TIMES_SEVENTH.cycleSeconds;
+    const t=((seconds%cycle)+cycle)%cycle;
+    return {vehicle:t<NYC_TIMES_SEVENTH.lpiSeconds?'red':
+      t<NYC_TIMES_SEVENTH.greenEnds?'green':
+      t<NYC_TIMES_SEVENTH.amberEnds?'amber':'red',
+      pedestrian:t<NYC_TIMES_SEVENTH.walkEnds?'walk':'hand',
+      leadingPedestrian:t<NYC_TIMES_SEVENTH.lpiSeconds,
+      rightOnRed:false,phaseSeconds:t};
+  }
+  function timesSeventhNextGreen(seconds){
+    const cycle=NYC_TIMES_SEVENTH.cycleSeconds;
+    const phase=((seconds%cycle)+cycle)%cycle;
+    if(phase>=NYC_TIMES_SEVENTH.lpiSeconds &&
+       phase<NYC_TIMES_SEVENTH.greenEnds)return seconds;
+    return seconds+(phase<NYC_TIMES_SEVENTH.lpiSeconds
+      ?NYC_TIMES_SEVENTH.lpiSeconds-phase:
+      cycle-phase+NYC_TIMES_SEVENTH.lpiSeconds);
+  }
+  // Piecewise analytic route clock: clamp each southbound W 44 St approach
+  // at a real model stop bar and resume only on green. Unlike teleporting
+  // a nominal offset after red, this preserves continuous actor movement.
+  function timesSeventhControlledDistance(actor,seconds){
+    const L=actor.route.total,pace=actor.pace;
+    if(!Number.isFinite(seconds)||seconds<=0||!(pace>0)||!(L>0))
+      return ((actor.offset%L)+L)%L;
+    let distance=((actor.offset%L)+L)%L;
+    let elapsed=0;
+    let stop=NYC_TIMES_SEVENTH.stopDistance+
+      Math.ceil((distance-NYC_TIMES_SEVENTH.stopDistance-1e-8)/L)*L;
+    for(let pass=0;pass<2048;pass++){
+      const arrive=elapsed+Math.max(0,stop-distance)/pace;
+      if(seconds<arrive)return distance+(seconds-elapsed)*pace;
+      const release=timesSeventhNextGreen(arrive);
+      if(seconds<=release)return stop;
+      elapsed=release;
+      distance=stop;
+      stop+=L;
+    }
+    // Long-session limit: never jump across a red light after exhausting
+    // event bounds; remain held at the last safe stop instead.
+    return distance;
+  }
+
   function buildStreetScene(addQuad, box) {
     const pavement = [0.25,0.28,0.30], sidewalk = [0.53,0.54,0.51], paint = [0.84,0.78,0.52];
     for (const street of CITY_STREETS.slice(1)) {
@@ -4892,7 +4944,8 @@ const CENTRAL_PARK_SITES=[
   function trafficPose(actor,time) {
     if(actor.parked)return actor.parked;
     const {route,pace,offset,kind}=actor;
-    const cycle=(time*pace+offset)%(actor.vegas||actor.oneWay?route.total:2*route.total);
+    const motion=actor.timesSeventh?timesSeventhControlledDistance(actor,time):time*pace+offset;
+    const cycle=motion%(actor.vegas||actor.oneWay?route.total:2*route.total);
     const direction=cycle<route.total?1:-1;
     const distance=direction===1?cycle:2*route.total-cycle;
     const i=route.lengths.findIndex((at,index)=>index>0 && at>=distance);
@@ -4944,11 +4997,11 @@ const CENTRAL_PARK_SITES=[
       }
       const seventh=makeTrafficRoute([[12,54],[12,50],[12,30],[12,14],[12,-2],[12,-19],[12,-40],
         [11,-44],[-32,-44],[-35,-40],[-35,47],[-32,50],[8,50],[12,54]]);
-      for(let i=0;i<8;i++)cityTraffic.push({kind:'taxi',oneWay:true,route:seventh,
+      for(let i=0;i<8;i++)cityTraffic.push({kind:'taxi',oneWay:true,timesSeventh:true,route:seventh,
         offset:seventh.total*i/8,pace:5.7});
-      cityTraffic.push({kind:'police',oneWay:true,route:seventh,offset:seventh.total/16,pace:5.7});
+      cityTraffic.push({kind:'police',oneWay:true,timesSeventh:true,route:seventh,offset:seventh.total/16,pace:5.7});
       for(let j=0;j<9;j++)
-        cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,
+        cityTraffic.push({kind:['sedan','suv','van'][j%3],oneWay:true,timesSeventh:true,
           route:seventh,offset:11+seventh.total*(j+.34)/10.3,
           pace:5.2+(j%4)*.45,livery:(j+Math.floor(j/3))%3});
       if(BROOKLYN_RAIL.enabled)
