@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PATROL · NYC real municipal 2014 rooftop source triangles</title>
+<style>
+html,body{margin:0;background:#101923;color:#f0f3f6;font:14px system-ui,sans-serif;height:100%;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh;touch-action:none}
+aside{position:absolute;left:14px;top:14px;max-width:390px;padding:15px 18px;border:1px solid #546981;border-radius:10px;background:#0d1c2ae8}
+h1{margin:0 0 8px;font-size:18px}p{margin:6px 0;line-height:1.5}small{color:#b9c6ce}
+label{display:block;margin-top:12px;color:#ffd590;font-weight:600}
+#state{font-variant-numeric:tabular-nums;color:#9edfc4}
+</style></head><body>
+<canvas id="viewer"></canvas><aside>
+<h1>时代广场 · 官方历史屋顶三角面</h1>
+<p><strong>来源是 NYC DCP 的 2014 年 MN05 Rhino 模型，而不是 2026 实景扫描。</strong></p>
+<p>灰色：2022 市政建筑轮廓与屋顶高度占位体块；橙色：2014 年原始模型保存的屋顶网格，按真实 X/Z 米制位置配准。</p>
+<p><strong>屋顶显示高度仅锚定到 2022 HEIGHTROOF。</strong> 原 Rhino Z 的垂直基准尚未经实测确认，因此它不是精确的历史屋顶高程。</p>
+<label><input id="showActualRoofs" type="checkbox" checked/> 显示真正的 2014 保存屋顶三角面</label>
+<p id="state">正在载入原始市政源几何...</p>
+<small>鼠标拖动旋转，滚轮缩放。网格是 50 米参照，不是虚构道路。此页面仅为数据/实时 WebGL2 验收，不进入现有游戏。</small>
+</aside>
+<script>
+(async()=>{
+const state=document.getElementById('state'),canvas=document.getElementById('viewer');
+const toggle=document.getElementById('showActualRoofs');
+const gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
+if(!gl)throw Error('WebGL2 not supported');
+const vs='#version 300 es\nprecision highp float;layout(location=0)in vec3 p;layout(location=1)in vec3 c;layout(location=2)in vec3 n;uniform mat4 m;out vec3 col;out vec3 nor;void main(){gl_Position=m*vec4(p,1);col=c;nor=n;}';
+const fs='#version 300 es\nprecision highp float;in vec3 col;in vec3 nor;out vec4 rgba;void main(){float shade=.55+.45*max(0.,dot(normalize(nor),normalize(vec3(.36,.80,.47))));rgba=vec4(pow(col*shade,vec3(.85)),1.);}';
+function shader(type,src){
+ const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+ if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));
+ return s;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);const uniform=gl.getUniformLocation(prog,'m');
+const data=[{pos:[],col:[],nor:[]},{pos:[],col:[],nor:[]},{pos:[],col:[],nor:[]}];
+function add(type,a,b,c,tint,norm=null){
+ const k=data[type],u=b.map((v,i)=>v-a[i]),v=c.map((w,i)=>w-a[i]);
+ const cr=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+ const len=Math.hypot(...cr)||1,normal=norm||cr.map(v=>v/len);
+ for(const p of [a,b,c]){k.pos.push(...p);k.col.push(...tint);k.nor.push(...normal);}
+}
+function edge(k,a,b,color){
+ for(const p of [a,b]){data[k].pos.push(...p);data[k].col.push(...color);data[k].nor.push(0,1,0);}
+}
+function ringArea(loop){return loop.reduce((s,a,i)=>{const b=loop[(i+1)%loop.length];return s+a[0]*b[1]-a[1]*b[0];},0);}
+function inside(p,a,b,c,sign){
+ const cross=(u,v,w)=>(v[0]-u[0])*(w[1]-u[1])-(v[1]-u[1])*(w[0]-u[0]);
+ return sign*cross(a,b,p)>=-1e-7&&sign*cross(b,c,p)>=-1e-7&&sign*cross(c,a,p)>=-1e-7;
+}
+function flatRoof(poly,height,tint){
+ const idx=poly.map((_,i)=>i),sign=Math.sign(ringArea(poly))||1;
+ let guard=poly.length*poly.length;
+ while(idx.length>3&&guard-->0){
+  let used=false;
+  for(let i=0;i<idx.length;i++){
+   const ia=idx[(i+idx.length-1)%idx.length],ib=idx[i],ic=idx[(i+1)%idx.length];
+   const a=poly[ia],b=poly[ib],c=poly[ic];
+   const cross=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+   if(sign*cross<=.000001)continue;
+   if(idx.some(j=>j!==ia&&j!==ib&&j!==ic&&inside(poly[j],a,b,c,sign)))continue;
+   add(0,[a[0],height,a[1]],[b[0],height,b[1]],[c[0],height,c[1]],tint,[0,1,0]);
+   idx.splice(i,1);used=true;break;
+  }
+  if(!used)break;
+ }
+ if(idx.length!==3)throw Error('2022 building source cannot be safely triangulated');
+ const [a,b,c]=idx.map(i=>poly[i]);
+ add(0,[a[0],height,a[1]],[b[0],height,b[1]],[c[0],height,c[1]],tint,[0,1,0]);
+}
+function mesh(type){
+ const k=data[type],vao=gl.createVertexArray();gl.bindVertexArray(vao);
+ for(const [i,array] of [[0,k.pos],[1,k.col],[2,k.nor]]){
+  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(array),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,3,gl.FLOAT,false,0,0);
+ }
+ gl.bindVertexArray(null);return {vao,count:k.pos.length/3};
+}
+const response=await fetch('./mn05-cached-roof-metric-preview.json');
+if(!response.ok)throw Error('Official source roof artifact missing');
+const source=await response.json();
+if(source.schema!=='nyc-mn05-2014-saved-brep-roof-triangles-v1'||
+ !source.meshAccepted||source.sourceVerticalDatumVerified!==false||
+ source.assetRole!=='2014_HISTORICAL_SOURCE_ONLY_NOT_GAME_COLLISION'||
+ source.sourceRhinoSha256!=='b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57')
+ throw Error('Unverified or non-municipal 3D roof source');
+if(source.counts.matched2022Fids<3||source.triangles.length<10||source.triangles.length>12000)
+ throw Error('Unexpected true municipal source mesh coverage');
+const bounds=[Infinity,Infinity,-Infinity,-Infinity];
+let buildings=0;
+for(const b of source.matchedFids){
+ const loop=b.outline.slice(0,-1);
+ if(loop.length<3||!Number.isFinite(b.heightMetres))throw Error('Invalid 2022 true-metre building');
+ for(const a of loop){bounds[0]=Math.min(bounds[0],a[0]);bounds[1]=Math.min(bounds[1],a[1]);bounds[2]=Math.max(bounds[2],a[0]);bounds[3]=Math.max(bounds[3],a[1]);}
+ for(let i=0;i<loop.length;i++){
+  const a=loop[i],c=loop[(i+1)%loop.length],h=b.heightMetres;
+  const lower=[a[0],0,a[1]],other=[c[0],0,c[1]],upper=[a[0],h,a[1]],upper2=[c[0],h,c[1]];
+  const tint=[.43+.06*(b.fid%7)/7,.48,.52];
+  add(0,lower,other,upper2,tint);add(0,lower,upper2,upper,tint);
+ }
+ flatRoof(loop,b.heightMetres,[.64,.69,.73]);buildings++;
+}
+for(const tri of source.triangles){
+ if(!Array.isArray(tri.vertices)||tri.vertices.length!==3||
+  tri.vertices.some(p=>p.length!==3||p.some(v=>!Number.isFinite(v))))
+  throw Error('Invalid original saved source rooftop triangle');
+ const v=tri.vertices;
+ // Original municipal source face triangles, displayed at 2022 official roof
+ // height: never claim that original 2014 model Z is current surveyed AGL.
+ add(1,[v[0][0],v[0][2],v[0][1]],
+       [v[1][0],v[1][2],v[1][1]],
+       [v[2][0],v[2][2],v[2][1]],
+       [.92,.49,.21],[0,1,0]);
+}
+const mid=[(bounds[0]+bounds[2])/2,(bounds[1]+bounds[3])/2];
+const west=Math.floor(bounds[0]/50)*50,east=Math.ceil(bounds[2]/50)*50;
+const south=Math.floor(bounds[1]/50)*50,north=Math.ceil(bounds[3]/50)*50;
+for(let x=west;x<=east;x+=50)edge(2,[x,-.4,south],[x,-.4,north],[.30,.39,.44]);
+for(let z=south;z<=north;z+=50)edge(2,[west,-.4,z],[east,-.4,z],[.30,.39,.44]);
+const solid=mesh(0),roofs=mesh(1),grid=mesh(2);
+let target=[mid[0],50,mid[1]],span=Math.max(bounds[2]-bounds[0],bounds[3]-bounds[1]);
+let distance=Math.max(210,span*1.5),yaw=-.66,pitch=.78,down=false,px=0,py=0;
+function norm(v){const l=Math.hypot(...v)||1;return v.map(x=>x/l);}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function dot(a,b){return a.reduce((s,x,i)=>s+x*b[i],0);}
+function look(eye,at){
+ const z=norm(eye.map((x,i)=>x-at[i])),x=norm(cross([0,1,0],z)),y=cross(z,x);
+ return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,
+ -dot(x,eye),-dot(y,eye),-dot(z,eye),1]);
+}
+function pers(aspect){const f=1/Math.tan(Math.PI/5.5),n=1,far=2500;
+ return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+n)/(n-far),-1,0,0,2*far*n/(n-far),0]);}
+function multiply(a,b){const out=new Float32Array(16);
+ for(let j=0;j<4;j++)for(let i=0;i<4;i++)for(let k=0;k<4;k++)
+ out[j*4+i]+=a[k*4+i]*b[j*4+k];return out;}
+canvas.addEventListener('pointerdown',e=>{down=true;px=e.clientX;py=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerup',()=>down=false);
+canvas.addEventListener('pointermove',e=>{if(!down)return;yaw+=(e.clientX-px)*.004;pitch=Math.max(.18,Math.min(1.45,pitch+(e.clientY-py)*.004));px=e.clientX;py=e.clientY;});
+canvas.addEventListener('wheel',e=>{distance=Math.max(70,Math.min(2100,distance*Math.exp(e.deltaY*.001)));e.preventDefault();},{passive:false});
+gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.045,.071,.097,1);
+function draw(){
+ const scale=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.floor(canvas.clientWidth*scale)),h=Math.max(1,Math.floor(canvas.clientHeight*scale));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ const eye=[target[0]+distance*Math.cos(pitch)*Math.sin(yaw),
+ target[1]+distance*Math.sin(pitch),target[2]+distance*Math.cos(pitch)*Math.cos(yaw)];
+ gl.uniformMatrix4fv(uniform,false,multiply(pers(w/h),look(eye,target)));
+ gl.bindVertexArray(grid.vao);gl.drawArrays(gl.LINES,0,grid.count);
+ gl.bindVertexArray(solid.vao);gl.drawArrays(gl.TRIANGLES,0,solid.count);
+ if(toggle.checked){gl.bindVertexArray(roofs.vao);gl.drawArrays(gl.TRIANGLES,0,roofs.count);}
+ gl.bindVertexArray(null);requestAnimationFrame(draw);
+}
+window.mn05RoofQA={ready:true,sourceYear:2014,
+ sourceTriangles:source.counts.genuineSavedSourceTriangles,
+ matchedFids:source.counts.matched2022Fids,displayOnly:true,
+ originalZDatumVerified:false,viewAnchor:'2022 roof HEIGHTROOF',
+ getRoofVisible:()=>toggle.checked,trianglesDrawn:()=>toggle.checked?roofs.count/3:0};
+state.textContent='官方原始屋顶 '+source.counts.genuineSavedSourceTriangles+
+ ' 个三角面 · 匹配建筑 '+buildings+' 栋 · 2014 历史来源';
+draw();
+})().catch(e=>{window.mn05RoofQA={ready:false,error:String(e)};
+ document.getElementById('state').textContent='源数据/浏览器校验失败: '+e.message;
+ console.error(e);});
+</script></body></html>
