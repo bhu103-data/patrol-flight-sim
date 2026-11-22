@@ -72,6 +72,7 @@ jobs:
           path: |
             artifacts/nyc-official-mn05/mn05-probe.json
             artifacts/nyc-official-mn05/mn05-building-component-linkage.json
+            artifacts/nyc-official-mn05/times-square-original-footprint-mesh.json
             artifacts/nyc-official-mn05/times-square-roof-source-roi.json
             artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
             artifacts/nyc-official-mn05/times-square-original-facade-mesh.json
