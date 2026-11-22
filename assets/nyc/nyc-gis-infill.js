@@ -205,7 +205,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         }
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
-          floors=Math.min(12,Math.floor((h-2.2)/2.35));
+          floors=Math.min(showcaseFacade?28:12,Math.floor((h-2.2)/2.35));
         if(bays<1||floors<1)continue;
         // PATROL_NYC_GIS_FAIR_WINDOW_COVERAGE_V1: the former unbounded
         // row-major traversal exhausted all 2,200 windows halfway through
@@ -222,7 +222,10 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         const rowBands=Math.min(floors,Math.max(2,Math.floor(edgeQuota/colBands)));
         for(let rr=0;rr<rowBands;rr++)for(let bb=0;bb<colBands;bb++){
           if(windows>=2200||pieceWindows>=pieceBudget)break;
-          const row=Math.min(floors-1,Math.floor((rr+.5)*floors/rowBands));
+          // Include top and base rows for a tall surveyed wall; centered
+          // samples previously missed the actual upper stories entirely.
+          const row=rowBands<2?0:Math.min(floors-1,
+            Math.round(rr*(floors-1)/(rowBands-1)));
           const bay=Math.min(bays-1,Math.floor((bb+.5)*bays/colBands));
           const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
           const q=(t,y,depth=.045)=>[a[0]+(b[0]-a[0])*t+nx*depth,y,
