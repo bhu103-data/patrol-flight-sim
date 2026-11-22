@@ -23,13 +23,19 @@ Original Manhattan aircraft physics, C185 and all other maps are untouched.
   (already present in the 118-building 1:1 reference), source position,
   2022 OTI core road shapes and real NYC DCM line positions.
 - **Not real**: brick/glass/stone selection by height or individual FID,
-  color, simulated mortar scale, facade grids, real glass composition,
+  color, facade grids, real glass composition,
   measured windows/entrances, ground elevations, or complete 2026 streets.
+  The brick proxy's repeat is now the U.S. modular nominal face module
+  (8 in × 2⅔ in, including the mortar joint), not a measured FID-specific
+  facade course. This is a standards-based visual scale correction only.
   Even the 1515 Broadway FID override is **ART DIRECTION**, not an
   as-built material record or vetted PBR photo.
 - No photogrammetry, no authentic PBR albedo/normal/ORM maps, no 6DoF
   photograph comparison, and no native GPU performance acceptance.
   Original project-authored procedural math does not imply scanned reality.
+  Reference for the generic U.S. brick module: GSA Metric Design Guide,
+  Architectural/Masonry, p.14 (actual 3⅝ × 2¼ × 7⅝ in with ⅜-in joint;
+  nominal 4 × 2⅔ × 8 in); this is not a claim about any particular NYC wall.
 
 ## Strict material asset replacement contract
 Until a real asset has **individually verified** rights and provenance,
