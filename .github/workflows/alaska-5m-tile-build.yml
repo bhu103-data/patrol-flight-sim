@@ -67,8 +67,10 @@ jobs:
           name: alaska-tracyarm-5m-source-sample
           path: |
             artifacts/alaska-tracyarm-ifsar5m-report.json
-            artifacts/alaska-tracyarm-ifsar5m-int16.bin.gz
-            artifacts/alaska-tracyarm-ifsar5m-int16.bin.gz.b64
+            artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz
+            artifacts/alaska-tracyarm-ifsar5m-delta2-int16.bin.gz.b64
+            artifacts/alaska-tracyarm-ifsar5m-manifest.json
+            artifacts/alaska-tracyarm-ifsar5m/*.xml
             artifacts/alaska-tracyarm-five-metre-tile.json
             artifacts/alaska-tracyarm-five-metre-report.json
             artifacts/alaska-usgs5m-native-source.json
