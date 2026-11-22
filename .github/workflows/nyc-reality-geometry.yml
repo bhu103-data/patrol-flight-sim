@@ -1,0 +1,62 @@
+name: NYC Reality 1-to-1 experimental geometry QA
+on:
+  pull_request:
+    paths:
+      - 'nyc-reality.html'
+      - 'assets/nyc/nyc-reality-projection.mjs'
+      - 'assets/nyc/times-square-footprints.json'
+      - 'tests/nyc-reality-georef.test.mjs'
+      - 'tests/nyc-reality-browser-smoke.cjs'
+      - '.github/workflows/nyc-reality-geometry.yml'
+  push:
+    branches:
+      - 'experiment/nyc-reality-times-1to1-20261122-chat'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strict-geodesy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test actual WGS84 metric scale, source count, height and hole rejection
+        run: node --test tests/nyc-reality-georef.test.mjs
+  webgl-view:
+    needs: strict-geodesy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium and image reader
+        shell: bash
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1 pngjs@7.0.0
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start geometry pilot server
+        shell: bash
+        run: |
+          python3 -m http.server 8127 --bind 127.0.0.1 > /tmp/patrol-reality-http.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8127/nyc-reality.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Inspect actual WGS84 WebGL geometry at aerial and street-height cameras
+        timeout-minutes: 6
+        run: node tests/nyc-reality-browser-smoke.cjs
+      - name: Publish source-geometry browser QA report, not a photoreal acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-reality-1to1-geometry-not-photoreal
+          path: artifacts/nyc-reality/
+          retention-days: 14
+          if-no-files-found: warn
