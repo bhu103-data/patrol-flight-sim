@@ -12,7 +12,7 @@ permissions:
 jobs:
   node-regressions:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,3 +20,60 @@ jobs:
           node-version: '22'
       - name: Verify all browser-free regression tests
         run: node --test tests/*.test.mjs
+      - name: Count production NYC harbor ship meshes (NYC ferry PR only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: node tools/nyc/audit_existing_ships.mjs
+      - name: Audit official CC0 ferry GLBs, LODs and source permission (NYC ferry PR only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: python3 tools/nyc/audit_cc0_ferry_lods.py
+      - name: Decode and validate WebGL2-ready CC0 ferry near/mid/far GLBs
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        run: |
+          npm install --global @gltf-transform/cli
+          python3 -m pip install --disable-pip-version-check pillow
+          source tools/nyc/install_ktx.sh
+          bash tools/nyc/build_cc0_ferry_lods.sh
+      - name: Preserve CC0 publisher source and model metrics (NYC ferry PR only)
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-nyc-ferry-cc0-source-qa
+          path: nyc-harbor-audit/
+          if-no-files-found: warn
+          retention-days: 7
+
+
+  nyc-ferry-cc0-real-webgl:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+    needs: node-regressions
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium software WebGL2 dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Serve complete same-origin PATROL game with all 3 committed CC0 GLBs
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-ferry-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8765/assets/nyc/harbor/tevy-ro-ro-lod2.glb -o /dev/null
+      - name: Verify ferry near, mid, far visual LOD and four-map fallback in Chromium
+        run: |
+          node --check tools/nyc/smoke_cc0_ferry_webgl.mjs
+          node tools/nyc/smoke_cc0_ferry_webgl.mjs
+      - name: Retain all matching-camera WebGL captures and failing stage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patrol-nyc-cc0-ferry-webgl-lod-qa
+          path: artifacts/nyc/ferry-lod/
+          if-no-files-found: warn
+          retention-days: 7

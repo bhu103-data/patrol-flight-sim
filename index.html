@@ -6677,6 +6677,43 @@ const CENTRAL_PARK_SITES=[
   }
 
   const shipMeshes = Object.fromEntries(Object.keys(SHIP_TYPES).map(kind => [kind, buildShipMesh(kind)]));
+  // NYC HARBOR CC0 FERRY PILOT — Disabled unless explicitly requested.
+  // The source is a generic, legally redistributable ro-ro, not a measured
+  // NYC Ferry. It ONLY substitutes a ferry's appearance. SHIP_TYPES hull
+  // bounds, loop routes, wrecks and C185 collision remain procedural.
+  const ferryVisualPreview=new URLSearchParams(location.search)
+    .get('nycHarborVessels')==='cc0-ferry-preview';
+  let nycFerryLods=null,nycFerryLoadBusy=false;
+  function prepareNycFerryVisuals(){
+    if(!ferryVisualPreview||!selectedMap.city||graphicsCompat){
+      if(nycFerryLods){nycFerryLods.dispose();nycFerryLods=null;}
+      return;
+    }
+    if(nycFerryLods||nycFerryLoadBusy||gl.isContextLost())return;
+    nycFerryLoadBusy=true;
+    Promise.all([
+      import('./assets/nyc/nyc-harbor-ferry-lods.js'),
+      import('./assets/nyc/nyc-realism.js')
+    ]).then(([mod,realism])=>{
+      const lods=mod.createNycHarborFerryLods(gl,realism.decodeGLB,{
+        onStatus:result=>console.info('[PATROL NYC ferry LOD]',result)
+      });
+      if(!selectedMap.city||graphicsCompat||gl.isContextLost()){
+        lods.dispose();return;
+      }
+      nycFerryLods=lods;
+      lods.start();
+    }).catch(error=>console.warn('[PATROL] NYC ferry visual fallback:',error))
+      .finally(()=>{nycFerryLoadBusy=false;});
+  }
+  if(ferryVisualPreview)window.PatrolFerryLodQA=()=>({
+    enabled:Boolean(selectedMap.city&&!graphicsCompat),
+    ready:nycFerryLods?.stats.ready||[],
+    failed:nycFerryLods?.stats.failed||[],
+    requested:nycFerryLods?.stats.requested||[],
+    selections:nycFerryLods?.stats.selections||{near:0,mid:0,far:0,fallback:0}
+  });
+
   const mooseMesh = buildMooseMesh();
 
   function buildBirdModels(eagle=false) {
@@ -13011,6 +13048,7 @@ const CENTRAL_PARK_SITES=[
     gulls = [];
     boatWakes.fill(0);
     sceneryTime = 0;
+    prepareNycFerryVisuals();
     const anchor=selectedMap.shipAnchor;
     if(!anchor)return;
     for (const [index, kind] of ['cruise','ferry','cargo','ferry'].entries()) {
@@ -13329,7 +13367,14 @@ const CENTRAL_PARK_SITES=[
       const right = [front[2],0,-front[0]];
       const bob = 0.16*Math.sin(1.75*sceneryTime+boat.phase);
       drawHullWash(drawMesh,boat,x,z,front,right);
-      drawMesh(shipMeshes[boat.kind],mat4FromBasis([x,WATER_H+bob,z],right,worldUp,front,1));
+      const distance=Math.hypot(x-camPos[0],z-camPos[2]);
+      const imported=selectedMap.city&&!graphicsCompat&&boat.kind==='ferry'
+        ? nycFerryLods?.select(distance) : null;
+      // Render-only import: even near the ferry we keep SHIP_TYPES' original
+      // conservative collision footprint and all route/floatplane semantics.
+      const model=imported||shipMeshes[boat.kind];
+      const height=WATER_H+bob-(imported?1.1:0);
+      drawMesh(model,mat4FromBasis([x,height,z],right,worldUp,front,1));
     }
     for (const animal of moose) {
       const [x,z,yaw] = sceneryPose(animal,sceneryTime);

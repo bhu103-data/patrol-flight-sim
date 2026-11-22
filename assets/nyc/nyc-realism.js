@@ -19,7 +19,7 @@ function nodeMatrix(node){
   ];
 }
 // Named export permits real-browser GLB smoke tests without loading paid assets.
-export async function decodeGLB(gl,buffer,targetHeight){
+export async function decodeGLB(gl,buffer,targetHeight,maxPositionFloats=240000){
   const dv=new DataView(buffer);
   if(buffer.byteLength<28||dv.getUint32(0,true)!==0x46546c67||
     dv.getUint32(4,true)!==2||dv.getUint32(8,true)!==buffer.byteLength)
@@ -154,7 +154,9 @@ export async function decodeGLB(gl,buffer,targetHeight){
   }
   for(const id of document.scenes?.[document.scene||0]?.nodes||[])
     walk(id,identity);
-  if(pos.length===0||pos.length>240000||!(maxY>minY))
+  if(!Number.isInteger(maxPositionFloats)||maxPositionFloats<240000||
+     maxPositionFloats>480000 || pos.length===0||
+     pos.length>maxPositionFloats||!(maxY>minY))
     throw Error('GLB is empty, too large or flat');
   const scale=targetHeight/(maxY-minY),mx=(minX+maxX)*0.5,mz=(minZ+maxZ)*0.5;
   for(let i=0;i<pos.length;i+=3){
