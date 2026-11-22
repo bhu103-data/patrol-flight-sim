@@ -9076,13 +9076,16 @@ const CENTRAL_PARK_SITES=[
       const za=-210+i*88/24,zb=-210+(i+1)*88/24;
       const xa=vegasMeasuredStripX(za),xb=vegasMeasuredStripX(zb);
       for(const side of [-1,1]){
-        const inner=side*7.14,outer=side*7.22;
+        const left=Math.min(side*7.14,side*7.22),
+          right=Math.max(side*7.14,side*7.22);
         const point=(center,offset,z)=> {
           const x=center+offset;
           return [x,sampleTerrainHeight(x,z)+.333,z];
         };
-        addQuad(point(xa,inner,za),point(xa,outer,za),
-          point(xb,outer,zb),point(xb,inner,zb),
+        // Consistent +Y winding on both shoulders; avoid a one-sided
+        // invisible seam when normal-based back-face culling is enabled.
+        addQuad(point(xa,left,za),point(xb,left,zb),
+          point(xb,right,zb),point(xa,right,za),
           i%6===0?joint:asphalt);
         triangles+=2;
       }
