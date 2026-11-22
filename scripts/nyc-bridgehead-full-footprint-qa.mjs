@@ -30,6 +30,24 @@ function lampMeanRgb(bytes,roi){
   assert(n>40,'Signal screenshot ROI unexpectedly too small');
   return sums.map(v=>Number((v/n).toFixed(1)));
 }
+// Two fixed-height candidate windows are calibrated against the *actual*
+// PR #175 and #205 1280x720 SwiftShader PNGs. The road/near-camera geometry
+// shifts the physical red lens by ~14px vertically between these baselines.
+// A red-dominant hue gate prevents a yellow/amber lens from being accepted
+// merely because the ROI includes warm light. Not a game-source change.
+function selectRedLampRoi(candidates){
+  const rows=candidates.map(({label,red,green})=>({
+    label,
+    redGain:Number((red[0]-green[0]).toFixed(1)),
+    redDominance:Number((red[0]-red[1]).toFixed(1)),
+    redToGreen:red[1]>0?Number((red[0]/red[1]).toFixed(2)):Infinity
+  }));
+  const best=rows.filter(x=>x.redDominance>=50&&
+    x.redToGreen>=1.6&&x.redGain>=25)
+    .sort((a,b)=>b.redGain-a.redGain)[0];
+  return {upperRedGain:best?.redGain??0,
+    selectedRedRoi:best?.label??null,redRoiCandidates:rows};
+}
 const injection=String.raw`
   // Test-only closure access; this string never enters the repository's index.
   window.__patrolBridgeheadQa = () => {
@@ -478,7 +496,9 @@ try{
     });
     await page.waitForTimeout(1700);
     result.signalVisual={camera:'Bridge Signal QA · Close',captures:[],
-      roi:{upperRed:[633,344,648,361],middleAmber:[633,362,648,375],
+      roi:{upperRed:[633,344,648,361],
+        upperRedShifted:[633,330,648,342],
+        middleAmber:[633,362,648,375],
         lowerGreen:[633,380,648,393]},
       colorContrast:null};
     for(const [phase,time,name] of [
@@ -513,6 +533,7 @@ try{
           window.__patrolBridgeheadLightState?.());
         snapshot={name,phase,before,after,attempt:attempt+1,
           topRedRgb:lampMeanRgb(pngBytes,[633,344,648,361]),
+          topRedShiftedRgb:lampMeanRgb(pngBytes,[633,330,648,342]),
           midAmberRgb:lampMeanRgb(pngBytes,[633,362,648,375]),
           bottomGreenRgb:lampMeanRgb(pngBytes,[633,380,648,393])};
         if(after?.phase===phase)break;
@@ -529,12 +550,17 @@ try{
     const red=result.signalVisual.captures[0],
       green=result.signalVisual.captures[1],
       amber=result.signalVisual.captures[2];
-    const upperRedGain=Number((red.topRedRgb[0]-green.topRedRgb[0]).toFixed(1));
+    const redContrast=selectRedLampRoi([
+      {label:'red-original',red:red.topRedRgb,green:green.topRedRgb},
+      {label:'red-shifted',red:red.topRedShiftedRgb,
+        green:green.topRedShiftedRgb}
+    ]);
+    const {upperRedGain}=redContrast;
     const lowerGreenGain=Number((green.bottomGreenRgb[1]-red.bottomGreenRgb[1]).toFixed(1));
     const amberMiddleGain=Number((amber.midAmberRgb[0]-
       Math.max(red.midAmberRgb[0],green.midAmberRgb[0])).toFixed(1));
     result.signalVisual.colorContrast={
-      upperRedGain,lowerGreenGain,amberMiddleGain};
+      ...redContrast,lowerGreenGain,amberMiddleGain};
     assert(upperRedGain>=25&&lowerGreenGain>=40&&amberMiddleGain>=25,
       'Physical bridge signal is not visually distinguishable red vs green: '+
       JSON.stringify(result.signalVisual));
