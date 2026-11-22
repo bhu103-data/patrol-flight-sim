@@ -23,6 +23,8 @@ test('official source is 2022 NYC OTI roadbed, not inferred centerline widths',(
   const info=validateFrontDockOfficialSource(source);
   assert.equal(source.schema,'patrol-nyc-dumbo-front-dock-oti-roadbed-2022-v1');
   assert.equal(info.triangleCount,577);
+  assert.equal(info.droppedDegenerateTriangles,24);
+  assert.equal(info.renderableTriangles,553);
   assert.equal(info.uniqueFids,8);
   assert.equal(source.areaSquareMetres,3714.73);
   assert.equal(source.origin.lon,-73.992042);
@@ -32,18 +34,19 @@ test('official source is 2022 NYC OTI roadbed, not inferred centerline widths',(
 test('normal, footprint and production budget: no fictional rectangular roof',()=>{
   const {out,faces}=render();
   assert.equal(out.enabled,true);
-  assert.equal(out.officialTriangles,577);
+  assert.equal(out.officialTriangles,553);
+  assert.equal(out.droppedDegenerateTriangles,24);
   assert.deepEqual(out.skipFictionalStreetSegments,[[16,-9],[17,-9]]);
   assert(out.bikePaintQuads>=4,
     '2026 DOT planned bike markings should be physically inside source');
   assert(out.signalHeads===2,'The photographed Front/Dock intersection has signal heads');
-  assert(out.triangles>577&&out.triangles<1100);
+  assert(out.triangles>553&&out.triangles<1100);
   assert.equal(out.newTextures,0);
   assert.equal(out.additionalDrawCalls,0);
   assert(out.estimatedVertexBufferBytes<200_000);
   // First 577 triangles use original licensed geo-poly vertices, no XY
   // rectangle generator, with upward normals after East/North -> X/-Z map.
-  const sourceFaces=faces.slice(0,577);
+  const sourceFaces=faces.slice(0,out.officialTriangles);
   assert(sourceFaces.every(f=>f.kind==='tri'));
   assert(sourceFaces.every(f=>{
     const [a,b,c]=f.v,u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
