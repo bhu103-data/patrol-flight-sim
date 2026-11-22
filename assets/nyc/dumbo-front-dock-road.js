@@ -60,15 +60,15 @@ export function validateFrontDockOfficialSource(data){
 }
 export function buildDumboFrontDockRoad(data,{
   addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
-  streetY,waterY,detailBand
+  streetY,waterY,detailBand,grid
 }){
   if(!data)return {enabled:false,officialTriangles:0,reason:'opt-in disabled'};
   const verified=validateFrontDockOfficialSource(data);
-  // Keep the official 2022 planimetric road surface in the SAME existing
-  // PATROL ground plane as procedural asphalt, not a raised floating patch.
-  // Only (flat) XY pavement shape is sourced; vertical road grade remains
-  // the existing game streetY. Paint is just above, like original markings.
-  const roadY=streetY+.086,paintY=streetY+.121;
+  // Preserve original street road connectivity whenever the dated official
+  // polygon only partially covers a compressed game corridor. A 0.004-unit
+  // visual depth bias avoids coplanar z-fighting against those old strips;
+  // this is NOT a surveyed vertical elevation or real curb height.
+  const roadY=streetY+.090,paintY=streetY+.121;
   const isSafe=([e,n],y=roadY)=>{
     const [x,,z]=world([e,n],y);
     return terrainAt(x,z)>=waterY+1.58&&isClear(x,z,.12);
@@ -161,6 +161,32 @@ export function buildDumboFrontDockRoad(data,{
     // NYC-style directional sign blades and bounded street-name labels.
     box(x,y+4.12,z-.05,1.48,.30,.08,[.07,.33,.24]);triangles+=12;
   }
+  // A source polygon is not enough to replace an entire fictional city
+  // rectangle unless it covers *every* sampled old lane-width position.
+  // Earlier hardcoded deletion of i=16/17 left demonstrable pavement holes
+  // (centerline coverage 12/21 and 2/21). Sample five across-width points
+  // on 21 longitudinal locations for each potentially overlapping strip.
+  if(!Number.isFinite(grid?.blockLength)||!Number.isFinite(grid?.blockWidth)||
+    !Number.isFinite(grid?.tilt)||!Number.isFinite(grid?.offset))
+    throw new Error('Cannot safely reconcile official roadbed to old city without grid');
+  const originalJ=-9,originalZ=originalJ*grid.blockLength,oldWidth=5.65;
+  const legacyCoverage=[15,16,17].map(i=>{
+    const x0=i*grid.blockWidth+grid.tilt*originalZ+grid.offset;
+    let covered=0,checked=0;
+    for(let u=0;u<21;u++)for(let v=0;v<5;v++){
+      const x=x0+grid.blockWidth*(u+.5)/21;
+      const z=originalZ+oldWidth*((v+.5)/5-.5);
+      // Exact inverse of the authored game similarity transform.
+      const p=[(x-FRONT_DOCK_GAME.x)/FRONT_DOCK_GAME.gameUnitsPerMetre,
+        (FRONT_DOCK_GAME.z-z)/FRONT_DOCK_GAME.gameUnitsPerMetre];
+      checked++;
+      if(isPavement(p))covered++;
+    }
+    return {i,j:originalJ,covered,samples:checked,
+      fraction:+(covered/checked).toFixed(4),entireCorridorCovered:covered===checked};
+  });
+  const skipFictionalStreetSegments=legacyCoverage
+    .filter(row=>row.entireCorridorCovered).map(row=>[row.i,row.j]);
   return {
     enabled:true,sourceYear:2022,sourceFids:verified.uniqueFids,
     sourceTriangles:verified.triangleCount,officialTriangles:accepted.length,
@@ -170,7 +196,8 @@ export function buildDumboFrontDockRoad(data,{
     bikePaintQuads:lanes,bikeArrows:arrows,signalHeads,
     signalLensTriangles:signalTriangles,
     newTextures:0,additionalDrawCalls:0,
-    skipFictionalStreetSegments:[[16,-9],[17,-9]],
+    skipFictionalStreetSegments,legacyCoverage,
+    sourceOverlayOnly:skipFictionalStreetSegments.length===0,
     caveat:'Official 2022 shapes scaled uniformly 0.32 game units/m; 2026 planned bicycle markings and approximate traffic-signal props, no as-built timings/collidable curb or native metre street.'
   };
 }
