@@ -193,6 +193,42 @@ that the public dataset is unusable for every purpose.
   derived source snapshots as a separate rights-review item. No new
   NYC-derived source snapshot was added by this follow-up.
 
+
+### Rights-cleared candidate for the next facade-tag coverage audit: OSM
+
+A more practical redistributable candidate than the 2014 City 3D model is
+a **bounded OpenStreetMap extract**, kept as a separate ODbL source layer:
+- OSMF states that OSM data is ODbL 1.0 and may be copied, adapted and
+  redistributed with attribution; modified/derived OSM databases must
+  remain under ODbL. See
+  https://www.openstreetmap.org/copyright and
+  https://osmfoundation.org/wiki/Licence/Licence_and_Legal_FAQ.
+- OSM's 3D building tagging scheme supports `height`,
+  `building:levels`, `building:part`, `roof:shape`, `roof:height`,
+  `roof:material`, `building:material` and `building:colour`.
+  See https://wiki.openstreetmap.org/wiki/Simple_3D_buildings and
+  https://wiki.openstreetmap.org/wiki/3D_development/Tagging.
+- The public `kjhealy/nycosm` package provides an NYC Geofabrik extract
+  dated 2026-10-18, with 1,089,132 building features in EPSG:2263,
+  original OSM tags, optional `nycdoitt_bin` linkage and height/levels.
+  Its code is MIT; its bundled OSM-derived GeoParquet database is
+  explicitly ODbL 1.0. See
+  https://github.com/kjhealy/nycosm and
+  https://github.com/kjhealy/nycosm/blob/main/inst/COPYRIGHTS.
+
+This is **a candidate source, not yet an accepted asset**. The NYC subset
+must first be audited for actual coverage of `height`, `building:levels`,
+`roof:shape`, `building:part`, `building:material`,
+`building:colour`, `roof:material`, `name` and `wikidata` across
+the chosen Times Square/DUMBO FIDs/BINs. OSM contributors may have copied
+base building footprints from City data; OSM's added tags are volunteer
+mapping, not official survey. Do not invent missing values or infer a
+facade material from an untagged building. Keep the ODbL dataset and its
+derived database separate from non-OSM source datasets, preserve
+attribution and share-alike notices, and do not relabel it CC0 or MIT.
+No OSM snapshot has been downloaded, committed or integrated in this
+follow-up; tag coverage and join accuracy remain **NOT TESTED**.
+
 ### Current release decision
 
 - Keep #211 Draft and keep #293/#248/#239 as isolated opt-in experiments.
