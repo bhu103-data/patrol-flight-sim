@@ -29,6 +29,7 @@ try{
    const gl=document.querySelector('canvas')?.getContext('webgl2');
    return {stats:audit.stats,rejections:audit.rejections,
      streetStats:audit.streetStats,curbStats:audit.curbStats,
+     planimetricStats:audit.planimetricStats,staticGpu:audit.staticGpu,
      camera:audit.camera,contextLost:gl?.isContextLost(),
      webglError:gl?.getError(),canvas:[gl?.drawingBufferWidth,gl?.drawingBufferHeight]};
  });
@@ -47,6 +48,17 @@ try{
     state.curbStats.edges<15||
     state.curbStats.totalLengthMetres<100||
     state.curbStats.noRoadbedOrSidewalks!==true||
+    !state.planimetricStats||
+    !['roadbed','sidewalk'].every(k=>{
+      const s=state.planimetricStats[k];
+      return s&&s.records>=3&&s.visibleEdges>=6&&
+       s.historicSource===true&&s.pavementFill===false&&
+       s.sourceHolesPreserved===true&&s.drawnRoadWidths===false;
+    })||
+    !state.staticGpu||state.staticGpu.layers!==6||
+    state.staticGpu.drawCallsPerFrame>6||
+    state.staticGpu.uploadBytes>32*1024*1024||
+    state.staticGpu.perFrameReuploads!==false||
     state.contextLost||state.webglError!==0||
     state.canvas[0]!==1280||state.canvas[1]!==800)
     throw Error('Meter-scale scene audit not valid '+JSON.stringify(state));
