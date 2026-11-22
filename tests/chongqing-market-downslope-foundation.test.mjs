@@ -82,7 +82,7 @@ test('foundation remains pooled, license-free and collision-neutral',()=>{
   assert.equal(draws.filter(a=>a[0]==='steps'&&a[4]===1.55&&a[6]===1.55).length,8);
   assert.ok(details.includes("['stone',2700]")&&details.includes("['steps',1250]"),
     'use existing CC0 PBR-backed stone and steps pools; no draw or shader added');
-  assert.equal(obstacles.filter(o=>o.x===236||o.x===284||o.x===332).length,3,
+  assert.equal(obstacles.filter(o=>o.z===339&&[236,284,332].includes(o.x)).length,3,
     'original shop collider extents remain unchanged');
   assert.ok(obstacles.every(o=>!o.marketFoundation),
     'pure under-floor detail must not register incompatible flight colliders');
