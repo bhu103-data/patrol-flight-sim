@@ -34,7 +34,12 @@ export function polygonMetrics(ring){
   const pts=ring.map(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)?p:null);
   if(pts.some(p=>!p))return null;
   const lat0=pts.reduce((s,p)=>s+p[1],0)/pts.length;
-  const xy=pts.map(p=>toLocal(p,lat0));
+  const origin=pts[0];
+  const rad=Math.PI/180,R=6378137;
+  const xy=pts.map(p=>[
+    R*Math.cos(lat0*rad)*(p[0]-origin[0])*rad,
+    R*(p[1]-origin[1])*rad
+  ]);
   if(Math.hypot(xy[0][0]-xy.at(-1)[0],xy[0][1]-xy.at(-1)[1])<.02)xy.pop();
   if(xy.length<3)return null;
   let twiceArea=0,cx=0,cy=0;
@@ -45,12 +50,11 @@ export function polygonMetrics(ring){
   if(Math.abs(twiceArea)<.01)return null;
   const area=Math.abs(twiceArea/2);
   const center=[cx/(3*twiceArea),cy/(3*twiceArea)];
-  const rad=Math.PI/180,R=6378137;
   return {
     areaSquareMeters:area,
     centroidWGS84:[
-      center[0]/(R*Math.cos(lat0*rad))/rad,
-      center[1]/R/rad
+      origin[0]+center[0]/(R*Math.cos(lat0*rad))/rad,
+      origin[1]+center[1]/R/rad
     ]
   };
 }
