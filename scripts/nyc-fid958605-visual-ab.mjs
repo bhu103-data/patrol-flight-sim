@@ -53,6 +53,16 @@ async function captureSite(label,base){
       'body.patrol-fid-qa * {visibility:hidden !important;} '+
       'body.patrol-fid-qa #glCanvas {visibility:visible !important;}'});
     for(const angle of [-24,0,24]){
+      // The flight camera eases by exp(-dt*4.2), with dt capped under
+      // SwiftShader. A clock-based 1.4s wait can capture *different*
+      // intermediate angles in the base vs candidate. Briefly switch
+      // scenic targets to call updateScenicView() and reset
+      // camInitialized, so the next frame snaps to the exact tested
+      // bearing instead of interpolating from the preceding camera.
+      if(angle!==-24){
+        await page.locator('#hotelTarget').selectOption({label:'One Times Square'});
+        await page.locator('#hotelTarget').selectOption({label:'Times Square'});
+      }
       await page.locator('#hotelAngle').evaluate((el,v)=>{
         el.value=String(v);
         el.dispatchEvent(new Event('input',{bubbles:true}));
