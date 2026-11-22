@@ -27,6 +27,8 @@ Game-terrain production worker uses the source-backed class-11 mask, matched in 
 2. `measuredHeight(u,v)<=12m`, capping potential visual/physics edits to low-lying land.
 3. `measuredWaterClass(u,v)===true`, with nearest-neighbor sampling to preserve the categorical source.
 
+The existing C185 start/132-unit eastbound takeoff corridor, harbor dock/cabin safety buffers and upper glacier corridor are protected from opt-in reclassification. In the 1024×1024 terrain grid, **7,088** potential low-lying classified cells were found; **660** fall in the protected start/harbor corridors (255 launch, 405 harbor), leaving **6,428** preview cells (about **0.61%** of the grid). These are source/worker-grid counts, not an assertion of visual accuracy or safe landing rate.
+
 No existing aircraft, float physics, docks, ships, map switching, terrain sampler, shader, or texture atlas is modified directly; terrain geometry changes **only inside this opt-in test**. The existing 25-point float contact check continues to query the resulting terrain.
 
 ## Upstream conflict and measured scale
@@ -34,7 +36,7 @@ No existing aircraft, float physics, docks, ships, map switching, terrain sample
 Across 65,536 source-aligned cells, LANDFIRE classifies 13,658 as water, while 3DEP/terrain classification disagrees dramatically:
 - **337** source cells have EVC water class AND DEM elevation **1m < h <= 12m** (conservative preview candidates);
 - **8,197** EVC water cells have DEM elevation **>12m**, including **7,339 >100m**, so they remain **untouched** by this pilot;
-- conversion operates at the production 1024×1024 terrain grid using interpolated elevations. The exact changed 1024-cell count must be measured in CI; **337 is not a count of changed game pixels**.
+- conversion operates at the production 1024×1024 terrain grid using interpolated elevations. **337 is not a count of changed game pixels**; bilinear interpolation produces the above 6,428 remaining 1024-grid candidates after safety buffers.
 
 This preview cannot resolve the full historical coast mismatch; increasing the threshold to carve high cliffs would be unsafe and is explicitly outside scope. No assertion that LANDFIRE is more accurate than 3DEP for all shoreline/terrain points is made.
 
@@ -54,3 +56,8 @@ node --test tests/*.test.mjs
 ```
 
 The official source and this derived experimental file are distributable public-domain government data; retain origin, hashes, coordinate transform, acquisition date, and modification history. No claim is made for any separate proprietary models, photographs, or third-party CUSP component.
+
+
+## Regression gate: C185 shallow-bank protection
+
+The first 1024-grid floatplane regression detected that the experimental water mask turned the known non-landable shallow bank north of the Alaska spawn `(-19,-631)` into usable water. Rather than weakening the test, the preview now **excludes** the existing published spawn, 132-unit safe takeoff corridor, authored harbor and glacier front. The default game was never affected. The updated test exercises the 25-contact production safety gate before considering this pilot mergeable.
