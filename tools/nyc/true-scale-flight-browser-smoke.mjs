@@ -78,7 +78,8 @@ try{
   report.passed=true;
   Object.assign(report,{sourceBuildings:info.sourceBuildings,sourceRoads:info.sourceRoads,
     spawn:info.sourceRoadSpawn,initial,climbed,moved,displacement,browserInfo,shots,errors,warnings,
-    caveat:'Actual FID roof masses + DCM centerlines, but no surveyed street roadbed/facades/terrain'});
+    officialRoadbed2022:info.officialRoadbed2022,
+    caveat:'Actual OTI 2022 planimetric roadbed + original FID roof masses and DCM centrelines; no current surveyed curbs, lanes, facades, elevations or aircraft physics'});
 }catch(e){
   report.error=e.stack||String(e);
   report.errors=errors;report.warnings=warnings;report.shots=shots;
