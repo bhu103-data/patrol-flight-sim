@@ -12,7 +12,7 @@ const dir=path.resolve('artifacts/nyc-one-times-skywalk');
 fs.mkdirSync(dir,{recursive:true});
 const report={source:'One Times Square: NYC roof FID 57216 + DeSimone 2026 55-ft deck',
   head:process.env.GITHUB_SHA||null,render:'SwiftShader WebGL2 (software, NOT native GPU)',
-  passed:false,errors:[],frames:{},screenshots:[],environment:'same Manhattan scenic camera / 1280x720'};
+  passed:false,errors:[],frames:{},screenshots:[],environment:'same Manhattan north high-oblique Roof Close camera / 1280x720'};
 function pixels(buf){
   const image=PNG.sync.read(buf);
   let colors=new Set(),luminous=0,n=0;
@@ -77,7 +77,7 @@ function compare(a,b){
       await page.keyboard.press('h');
       await page.waitForFunction(()=>!document.getElementById('hotelViews')?.hidden,
         null,{timeout:25000});
-      await page.locator('#hotelTarget').selectOption({label:'One Times Square'});
+      await page.locator('#hotelTarget').selectOption({label:'One Times Square · Roof Close'});
       await page.waitForTimeout(1300);
       const q=await page.evaluate(()=>{
         const c=document.getElementById('glCanvas');
@@ -89,7 +89,7 @@ function compare(a,b){
       });
       assert(q.ready&&q.width>=500&&q.height>=300,'Live game WebGL missing');
       assert.equal(q.glError,0,'WebGL error');
-      assert.equal(q.view,'One Times Square');
+      assert.equal(q.view,'One Times Square · Roof Close');
       assert.equal(q.skywalk?.enabled,mode==='on');
       if(mode==='on'){
         assert(q.skywalk.triangles>100&&q.skywalk.triangles<600);
@@ -105,7 +105,7 @@ function compare(a,b){
         await new Promise(resolve=>{
           const step=t=>{
             marks.push(t);
-            if(marks.length<91)requestAnimationFrame(step);
+            if(marks.length<41)requestAnimationFrame(step);
             else resolve();
           };
           requestAnimationFrame(step);
@@ -127,8 +127,9 @@ function compare(a,b){
       await page.close();
     }
     report.difference=compare(imgs[0],imgs[1]);
-    assert(report.difference.changedSamples>70,
-      'Source-informed skywalk must be visible from actual One Times Square scenic camera');
+    assert(report.difference.changedSamples>150 &&
+      report.difference.upperCenterChangedSamples>90,
+      'North roof close-up must show spatially significant visible source-backed Skywalk geometry');
     assert.equal(report.errors.length,0,'Browser console/page errors');
     report.passed=true;
   }catch(error){
