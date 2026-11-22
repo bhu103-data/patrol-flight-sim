@@ -5,6 +5,7 @@ import {
   TRUEGEO_ORIGIN,toLocalMeters,polygonSignedArea,
   triangulateSimplePolygon,buildTrueGeoTimesSquare
 } from '../assets/nyc/truegeo-times-square.mjs';
+import {csclSourceURL,buildTrueGeoCSCL} from '../assets/nyc/truegeo-cscl.mjs';
 
 const snapshot=JSON.parse(await readFile(
   new URL('../assets/nyc/times-square-footprints.json',import.meta.url),'utf8'));
@@ -93,6 +94,30 @@ test('source avoids invented game-space road collision overrides',async()=>{
   assert.match(code,/ECEF-to-ENU/);
 });
 
+test('live CSCL meter roads retain physical IDs and are not synthesized pavements',()=>{
+  const q=csclSourceURL();
+  assert.match(q,/inkn-q76z/);
+  assert.match(decodeURIComponent(q),/within_box\(the_geom/);
+  const rows=[
+    {physicalid:1,trafdir:'FT',rw_type:1,
+      the_geom:{type:'LineString',coordinates:[
+        [-73.9869,40.7562],[-73.9868,40.7563],[-73.9867,40.7564]]}},
+    {physicalid:2,trafdir:'TF',rw_type:1,
+      the_geom:{type:'MultiLineString',coordinates:[[
+        [-73.9867,40.7564],[-73.9865,40.7565],[-73.9864,40.7566],
+        [-73.9862,40.7567]]]}},
+    {physicalid:3,trafdir:'TW',rw_type:1,
+      the_geom:{type:'LineString',coordinates:[
+        [-73.9862,40.7567],[-73.9860,40.7568]]}}
+  ];
+  const streets=buildTrueGeoCSCL(rows);
+  assert.equal(streets.stats.physicalIds,3);
+  assert.equal(streets.stats.lineSegments,6);
+  assert.equal(streets.positions.length,6*2*3);
+  assert.ok(streets.positions.every(Number.isFinite));
+  assert.ok(streets.records.some(v=>v.trafdir==='FT'));
+  assert.ok(!Object.hasOwn(streets.stats,'roadWidth'));
+});
 test('standalone WebGL2 preview labels its actual limitations',async()=>{
   const html=await readFile(new URL(
     '../truegeo-times-square-preview.html',import.meta.url),'utf8');
@@ -103,5 +128,5 @@ test('standalone WebGL2 preview labels its actual limitations',async()=>{
   assert.match(html,/50 m reference grid/);
   const js=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
   assert.ok(js,'preview module missing');
-  assert.doesNotThrow(()=>new Function(js.replace(/^import .*;$/m,'')));
+  assert.doesNotThrow(()=>new Function(js.replace(/^import .*;$/gm,'')));
 });
