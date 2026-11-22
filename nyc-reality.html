@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PATROL — NYC Reality Geometry Pilot</title>
+  <style>
+    :root { color-scheme: dark; font: 14px system-ui,-apple-system,Segoe UI,sans-serif; }
+    * { box-sizing: border-box; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; background:#0c1c2c; color:#f3f7fc; }
+    #stage { display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+    #panel { position:absolute; top:14px; left:14px; max-width:min(390px,calc(100vw - 28px));
+      padding:16px 18px; background:rgba(9,18,30,.90); border:1px solid #64839e;
+      border-radius:12px; line-height:1.45; box-shadow:0 12px 40px #0008; }
+    h1 { margin:0 0 5px; font-size:17px; }
+    p { margin:7px 0; }
+    #metrics { color:#bfe5ff; font-variant-numeric:tabular-nums; }
+    #limits { color:#e9c6a8; font-size:12px; }
+    #selected { color:#c8eacd; }
+    #roadStatus { color:#aee7f4; font-variant-numeric:tabular-nums; }
+    #controls { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0 7px; }
+    button { padding:8px 10px; color:#eaf5ff; background:#173c55;
+      border:1px solid #6b93ad; border-radius:7px; font:inherit; cursor:pointer; }
+    button:hover,button:focus-visible { background:#285e7a; }
+    small { color:#cadbe8; }
+    #error { color:#ffc0b2; }
+    #status { position:absolute; bottom:12px; right:12px; max-width:350px;
+      background:rgba(7,18,28,.82); border-radius:8px; padding:9px 12px;
+      text-align:right; color:#c1d3e3; font-variant-numeric:tabular-nums; }
+    @media (max-height:580px) { #panel { max-height:75vh; overflow:auto; } }
+  </style>
+</head>
+<body>
+  <canvas id="stage" aria-label="Interactive WGS84 Times Square geometry pilot"></canvas>
+  <aside id="panel">
+    <h1>NYC Reality · Geometry pilot</h1>
+    <p><strong>True WGS84 horizontal positions · 1 unit = 1 meter</strong></p>
+    <p id="metrics">Loading municipal building polygons…</p>
+    <p id="selected">Click a building to inspect its municipal FID and roof height.</p>
+    <p id="roadStatus" aria-live="polite">Official DCM street centerlines: loading…</p>
+    <div id="controls">
+      <button id="aerial" type="button">Aerial</button>
+      <button id="street" type="button">Street-height</button>
+      <button id="grid" type="button" aria-pressed="true">50 m grid: on</button>
+    </div>
+    <small>W/A/S/D: move · E/Q: rise/descend · drag: look · Shift: faster</small>
+    <p id="limits">This is a source-based <strong>geometry validator, not a photorealistic Manhattan release</strong>.
+      Materials are illustrative, ground is a flat zero datum, municipal sample is incomplete;
+      DCM lines are <strong>street centerlines only, not curb lines or drivable roads</strong>;
+      no lane geometry, accurate facades, billboards, terrain, collisions or flight physics yet.
+      No Google imagery or proprietary 3D models are included.</p>
+    <p><small>Source: NYC municipal Building Footprints, bundled snapshot dated 2026-11-20.
+      Original source IDs and heights preserved. Two multi-ring records are withheld rather
+      than falsely filling possible courtyards.</small></p>
+    <p id="error" role="alert"></p>
+  </aside>
+  <div id="status" aria-live="off">WGS84 ENU · metres</div>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+    import {auditTimesSquareSnapshot, NYC_REALITY_ORIGIN}
+      from './assets/nyc/nyc-reality-projection.mjs';
+    import {fetchOfficialDCM,chooseOfficialStreetCamera}
+      from './assets/nyc/nyc-reality-street-centerlines.mjs';
+
+    const canvas = document.getElementById('stage');
+    const metrics = document.getElementById('metrics');
+    const selected = document.getElementById('selected');
+    const roadStatus = document.getElementById('roadStatus');
+    const status = document.getElementById('status');
+    const errorLabel = document.getElementById('error');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x122334);
+    scene.fog = new THREE.Fog(0x122334, 480, 1250);
+    const camera = new THREE.PerspectiveCamera(68, 1, 0.3, 1800);
+    camera.rotation.order = 'YXZ';
+    const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.6));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
+    scene.add(new THREE.HemisphereLight(0xc2deff, 0x243044, 2));
+    const sun = new THREE.DirectionalLight(0xffe6c7, 2.2);
+    sun.position.set(-110, 280, 190);
+    scene.add(sun);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(1500, 1500),
+      new THREE.MeshStandardMaterial({color:0x233847, roughness:1, metalness:0})
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.09;
+    scene.add(ground);
+    // The grid is a measurement aid, NOT a road network.
+    const grid = new THREE.GridHelper(1400, 28, 0x8e9aa7, 0x3a5365);
+    grid.position.y = 0.015;
+    scene.add(grid);
+
+    const roofMaterial = new THREE.MeshStandardMaterial({color:0x77828a, roughness:.94});
+    const wallMaterials = [0x837e74,0x938b7f,0x7c8a94,0x8f827d,0x777e83,0x968c83]
+      .map(color=>new THREE.MeshStandardMaterial({color, roughness:.84, metalness:.06}));
+    const edgeMaterial = new THREE.LineBasicMaterial({color:0xb7d3e4,transparent:true,opacity:.48});
+    const buildings = [];
+    const builtLineMaterial = new THREE.LineBasicMaterial({color:0x34b9df});
+    const recordedLineMaterial = new THREE.LineDashedMaterial({
+      color:0xf8b24f,dashSize:4,gapSize:3
+    });
+    const keys = new Set();
+    const raycaster = new THREE.Raycaster();
+    let yaw = 0, pitch = 0, dragging = false, moved = false, lastX = 0, lastY = 0;
+    const clock = new THREE.Clock();
+
+    function setView(x,y,z,targetX,targetY,targetZ) {
+      camera.position.set(x,y,z);
+      camera.lookAt(targetX,targetY,targetZ);
+      const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+      yaw = Math.atan2(-forward.x,-forward.z);
+      pitch = Math.asin(THREE.MathUtils.clamp(forward.y,-1,1));
+      camera.rotation.set(pitch,yaw,0,'YXZ');
+    }
+    // Survey-style overview: high enough to see the block layout instead of a foreground facade.
+    const aerial = () => setView(250,600,355,0,30,-125);
+    // Free placement avoids assuming a particular road centerline is known.
+    let street = () => setView(-55,6,40,20,18,-100);
+    document.getElementById('aerial').addEventListener('click', aerial);
+    document.getElementById('street').addEventListener('click', () => street());
+    document.getElementById('grid').addEventListener('click', ev => {
+      grid.visible = !grid.visible;
+      ev.currentTarget.setAttribute('aria-pressed', String(grid.visible));
+      ev.currentTarget.textContent = '50 m grid: ' + (grid.visible?'on':'off');
+    });
+    window.addEventListener('keydown', ev => {
+      if (/^(Key[WASDEQ]|ShiftLeft|ShiftRight)$/.test(ev.code)) {
+        keys.add(ev.code);
+        ev.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', ev => keys.delete(ev.code));
+    window.addEventListener('blur', () => keys.clear());
+    canvas.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0) return;
+      dragging=true; moved=false; lastX=ev.clientX;lastY=ev.clientY;
+      canvas.setPointerCapture(ev.pointerId);
+    });
+    canvas.addEventListener('pointermove', ev => {
+      if(!dragging)return;
+      const dx=ev.clientX-lastX, dy=ev.clientY-lastY;
+      if(Math.abs(dx)+Math.abs(dy)>1)moved=true;
+      yaw -= dx * .003;
+      pitch = THREE.MathUtils.clamp(pitch-dy*.003,-1.47,1.47);
+      lastX=ev.clientX;lastY=ev.clientY;
+    });
+    canvas.addEventListener('pointerup', ev => {
+      dragging=false;
+      if(moved)return;
+      const rect=canvas.getBoundingClientRect();
+      const point=new THREE.Vector2(
+        ((ev.clientX-rect.left)/rect.width)*2-1,
+        -((ev.clientY-rect.top)/rect.height)*2+1
+      );
+      raycaster.setFromCamera(point,camera);
+      const hit=raycaster.intersectObjects(buildings,false)[0];
+      if(hit){
+        const b=hit.object.userData;
+        selected.textContent = 'Official FID ' + b.fid +
+          ' · roof height ' + b.heightMeters.toFixed(2) +
+          ' m above source-defined ground · geometry only';
+      }
+    });
+    canvas.addEventListener('pointercancel',()=>{dragging=false;});
+
+    function addMunicipalBuilding(record) {
+      // Flat elevation is disclosed; the X/Z footprint is WGS84-derived and uncompressed.
+      const shape = new THREE.Shape(record.footprintMeters.map(([east,north]) =>
+        new THREE.Vector2(east,north)));
+      const geom = new THREE.ExtrudeGeometry(shape,{
+        depth:record.heightMeters, bevelEnabled:false, steps:1, curveSegments:1
+      });
+      geom.rotateX(-Math.PI/2);
+      const mesh = new THREE.Mesh(geom,[
+        roofMaterial,wallMaterials[record.fid % wallMaterials.length]
+      ]);
+      mesh.userData={fid:record.fid,heightMeters:record.heightMeters};
+      scene.add(mesh);
+      buildings.push(mesh);
+      const outlinePoints=record.footprintMeters.map(([east,north])=>
+        new THREE.Vector3(east,record.heightMeters+.035,-north));
+      const line=new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(outlinePoints),edgeMaterial
+      );
+      scene.add(line);
+    }
+
+    function addOfficialDCMRoad(record) {
+      // A source centerline must never be turned into an invented roadbed.
+      for(const line of record.metreLines){
+        if(line.length<2)continue;
+        const positions=line.map(([east,north])=>
+          new THREE.Vector3(east,0.075,-north));
+        const geometry=new THREE.BufferGeometry().setFromPoints(positions);
+        const ink=new THREE.Line(geometry,record.built?
+          builtLineMaterial:recordedLineMaterial);
+        if(!record.built)ink.computeLineDistances();
+        ink.userData={source:'NYC DCM',objectId:record.objectId,
+          streetName:record.name,built:record.built};
+        scene.add(ink);
+      }
+    }
+    function resize(){
+      const w=canvas.clientWidth,h=canvas.clientHeight;
+      if (canvas.width !== Math.round(w*renderer.getPixelRatio()) ||
+          canvas.height !== Math.round(h*renderer.getPixelRatio())) {
+        renderer.setSize(w,h,false);
+      }
+      camera.aspect=w/Math.max(1,h);
+      camera.updateProjectionMatrix();
+    }
+    function frame() {
+      const dt=Math.min(clock.getDelta(),.05);
+      camera.rotation.set(pitch,yaw,0,'YXZ');
+      const front=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+      front.y=0;front.normalize();
+      const right=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
+      right.y=0;right.normalize();
+      const speed=(keys.has('ShiftLeft')||keys.has('ShiftRight')?80:18)*dt;
+      if(keys.has('KeyW'))camera.position.addScaledVector(front,speed);
+      if(keys.has('KeyS'))camera.position.addScaledVector(front,-speed);
+      if(keys.has('KeyD'))camera.position.addScaledVector(right,speed);
+      if(keys.has('KeyA'))camera.position.addScaledVector(right,-speed);
+      if(keys.has('KeyE'))camera.position.y+=speed;
+      if(keys.has('KeyQ'))camera.position.y-=speed;
+      camera.position.y=Math.max(1.7,Math.min(900,camera.position.y));
+      status.textContent = 'East '+camera.position.x.toFixed(1)+' m · North '+
+        (-camera.position.z).toFixed(1)+' m · Altitude '+camera.position.y.toFixed(1)+
+        ' m · origin '+NYC_REALITY_ORIGIN.lat+', '+NYC_REALITY_ORIGIN.lon;
+      resize();
+      renderer.render(scene,camera);
+    }
+    async function init(){
+      const response=await fetch('./assets/nyc/times-square-footprints.json',{cache:'no-store'});
+      if(!response.ok)throw new Error('Bundled municipal data HTTP '+response.status);
+      const audit=auditTimesSquareSnapshot(await response.json());
+      for(const record of audit.accepted)addMunicipalBuilding(record);
+      metrics.textContent = audit.accepted.length+' / '+audit.originalCount+
+        ' municipal footprints shown · '+audit.rejected.length+
+        ' withheld · original roof heights in metres, no 0.32× compression';
+      aerial();
+      renderer.setAnimationLoop(frame);
+      // Official DCP/OTI DCM source. No fictional fallback or invented widths.
+      try {
+        const roads=await fetchOfficialDCM();
+        for(const record of roads.records)addOfficialDCMRoad(record);
+        const roadCamera=chooseOfficialStreetCamera(roads.records,'7 Avenue');
+        street=()=>setView(...roadCamera.eye,...roadCamera.look);
+        roadStatus.textContent='Official DCM: '+roads.records.length+
+          ' records / '+roads.totalLines+' centerline pieces · '+
+          roads.builtCount+' marked improved city streets · not lanes or curbs';
+        window.PatrolRealityStreetStatus={status:'loaded',count:roads.records.length,
+          lines:roads.totalLines,built:roads.builtCount,origin:roads.origin,
+          streetCamera:roadCamera};
+        console.info('[PATROL] NYC official DCM meter centerlines',window.PatrolRealityStreetStatus);
+      }catch(err){
+        roadStatus.textContent='Official DCM unavailable: '+String(err.message||err);
+        window.PatrolRealityStreetStatus={status:'error',message:String(err.message||err)};
+        console.warn('[PATROL] DCM streets not loaded; no fallback',err);
+      }
+      console.info('[PATROL] NYC Reality 1:1 pilot', {
+        shown:audit.accepted.length, withheld:audit.rejected,
+        origin:audit.origin,units:audit.units,knownLimits:audit.knownLimits
+      });
+    }
+    init().catch(err=>{
+      errorLabel.textContent='Scene failed to load: '+String(err.message||err);
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
