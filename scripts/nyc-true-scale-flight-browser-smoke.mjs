@@ -57,6 +57,51 @@ try{
       JSON.stringify(report.initial.camera));
   check(report.initial.windowVisuals>100,'No bounded facade detail');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
+  check(report.initial.historical2014ModelImported===true&&
+    report.initial.historical2014SourceYear===2014&&
+    report.initial.historical2014RoofTriangles===1974&&
+    report.initial.historical2014FacadeTriangles===540&&
+    report.initial.historical2014RoofFids===33&&
+    report.initial.historical2014FacadeFids===30,
+    'Original 2014 DCP MN05 roof/facade mesh import counts or source year mismatch');
+  check(report.initial.historical2014CollisionEnabled===false&&
+    report.initial.historical2014VerticalDatumVerified===false&&
+    report.initial.historical2014SourceRhinoSha256===
+      'b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57',
+    'Historical model was incorrectly promoted to collision or absolute elevation');
+  check(report.initial.trueFacadeVerified===false,
+    'A bounded historical facade subset must not be called complete facade verification');
+  const historicalOffPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+  historicalOffPage.on('pageerror',e=>report.errors.push('historical-off JS '+e.message));
+  await historicalOffPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?historical=off',
+    {waitUntil:'domcontentloaded',timeout:60000});
+  await historicalOffPage.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  const historicalOff=await historicalOffPage.locator('#scene').screenshot({
+    path:out+'/02-true-scale-without-2014-mesh.png',timeout:90000});
+  const meshOnPng=PNG.sync.read(initial),meshOffPng=PNG.sync.read(historicalOff);
+  check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
+    '2014 mesh A/B frames do not share the same viewport');
+  let historicalChangedPixels=0;
+  for(let i=0;i<meshOnPng.data.length;i+=4){
+    const delta=(Math.abs(meshOnPng.data[i]-meshOffPng.data[i])+
+      Math.abs(meshOnPng.data[i+1]-meshOffPng.data[i+1])+
+      Math.abs(meshOnPng.data[i+2]-meshOffPng.data[i+2]))/3;
+    if(delta>6)historicalChangedPixels++;
+  }
+  report.historical2014VisualAB={
+    onTriangles:report.initial.historical2014RoofTriangles+
+      report.initial.historical2014FacadeTriangles,
+    offTriangles:(await historicalOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles)),
+    changedPixelsOver6:historicalChangedPixels,
+    sameViewport:true,
+    offModelImported:await historicalOffPage.evaluate(()=>
+      window.PatrolMetricFlightQA.historical2014ModelImported)
+  };
+  check(report.historical2014VisualAB.offModelImported===false&&
+    historicalChangedPixels>=100,
+    'Imported 2014 roof/facade meshes do not visibly change the same-camera WebGL2 frame');
+  await historicalOffPage.close();
   const initial=await page.locator('#scene').screenshot({
     path:out+'/01-true-scale-flythrough.png',timeout:90000});
   const initialCapturedUTC=new Date().toISOString();
