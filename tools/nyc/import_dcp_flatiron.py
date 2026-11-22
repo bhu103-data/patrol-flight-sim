@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import rhino3dm
 import trimesh
+from shapely.affinity import scale as scale_geometry
 from shapely.geometry import Polygon, box, mapping
 from shapely.ops import unary_union
 
@@ -29,6 +30,8 @@ MAX_GLB_BYTES = 8 * 1024 * 1024
 MIN_FOOTPRINT_IOU = 0.88
 MAX_HAUSDORFF_FT = 5.0
 MAX_HEIGHT_DELTA_FT = 12.0
+MM_PER_US_SURVEY_FOOT = 304.8006096012192
+M_PER_US_SURVEY_FOOT = 0.3048006096012192
 SURFACE_LAYERS = {
     "surfacerooftop": "roof",
     "surfacefacade": "facade",
@@ -182,7 +185,7 @@ def rgba_from_color(color, fallback):
         return fallback
 
 
-def extract_mesh_arrays(model, layer_names, source_footprint):
+def extract_mesh_arrays(model, layer_names, source_footprint, unit_scale):
     vertices_all = []
     faces_all = []
     colors_all = []
@@ -202,7 +205,7 @@ def extract_mesh_arrays(model, layer_names, source_footprint):
         category = SURFACE_LAYERS[layer_key]
         geometry = obj.Geometry
         try:
-            x0, y0, x1, y1, z0, z1 = bbox_values(geometry)
+            x0, y0, x1, y1, z0, z1 = [value * unit_scale for value in bbox_values(geometry)]
         except Exception:
             continue
         object_xy = box(x0, y0, x1, y1)
@@ -225,7 +228,7 @@ def extract_mesh_arrays(model, layer_names, source_footprint):
             local_vertices = np.asarray(
                 [[float(v.X), float(v.Y), float(v.Z)] for v in rhino_mesh.Vertices],
                 dtype=np.float64,
-            )
+            ) * unit_scale
             local_faces = []
             for face in rhino_mesh.Faces:
                 try:
@@ -398,6 +401,14 @@ def main():
             raise RuntimeError("rhino3dm could not read the official 3DM file")
         unit = str(getattr(model.Settings, "ModelUnitSystem", "unknown"))
         report["source"]["rhino_model_units"] = unit
+        unit_key = unit.lower()
+        if "millimeter" in unit_key:
+            unit_scales = [1.0 / MM_PER_US_SURVEY_FOOT, 1.0, 1.0 / M_PER_US_SURVEY_FOOT]
+        elif "meter" in unit_key:
+            unit_scales = [1.0 / M_PER_US_SURVEY_FOOT, 1.0, 1.0 / MM_PER_US_SURVEY_FOOT]
+        else:
+            unit_scales = [1.0, 1.0 / MM_PER_US_SURVEY_FOOT, 1.0 / M_PER_US_SURVEY_FOOT]
+        report["source"]["candidate_unit_scales_to_us_survey_feet"] = unit_scales
 
         layer_names = {}
         layer_inventory = Counter()
@@ -416,29 +427,34 @@ def main():
             geometry = obj.Geometry
             try:
                 bb = bbox_values(geometry)
-                center_distance = math.hypot(
-                    (bb[0] + bb[2]) * 0.5 - target_center.x,
-                    (bb[1] + bb[3]) * 0.5 - target_center.y,
-                )
             except Exception:
-                center_distance = 0
-            if center_distance > 250:
                 continue
-            candidate = curve_polygon(geometry)
-            if candidate is None:
+            raw_candidate = curve_polygon(geometry)
+            if raw_candidate is None:
                 continue
-            intersection = candidate.intersection(oti_poly).area
-            union_area = candidate.union(oti_poly).area
-            iou = intersection / union_area if union_area else 0
-            hausdorff = candidate.hausdorff_distance(oti_poly)
-            footprint_candidates.append({
-                "polygon": candidate,
-                "layer": layer_name,
-                "iou": float(iou),
-                "hausdorff_ft": float(hausdorff),
-                "centroid_distance_ft": float(candidate.centroid.distance(target_center)),
-                "area_sqft": float(candidate.area),
-            })
+            for unit_scale in unit_scales:
+                center_distance = math.hypot(
+                    (bb[0] + bb[2]) * 0.5 * unit_scale - target_center.x,
+                    (bb[1] + bb[3]) * 0.5 * unit_scale - target_center.y,
+                )
+                if center_distance > 250:
+                    continue
+                candidate = scale_geometry(
+                    raw_candidate, xfact=unit_scale, yfact=unit_scale, origin=(0, 0)
+                )
+                intersection = candidate.intersection(oti_poly).area
+                union_area = candidate.union(oti_poly).area
+                iou = intersection / union_area if union_area else 0
+                hausdorff = candidate.hausdorff_distance(oti_poly)
+                footprint_candidates.append({
+                    "polygon": candidate,
+                    "layer": layer_name,
+                    "unit_scale": float(unit_scale),
+                    "iou": float(iou),
+                    "hausdorff_ft": float(hausdorff),
+                    "centroid_distance_ft": float(candidate.centroid.distance(target_center)),
+                    "area_sqft": float(candidate.area),
+                })
         if not footprint_candidates:
             raise RuntimeError(
                 "No source footprint curve was found near the current OTI Flatiron footprint"
@@ -480,8 +496,29 @@ def main():
         )
 
         vertices, faces, colors, mesh_report = extract_mesh_arrays(
-            model, layer_names, source_poly
+            model, layer_names, source_poly, best["unit_scale"]
         )
+        footprint_bounds = source_poly.bounds
+        footprint_width_ft = float(footprint_bounds[2] - footprint_bounds[0])
+        footprint_depth_ft = float(footprint_bounds[3] - footprint_bounds[1])
+        mesh_width_ft = float(vertices[:, 0].max() - vertices[:, 0].min())
+        mesh_depth_ft = float(vertices[:, 1].max() - vertices[:, 1].min())
+        width_ratio = mesh_width_ft / footprint_width_ft if footprint_width_ft else 0.0
+        depth_ratio = mesh_depth_ft / footprint_depth_ft if footprint_depth_ft else 0.0
+        report["source"]["footprint_bbox_match"] = {
+            "footprint_width_ft": footprint_width_ft,
+            "footprint_depth_ft": footprint_depth_ft,
+            "mesh_width_ft": mesh_width_ft,
+            "mesh_depth_ft": mesh_depth_ft,
+            "width_ratio": width_ratio,
+            "depth_ratio": depth_ratio,
+            "allowed_ratio": [0.80, 1.20],
+        }
+        if not (0.80 <= width_ratio <= 1.20 and 0.80 <= depth_ratio <= 1.20):
+            raise RuntimeError(
+                "Imported source surfaces do not match the Flatiron footprint dimensions: "
+                + f"width ratio {width_ratio:.3f}, depth ratio {depth_ratio:.3f}"
+            )
         report["source"]["mesh"] = mesh_report
         height_delta = abs(mesh_report["source_mesh_height_ft"] - height_roof_ft)
         report["source"]["height_delta_vs_current_oti_ft"] = float(height_delta)
