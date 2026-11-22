@@ -24,11 +24,6 @@ export function buildOverpassQuery(bbox){
   return '[out:json][timeout:45];(way["building"]('+box+');relation["building"]('+box+');way["building:part"]('+box+');relation["building:part"]('+box+'););out tags geom;';
 }
 
-function toLocal(point,lat0){
-  const [lon,lat]=point;
-  const rad=Math.PI/180,R=6378137;
-  return [R*Math.cos(lat0*rad)*lon*rad,R*lat*rad];
-}
 export function polygonMetrics(ring){
   if(!Array.isArray(ring)||ring.length<4)return null;
   const pts=ring.map(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)?p:null);
@@ -120,9 +115,10 @@ export function analyzeOsmFeatures(source,osm,{retrievedAt=new Date().toISOStrin
     retrievedAt,
     source:{
       name:'OpenStreetMap contributors',
-      extractCandidate:'Geofabrik New York State extract 2026-10-18 (nycosm)',
+      sourceMode:'live Overpass API response; retrievedAt is the source snapshot time',
+      referenceExtractCandidate:'Geofabrik New York State extract 2026-10-18 (nycosm), not used by this run',
       queryBboxWGS84:bbox,
-      queryType:'Overpass ways + relations tagged building',
+      queryType:'Overpass ways + relations tagged building or building:part',
       endpoint:'Overpass API (endpoint recorded by acquisition log)',
       license:OSM_LICENSE,
       attribution:OSM_ATTRIBUTION,
