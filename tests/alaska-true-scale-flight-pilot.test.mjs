@@ -56,7 +56,7 @@ test('flight starts from a verified water source location and keeps real dynamic
   const [e,n]=rasterCellToLocalEnu(dem,170,105,0);
   assert.ok(Number.isFinite(e)&&Number.isFinite(n));
   assert.match(src,/spawn=\[e,320,north\]/);
-  assert.match(src,/if\(dem\.heights\[105\*dem\.width\+170\]>1\)/);
+  assert.match(src,/if\(coarse\.heights\[105\*coarse\.width\+170\]>1\)/);
   assert.match(src,/Math\.max\(Math\.max\(0,surface\)\+18,Math\.min\(3800,pose\.xyz\[1\]\)\)/);
   assert.match(src,/gl\.drawElements\(gl\.TRIANGLES,m\.count,gl\.UNSIGNED_INT,0\)/);
 });
@@ -81,4 +81,20 @@ test('materials are reused from already-bundled CC0 rather than unsourced scener
   assert.match(src,/gl\.texSubImage3D\(gl\.TEXTURE_2D_ARRAY,0,0,0,layer,256,256,1,/);
   assert.match(src,/gl\.generateMipmap\(gl\.TEXTURE_2D_ARRAY\)/);
   assert.doesNotMatch(src,/gl\.texImage2D\(gl\.TEXTURE_2D,0,gl\.RGBA8/);
+});
+
+test('optional 5m tile is source-aligned, leaves default 30m untouched and validates actual source',()=>{
+  const decoder=readFileSync(
+    new URL('../assets/alaska/usgs-5m-tile.js',import.meta.url),'utf8');
+  assert.match(src,/get\('alaskaDetail'\)==='5m'/);
+  assert.match(src,/decodeAlaskaFiveMetreTile\(await response\.json\(\),coarse\)/);
+  assert.match(src,/detailMode='source-5m-local'/);
+  assert.match(src,/detailWarning='5m source tile is unavailable\/invalid/);
+  assert.match(src,/wgs84ToLocalEnu\(\.\.\.rasterCellWgs84\(dem,col,row\),0,\.\.\.origin\)/);
+  assert.match(src,/origin=sourceTileOrigin\(coarse\)/);
+  assert.match(decoder,/parentCoarseCellCentres\.join/);
+  assert.match(decoder,/Math\.abs\(actual\[0\]-expected\[0\]\)>1e-7/);
+  assert.match(decoder,/NoData found in experimental 5m source tile/);
+  assert.match(decoder,/Number\(payload\.projectIndexEvidence\?\.dem_gsd_meters\)!==5/);
+  assert.match(decoder,/String\(payload\.projectIndexEvidence\?\.vert_crs\)!=='5703'/);
 });
