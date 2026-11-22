@@ -79,11 +79,12 @@ test('same single-city mesh, bounded cost and original full-body collision envel
 });
 test('other two OTI pilot buildings and all other maps keep original flat source roofs',()=>{
  for(const lot of OTHER){
-   const {out,tri}=geometry(lot);
+   const {out,tri,quad}=geometry(lot);
    assert.equal(out.roofStepDrop,0);
    assert.equal(out.roofAreas,1);
    assert.equal(out.facadeBands,0);
    assert.equal(out.metalPanels,0);
+   assert.ok(quad.every(q=>q.at(-1)!==4),'no metal paint leaks into historic warehouse pilot');
    assert.notEqual(out.floors,12);
    const roof=tri.filter(t=>t.at(-1)===14);
    assert.ok(roof.every(t=>t.slice(0,3).every(p=>
@@ -98,7 +99,7 @@ test('other two OTI pilot buildings and all other maps keep original flat source
 test('Nexus palette is 2006-era yellow brick and silver/blue/green metal, not red warehouse',()=>{
  const {out,quad}=geometry(LOT);
  assert.equal(out.fid,1080628);
- const count=quad.filter(q=>q.at(-1)===12&&
+ const count=quad.filter(q=>q.at(-1)===4&&
    [[.24,.43,.46],[.34,.48,.42],[.65,.70,.71]]
      .some(c=>c.every((v,i)=>Math.abs(q[4][i]-v)<1e-7))).length;
  assert.ok(count>=40,'physical metal sheets and accent courses must enter same game mesh');
