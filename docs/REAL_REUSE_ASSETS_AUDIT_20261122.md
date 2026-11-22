@@ -59,6 +59,38 @@ shown on their pages is **not** the intended runtime size.
 | [Las Vegas photogrammetric/3D city marketplace](https://www.artstation.com/marketplace/p/L8p30/las-vegas-downtown-3d-scan-usa-3d-model) | Marketplace/standard license is not a verified freely redistributable source model. Excluded. |
 | [Sketchfab church/bell tower from Finland](https://sketchfab.com/3d-models/bell-tower-of-lemu-church-masku-finland-bf7194b1ca384a95a80bd9333432aa49) | Model is CC BY, but **not the correct building shape** for either St Mark's or The Venetian. May serve as learning reference; do not claim it is the actual Vegas tower. |
 
+
+## E. Downloadable real landmark models with explicit CC BY attribution
+
+The following are **actual modeled/scanned 3D objects with individual publisher
+pages showing "Download 3D Model" and Creative Commons Attribution**.
+CC BY is not CC0: retain author name, source URL, CC BY license text/version,
+and modifications in the game's NOTICE/credits and distributed package.
+The hosted original download contents, source texture provenance and file
+hashes have **not yet been inspected**; do not mark integrated. Sketchfab may
+require an authenticated user download. Source triangle counts below are
+**publisher-reported**, not our converted runtime measurement.
+
+| Site in PATROL | Named model / creator and exact URL | Triangles | Fidelity, eligibility, budget |
+|---|---|---:|---|
+| NYC Statue of Liberty / Liberty Island | [Statue Of Liberty — Gravity Jack](https://sketchfab.com/3d-models/statue-of-liberty-84094e8d5e724b5c882cf576ca12e44e), CC BY | **56,900** | Modeler states ZBrush+Maya and Substance Painter PBR, UV unwrapped and game-ready. **Strongest near-term NYC GLB replacement candidate**, conditionally: inspect likeness to actual harbor statue, licensing and scene-scale anchor; target 18–35K near / 3–8K mid / impostor far (proposal). |
+| NYC Statue of Liberty / alternate **Paris replica** scan | [Statue of liberty — 3Dystopia](https://sketchfab.com/3d-models/statue-of-liberty-04a8e7b1ba9142ba8cebc6108cd5bb97), CC BY | **19,800** | 4K diffuse/normal/metallic/roughness and source says scanned **Luxembourg Garden, Paris replica**. Potential cost-effective scan silhouette, but do not claim it was scanned in NY or that pedestal is included. Target 1K/2K KTX2. |
+| NYC Statue of Liberty / alternate **museum replica** scan | [Statue of Liberty — Maurice Svay](https://sketchfab.com/3d-models/statue-of-liberty-c461ed8724424ad99500fd058a0ab082), CC BY | **699,100** | True photogrammetry of a roughly 3 m replica at **Musée des Arts et Métiers in Paris**, not the NY monument. Needs heavy retopo to <=30K for game and separate pedestal modeling. |
+| NYC Brooklyn Bridge | [Brooklyn Bridge — Union (krprom)](https://sketchfab.com/3d-models/brooklyn-bridge-a1ea746e42d6499080d73db514848d6b), CC BY | **Unverified** | Named model of the real bridge and downloadable under CC BY. Compare suspension cable layout, arches and road deck against current PATROL bridge before importing; keep actual flight collisions. Do not treat a picture thumbnail as dimensional validation. |
+| NYC Empire State Building | [Empire State Building, NYC — Brian Trepanier](https://sketchfab.com/3d-models/empire-state-building-new-york-city-ny-usa-941cad02f4db4883b40bddf4c5d20c94), CC BY | **1,500,000** | Named real landmark with confirmed CC BY. Too many triangles as-is; strong reference/high-poly bake only; target 15–40K near LOD after high→low retopo, or use NYC official city massing. |
+| NYC Empire State Building / alternate | [Empire State Building — Union](https://sketchfab.com/3d-models/empire-state-building-0b5b5e4c66a7433f8f8ad24536eac167), CC BY | **Unverified** | Named downloadable variant; check original geometry/texture, size and real facade accuracy before choosing over Brian Trepanier's mesh. |
+| NYC Chrysler Building | [Chrysler Building — NanoRay](https://sketchfab.com/3d-models/chrysler-building-26be9287b12d4234af009e4162135897), CC BY | **Unverified** | Named downloadable architectural model; inspect characteristic terraced stainless spire and corner eagles; 10–35K triangles proposed near budget. |
+| NYC 500 Fifth Avenue | [500 Fifth Avenue — NanoRay](https://sketchfab.com/3d-models/500-fifth-avenue-ca32c74257b1447898db63dce6028e38), CC BY | **Unverified** | Actual named art deco building; good for standalone landmark, but inspect geometry and source texture rights prior to integration. |
+| Vegas Venetian internal bell **only** | [Old Church Bell — vertexgrocer](https://sketchfab.com/3d-models/old-church-bell-8aa10771481c4a0d83f7a47af6fdf9e1), CC BY | **3,100** | **Photogrammetric source + manually retopologized + UV baked 2K baseColor/normal/roughness.** Strongest low-poly *real scanned bell* candidate to replace PR #186's authored 10-sided bell. **Not scanned from The Venetian**; scale/location are artistic approximations. Target 3.1K tris and 512/1K maps, conditional on final screenshot fit and attribution. |
+| **Excluded on license** NYC Empire State variant | [Empire State Building — mohamedhussien](https://sketchfab.com/3d-models/empire-state-building-ab06ee0548a041a2b9a5d16c81946526), **CC BY-ND** | 188,800 | NoDerivatives: **do not remesh, modify or repackage a converted derivative**. Use as reference only; not an approved game asset. |
+
+**Practical first real-mesh proof-of-concept:** export the 3.1K-triangle
+photogrammetry church bell with full required attribution into a separate
+Vegas-only test branch, or the PBR/UV game-ready 56.9K Statue of Liberty into a
+NYC-only test branch. Source pages being download-enabled does not establish
+that we have locally obtained the files. Do not copy imagery or textures from
+pages other than the explicitly licensed download artifact.
+
 ## Mandatory import gate
 
 1. **Before download**: capture original URL, publisher, license (and
