@@ -1,0 +1,67 @@
+name: NYC Liberty CC0 production opt-in LOD and cross-map regression
+on:
+  push:
+    branches:
+      - feat/nyc-liberty-cc0-optin-lod-20261122-chat
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/nyc/nyc-realism.js'
+      - 'assets/nyc/scenario-manifest.json'
+      - 'assets/nyc/scenario/liberty.glb'
+      - 'tests/nyc-liberty-cc0-production-optin.test.mjs'
+      - 'scripts/nyc-liberty-production-lod-browser.mjs'
+      - '.github/workflows/nyc-liberty-production-lod.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-and-crossmap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate original source/geometry budgets (no reupload or offline rendering)
+        run: |
+          node --test tests/nyc-liberty-cc0-production-optin.test.mjs
+          node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
+          node tools/nyc/check-liberty-harbor-placement.mjs assets/nyc/scenario/liberty.glb
+      - name: Full Node map flight, collision, water, floatplane and Chongqing regression
+        run: node --test tests/*.test.mjs
+  game-webgl:
+    needs: source-and-crossmap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser and PNG decoder (runner only)
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve exact PATROL production game files
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/patrol-liberty-optin.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture default, opt-in source model, and procedural rollback from real WebGL2
+        timeout-minutes: 10
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-liberty-production-lod-browser.mjs
+      - name: Upload screenshots and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-liberty-cc0-production-optin-not-release
+          path: artifacts/nyc-liberty-production-lod/
+          if-no-files-found: warn
+          retention-days: 14
