@@ -28,7 +28,13 @@ PATROL_BASE_URL=http://127.0.0.1:8765 node scripts/nyc-reality-central-3d-qa.mjs
 
 The GitHub Action `nyc-reality-central-3d.yml` does this on the PR head. Artifacts:
 `artifacts/nyc-reality-central-3d/central-report.json` plus unedited PNGs
-at 1280×720:
+at 1280×720: an **additional actual open-water aircraft-spawn screenshot**
+(`00-harbor-spawn-airborne.png`), captured before opening Scenic Views,
+plus seven existing game presets. The previously chosen named Waterfront
+camera can point into nearby box buildings and must **not** be treated as
+proof of visible ferries or shoreline simply because its label says Waterfront.
+The extra open-water camera reports pixel evidence and actual aircraft spawn
+state, but does not certify hull identity, berth or source coordinates.
 1. Brooklyn Bridge deck and Brooklyn/BQE connection, zoom 68
 2. DUMBO warehouse blocks, zoom 42
 3. Statue of Liberty, zoom 42
