@@ -118,7 +118,8 @@ except Exception as exc:
  metadata["error"]=f"{type(exc).__name__}: {exc}"
 finally:
  # Keep verified evidence only, never bundle a large model into the repo.
- (OUT/"mn05-source.3dm").unlink(missing_ok=True)
+ if os.environ.get("PATROL_KEEP_MN05") != "1":
+   (OUT/"mn05-source.3dm").unlink(missing_ok=True)
  archive.unlink(missing_ok=True)
  (OUT/"mn05-probe.json").write_text(json.dumps(metadata,ensure_ascii=False,indent=2))
  print(json.dumps(metadata,ensure_ascii=False,indent=2))
