@@ -112,8 +112,8 @@ test('44th Street inspected FID receives bounded deep upper windows',()=>{
   assert.ok(source&&source.heightFt>450,'refer to real municipal footprint');
   const one=simulate({...data,features:[source]});
   assert.ok(one.stats.infillPieces>=1,'inspected parcel must survive road cuts');
-  assert.ok(one.stats.windowQuads>=40&&one.stats.windowQuads<=180,
-    'dense but bounded facade, not a shader-only effect');
+  assert.ok(one.stats.windowQuads>=40&&one.stats.windowQuads<=200,
+    'bounded window+street-facing glass detail, not a shader-only effect');
   assert.ok(one.glazingCenters.filter(p=>p[1]>14.93+27).length>=8,
     'upper floors must contain genuine glass quads');
   assert.ok(one.surfaces.get(6)>one.surfaces.get(7)/2,

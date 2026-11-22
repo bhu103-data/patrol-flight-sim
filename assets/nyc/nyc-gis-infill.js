@@ -154,6 +154,40 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         // Narrow, recessed dark windows. Never exceed mobile detail budget.
         const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
         const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+        // PATROL_NYC_FID1000156_CAMERA_FRONT_GLAZING_V2:
+        // Two 44th Street camera-facing GIS walls on the official FID,
+        // clipped by the authored street corridor at game z=17.05, still
+        // appeared as featureless slabs despite the fair window quota.
+        // This only adds original authored facade glazing/metal trim to
+        // those two existing edges; not a surveyed real window schedule.
+        // Leave source footprint, road cuts, original windows, roof,
+        // billboards, collision and all other building FIDs untouched.
+        const cameraFacingCut=showcaseFacade && len>=3.8 && nz<-.96 &&
+          Math.abs(a[1]-17.05)<.035 && Math.abs(b[1]-17.05)<.035 &&
+          Math.min(a[0],b[0])>=20.1 && Math.max(a[0],b[0])<=31.0;
+        if(cameraFacingCut){
+          const at=(t,y,offset)=>[a[0]+(b[0]-a[0])*t+nx*offset,
+            y,a[1]+(b[1]-a[1])*t+nz*offset];
+          const strip=(u,v,low,high,depth,color,tag)=>
+            addQuad(at(u,low,depth),at(v,low,depth),
+              at(v,high,depth),at(u,high,depth),color,tag);
+          const glass=[.13,.23,.28],aluminum=[.39,.45,.48],frame=[.29,.34,.38];
+          for(let row=0;row<10 && windows<2200;row++){
+            const low=ground+5.25+row*5.55,high=low+3.75;
+            if(high>top-.82)break;
+            strip(.07,.93,low,high,.082,glass,7);
+            windows++;
+            strip(.06,.94,high+.045,high+.118,.102,
+              row%3===0?aluminum:frame,6);
+          }
+          // Actual projecting geometry; glass and trim depths differ,
+          // so this is not a flat decal or shader-only contrast change.
+          for(const u of [.30,.50,.70]){
+            strip(u-.010,u+.010,ground+5.20,
+              Math.min(top-.85,ground+5.25+9*5.55+3.87),
+              .112,aluminum,6);
+          }
+        }
         // PATROL_NYC_TIMES_FID384606_SHOPFRONT_V1: the 5.98-unit polygon
         // at the 44th Street camera's right foreground had zero window quads:
         // the generic h<9 infill gate skipped it. Keep the municipal polygon,
