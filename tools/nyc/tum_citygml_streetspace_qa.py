@@ -144,7 +144,7 @@ def process_dataset(
     output_dir: Path,
 ) -> dict[str, Any]:
     metadata = DATASETS[dataset_key]
-    extracted_dir = output_dir / "_extracted" / dataset_key
+    extracted_dir = (zip_path.parent / "_extracted" / dataset_key).resolve()
     extracted = safe_extract_zip(zip_path, extracted_dir)
     source_files = sorted(
         path for path in extracted
