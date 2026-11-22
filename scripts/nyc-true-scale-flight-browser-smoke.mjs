@@ -274,6 +274,10 @@ try{
     'FID material opt-in preview missing or did not bind all 118 buildings');
   check(report.materialPreview.materialEvidence==='visual-proxy-only-not-as-built',
     'Artist preview deceptively claims real NYC material evidence');
+  check(Array.isArray(report.materialPreview.materialBrickModuleMeters)&&
+    Math.abs(report.materialPreview.materialBrickModuleMeters[0]-.2032)<1e-9&&
+    Math.abs(report.materialPreview.materialBrickModuleMeters[1]-.06773333333333333)<1e-9,
+    'Browser is not using the source-backed 8in x 2-2/3in brick module');
   check(report.materialPreview.sourceBuildingCount===report.materialBaseline.sourceBuildingCount&&
     report.materialPreview.streetSegments===report.materialBaseline.streetSegments&&
     report.materialPreview.officialRoadbedTriangles===report.materialBaseline.officialRoadbedTriangles&&
