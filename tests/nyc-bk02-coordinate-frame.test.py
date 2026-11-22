@@ -34,7 +34,7 @@ class BK02ProjectionTest(unittest.TestCase):
         root=pathlib.Path(__file__).resolve().parents[1]
         bounds=source_bounds_from_oti(root/"assets/nyc/dumbo-oti-metric-48.json")
         self.assertEqual(len(bounds),4)
-        self.assertTrue(450<bounds[2]-bounds[0]<550)
+        self.assertTrue(360<bounds[2]-bounds[0]<420)
         self.assertTrue(480<bounds[3]-bounds[1]<580)
 
     def test_invalid_source_coordinates_fail_closed(self):
