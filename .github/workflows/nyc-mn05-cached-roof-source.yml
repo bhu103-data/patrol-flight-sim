@@ -1,0 +1,97 @@
+name: NYC 2014 authentic MN05 baked Brep rooftop mesh extraction
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/extract-mn05-cached-roof-mesh.py'
+      - 'tools/nyc/inspect_mn05_support.py'
+      - 'tools/nyc/inspect_mn05_facade_support.py'
+      - 'tools/nyc/extract-mn05-cached-facade-mesh.py'
+      - 'tests/nyc-mn05-cached-facade-source.test.py'
+      - 'tests/nyc-mn05-cached-roof-source.test.py'
+      - '.github/workflows/nyc-mn05-cached-roof-source.yml'
+      - 'tools/nyc/probe-official-mn05-rhino.py'
+      - 'tools/nyc/official_mn05_projection.py'
+      - 'tools/nyc/mn05-cached-roof-webgl.html'
+      - 'tools/nyc/mn05-cached-roof-browser-smoke.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  genuine-brep-cached-rooftops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Use pinned free OpenNURBS reader and metric geometry libraries
+        run: |
+          python -m pip install --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
+      - name: Independently test source saved mesh faces, quad splitting and georeferenced FID match
+        run: |
+          python -m py_compile tools/nyc/extract-mn05-cached-roof-mesh.py
+          python tests/nyc-mn05-cached-roof-source.test.py
+          python tests/nyc-official-mn05-coordinate-frame.test.py
+          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
+            python -m py_compile tools/nyc/inspect_mn05_facade_support.py
+            python -m py_compile tools/nyc/extract-mn05-cached-facade-mesh.py
+            python tests/nyc-mn05-cached-facade-source.test.py
+          fi
+      - name: Obtain immutable original NYC DCP MN05 2014 3DM, never modified
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
+      - name: Export only authentic Rhino-cached roof face triangles and source FID evidence
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/extract-mn05-cached-roof-mesh.py
+          test -s artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
+            python tools/nyc/extract-mn05-cached-facade-mesh.py
+            test -s artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
+          fi
+          rm -f artifacts/nyc-official-mn05/mn05-source.3dm
+          test ! -e artifacts/nyc-official-mn05/mn05-source.3dm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install free Chromium WebGL2 and PNG paired-frame comparison
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve original 2014 source roof/2022 municipal FID diagnostic WebGL
+        run: |
+          cp tools/nyc/mn05-cached-roof-webgl.html artifacts/nyc-official-mn05/preview.html
+          python3 -m http.server 8766 --bind 127.0.0.1 --directory artifacts/nyc-official-mn05 > /tmp/nyc-mn05-roofs-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8766/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture real source rooftop ON/OFF same-camera WebGL2 frames
+        run: |
+          node tools/nyc/mn05-cached-roof-browser-smoke.mjs
+          test -s artifacts/nyc-official-mn05/roof-browser-report.json
+          test -s artifacts/nyc-official-mn05/municipal-roof-off.png
+          test -s artifacts/nyc-official-mn05/municipal-roof-on.png
+          if [ -f tools/nyc/extract-mn05-cached-facade-mesh.py ]; then
+            test -s artifacts/nyc-official-mn05/facade-off.png
+            test -s artifacts/nyc-official-mn05/facade-on.png
+          fi
+      - name: Publish bounded 2014 original-mesh evidence, not 627MB Rhino source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-official-mn05-2014-cached-roof-mesh-qa
+          path: |
+            artifacts/nyc-official-mn05/mn05-probe.json
+            artifacts/nyc-official-mn05/mn05-cached-roof-metric-preview.json
+            artifacts/nyc-official-mn05/mn05-cached-facade-metric-preview.json
+            artifacts/nyc-official-mn05/roof-browser-report.json
+            artifacts/nyc-official-mn05/municipal-roof-off.png
+            artifacts/nyc-official-mn05/municipal-roof-on.png
+            artifacts/nyc-official-mn05/facade-off.png
+            artifacts/nyc-official-mn05/facade-on.png
+            artifacts/nyc-official-mn05/preview.html
+          retention-days: 7
+          if-no-files-found: warn
