@@ -21,7 +21,7 @@ try{
   const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
   const errors=[],responses=[];
   page.on('pageerror',e=>errors.push(e.message));
-  page.on('response',r=>{if(/dumbo-oti-true-scale-source|dumbo-true-scale-geodesy/.test(r.url()))
+  page.on('response',r=>{if(/dumbo-oti-true-scale-source|dumbo-true-scale-geodesy|dumbo-cscl-official-snapshot|dumbo-cscl-true-metre/.test(r.url()))
     responses.push({url:r.url().split('/').at(-1),status:r.status()});});
   const response=await page.goto('http://127.0.0.1:8765/nyc-dumbo-true-scale.html',
     {waitUntil:'domcontentloaded',timeout:30000});
@@ -33,6 +33,16 @@ try{
   assert.deepEqual(meta.sourceFids,[1080628,1031082,1051309]);
   assert.equal(meta.worldUnits,'metres');
   assert.equal(meta.sourceSpaceUncompressed,true);
+  assert.equal(meta.officialStreetSource,'NYC OTI CSCL inkn-q76z');
+  assert.equal(meta.streetSourceRecords,404);
+  assert.equal(meta.groundStreetRecordCount,213);
+  assert.equal(meta.groundStreetEdgeCount,295);
+  assert.equal(meta.omittedBridgeAndNonstreetRecords,191);
+  for(const name of ['WATER ST','WASHINGTON ST','FRONT ST','PLYMOUTH ST'])
+    assert.ok(meta.streetNames.includes(name),'Missing official street: '+name);
+  assert.ok(!meta.streetNames.includes('MANHATTAN BRG')&&
+    !meta.streetNames.includes('BROOKLYN BRG'),
+    'Unsourced bridge deck elevations must not be flattened to diagnostic ground');
   assert.equal(meta.buildings[0].heightMetres,36.8808);
   assert.equal(meta.buildings[1].heightMetres,25.423368);
   assert.equal(meta.buildings[2].heightMetres,26.3652);
@@ -51,6 +61,9 @@ try{
       sum+2*(b.faceCount+2)+b.faceCount,0);
     assert.equal(state.meshTriangles,exactTriangleCount,
       'Render exactly original wall polygons and triangulated roofs, not extra box faces');
+    assert.equal(state.streetSegments,295);
+    assert.equal(state.roadTriangles,590,
+      'Each of 295 real CSCL metre centreline edges must emit exactly two upward ribbon triangles');
     assert.ok(state.gridSegments>=10,'Metre scale reference grid must show');
     assert.equal(state.glError,0,'WebGL2 must have no GL errors');
     assert.equal(state.contextLost,false,'3D context must not be lost');
@@ -62,10 +75,18 @@ try{
   await shot('overview',.55,.40,445);
   await shot('street-axis',-.25,.21,280);
   await shot('birdseye',1.03,1.10,390);
-  assert.deepEqual(responses.map(x=>x.status),[200,200],
-    'Both original WGS84 data and geodesy source must load from local files');
+  assert.equal(responses.length,4,
+    'OTI 3D geometry + geodesy and CSCL snapshot + clipping logic must all load');
+  assert.ok(responses.every(r=>r.status===200),
+    'All four authoritative local sources must return HTTP 200');
   assert.deepEqual(errors,[],'No browser JS errors');
   report.passed=true;report.buildings=meta.buildings;
+  report.roadCenterlines={dataset:meta.officialStreetSource,
+    acceptedRecords:meta.groundStreetRecordCount,
+    excludedBridgeOrNonstreetRecords:meta.omittedBridgeAndNonstreetRecords,
+    clippedRealStreetSegments:meta.groundStreetEdgeCount,
+    names:meta.streetNames,visualOnlyWidthMetres:1.8,
+    authoritativeStreetWidthUsed:false,elevatedBridgeHeightsInvented:false};
   report.realBuildingDistancesMetres={firstSecond:d01,firstThird:d02};
   report.responses=responses;report.pageErrors=errors;
   await page.close();
