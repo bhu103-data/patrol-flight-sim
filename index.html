@@ -2158,7 +2158,14 @@ const CENTRAL_PARK_SITES=[
           col = mix(waterCol*vec3(0.19,0.25,0.38),waterCol,uAtmosphere.x) * (naturalLight() ? mix(vec3(0.71,0.80,0.89),vec3(1.0),litFactor) : shadowTint);
         } else {
           // LAND RENDERING
-          float eps = 0.85;
+          // The USGS 256-cell DEM spans 1920 game units: a 7.5-unit
+          // sample footprint. Smooth distant relief normals across up to
+          // half a DEM cell, never displacing the actual land silhouette,
+          // coastline, collision height, waterline, or near-field detail.
+          // The same four height samples and four lookups remain.
+          float eps = uAlaska
+            ? clamp(0.85 + hitDist*0.007, 0.85, 3.50)
+            : 0.85;
           float hL = terrainHeight(p.xz - vec2(eps, 0.0));
           float hR = terrainHeight(p.xz + vec2(eps, 0.0));
           float hD = terrainHeight(p.xz - vec2(0.0, eps));
