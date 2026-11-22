@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/alaska-official-aoi-fetch.yml'
+      - 'tools/alaska/audit_landfire_aoi.py'
   workflow_dispatch:
 
 permissions:
