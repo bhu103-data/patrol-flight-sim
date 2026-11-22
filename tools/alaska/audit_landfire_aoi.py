@@ -132,7 +132,22 @@ def run(input_dir: Path, dem_path: Path, output_dir: Path) -> dict:
     landcover_on_dem_water = (~water) & dem_water
     trees_on_dem_water = tree & dem_water
     safe_terrain = erode_1px_land(dem_land)
-    safe_tree = tree & safe_terrain
+    # Mirror the existing procedural conifer exclusion corridors in
+    # assets/alaska/alaska-fjord-detail.js. This is only an OFFLINE candidate
+    # raster; no runtime tree placement is changed.
+    rows, cols = np.indices((GRID, GRID))
+    gx = (0.5 - (rows + .5) / GRID) * GAME_SPAN
+    gz = ((cols + .5) / GRID - 0.5) * GAME_SPAN
+    inside_existing_forest_radius = np.hypot(gx, gz) <= 765
+    protected_scenic = (
+        (np.hypot(gx - 151, gz + 525) < 78)
+        | (np.hypot(gx + 19, gz + 667) < 38)
+        | (np.hypot(gx + 155, gz + 610) < 28)
+        | ((gz > 423) & (np.abs(gx - 130) < 71))
+    )
+    scenic_allowed = inside_existing_forest_radius & ~protected_scenic
+    safe_tree_terrain_only = tree & safe_terrain
+    safe_tree = safe_tree_terrain_only & scenic_allowed
 
     report = {
         "kind": "PATROL_ALASKA_LANDFIRE_USGS_DEM_READONLY_QA_V1",
@@ -159,9 +174,13 @@ def run(input_dir: Path, dem_path: Path, output_dir: Path) -> dict:
         },
         "tree_safety": {
             "original_tree_cells": int(tree.sum()),
+            "terrain_only_safe_tree_cells": int(safe_tree_terrain_only.sum()),
             "safe_tree_cells": int(safe_tree.sum()),
             "removed_tree_cells": int((tree & ~safe_tree).sum()),
+            "removed_by_scenic_protection_cells": int((safe_tree_terrain_only & ~scenic_allowed).sum()),
             "safe_tree_on_dem_water_cells": int((safe_tree & dem_water).sum()),
+            "safe_tree_in_protected_scenic_cells": int((safe_tree & protected_scenic).sum()),
+            "excluded_glacier_and_harbor_using_existing_game_corridors": True,
             "buffer": "one full DEM cell (3x3 erosion of land); not GIS-verified shoreline",
             "does_not_place_individual_trees": True,
         },
@@ -170,6 +189,7 @@ def run(input_dir: Path, dem_path: Path, output_dir: Path) -> dict:
             "USGS 3DEP and LANDFIRE 2025 are not contemporaneous.",
             "DEM elevation <=3m is an approximate water classification, not NOAA surveyed shoreline.",
             "No collision, flight physics, existing forest geometry, or shading changed.",
+            "Existing glacier/harbor exclusion corridors are approximated per GIS cell center.",
             "A safe-tree staging mask does not validate a WebGL frame rate.",
         ],
     }
