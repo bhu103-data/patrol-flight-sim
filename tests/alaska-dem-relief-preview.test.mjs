@@ -8,6 +8,10 @@ const elevations=Buffer.from(dem.heightsBase64,'base64');
 
 test('opt-in high-relief only after verified USGS decode, never for fallback',()=>{
   const reset=html.indexOf('activeAlaskaTerrainScale = ALASKA_STANDARD_SCALE;',html.indexOf('async function launchFlight'));
+  const loadingGuard=html.indexOf('if (loading) return;',html.indexOf('async function launchFlight'));
+  const contextGuard=html.indexOf('if(gl.isContextLost()){',html.indexOf('async function launchFlight'));
+  assert.ok(loadingGuard>0&&contextGuard>loadingGuard&&reset>contextGuard,
+    're-entrant or graphics-rejected launch must never reset live Alaska terrain scale');
   const decoded=html.indexOf("const dem=await loadAlaskaDEM(");
   const optIn=html.indexOf(".get('alaskaRelief')==='preview'");
   const activate=html.indexOf('activeAlaskaTerrainScale=selectedTerrainScale;');
