@@ -35,7 +35,10 @@ const injection=String.raw`
     const views={
       street:{eye:[303,17.8,-367],look:[303,21.2,-347],up:worldUp,fov:64},
       lowflight:{eye:[285,29,-403],look:[294,22,-349],up:worldUp,fov:56},
-      rooftop:{eye:[294,44,-380],look:[294,28.3,-347],up:worldUp,fov:47}
+      rooftop:{eye:[294,44,-380],look:[294,28.3,-347],up:worldUp,fov:47},
+      otiStreet:{eye:[381,17.7,-375],look:[381,22.4,-347],up:worldUp,fov:61},
+      otiLowflight:{eye:[379,40,-394],look:[380,27,-346],up:worldUp,fov:57},
+      otiNorth:{eye:[358,38,-316],look:[359,27,-280],up:worldUp,fov:55}
     };
     if(mode!==null&&!views[mode])throw Error('Unknown DUMBO test camera');
     window.__patrolBridgeheadQaDumboCamera=mode?views[mode]:null;
@@ -372,7 +375,10 @@ try{
     for(const [mode,name] of [
       ['street','06-dumbo-infill-street-level.png'],
       ['lowflight','07-dumbo-infill-low-flight.png'],
-      ['rooftop','08-dumbo-infill-roofline-close.png']
+      ['rooftop','08-dumbo-infill-roofline-close.png'],
+      ['otiStreet','09-dumbo-oti-silhouettes-street.png'],
+      ['otiLowflight','10-dumbo-oti-silhouettes-low-flight.png'],
+      ['otiNorth','11-dumbo-oti-north-roofline.png']
     ]){
       await page.evaluate(x=>window.__patrolBridgeheadQaSetDumboCamera(x),mode);
       await page.evaluate(()=>new Promise(resolve=>
@@ -407,8 +413,8 @@ try{
       window.__patrolBridgeheadQaSetHold(null);
     });
   }
-  assert(result.infillFrames.length===3,
-    'Missing street-level/low-flight/rooftop real WebGL2 evidence');
+  assert(result.infillFrames.length===6,
+    'Missing standard DUMBO and three OTI-pilot real WebGL2 views');
   assert(errors.length===0,'Browser exceptions/assets: '+errors.join('; '));
   result.passed=true;
 }catch(error){
