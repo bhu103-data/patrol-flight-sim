@@ -1,0 +1,51 @@
+name: NYC Nexus sourced facade live seaplane map switch QA
+on:
+  push:
+    branches:
+      - feat/nyc-dumbo-oti-source-mesh-on-main-candidate-20261122-chat
+    paths:
+      - 'index.html'
+      - 'scripts/nyc-dumbo-nexus-map-switch-browser.mjs'
+      - '.github/workflows/nyc-nexus-map-switch-webgl.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'scripts/nyc-dumbo-nexus-map-switch-browser.mjs'
+      - '.github/workflows/nyc-nexus-map-switch-webgl.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manhattan-alaska-return:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright in free runner
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run same local production PATROL files
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/patrol-nexus-switch.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Actual WebGL Manhattan to Alaska to Manhattan C185 seaplane switch
+        timeout-minutes: 14
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-dumbo-nexus-map-switch-browser.mjs
+      - name: Preserve true game screenshots + raw transition state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-nexus-live-map-switch-webgl-not-release
+          path: artifacts/nyc-dumbo-nexus-map-switch/
+          retention-days: 14
+          if-no-files-found: warn
