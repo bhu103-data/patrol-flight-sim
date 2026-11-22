@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches:
-      - research/nyc-dcp-mn05-3dmodel-source-audit-20261122-chat
+      - feat/nyc-oti-surfaces-full-runtime-20261122-chat
     paths:
       - "scripts/nyc-dcp-mn05-3dmodel-audit.py"
       - "docs/NYC_DCP_3D_MODEL_SOURCE_AUDIT_20261122.md"
