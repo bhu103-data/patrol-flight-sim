@@ -16,7 +16,7 @@ function geoBoundsMetres(b){
   const coords=[
     [b.west,b.south],[b.west,b.north],
     [b.east,b.south],[b.east,b.north]
-  ].map(wgs84ToLocalMetres);
+  ].map(pair=>wgs84ToLocalMetres(pair));
   return [
     Math.min(...coords.map(v=>v[0])),Math.max(...coords.map(v=>v[0])),
     Math.min(...coords.map(v=>v[1])),Math.max(...coords.map(v=>v[1]))
