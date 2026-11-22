@@ -71,6 +71,9 @@ try{
     'Historical model was incorrectly promoted to collision or absolute elevation');
   check(report.initial.trueFacadeVerified===false,
     'A bounded historical facade subset must not be called complete facade verification');
+  const initial=await page.locator('#scene').screenshot({
+    path:out+'/01-true-scale-flythrough.png',timeout:90000});
+  const initialCapturedUTC=new Date().toISOString();
   const historicalOffPage=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
   historicalOffPage.on('pageerror',e=>report.errors.push('historical-off JS '+e.message));
   await historicalOffPage.goto(base+'/assets/nyc/nyc-true-scale-flight.html?historical=off',
@@ -102,9 +105,6 @@ try{
     historicalChangedPixels>=100,
     'Imported 2014 roof/facade meshes do not visibly change the same-camera WebGL2 frame');
   await historicalOffPage.close();
-  const initial=await page.locator('#scene').screenshot({
-    path:out+'/01-true-scale-flythrough.png',timeout:90000});
-  const initialCapturedUTC=new Date().toISOString();
   const png=PNG.sync.read(initial);
   let pixels=0;
   for(let y=45;y<png.height;y+=4)for(let x=0;x<png.width;x+=4){
