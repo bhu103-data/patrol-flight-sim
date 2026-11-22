@@ -98,7 +98,10 @@ def probe():
     finally:
         # Do not re-upload raw historical CityGML until the terms and
         # geometry are independently reviewed; keep only metadata evidence.
-        (ARTIFACT / "source.zip").unlink(missing_ok=True)
+        # A same-job source extractor may use this for measured geometry
+        # clipping. Never publish the unreviewed raw ZIP as a repo asset.
+        if os.environ.get("PATROL_KEEP_GML") != "1":
+            (ARTIFACT / "source.zip").unlink(missing_ok=True)
         output.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     if not summary.get("acquired"):
