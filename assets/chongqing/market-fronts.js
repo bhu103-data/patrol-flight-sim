@@ -109,8 +109,23 @@ export function buildChongqingMarketFronts({
   // Poly Haven CC0 photo is available, and retains a local tiled fallback.
   const timberMat=pbr?.wood??material(0x493e34,.88),
     stoneMat=pbr?.cutStone??material(0x78736a,.93);
-  const glassMat=pbr?.glass??new THREE.MeshStandardMaterial({
-    color:0x3e5964,roughness:.23,metalness:.2,side:THREE.DoubleSide
+  // Clone the game's licensed/loaded physical glass so only these 3 market
+  // shops gain partial transmission; NEVER mutate globally shared pbr.glass.
+  // The inserted matte backing 1.19 units farther inside provides parallax
+  // instead of a flat blue opaque billboard when the sky has no env cubemap.
+  const sourceGlass=pbr?.glass??null;
+  const glassMat=sourceGlass?.clone?.()??sourceGlass??new THREE.MeshStandardMaterial({
+    color:0x94a6ac,roughness:.32,metalness:.07,side:THREE.DoubleSide
+  });
+  if(glassMat!==sourceGlass){
+    glassMat.transparent=true;glassMat.opacity=.48;
+    glassMat.depthWrite=false;glassMat.roughness=.32;glassMat.metalness=.07;
+    glassMat.color?.setHex?.(0x94a6ac);
+    glassMat.side=THREE.DoubleSide;glassMat.needsUpdate=true;
+  }
+  const interiorMat=new THREE.MeshStandardMaterial({
+    color:0xf1e6d5,roughness:.93,metalness:0,
+    emissive:0x241b16,emissiveIntensity:.13
   });
   const trimMat=pbr?.carvedWood??material(0x8e8980,.76),
     tileMat=pbr?.roof??material(0x4c5559,.87);
@@ -125,7 +140,8 @@ export function buildChongqingMarketFronts({
     stone=batch(unit,stoneMat,40),
     glass=batch(unit,glassMat,32),
     lattice=batch(unit,trimMat,144),
-    roof=batch(makeChongqingMarketTileRoof(THREE),tileMat,3);
+    roof=batch(makeChongqingMarketTileRoof(THREE),tileMat,3),
+    interiors=batch(unit,interiorMat,24);
   const position=(mesh,x,y,z,w,h,d,rotX=0,rotZ=0)=>{
     if(mesh.count>=mesh.instanceMatrix.count)throw Error('Chongqing gallery batch exceeded '+mesh.instanceMatrix.count);
     marker.position.set(x,y,z);
@@ -135,7 +151,15 @@ export function buildChongqingMarketFronts({
     mesh.setMatrixAt(mesh.count++,marker.matrix);
   };
   const sites=[],facades=[];
-  let stairTreads=0;
+  let stairTreads=0,backingOrdinal=0;
+  const mutedInteriorColors=[0x63574b,0x56605e,0x795f4d,0x4e504b];
+  const backing=(x,y,z,w,h,d=.12)=>{
+    position(interiors,x,y,z,w,h,d);
+    if(interiors.setColorAt&&THREE.Color)
+      interiors.setColorAt(interiors.count-1,
+        new THREE.Color(mutedInteriorColors[backingOrdinal%mutedInteriorColors.length]));
+    backingOrdinal++;
+  };
   for(const site of CHONGQING_MARKET_SITES){
     const {x,z,roofRise,doorSide}=site,
       earth=ground(x,z),frontGround=ground(x,z+5.35);
@@ -190,10 +214,12 @@ export function buildChongqingMarketFronts({
     // with a visible dark reveal gap; the old solid market front is absent.
     // Keep the site's original seven glazing cards (not additional draws).
     position(glass,doorX,earth+3.15,z+2.11,3.05,5.3,.10);
+    backing(doorX,earth+3.15,z+.92,2.94,5.18);
     position(lattice,doorX,earth+3.15,z+2.42,.09,5.1,.18);
     for(const dx of [-7.1,0,7.1]){
       if(Math.abs((x+dx)-doorX)<3.0)continue;
       position(glass,x+dx,earth+5.6,z+2.11,4.2,4.3,.1);
+      backing(x+dx,earth+5.6,z+.92,4.06,4.14);
       position(beams,x+dx,earth+5.6,z+2.65,.11,4.65,.18);
       // Individual sash and transom positions vary subtly by shop.
       position(lattice,x+dx+(site.id==='stone-stair'?.12:-.10),
@@ -208,6 +234,7 @@ export function buildChongqingMarketFronts({
       const bayWidth=site.id==='river-market'&&i===1?2.24:2.40;
       position(glass,x+upper[i],earth+13.41,z+2.11,
         bayWidth,2.38,.1);
+      backing(x+upper[i],earth+13.41,z+.92,bayWidth-.14,2.25);
       position(lattice,x+upper[i]+(i%2?.12:-.10),earth+13.41,
         z+2.42,.09,2.36,.18);
       // Real projecting slate sill outside the jamb; not a painted line.
@@ -262,8 +289,9 @@ export function buildChongqingMarketFronts({
       }
     }
   }
-  for(const mesh of [beams,braces,stone,glass,lattice,roof]){
+  for(const mesh of [beams,braces,stone,glass,lattice,roof,interiors]){
     mesh.instanceMatrix.needsUpdate=true;
+    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
     if(mesh.count)mesh.computeBoundingSphere();
     mesh.frustumCulled=true;
   }
@@ -271,14 +299,15 @@ export function buildChongqingMarketFronts({
     sites:sites.length,posts:sites.length*2,
     galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
-    meshes:9,batchDraws:6,openFacades:facades.length,
+    meshes:10,batchDraws:7,interiorBackings:interiors.count,
+    openFacades:facades.length,
     // THREE.BufferGeometry.getIndex() is a BufferAttribute in real WebGL
     // (.count), unlike the array-based headless fixture (.length).
     openFacadeTriangles:facades.reduce((v,m)=>{
       const index=m.geometry.getIndex?.()??m.geometry.index;
       return v+(index?.count??index?.length??0)/3;
     },0),
-    instances:[beams,braces,stone,glass,lattice,roof]
+    instances:[beams,braces,stone,glass,lattice,roof,interiors]
       .reduce((sum,m)=>sum+m.count,0)
   };
   return {
@@ -288,6 +317,7 @@ export function buildChongqingMarketFronts({
       lattice.visible=mode!=='low';
       glass.visible=true;beams.visible=true;
       stone.visible=true;braces.visible=true;roof.visible=true;
+      interiors.visible=true;
       for(const facade of facades)facade.visible=true;
     }
   };
