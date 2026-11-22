@@ -303,6 +303,20 @@ test('Digit8 free inspection camera remains clear on right-hand terrace',async()
     'camera must offset away from left hillside while facing windows');
 });
 
+test('Digit8 inspector releases for mobile joystick and on-screen flight buttons',async()=>{
+  const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
+  assert.ok(game.includes('e.preventDefault();marketInspect=null;joystickPointer=e.pointerId;'),
+    'touch joystick must exit inspection view on active pointerdown');
+  const press=game.slice(game.indexOf('function press(key,once=false){'),
+    game.indexOf("window.addEventListener('keydown'"));
+  assert.ok(press.includes("'KeyW','KeyA','KeyS','KeyD'"));
+  assert.ok(press.includes("'ControlLeft','ControlRight','ArrowUp','ArrowDown','ArrowLeft'"));
+  assert.ok(press.includes("'ArrowRight','KeyF'].includes(key))marketInspect=null;"),
+    'touch flight controls must leave inspection mode via shared press()');
+  assert.ok(game.includes("b.addEventListener('pointerdown',e=>{e.preventDefault();press(key,true);"),
+    'on-screen mobile buttons must use the shared press handler');
+});
+
 test('main game builds galleries BEFORE shared collisions and has a QA shortcut',async()=>{
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   const html=await readFile(new URL('../chongqing.html',import.meta.url),'utf8');
