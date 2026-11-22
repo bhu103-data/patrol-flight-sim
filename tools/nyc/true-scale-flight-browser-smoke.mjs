@@ -25,6 +25,8 @@ try{
     getFlight:undefined,setFlight:undefined,resetFlight:undefined
   }));
   if(!info.ready||info.error||info.sourceBuildings<110||info.sourceRoads<25||
+     !info.officialRoadbed2022||info.officialRoadbed2022.features<70||
+     info.officialRoadbed2022.triangles<7000||!info.noInventedStreetSurface||
      !info.sourceRoadSpawn||!Number.isFinite(info.sourceRoadSpawn.position[0])||
      !info.streetWidthEnvelopes||
      info.streetWidthEnvelopes.derivedWidthFeatures<20||
