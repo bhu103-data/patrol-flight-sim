@@ -41,7 +41,7 @@ jobs:
           node --check scripts/nyc-osm-times-square-audit.mjs
           node --test tests/nyc-osm-times-square-audit.test.mjs
           python -m py_compile scripts/nyc_osm_times_square_extract.py
-          python -m unittest tests/test_nyc_osm_times_square_extract.py
+          python -m unittest discover -s tests -p 'test_nyc_osm_times_square_extract.py'
       - name: Extract only the Times Square ODbL sample to temporary storage
         env:
           PATROL_OSM_AUDIT_INPUT: /tmp/nyc-osm-times-square-elements.json
