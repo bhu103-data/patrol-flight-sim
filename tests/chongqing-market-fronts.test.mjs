@@ -11,6 +11,9 @@ const {CHONGQING_MARKET_SITES,makeChongqingMarketTileRoof,
 class Geo{
   setAttribute(key,attribute){this[key]=attribute}
   setIndex(indices){this.index=indices}
+  // Browser Three.js returns an Index BufferAttribute with .count.
+  // Keep the raw array too so geometry/orientation assertions remain usable.
+  getIndex(){return {count:this.index.length}}
   computeVertexNormals(){this.normalsReady=true}
 }
 class Obj{
