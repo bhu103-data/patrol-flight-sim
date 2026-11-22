@@ -67,13 +67,22 @@ out vec4 fragColor;
 vec3 atlasColor(float tile,vec3 n){
   // Choose a locally planar projection on steep cliffs: no stretched
   // bird's-eye UV on vertical rock. Tiling in real-world metres.
-  vec3 a=abs(n);vec2 uv;
-  if(a.y>=a.x&&a.y>=a.z)uv=vPos.xz;
-  else if(a.x>=a.z)uv=vPos.zy;
-  else uv=vPos.xy;
-  uv=clamp(fract(uv/26.0),vec2(.008),vec2(.992));
+  vec3 a=abs(n);
+  // Explicit gradients of UNWRAPPED world UVs: derivative of fract(UV)
+  // incorrectly selects extreme mip levels near every tile repetition,
+  // causing bright regular grids on source-derived fjord cliffs.
+  vec2 px=vPos.zy/26.0,py=vPos.xz/26.0,pz=vPos.xy/26.0;
+  vec2 ddxX=dFdx(px),ddyX=dFdy(px);
+  vec2 ddxY=dFdx(py),ddyY=dFdy(py);
+  vec2 ddxZ=dFdx(pz),ddyZ=dFdy(pz);
+  vec2 uv,du,dv;
+  if(a.y>=a.x&&a.y>=a.z){uv=py;du=ddxY;dv=ddyY;}
+  else if(a.x>=a.z){uv=px;du=ddxX;dv=ddyX;}
+  else{uv=pz;du=ddxZ;dv=ddyZ;}
+  uv=clamp(fract(uv),vec2(.008),vec2(.992));
   vec2 atlasUV=vec2((tile+uv.x)/4.0,uv.y);
-  return texture(uAlbedo,atlasUV).rgb;
+  return textureGrad(uAlbedo,atlasUV,
+    vec2(du.x*.25,du.y),vec2(dv.x*.25,dv.y)).rgb;
 }
 void main(){
   vec3 n=normalize(vNormal);
