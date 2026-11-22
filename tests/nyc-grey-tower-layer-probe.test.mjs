@@ -47,6 +47,8 @@ test('probe measures left wall, center wall, LED and full-frame regions',()=>{
   assert.match(probe,/fullFrame:\[0,0,1280,720\]/);
   assert.match(probe,/const groups=\['none','procedural','landscape','scenery','gis','street','roadChunks','hero','park','screens','lights','landmarks'\]/);
   assert.match(probe,/for\(const group of groups\)await capture/);
+  assert.match(probe,/s\?\.gisTriangles>0/);
+  assert.match(probe,/typeof window\.__patrolNycVisualProbe\?\.setGisSkippedFids==='function'/);
   assert.match(probe,/await capture\('44th-restored','none'\)/);
   assert.match(probe,/report\.rankedByRoi=/);
   assert.match(probe,/report\.fidScan=await page\.evaluate/);
