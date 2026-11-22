@@ -67,8 +67,7 @@ pages showing "Download 3D Model" and Creative Commons Attribution**.
 CC BY is not CC0: retain author name, source URL, CC BY license text/version,
 and modifications in the game's NOTICE/credits and distributed package.
 The hosted original download contents, source texture provenance and file
-hashes have **not yet been inspected**; do not mark integrated. Sketchfab may
-require an authenticated user download. Source triangle counts below are
+hashes have **not yet been inspected**; do not mark integrated. Sketchfab's official [Download API documentation](https://sketchfab.com/developers/download-api/downloading-models) requires an authenticated Sketchfab account for its download flow. Downloadable model listings are not evidence that model bytes have been acquired or passed an import audit. Source triangle counts below are
 **publisher-reported**, not our converted runtime measurement.
 
 | Site in PATROL | Named model / creator and exact URL | Triangles | Fidelity, eligibility, budget |
