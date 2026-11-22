@@ -1,7 +1,12 @@
 # PATROL NYC — centralized reality-grade 3D acceptance (2026-11-22)
 
-**Authority / starting code:** exact merged flight candidate #211, commit
-`b7441b9b20677a60128249bae0dc164e81e8f912`.
+**Original QA starting code:** #211 commit
+`b7441b9b20677a60128249bae0dc164e81e8f912`. The QA-only files were
+merged into the still-Draft #211 branch at `1e1d8fb22c93f3b9075a5779d864877e7873b69d`,
+which is the new exact-head rerun target. The earlier artifact
+`14756234467` is baseline evidence from the older head only; it is **not**
+a current-head performance or screenshot sign-off. The new workflow run must
+record its actual checkout SHA and be inspected before accepting this QA.
 This work changes *QA only*, not production `index.html`, map, flight controls,
 GLB data, water, collisions, or branches from other authors.
 
