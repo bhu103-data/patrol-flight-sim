@@ -1,0 +1,35 @@
+name: Alaska official USGS 5m Tracy Arm coverage audit
+
+on:
+  pull_request:
+    branches: [feat/alaska-wgs84-metre-frame-20261122-chat]
+    paths:
+      - tools/alaska/probe_usgs5m_coverage.mjs
+      - .github/workflows/alaska-usgs5m-coverage.yml
+      - assets/alaska/tracy-arm-3dep.json
+
+permissions:
+  contents: read
+
+jobs:
+  verify-exact-source-footprint:
+    if: github.head_ref == 'feat/alaska-true-scale-terrain-flight-pilot-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate official index probe syntax
+        run: node --check tools/alaska/probe_usgs5m_coverage.mjs
+      - name: Query official 5m Alaska source footprints and vertical CRS candidates
+        run: node tools/alaska/probe_usgs5m_coverage.mjs
+      - name: Keep official evidence even when the source server errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-usgs5m-exact-coverage
+          path: artifacts/alaska-usgs5m-coverage.json
+          retention-days: 14
+          if-no-files-found: error
