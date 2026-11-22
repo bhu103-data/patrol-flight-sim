@@ -37,6 +37,8 @@ try{
   check(report.initial.sourceStreetCount>=35,'DCM street lines not displayed');
   check(report.initial.streetSegments>=80,'Official source geometry incomplete');
   check(report.initial.metresPerWorldUnit===1,'Wrong scene geographic scale');
+  check(report.initial.spawnFromOfficialStreet===true,
+    'Free-flight spawn is not on an accepted official Seventh Avenue centerline');
   check(report.initial.windowVisuals>100,'No bounded facade detail');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   const initial=await page.locator('#scene').screenshot({
@@ -56,10 +58,13 @@ try{
   report.afterFlight=await page.evaluate(()=>({
     frames:window.PatrolMetricFlightQA.frames,
     camera:window.PatrolMetricFlightQA.camera,
-    glError:window.PatrolMetricFlightQA.glError
+    glError:window.PatrolMetricFlightQA.glError,
+    errors:window.PatrolMetricFlightQA.errors
   }));
   check(report.afterFlight.frames>report.initial.frames+10,'Animation loop not advancing');
   check(report.afterFlight.glError===0,'GL error after movement');
+  check(report.afterFlight.errors.length===0,
+    'Invalid flight state: '+report.afterFlight.errors.join('; '));
   const before=report.initial.camera,after=report.afterFlight.camera;
   const moved=Math.hypot(...before.map((v,i)=>after[i]-v));
   report.flightMetres=moved;
