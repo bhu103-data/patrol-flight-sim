@@ -14,6 +14,55 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-unsafe-swiftshader'
 ]});
 const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
+
+// QA-only WebGL camera and rock toggle: intercepted source lives in this
+// Playwright session, never in the game's production chongqing.js asset.
+const rockMarker='let marketInspect=null;';
+let rockHookInjected=false;
+await page.route('**/assets/chongqing/chongqing.js',async route=>{
+  const response=await route.fetch();
+  check(response.ok(),'Could not fetch real Chongqing JS for rock A/B');
+  const runtime=await response.text();
+  check(runtime.split(rockMarker).length===2,
+    'Rock QA injection anchor missing or ambiguous');
+  const hook=`
+window.__patrolQaRock=(visible)=>{
+  if(typeof visible!=='boolean')throw Error('Rock toggle must be boolean');
+  const site=marketFronts.snapshot().find(s=>s.id==='stone-stair');
+  const rock=marketRockOutcrop.mesh;
+  if(!site||!rock)throw Error('Missing real stone-stair shop or rock skin');
+  const eye=[site.x+12,ground(site.x+12,site.z+25)+16,site.z+25];
+  const rockX=274.5,rockZ=348.5;
+  const aim=[rockX,ground(rockX,rockZ)+1.4,rockZ];
+  let minRayTerrainClearance=Infinity;
+  for(let i=0;i<=32;i++){
+    const t=i/32;
+    const x=eye[0]+(aim[0]-eye[0])*t;
+    const y=eye[1]+(aim[1]-eye[1])*t;
+    const z=eye[2]+(aim[2]-eye[2])*t;
+    minRayTerrainClearance=Math.min(minRayTerrainClearance,y-ground(x,z));
+  }
+  rock.visible=visible;
+  marketInspect={
+    eye:new THREE.Vector3(...eye),
+    aim:new THREE.Vector3(...aim)
+  };
+  return {
+    visible,eye,aim,site:site.id,
+    groundClearance:eye[1]-ground(eye[0],eye[2]),
+    minRayTerrainClearance,
+    rockTriangles:rock.geometry.getIndex().count/3,
+    rockVertices:rock.geometry.getAttribute('position').count,
+    alphaChannels:rock.geometry.getAttribute('color').itemSize,
+    transparent:rock.material.transparent,
+    depthWrite:rock.material.depthWrite
+  };
+};
+`;
+  await route.fulfill({response,body:runtime.replace(
+    rockMarker,rockMarker+'\n'+hook)});
+  rockHookInjected=true;
+});
 page.on('pageerror',err=>errors.push(err.message));
 page.on('console',msg=>{if(msg.type()==='error')warnings.push(msg.text());});
 page.on('requestfailed',req=>{
@@ -143,6 +192,43 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
+  // Full same-camera A/B: hide ONLY the optional rock overlay, then restore.
+  // The source game and every other map object remain unchanged.
+  check(rockHookInjected,'Rock QA source hook did not install');
+  let rockOffPose;
+  try{
+    for(const [visible,name] of [
+      [false,'03j-market-rock-oblique-without-skin'],
+      [true,'03k-market-rock-oblique-with-skin']
+    ]){
+      const pose=await page.evaluate(value=>window.__patrolQaRock?.(value),visible);
+      check(pose&&pose.visible===visible&&pose.site==='stone-stair'&&
+        pose.eye.every(Number.isFinite)&&pose.aim.every(Number.isFinite)&&
+        pose.groundClearance>=15.9&&pose.minRayTerrainClearance>=1.3&&
+        pose.rockTriangles===864&&pose.rockVertices===475&&
+        pose.alphaChannels===4&&pose.transparent===true&&
+        pose.depthWrite===false,
+        'Rock A/B must inspect the actual transparent mesh and terrain-safe pose: '+
+          JSON.stringify(pose));
+      if(rockOffPose){
+        check(pose.eye.every((v,i)=>Math.abs(v-rockOffPose.eye[i])<1e-8)&&
+          pose.aim.every((v,i)=>Math.abs(v-rockOffPose.aim[i])<1e-8),
+          'Rock on/off A/B camera changed; photos are not comparable');
+      }else rockOffPose=pose;
+      await page.waitForTimeout(550);
+      check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+        .marketInspectorActive===true,
+        'Actual market camera is inactive in rock A/B screenshot');
+      await capture(name);
+      screenshots[screenshots.length-1].rockQaPose=pose;
+    }
+  }finally{
+    await page.evaluate(()=>window.__patrolQaRock?.(true));
+    await page.keyboard.press('8');
+  }
+  check((await page.evaluate(()=>window.PatrolSpaceBridge.getState()))
+    .marketInspectorActive===true,
+    'Could not restore original Digit8 after rock A/B photos');
   // The game renders desktop screenshots above, but its separate mobile
   // joystick and on-screen flight button must also release this fixed eye.
   // Use Chromium's CDP touch input on the real on-screen controls,
