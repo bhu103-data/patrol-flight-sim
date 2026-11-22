@@ -87,3 +87,14 @@ test('NYC optical far-water fix does not reintroduce a physical crest phase bend
   assert.doesNotMatch(html,/nycCrestBend|NYC_CREST_BEND/,
     'rejected physical crest warp must not return');
 });
+
+test('fixed-camera water QA reports ROI stripe gradients without gating visual acceptance',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(qa,/const roi=\{x:20,y:205,width:600,height:90\};/);
+  assert.match(qa,/verticalRms=Math\.sqrt\(vertical\/count\)/);
+  assert.match(qa,/horizontalRms=Math\.sqrt\(horizontal\/count\)/);
+  assert.match(qa,/stripeDirectionRatio:verticalRms\/Math\.max\(horizontalRms,1e-9\)/);
+  assert.match(qa,/report\.farWaterComparison=\{/);
+  assert.match(qa,/stripeDirectionRatioChangePct:pctChange\(/);
+  assert.match(qa,/not GPU time, sea-state measurement, or an automated visual pass/);
+});
