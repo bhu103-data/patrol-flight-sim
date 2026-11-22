@@ -44,13 +44,16 @@ test('official NYC OTI 2022 layer endpoints, BBOX and CRS are explicit',()=>{
   assert.match(OTI_2022_LAYERS.curb,/Curb_2022\/FeatureServer\/4$/);
   assert.match(OTI_2022_LAYERS.curbCut,/Curb_Cut_2022\/FeatureServer\/5$/);
   for(const kind of Object.keys(OTI_2022_LAYERS)){
-    const url=new URL(officialLayerQuery(kind,200));
+    const pageSize=['roadbed','plaza'].includes(kind)?200:150;
+    const url=new URL(officialLayerQuery(kind,pageSize));
     assert.equal(url.searchParams.get('geometry'),OTI_2022_BBOX.join(','));
     assert.equal(url.searchParams.get('inSR'),'4326');
     assert.equal(url.searchParams.get('outSR'),'4326');
     assert.equal(url.searchParams.get('returnGeometry'),'true');
     assert.equal(url.searchParams.get('f'),'geojson');
-    assert.equal(url.searchParams.get('resultOffset'),'200');
+    assert.equal(url.searchParams.get('resultOffset'),String(pageSize));
+    assert.equal(url.searchParams.get('resultRecordCount'),String(pageSize));
+    assert.throws(()=>officialLayerQuery(kind,pageSize+1),/Invalid OTI result offset/);
   }
 });
 
