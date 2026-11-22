@@ -114,7 +114,9 @@ try{
   check(marketState.marketGalleryRoofs===3 &&
     marketState.marketGalleryInstances===219 &&
     marketState.marketOpenFacades===3 &&
-    marketState.marketOpenFacadeTriangles===1872,
+    marketState.marketOpenFacadeTriangles===1872 &&
+    marketState.marketCliffOutcropTriangles===864 &&
+    marketState.marketCliffOutcropDraws===1,
     'Three physical facade apertures or batched shop geometry missing in live WebGL: '+
       JSON.stringify(marketState));
   check(marketState.avatarFlying,'Market inspector must remain above the hillside');
