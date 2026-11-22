@@ -1,0 +1,46 @@
+name: Vegas Venetian Campanile real WebGL2 close-up QA
+
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'scripts/vegas-campanile-browser-smoke.mjs'
+      - 'tests/vegas-venetian-campanile.test.mjs'
+      - '.github/workflows/vegas-campanile-webgl-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  venetian-campanile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert open arcade, unchanged collision and scoped camera
+        run: node --test tests/vegas-venetian-campanile.test.mjs
+      - name: Install free Chromium with software WebGL2 support
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve candidate Vegas map
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/vegas-campanile-server.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture actual tower at near/far noon/night
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/vegas-campanile-browser-smoke.mjs
+      - name: Preserve screenshot report even after visual failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venetian-campanile-four-webgl-views
+          path: artifacts/vegas-campanile/
+          if-no-files-found: warn
+          retention-days: 7
