@@ -5050,7 +5050,7 @@ const CENTRAL_PARK_SITES=[
     const radius=actor.laneOffset??1.07;
     const period=2*(actor.route.total+Math.PI*radius);
     const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
-      (actor.signalQueueSlot??0)*5.5;
+      (actor.signalQueueSlot??0)*9.0;
     const speed=actor.pace;
     let now=0,distance=actor.offset;
     for(let count=0;count<256 && now<time;count++){
@@ -5091,10 +5091,21 @@ const CENTRAL_PARK_SITES=[
     return distance;
   }
 
+  function bridgeheadResolvedTravel(actor,time){
+    const desired=bridgeheadSignalTravel(actor,time);
+    if(!actor.bridgeheadLeader)return desired;
+    const leader=bridgeheadSignalTravel(actor.bridgeheadLeader,time);
+    // Keep 9 route units behind the designated lead vehicle, even after
+    // thousands of seconds of faster sedan progress around this loop.
+    return Math.min(desired,leader-9.0);
+  }
+
   function bridgeheadTrafficPose(actor,time){
     const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
     const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
-    const traveled=actor.signalized?bridgeheadSignalTravel(actor,time):time*pace+offset;
+    // Analytic car-following shares the SAME resolved travel as browser QA.
+    // Min of monotone progress clocks prevents backward motion or overtaking.
+    const traveled=actor.signalized?bridgeheadResolvedTravel(actor,time):time*pace+offset;
     const phase=((traveled%period)+period)%period;
     const first=route.points[0],last=route.points.at(-1);
     const tangent=(a,b)=>{
@@ -5198,7 +5209,11 @@ const CENTRAL_PARK_SITES=[
         cityTraffic.push({kind:j?'sedan':'taxi',bridgehead:true,
           bridgeSegmentCount:CITY_STREETS[0].length-1,
           signalized:true,signalQueueSlot:j,
-          route:connector,offset:connector.total*(.18+j*.46),
+          // The second car starts behind the first on the same route.
+          // Keep a 9-unit longitudinal envelope and a separate red queue.
+          bridgeheadLeader:j?cityTraffic.find(a=>a.bridgehead&&
+            a.route===connector&&a.signalQueueSlot===0):null,
+          route:connector,offset:connector.total*.18-(j?12:0),
           pace:5.0+j*.6,livery:j});
       }
       for (const [i,street] of CITY_STREETS.slice(0,3).entries()) {
