@@ -1,0 +1,74 @@
+name: NYC DUMBO FID1080628 live source-roof AB and cross-map QA
+on:
+  push:
+    branches:
+      - feat/nyc-dumbo-oti-source-mesh-on-main-candidate-20261122-chat
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'tests/nyc-dumbo-fid1080628-roof.test.mjs'
+      - 'tests/nyc-dumbo-oti-source-silhouette.test.mjs'
+      - 'tools/nyc/dumbo-fid1080628-roof-ab.mjs'
+      - '.github/workflows/nyc-dumbo-fid1080628-roof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-geometry-and-crossmap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact OTI roof polygons, step planes, and source-only provenance
+        run: node --test tests/nyc-dumbo-fid1080628-roof.test.mjs tests/nyc-dumbo-oti-source-silhouette.test.mjs
+      - name: All NYC, Chongqing, Alaska, bridge, flight, water and floatplane Node regressions
+        run: node --test tests/*.test.mjs
+  fixed-camera-webgl:
+    needs: actual-geometry-and-crossmap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Recover EXACT parent before state without touching main
+        shell: bash
+        run: |
+          git cat-file -e d41ba45f4fb29d8e0ad3feafb2f57003989119c2^{commit}
+          git worktree add --detach /tmp/patrol-roof-before d41ba45f4fb29d8e0ad3feafb2f57003989119c2
+      - name: Install free browser and PNG decoder
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Run TWO same-source PATROL flight servers
+        shell: bash
+        run: |
+          (cd /tmp/patrol-roof-before && python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/nyc-roof-before.log 2>&1) &
+          python3 -m http.server 8766 --bind 127.0.0.1 > /tmp/nyc-roof-after.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null &&
+               curl -fsS http://127.0.0.1:8766/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Compare official FID roof under exact flight maps and frozen camera/rAF
+        timeout-minutes: 19
+        env:
+          PATROL_QA_BASELINE_URL: http://127.0.0.1:8765
+          PATROL_QA_CANDIDATE_URL: http://127.0.0.1:8766
+          PATROL_QA_CANDIDATE_SHA: ${{ github.sha }}
+        run: node tools/nyc/dumbo-fid1080628-roof-ab.mjs
+      - name: Upload image/perf/source evidence; not photogrammetry acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-fid1080628-roof-match-camera-ab
+          path: artifacts/nyc-dumbo-fid1080628/
+          retention-days: 14
+          if-no-files-found: warn
