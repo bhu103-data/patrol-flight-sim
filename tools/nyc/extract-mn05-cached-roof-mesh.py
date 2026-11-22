@@ -15,6 +15,7 @@ import collections
 import hashlib
 import json
 import math
+import os
 import pathlib
 import sys
 
@@ -223,8 +224,10 @@ def main():
     except Exception as error:
         report["errors"].append(type(error).__name__+": "+str(error))
     finally:
-        # No 627MB original model is uploaded or committed.
-        SOURCE.unlink(missing_ok=True)
+        # Keep the 627MB original only inside this same CI job when the
+        # facade extractor immediately follows; the facade step deletes it.
+        if os.environ.get("PATROL_KEEP_MN05") != "1":
+            SOURCE.unlink(missing_ok=True)
         OUTPUT.write_text(json.dumps(report,ensure_ascii=False,separators=(",",":")))
         print("NYC real cached source rooftop mesh",
               json.dumps({k:v for k,v in report.items()
