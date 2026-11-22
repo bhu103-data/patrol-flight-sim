@@ -53,6 +53,41 @@ const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
 ]});
 mkdirSync('artifacts',{recursive:true});
 const records={baselineSha,headSha:process.env.GITHUB_SHA||null,viewport:[1280,800]};
+
+async function verifySamePageMapSwitch(page){
+  // Use the shipped Flight Menu and launcher, never set selectedMap by hand.
+  const results=[];
+  await page.evaluate(()=>{window.__patrolQaHold=false;});
+  for(const map of ['manhattan','alaska']){
+    await page.locator('#flightMenuBtn').click({timeout:10000});
+    await page.waitForFunction(()=>!document.getElementById('titleOverlay')?.hidden,
+      null,{timeout:10000});
+    await page.locator('input[name="flightMap"][value="'+map+'"]').check({force:true});
+    await page.locator('#startFlight').click({timeout:15000});
+    await page.waitForFunction(()=>{
+      const error=document.getElementById('menuError');
+      const loader=document.getElementById('loadOverlay');
+      const title=document.getElementById('titleOverlay');
+      return (error&&!error.hidden)||
+        (loader?.classList.contains('done')&&title?.hidden);
+    },null,{timeout:110000});
+    await page.waitForTimeout(900);
+    const state=await page.evaluate(()=>({
+      flight:window.PatrolSpaceBridge?.getState?.(),
+      menuError:document.getElementById('menuError')?.hidden?null:
+        document.getElementById('menuError')?.textContent,
+      contextLost:document.getElementById('glCanvas')?.getContext('webgl2')?.isContextLost()
+    }));
+    if(state.menuError||state.contextLost||
+       !state.flight?.playing||state.flight.map!==map)
+      throw Error('Same-page map lifecycle failed on '+map+': '+JSON.stringify(state));
+    await page.screenshot({path:'artifacts/alaska-floe-switch-'+map+'.png'});
+    results.push({map,position:state.flight.position,
+      aircraft:state.flight.aircraft,contextLost:state.contextLost});
+  }
+  return results;
+}
+
 async function capture(label,file){
   const page=await browser.newPage({
     viewport:{width:1280,height:800},deviceScaleFactor:1
@@ -134,6 +169,10 @@ async function capture(label,file){
   records[label]={...state.flight,after,near,floe,floePose,pageErrors:errors,
     firstPlayableMs,softwareRafSamples:sorted.length,
     softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
+  if(label==='updated'){
+    // Alaska -> Manhattan -> Alaska, within the SAME browser tab and GL context.
+    records.mapSwitch=await verifySamePageMapSwitch(page);
+  }
   if(errors.length)throw Error(label+' JS errors: '+errors.join('; '));
   await page.close();
 }
