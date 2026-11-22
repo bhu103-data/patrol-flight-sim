@@ -26,19 +26,29 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - name: Check out pinned ODbL NYC OSM GeoParquet
-        uses: actions/checkout@v4
-        with:
-          repository: kjhealy/nycosm
-          ref: 75ec01ced7fdd85619493d59f4e7e9236e0990fd
-          path: .tmp/nycosm
-          sparse-checkout: |
-            inst/extdata/nyc_osm_buildings_manhattan.parquet
-            inst/extdata/nyc_osm_areas.parquet
-            inst/COPYRIGHTS
-          sparse-checkout-cone-mode: false
-          token: ''
-          persist-credentials: false
+      - name: Download exact pinned public ODbL GeoParquet blobs without cross-repo token
+        env:
+          NYCOSM_COMMIT: 75ec01ced7fdd85619493d59f4e7e9236e0990fd
+        run: |
+          set -euo pipefail
+          fetch_pinned() {
+            local path="$1"
+            local expected="$2"
+            local dest=".tmp/nycosm/$path"
+            mkdir -p "$(dirname "$dest")"
+            curl --fail --location --retry 4 --retry-all-errors \
+              "https://raw.githubusercontent.com/kjhealy/nycosm/$NYCOSM_COMMIT/$path" \
+              --output "$dest"
+            local actual
+            actual="$(git hash-object "$dest")"
+            test "$actual" = "$expected" || {
+              echo "Pinned source blob mismatch for $path: $actual" >&2
+              exit 1
+            }
+          }
+          fetch_pinned "inst/COPYRIGHTS" "5f234da235aadb055c4f23e7890e937e70359a70"
+          fetch_pinned "inst/extdata/nyc_osm_buildings_manhattan.parquet" "ffb0159eb8dc77fb27528f3147b4060237f8cd31"
+          fetch_pinned "inst/extdata/nyc_osm_areas.parquet" "9cda5edbe4a492976f802d954fb6365efcf11e9c"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
