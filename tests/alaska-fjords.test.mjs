@@ -67,7 +67,7 @@ test('detail is gated behind the Alaska map and map-switch lifetime',()=>{
   assert.match(script,/uniform bool uAlaskaMesh;/);
   assert.match(script,/if\(!map\.alaska\)meshSource=meshSource\.replace/);
   assert.match(script,/gl\.uniform1i\(uMesh\.alaskaMesh,Boolean\(selectedMap\.alaska\)\)/);
-  assert.match(script,/vHarborSurface<11\.5 \|\| vHarborSurface>12\.5/);
+  assert.match(script,/vHarborSurface<11\.5 \|\| vHarborSurface>13\.5/);
   assert.match(script,/alaskaGlacierFace\(material,n,surfaceRoughness\)/);
   assert.match(script,/alaskaPhotoAlbedo:gl\.getUniformLocation\(meshProg/);
   assert.match(script,/gl\.uniform1i\(uMesh\.alaskaPhotoReady,alaskaPhotoReady\?1:0\)/);
