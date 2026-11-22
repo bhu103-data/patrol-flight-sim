@@ -32,8 +32,12 @@ function lampMeanRgb(bytes,roi){
 }
 const injection=String.raw`
   // Test-only closure access; this string never enters the repository's index.
+  window.__patrolQaVehicleBounds = Object.create(null);
   window.__patrolBridgeheadQa = () => {
     const cars=cityTraffic.filter(a=>a.bridgehead);
+    const meshBounds=window.__patrolQaVehicleBounds;
+    if(!meshBounds?.taxi||!meshBounds?.sedan)
+      throw Error('Live taxi/sedan model vertex capture is missing');
     const rows=cars.map(actor=>{
       // Geometry QA scans pure distance positions even when the real actor
       // waits at a red light. Separate signal timing is checked below.
@@ -189,6 +193,59 @@ const injection=String.raw`
         pair.firstIssue??={t,gap,a,b};
       }
     }
+
+    // True 3D upright OBB separation from the vertices passed through the
+    // production buildStreetVehicle addTri/addQuad authoring path. This
+    // includes taxi roof sign, wheels and mirrors (but not separate lamp draw).
+    // Meshes are not re-authored or dimension-guessed in this test.
+    const pair3d={samples:0,nearRefinedSamples:0,nearPasses:0,
+      minGap:Infinity,badSamples:0,firstIssue:null,
+      minimumRequiredClearance:.08,source:'captured-buildStreetVehicle-vertices',
+      horizonSeconds:9000};
+    const footprintProjection=(pose,bounds,axis)=>{
+      const [right,forward]=carAxes(pose);
+      const dot=(u,v)=>u[0]*v[0]+u[1]*v[1];
+      const wx=dot(right,axis),wz=dot(forward,axis);
+      const center=pose.x*axis[0]+pose.z*axis[1]+
+        (bounds.minX+bounds.maxX)*.5*wx+
+        (bounds.minZ+bounds.maxZ)*.5*wz;
+      const radius=(bounds.maxX-bounds.minX)*.5*Math.abs(wx)+
+        (bounds.maxZ-bounds.minZ)*.5*Math.abs(wz);
+      return [center-radius,center+radius];
+    };
+    const gap3d=(a,b)=>{
+      const ba=meshBounds[cars[0].kind],bb=meshBounds[cars[1].kind];
+      let planar=-Infinity;
+      for(const axis of [...carAxes(a),...carAxes(b)]){
+        const pa=footprintProjection(a,ba,axis);
+        const pb=footprintProjection(b,bb,axis);
+        planar=Math.max(planar,pa[0]-pb[1],pb[0]-pa[1]);
+      }
+      const vertical=Math.max(
+        (a.y+ba.minY)-(b.y+bb.maxY),
+        (b.y+bb.minY)-(a.y+ba.maxY));
+      return Math.max(planar,vertical);
+    };
+    const sample3d=(t,refined=false)=>{
+      const a=trafficPose(cars[0],t),b=trafficPose(cars[1],t);
+      const gap=gap3d(a,b);
+      pair3d.samples++;
+      if(refined)pair3d.nearRefinedSamples++;
+      pair3d.minGap=Math.min(pair3d.minGap,gap);
+      if(gap<.5)pair3d.nearPasses++;
+      if(!Number.isFinite(gap)||gap<pair3d.minimumRequiredClearance){
+        pair3d.badSamples++;
+        pair3d.firstIssue??={t,gap,a,b,refined};
+      }
+      return gap;
+    };
+    if(cars.length===2)for(let k=0;k<=36000;k++){
+      const t=k*.25,gap=sample3d(t);
+      // Sub-frame coverage when true mesh boxes are near one another.
+      // 0.0625 s is finer than the 0.25 s full-horizon sampling.
+      if(gap<.55)for(const dt of [-.125,-.0625,.0625,.125])
+        if(t+dt>=0&&t+dt<=9000)sample3d(t+dt,true);
+    }
     // Real browser-loaded controller: test the leader-pace join, rather
     // than only checking its final nine-unit distance cap.
     let followerBlend=null;
@@ -211,6 +268,7 @@ const injection=String.raw`
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
       streetY:STREET_Y,waterY:WATER_H,
       lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair,
+      meshBounds,pair3d,
       followerBlend};
   };
   // Test-only snapshot clock: drive the production signal's actual scene
@@ -244,6 +302,61 @@ try{
     assert(html.split(marker).length===2,'Traffic injection marker is ambiguous');
     assert(!html.includes('__patrolBridgeheadQa'),'Probe name already in production');
     let instrumented=html.replace(marker,injection+marker);
+
+    // Only the intercepted Playwright test response is instrumented.
+    // Record exact vertices before passing them to production mesh writers.
+    const vehicleStart=instrumented.indexOf('  function buildStreetVehicle(');
+    const vehicleEnd=instrumented.indexOf('  const streetMeshes=Object.fromEntries(',vehicleStart);
+    assert(vehicleStart>=0&&vehicleEnd>vehicleStart,
+      'Production street mesh authoring boundaries not found');
+    const vehicleBlock=instrumented.slice(vehicleStart,vehicleEnd);
+    const originalWriter='    const { addTri,addQuad,upload }=createTriangleMesh();';
+    assert(vehicleBlock.split(originalWriter).length===2,
+      'Expected exactly one street vehicle mesh writer');
+    const wrappedWriter=String.raw`
+    const __qaMesh=createTriangleMesh();
+    const {upload}=__qaMesh;
+    const __qaCapture=kind==='taxi'||kind==='sedan';
+    const __qaBounds={minX:Infinity,maxX:-Infinity,minY:Infinity,
+      maxY:-Infinity,minZ:Infinity,maxZ:-Infinity,vertexCount:0};
+    const __qaVertex=v=>{
+      if(!Array.isArray(v)||v.length<3||
+         ![v[0],v[1],v[2]].every(Number.isFinite))
+        throw Error('Non-finite vertex in live street vehicle mesh');
+      __qaBounds.minX=Math.min(__qaBounds.minX,v[0]);
+      __qaBounds.maxX=Math.max(__qaBounds.maxX,v[0]);
+      __qaBounds.minY=Math.min(__qaBounds.minY,v[1]);
+      __qaBounds.maxY=Math.max(__qaBounds.maxY,v[1]);
+      __qaBounds.minZ=Math.min(__qaBounds.minZ,v[2]);
+      __qaBounds.maxZ=Math.max(__qaBounds.maxZ,v[2]);
+      __qaBounds.vertexCount++;
+    };
+    const addTri=(a,b,c,...rest)=>{
+      if(__qaCapture){__qaVertex(a);__qaVertex(b);__qaVertex(c);}
+      return __qaMesh.addTri(a,b,c,...rest);
+    };
+    const addQuad=(a,b,c,d,...rest)=>{
+      if(__qaCapture){
+        __qaVertex(a);__qaVertex(b);__qaVertex(c);__qaVertex(d);
+      }
+      return __qaMesh.addQuad(a,b,c,d,...rest);
+    };
+`;
+    const writerEnd='    return upload();';
+    assert(vehicleBlock.split(writerEnd).length===2,
+      'Expected exactly one final street vehicle mesh upload');
+    const bounded=vehicleBlock.replace(originalWriter,wrappedWriter)
+      .replace(writerEnd,String.raw`
+    if(__qaCapture){
+      const old=window.__patrolQaVehicleBounds[kind];
+      if(!old||__qaBounds.vertexCount>old.vertexCount)
+        window.__patrolQaVehicleBounds[kind]={...__qaBounds};
+    }
+    return upload();
+`);
+    instrumented=instrumented.slice(0,vehicleStart)+bounded+
+      instrumented.slice(vehicleEnd);
+
     if(process.env.PATROL_NYC_SIGNAL_VISUAL_QA==='1'){
       // This scenic view exists ONLY in the served test response, never
       // in the committed gameplay or normal Scenic Views dropdown.
@@ -307,6 +420,23 @@ try{
     traffic.pair.minGap>=traffic.pair.minimumRequiredClearance,
     'Live taxi/sedan body envelopes collide during long-run bridge traffic: '+
     JSON.stringify(traffic.pair));
+
+  assert(traffic.meshBounds?.taxi?.vertexCount>400&&
+    traffic.meshBounds?.sedan?.vertexCount>400&&
+    ['taxi','sedan'].every(kind=>{
+      const b=traffic.meshBounds[kind];
+      return [b.minX,b.maxX,b.minY,b.maxY,b.minZ,b.maxZ]
+        .every(Number.isFinite)&&b.minX<b.maxX&&b.minY<b.maxY&&
+        b.minZ<b.maxZ;
+    }),'Taxi/sedan bounds must be extracted from real scene mesh vertices: '+
+    JSON.stringify(traffic.meshBounds));
+  assert(traffic.pair3d?.samples>=36001&&
+    traffic.pair3d.nearPasses>5&&
+    traffic.pair3d.nearRefinedSamples>0&&
+    traffic.pair3d.badSamples===0&&
+    traffic.pair3d.minGap>=traffic.pair3d.minimumRequiredClearance,
+    'Actual 3D taxi/sedan vertex envelopes intersect in live NYC traffic: '+
+    JSON.stringify(traffic.pair3d));
   const blend=traffic.followerBlend;
   assert(blend&&Math.abs(blend.joinTime-5)<.001&&
     Math.abs(blend.entrySpeed-5.6)<.01&&
