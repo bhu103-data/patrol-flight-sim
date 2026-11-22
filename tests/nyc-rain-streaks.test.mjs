@@ -17,7 +17,7 @@ test('Manhattan rain uses sparse varied streaks instead of the dense screen-spec
   assert.match(nyc,/vec2\(p\.x\+p\.y\*0\.16,p\.y\)\*vec2\(96\.0,12\.0\)/);
   assert.match(nyc,/step\(0\.68,seed\)/);
   assert.match(nyc,/width=mix\(0\.040,0\.105,/);
-  assert.match(nyc,/length=mix\(0\.18,0\.42,/);
+  assert.match(nyc,/streakLength=mix\(0\.18,0\.42,/);
   assert.match(nyc,/depthFade=mix\(0\.72,1\.0,/);
   assert.match(nyc,/uWeatherVisual\.x\*0\.23/);
   assert.doesNotMatch(nyc,/vec2\(194\.0,15\.0\)|step\(0\.35,seed\)|uWeatherVisual\.x\*0\.43/);
