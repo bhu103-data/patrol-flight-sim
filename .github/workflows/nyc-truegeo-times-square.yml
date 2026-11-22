@@ -1,0 +1,51 @@
+name: NYC true-coordinate Times Square building pilot WebGL2
+on:
+  pull_request:
+    paths:
+      - 'assets/nyc/truegeo-times-square.mjs'
+      - 'assets/nyc/truegeo-cscl.mjs'
+      - 'assets/nyc/times-square-footprints.json'
+      - 'truegeo-times-square-preview.html'
+      - 'tests/nyc-truegeo-times-square.test.mjs'
+      - 'scripts/nyc-truegeo-times-square-browser.mjs'
+      - '.github/workflows/nyc-truegeo-times-square.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  truegeo-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate actual WGS84 ENU meter geometry and source handling
+        run: |
+          node --check assets/nyc/truegeo-times-square.mjs
+          node --check scripts/nyc-truegeo-times-square-browser.mjs
+          node --test tests/nyc-truegeo-times-square.test.mjs
+      - name: Install free SwiftShader Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unmodified static source preview
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-truegeo-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/truegeo-times-square-preview.html >/dev/null
+      - name: Capture actual 1-to-1 source massing and orbit WebGL2 PNGs
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-truegeo-times-square-browser.mjs
+      - name: Upload measured source QA and two camera PNGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-truegeo-times-square-pilot
+          path: artifacts/nyc-truegeo-times-square/
+          if-no-files-found: ignore
+          retention-days: 7
