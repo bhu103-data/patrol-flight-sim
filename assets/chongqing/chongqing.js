@@ -899,6 +899,7 @@ function toggleFlight(){
   if(state.flying)state.vel.y=Math.max(9,state.vel.y);
   message(state.flying?'飞行模式开启！Shift 加速，Space 上升，Ctrl 下降':'关闭飞行，准备降落');
 }
+let marketDetailTarget=null;
 // Optional viewpoint shortcuts let players visually inspect the distant landmarks
 // without waiting for a long flyover; they do not alter the world or quest progress.
 function scenicView(key){
@@ -948,12 +949,16 @@ function scenicView(key){
       destinations.Digit8={
         name:'山城商铺 · 实体窗洞近景',
         pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
-        target:[site.x,site.base+9.6,site.z+2.6]
+        target:[site.x,site.base+9.6,site.z+2.6],
+        // Aim the lens at two ground openings rather than the pilot's helmet.
+        // Only Digit8 gets this inspect target; player camera control is unchanged.
+        inspectTarget:[site.x+2.4,site.base+6.8,site.z+2.78]
       };
     }
   }
   const next=destinations[key];
   if(!next)return false;
+  marketDetailTarget=next.inspectTarget??null;
   state.pos.set(...next.pos);
   state.vel.set(0,0,0);
   state.flying=key!=='Digit4';
@@ -968,6 +973,10 @@ function scenicView(key){
   return true;
 }
 function press(key,once=false){
+  // Any deliberate movement/flight input restores normal third-person framing.
+  if(marketDetailTarget&&['KeyW','KeyA','KeyS','KeyD','Space',
+    'ControlLeft','ControlRight','ShiftLeft','ShiftRight','KeyF',
+    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key))marketDetailTarget=null;
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
   if(once&&key==='Space')jumpQueued=true;
@@ -1324,6 +1333,9 @@ function updateCamera(dt){
   cameraPos.y=Math.max(cameraPos.y,Math.max(ground(cameraPos.x,cameraPos.z),-2.0)+1.15);
   camera.position.copy(cameraPos);
   cameraAim.copy(cameraFocus);
+  // The collision-safe camera stays behind the player, but this one inspector
+  // looks at the physical door/window reveals instead of centering the avatar.
+  if(marketDetailTarget)cameraAim.set(...marketDetailTarget);
   camera.lookAt(cameraAim);
   const desiredFov=68+clamp((speed-26)*.24,0,15);
   const newFov=camera.fov+(desiredFov-camera.fov)*(1-Math.exp(-dt*2.5));
@@ -1404,7 +1416,8 @@ window.PatrolSpaceBridge={getState:()=>({
   marketGalleryRoofs:marketFronts.stats.curvedRoofs,
   marketGalleryInstances:marketFronts.stats.instances,
   marketOpenFacades:marketFronts.stats.openFacades,
-  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles
+  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles,
+  marketDetailInspect:Boolean(marketDetailTarget)
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
