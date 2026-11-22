@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Source-consistency diagnostic on 5m and original 30m USGS exact query
+        run: python tools/alaska/audit_usgs_dem_source_consistency.py
       - name: Verify source tile decoder contracts
         run: node --test tests/alaska-true-scale-flight-pilot.test.mjs tests/alaska-wgs84-metre-frame.test.mjs
       - name: Install pinned software WebGL2 test browser
@@ -56,6 +58,7 @@ jobs:
           path: |
             artifacts/alaska-tracyarm-five-metre-tile.json
             artifacts/alaska-tracyarm-five-metre-report.json
+            artifacts/alaska-tracyarm-registration-audit.json
             artifacts/alaska-true-scale-five-metre-*
             artifacts/alaska-true-scale-source-flight-*
           if-no-files-found: ignore
