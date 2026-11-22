@@ -66,3 +66,38 @@ verified control points, bridge/rail grade, legitimate LED placements,
 traffic control and measured real-GPU frame-time performance are
 implemented as a bounded *replacement* to existing compressed roads.
 No main or shared game renderer changes in this child PR.
+
+
+## Downstream source-QA: locate Broadway segments without mapped surface
+
+The existing whole-street `centreline-surface-topology.json` reports a
+Broadway DCM centerline of **673.076 metres**, comprising mapped ROADBED
+**330.261m**, PLAZA **265.433m**, SIDEWALK **44.263m**, and **33.119m** outside
+all three 2022 polygon layers (rounded from the verified same-source archive).
+This does **not** mean 33.119m of present-day street is missing: the DCM
+line may differ from actual paved centreline, official layers may have
+gaps or date/coverage differences, and the classification is purely planar.
+
+The bounded child QA produces two inspectable files from the exact same
+municipal-source CI input:
+
+- `broadway-surface-gap-locations.json`: source DCM OBJECTID, original
+  segment index, metric endpoints, inverse WGS84 endpoints, each non-roadbed
+  surface classification (`plaza`, `sidewalk`, `unmapped`, `overlap`)
+  and precise length.
+- `broadway-surface-gap-locations.geojson`: equivalent WGS84 LineString
+  features, labeled **QA_ONLY_NOT_DRIVABLE** for QGIS/map inspection.
+
+An independent Shapely/GEOS pass on the unchanged source artifacts
+`14761106187` and `14761360722` found **four unmapped Broadway fragments**:
+OBJECTID 1712 has two (about 10.624m and 10.256m), OBJECTID 6236 has one
+(6.485m), and OBJECTID 13281 has one (5.753m). This observation is a
+reproducible independent cross-check, **not a 2026 road closure, a legal
+pedestrian zone boundary, or a traffic routing permission**.
+
+The new source-only QA computes intersections with real outer polygon rings
+and inner holes, distinguishes overlaps rather than assigning arbitrary
+precedence, and requires 0.02m agreement with the earlier street aggregation.
+It does not change flight-world mesh, signal phasing, GIS features,
+collision geometry, main or shared integration. Do not enable automatic
+vehicle or pedestrian navigation from these labelled segments.
