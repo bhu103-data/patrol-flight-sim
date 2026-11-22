@@ -1409,6 +1409,9 @@ const CENTRAL_PARK_SITES=[
   // compatibility profile that keeps the same scene but avoids the large
   // intermediate framebuffer that can trigger another context loss.
   const graphicsCompat = new URLSearchParams(location.search).get('graphics') === 'compat';
+  // Explicit review-only pilot in the actual PATROL flight renderer.
+  const libertyCC0Pilot = new URLSearchParams(location.search).get('nycLibertyCC0')==='1';
+  const libertyLodQa = new URLSearchParams(location.search).get('nycLibertyLodQA')==='1';
 
   const gl = glCanvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) {
@@ -14473,6 +14476,22 @@ const CENTRAL_PARK_SITES=[
     return { basis, boundaryAssist };
   }
 
+  // PATROL_NYC_LIBERTY_SCENARIO_RADIAL_COLLISION_V1
+  // Derived from licensed 15,900-triangle candidate GLB, scaled to 31.3.
+  // Every radius bounds ALL mesh triangles crossing its 2-unit height band,
+  // including those whose vertices fall outside the band. Not a surveyed mesh.
+  // Preserve the game's original 0.55-unit aircraft collision cushion.
+  const libertyScenarioBandRadii = Object.freeze([
+    6.593, 6.307, 5.712, 5.117, 4.211, 4.371, 4.038, 4.228,
+    2.248, 2.121, 2.397, 2.397, 2.226, 2.226, 2.510, 2.646
+  ]);
+  function libertyScenarioRadialCollision(dx,dz,level){
+    if(!Number.isFinite(dx)||!Number.isFinite(dz)||!Number.isFinite(level)||
+       level<0||level>31.3+0.58)return false;
+    const band=Math.min(libertyScenarioBandRadii.length-1,Math.floor(level/2));
+    const radius=libertyScenarioBandRadii[band]+0.55;
+    return dx*dx+dz*dz<=radius*radius;
+  }
   function checkFlightCollision(previous, next) {
     // Substeps keep a fast-moving aircraft from crossing a narrow collision volume in one frame.
     const steps = Math.max(1, Math.ceil(Math.hypot(...next.map((value, i) => value - previous[i])) / 0.65));
@@ -14513,6 +14532,23 @@ const CENTRAL_PARK_SITES=[
       for (const mark of NEW_YORK_LANDMARKS) {
         const level = y - sampleGroundHeight(mark.x, mark.z);
         if (level < 0 || level > mark.top + 0.58) continue;
+        // Apply the GLB-specific profile ONLY when that exact-sized model is
+        // currently the rendered high-detail asset. Original procedural,
+        // bundled, texture-failure, low-quality and other map collisions
+        // continue unchanged, even while optional GLB loading is pending.
+        if(mark.kind==='liberty' && !graphicsCompat && smoothScenery()){
+          const mesh=nycRealismAssets?.models?.liberty;
+          if(mesh?.source==='scenario' && mesh.triangleCount===15900 &&
+             Math.abs(mesh.dimensions?.height-31.3)<0.01 &&
+             Math.abs(mesh.dimensions?.width-9.323)<0.04 &&
+             Math.abs(mesh.dimensions?.depth-9.323)<0.04){
+            if(libertyScenarioRadialCollision(x-mark.x,z-mark.z,level)){
+              finishFlight(pos,'Collision with '+mark.name,false);
+              return;
+            }
+            continue;
+          }
+        }
         const dx=Math.abs(x-mark.x),dz=z-mark.z;
         let width=mark.w,depth=mark.d;
         if(mark.kind==='flatiron'){
@@ -15013,13 +15049,47 @@ const CENTRAL_PARK_SITES=[
         // the legacy tiny GLB still needs the original detail check.
         const photoModel=imported && (imported.source==='scenario' ||
           imported.count>meshes.body.count*1.33) ? imported:null;
+        // NYC_CC0_LIBERTY_LOD_V1: reuse PR #103 high-detail GLB, the existing
+        // bundled low-poly GLB, and the original procedural far silhouette.
+        // Only downgrade when BOTH the eye and aircraft are well away.
+        let displayedModel=photoModel||meshes.body;
+        let libertyLod='off';
+        if(mark.kind==='liberty' && libertyCC0Pilot &&
+           photoModel?.source==='scenario' && photoModel.triangleCount===15900){
+          const low=nycRealismAssets?.models?.libertyLow;
+          const eyeDist=Math.hypot(camPos[0]-mark.x,camPos[2]-mark.z);
+          const aircraftDist=Math.hypot(plane.pos[0]-mark.x,plane.pos[2]-mark.z);
+          const distance=Math.min(eyeDist,aircraftDist);
+          if(distance<105){
+            libertyLod='near-cc0';displayedModel=photoModel;
+          }else if(distance<275){
+            libertyLod=low?'mid-bundled-glb':'mid-cc0-fallback';
+            displayedModel=low||photoModel;
+          }else{
+            const candidate=low||photoModel;
+            const useBuiltin=meshes.body.count<candidate.count;
+            displayedModel=useBuiltin?meshes.body:candidate;
+            libertyLod=useBuiltin?'far-built-in':'far-bundled-glb';
+          }
+          if(libertyLodQa){
+            window.PatrolLibertyLodQA={
+              lod:libertyLod,eyeDistance:eyeDist,aircraftDistance:aircraftDist,
+              drawTriangles:displayedModel.count/3,
+              nearTriangles:photoModel.count/3,
+              midTriangles:low?.count/3||null,
+              builtInTriangles:meshes.body.count/3,
+              assetSource:'Innerscene CC0 / PR #103',
+              textureReady:!!photoModel.texture
+            };
+          }
+        }
         const classId=({empire:1,liberty:2,chrysler:3,trade:4,flatiron:5,times:6})[mark.kind]||0;
         gl.uniform1i(uMesh.nySurfaceClass,classId);
-        drawMeshWithOutline(photoModel||meshes.body,model,false,mark.kind==='flatiron');
+        drawMeshWithOutline(displayedModel,model,false,mark.kind==='flatiron');
         gl.uniform1f(uMesh.dimLights,mark.kind==='times'?0:1);
         // The procedural lights follow the old model, so do not overlay them
         // when a real GLB mesh has replaced its architectural geometry.
-        if(meshes.lights.count && !photoModel)
+        if(meshes.lights.count && displayedModel===meshes.body)
           drawMeshWithOutline(meshes.lights,model,true);
         gl.uniform1f(uMesh.dimLights,0);
       }
