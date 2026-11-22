@@ -50,6 +50,23 @@ const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
      '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
      '    }else{','      flightStep=advanceFlight(dt);','    }'
    ].join(eol));
+   // Freeze BOTH software-water shader phase and authored boat/floe motion
+   // only when the QA-specific pose hold is active. Otherwise the same
+   // geometry can look like a different silhouette through moving waves.
+   // This edit exists solely in temporary QA HTML, never production index.html.
+   const clockAnchors=[
+     ['    const time = now * 0.001;',
+      '    const time = window.__patrolQaHold ? 42.125 : now * 0.001;'],
+     ['    sceneryTime += Math.min(rawDt, 0.12);',
+      '    if(!window.__patrolQaHold)sceneryTime += Math.min(rawDt, 0.12);'],
+     ['    const environment=sampleFlightEnvironment(Math.min(rawDt,0.12));',
+      '    const environment=sampleFlightEnvironment(window.__patrolQaHold?0:Math.min(rawDt,0.12));']
+   ];
+   for(const [original,stable] of clockAnchors){
+     if(html.split(original).length!==2)
+       throw Error('Freeze-time QA anchor missing/non-unique: '+original);
+     html=html.replace(original,stable);
+   }
    writeFileSync(output,html);
  }
  cameraQAPage('alaska-baseline.html','alaska-qa-baseline.html');
