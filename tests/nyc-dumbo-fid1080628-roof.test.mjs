@@ -68,9 +68,11 @@ test('same single-city mesh, bounded cost and original full-body collision envel
    assert.ok(Math.abs(p[2]-LOT[1])<=LOT[3]/2+.0001);
    assert.ok(p[1]>=y-.000001&&p[1]<=y+LOT[4]+.121);
  }
- assert.ok(tri.length<=14&&quad.length<=500);
- assert.equal(out.windows,45); assert.equal(out.doors,1);
- assert.equal(out.windowReveals,180);
+ assert.ok(tri.length<=14&&quad.length<=1100);
+ assert.equal(out.windows,108); assert.equal(out.doors,1);
+ assert.equal(out.windowReveals,432);
+ assert.equal(out.floors,12,'actual Nexus building is twelve stories');
+ assert.equal(out.metalPanels,40,'distinct 3D metal facade spandrels, not one plain wall');
  assert.match(html,/matchingDumboOtiPilot\(lot,detailBand\)/);
  assert.match(html,/buildDumboOtiPilotSourceMesh\(addTri,addQuad,lot,dumbOtiPilot,y\)/);
  assert.match(html,/function isBridgeCollision\(x,y,z,radius=0\)/);
@@ -81,6 +83,8 @@ test('other two OTI pilot buildings and all other maps keep original flat source
    assert.equal(out.roofStepDrop,0);
    assert.equal(out.roofAreas,1);
    assert.equal(out.facadeBands,0);
+   assert.equal(out.metalPanels,0);
+   assert.notEqual(out.floors,12);
    const roof=tri.filter(t=>t.at(-1)===14);
    assert.ok(roof.every(t=>t.slice(0,3).every(p=>
      Math.abs(p[1]-(14.58+lot[4]))<1e-7)));
@@ -88,4 +92,17 @@ test('other two OTI pilot buildings and all other maps keep original flat source
  assert.match(html,/selectedMap\.city/);
  assert.match(html,/selectedAircraft==='seaplane'/);
  assert.match(html,/floatOceanPose\(/);
+});
+
+
+test('Nexus palette is 2006-era yellow brick and silver/blue/green metal, not red warehouse',()=>{
+ const {out,quad}=geometry(LOT);
+ assert.equal(out.fid,1080628);
+ const count=quad.filter(q=>q.at(-1)===12&&
+   [[.24,.43,.46],[.34,.48,.42],[.65,.70,.71]]
+     .some(c=>c.every((v,i)=>Math.abs(q[4][i]-v)<1e-7))).length;
+ assert.ok(count>=40,'physical metal sheets and accent courses must enter same game mesh');
+ assert.ok(out.metalPanels>=30);
+ assert.match(html,/source\.fid===1080628/);
+ assert.match(html,/nexus\?12:Math\.max/);
 });
