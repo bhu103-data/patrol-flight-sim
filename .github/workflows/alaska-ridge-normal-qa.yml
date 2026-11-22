@@ -2,7 +2,7 @@ name: Alaska DEM ridge normal fixed-view QA
 
 on:
   pull_request:
-    branches: [codex/patrol-integration-20261121]
+    branches: [codex/patrol-integration-20261121, codex/alaska-dem-slope-footprint-20261121]
     paths:
       - index.html
       - tools/alaska/compare_dem_normals.mjs
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   alaska-ridge-normals:
-    if: github.head_ref == 'codex/alaska-dem-slope-footprint-20261121'
+    if: github.head_ref == 'codex/alaska-dem-slope-footprint-20261121' || github.head_ref == 'qa/alaska-dem-normal-frozen-time-20261121-chat'
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     steps:
