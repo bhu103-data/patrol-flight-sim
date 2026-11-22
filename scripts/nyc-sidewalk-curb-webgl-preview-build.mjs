@@ -9,14 +9,25 @@ import earcut,{deviation} from 'earcut';
 const input='artifacts/nyc-curb-sidewalk-source/';
 const base='artifacts/nyc-roadbed-source/';
 const geometry=JSON.parse(readFileSync(input+'edges.json','utf8'));
+const display=JSON.parse(readFileSync(input+'sidewalk-display.json','utf8'));
+const maskReport=JSON.parse(readFileSync(input+'sidewalk-occlusion-report.json','utf8'));
 const pavement=JSON.parse(readFileSync(base+'roadbed-mesh.json','utf8'));
+if(display.schema!=='patrol-nyc-sidewalk-visual-mask-v1'||
+   display.assetRole!=='VISUAL_ONLY_SOURCE_PRESERVING_DERIVATION'||
+   display.projection?.originLonLat?.join(',')!==
+     geometry.projection?.originLonLat?.join(',')||
+   display.counts?.sourceFeatures!==geometry.counts?.sidewalkFeatures||
+   !(maskReport.areas?.displayUnionBuildingOverlapSquareMetres<=1e-6))
+  throw Error('Display-only sidewalk mask absent, unaligned, or building-penetrating');
 if(geometry.schema!=='patrol-nyc-oti-sidewalk-curb-metre-source-v1'||
    geometry.projection?.originLonLat.join(',')!==
    pavement.projection?.originLonLat.join(','))
   throw Error('Sidewalk, roadbed and buildings must share exact WGS84 metres');
 const triangles=[],lineSegments=[];
 let degenerate=0,polygons=0,rings=0;
-for(const feature of geometry.sidewalks)for(const ringSet of feature.polygons){
+// Render only reviewed GEOS-derived display polygons. Keep edges.json
+// municipal source completely unchanged and separately downloadable.
+for(const feature of display.sidewalks)for(const ringSet of feature.polygons){
   const coords=[],holes=[];let vertices=0;
   for(const [i,raw] of ringSet.entries()){
     if(i)holes.push(vertices);
@@ -58,9 +69,24 @@ if(polygons<5||triangles.length<100||lineSegments.length<200)
   throw Error('Measured curb-sidewalk geometry coverage unexpectedly low');
 const payload={schema:'patrol-nyc-oti-street-edge-webgl-metre-v1',
   sourceImageryYear:2022,projection:geometry.projection,
+  sourceSidewalkMask: {
+    visualOnly:true,
+    originalSourceIntact:true,
+    maskedSquareMetres:maskReport.areas.maskedPartSumSquareMetres,
+    postMaskBuildingOverlapSquareMetres:
+      maskReport.areas.displayUnionBuildingOverlapSquareMetres
+  },
   note:'SIDEWALK planes and CURB/CURB CUT line overlays in flat illustrative ground. Y layering is NOT 2026 survey elevation or curb height.',
   counts:{sidewalkFeatures:geometry.counts.sidewalkFeatures,
     sidewalkPolygons:polygons,sidewalkRings:rings,
+    originalSidewalkFeatures:geometry.counts.sidewalkFeatures,
+    displaySidewalkFeatures:display.counts.displayFeatures,
+    sourceClippedAreaSquareMetres:
+      maskReport.areas.sourceClippedPartSumSquareMetres,
+    displayAreaSquareMetres:
+      maskReport.areas.displayPartSumSquareMetres,
+    visualMaskedOverlapSquareMetres:
+      maskReport.areas.maskedPartSumSquareMetres,
     sidewalkTriangles:triangles.length,
     skippedDegenerate:degenerate,
     curbFeatures:geometry.counts.curbFeatures,
@@ -79,7 +105,7 @@ function replaceOnce(before,after,label){
   html=html.replace(before,after);
 }
 replaceOnce('绿色：OTI 2022 道路面；黄色：真实交叉口；蓝色：DCM 中心线。',
-  '绿色：OTI 2022 道路面；黄色：交叉口；灰白：实测人行道面；青色：实测路缘；橙色：实测路缘开口；蓝色：DCM 中心线。',
+  '绿色：OTI 2022 道路面；黄色：交叉口；灰白：2022 原始人行道经建筑遮挡掩膜的显示层（官方源文件未改）；青色：实测路缘；橙色：实测路缘开口；蓝色：DCM 中心线。',
   'source legend');
 replaceOnce('const pavement=meshBuffer(pavementPos,pavementColors,pavementNormals);',
   [
@@ -116,6 +142,8 @@ replaceOnce('realPavementTriangles:pavement.count/3,realPavementVertices:pavemen
     'realPavementTriangles:pavement.count/3,realPavementVertices:pavement.count,',
     'realSidewalkFeatures:streetEdges.counts.sidewalkFeatures,',
     'realSidewalkTriangles:sidewalks.count/3,',
+    'sidewalkVisualMaskSquareMetres:streetEdges.counts.visualMaskedOverlapSquareMetres,',
+    'sidewalkDisplayBuildingOverlapSquareMetres:streetEdges.sourceSidewalkMask.postMaskBuildingOverlapSquareMetres,',
     'realCurbFeatures:streetEdges.counts.curbFeatures,',
     'realCurbCuts:streetEdges.counts.curbCuts,',
     'realCurbLineVertices:curbEdges.count};'
