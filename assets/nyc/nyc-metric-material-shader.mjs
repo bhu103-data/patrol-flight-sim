@@ -4,11 +4,13 @@
 export const NYC_MATERIAL_PREVIEW_GLSL=[
   'if(vMaterial>2.5&&vMaterial<5.5){',
   'vec2 wallUV=abs(n.z)>abs(n.x)?vPosition.xy:vPosition.zy;',
-  // 0.62m x 0.21m brick courses, authored appearance only.
+  // US modular nominal brick module: 8in x 2 2/3in incl. mortar.
+  // 0.2032m x 0.067733m repeat; artist proxy, not surveyed facade.
+
   'if(vMaterial<3.5){',
-  'vec2 b=wallUV/vec2(.62,.21);',
+  'vec2 b=wallUV/vec2(.2032,.06773333333333333);',
   'float row=floor(b.y);vec2 cell=fract(vec2(b.x+mod(row,2.)*.5,b.y));',
-  'float mortar=step(.065,cell.x)*step(cell.x,.935)*step(.07,cell.y)*step(cell.y,.93);',
+  'float mortar=step(.047,cell.x)*step(cell.x,.953)*step(.07,cell.y)*step(cell.y,.93);',
   'float grain=fract(sin(dot(floor(b),vec2(12.9898,78.233)))*43758.5453);',
   'base=mix(vec3(.245,.25,.25),vColor*(.75+.22*grain),mortar)*(.66+.42*lit);',
   // 1.5m x 3.6m illustrated glazing units, not true real-world mullions.
