@@ -28,16 +28,6 @@ _WGS84_TO_SOURCE = Transformer.from_crs(
     "EPSG:4326", "EPSG:2263", always_xy=True)
 
 
-def wgs84_to_local_metres(longitude: float, latitude: float) -> tuple[float, float]:
-    """Convert 2022 official WGS84 footprint coordinates to the shared local frame."""
-    if not math.isfinite(longitude) or not math.isfinite(latitude):
-        raise ValueError("Non-finite WGS84 building footprint coordinate")
-    if not (-75 < longitude < -72 and 39 < latitude < 42):
-        raise ValueError("Official WGS84 footprint point outside NYC")
-    return ((longitude - LONGITUDE_REF) * METRES_PER_DEG_LONGITUDE,
-            (latitude - LATITUDE_REF) * METRES_PER_DEG_LATITUDE)
-
-
 def mn05_stateplane_to_metric(source_x_ft: float, source_y_ft: float) -> tuple[float, float]:
     """Convert projected source-foot XY to local east/north metres.
 
