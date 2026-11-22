@@ -15,7 +15,8 @@ function render({clear=true}={}){
   const t=(...vertices)=>faces.push({kind:'tri',v:vertices.slice(0,3)});
   const opts={addTri:t,addQuad:q,box:()=>{},beam:()=>{},ribbon:()=>{},
     terrainAt:()=>1000,isClear:()=>clear,
-    streetY:14.86,waterY:0,detailBand:()=>3};
+    streetY:14.86,waterY:0,detailBand:()=>3,
+    grid:{blockLength:33,blockWidth:24,tilt:.24,offset:30}};
   const out=buildDumboFrontDockRoad(source,opts);
   return {out,faces};
 }
@@ -36,7 +37,14 @@ test('normal, footprint and production budget: no fictional rectangular roof',()
   assert.equal(out.enabled,true);
   assert.equal(out.officialTriangles,553);
   assert.equal(out.droppedDegenerateTriangles,24);
-  assert.deepEqual(out.skipFictionalStreetSegments,[[16,-9],[17,-9]]);
+  // Dated OTI boundaries partially cross the fictional grid. Do not delete
+  // all old asphalt when only a fraction of each strip has source pavement.
+  assert.deepEqual(out.skipFictionalStreetSegments,[]);
+  assert.equal(out.sourceOverlayOnly,true);
+  assert(out.legacyCoverage.some(x=>x.i===16&&x.covered<x.samples));
+  assert(out.legacyCoverage.some(x=>x.i===17&&x.covered<x.samples));
+  assert(out.legacyCoverage.every(x=>x.samples===105));
+  assert(out.legacyCoverage.every(x=>x.fraction>=0&&x.fraction<1));
   assert(out.bikePaintQuads>=4,
     '2026 DOT planned bike markings should be physically inside source');
   assert(out.signalHeads===2,'The photographed Front/Dock intersection has signal heads');
@@ -47,11 +55,13 @@ test('normal, footprint and production budget: no fictional rectangular roof',()
   // First 577 triangles use original licensed geo-poly vertices, no XY
   // rectangle generator, with upward normals after East/North -> X/-Z map.
   const sourceFaces=faces.slice(0,out.officialTriangles);
-  // Exact-height seam invariant: original NYC street painter emits asphalt
-  // at streetY+.086, so 2022 polygons may not float 0.064 higher.
-  const sourceY=14.86+.086;
+  // Keep a tiny 0.004 game-unit depth bias so partially covered polygons
+  // don't z-fight with the underlying continuous legacy asphalt. Do not
+  // repeat the former visibly floating 0.064-unit plate.
+  const sourceY=14.86+.090;
   assert(sourceFaces.every(f=>f.v.every(p=>Math.abs(p[1]-sourceY)<1e-9)),
-    'Official pavement must be flush with legacy NYC asphalt plane');
+    'Official pavement must be nearly flush with old continuous asphalt');
+  assert(Math.abs(sourceY-(14.86+.086))<=.004000001);
   assert(sourceFaces.every(f=>f.kind==='tri'));
   assert(sourceFaces.every(f=>{
     const [a,b,c]=f.v,u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
@@ -73,7 +83,7 @@ test('actual PATROL source only opt-in NYC and no change to flight or other maps
   assert(index.includes('frontDockRoadbed,'));
   assert(index.includes('window.PatrolDumboRoadQA=stats.officialFrontDock'));
   assert(index.includes("name:'DUMBO · Front Dock Real Road'"));
-  assert(streets.includes("if(replaceFrontDock && j===-9 && (i===16||i===17))continue;"));
+  assert(streets.includes("if(coveredLegacyStreets.has(i+':'+j))continue;"));
   assert(streets.includes("frontDockRoadbed=null"));
   assert(!streets.includes('fetch('),'No runtime network fetch in road generation');
   assert(!index.includes('onFrameNYCRoadbed'));
