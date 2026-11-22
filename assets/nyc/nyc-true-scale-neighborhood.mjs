@@ -3,7 +3,7 @@
 // scale and placement. Street centrelines are NYC DCM records, NOT curb edges.
 // Wall palettes/windows/road widths/ground treatment are artist-authored
 // illustrative materials: this is NOT surveyed facade or roadbed geometry.
-import {wgs84ToMeters,signedAreaMeters} from './times-square-metered-massing.mjs';
+import {wgs84ToMeters,signedAreaMeters,triangulateSimplePolygon} from './times-square-metered-massing.mjs';
 
 export const MESH_STRIDE=10;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
@@ -25,7 +25,7 @@ export function buildingContains(massing,east,north,eyeHeight){
   return null;
 }
 
-export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200}={}){
+export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null}={}){
   if(massing.units!=='metres'||massing.heightScale!==1||
      !Array.isArray(massing.buildings)||!massing.buildings.length)
     throw Error('A genuine metre-scale NYC source scene is required');
@@ -38,7 +38,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   // Flight-scene coordinates: +X true east, +Y up, -Z true north.
   const point=([e,n],y=0)=>[e-centerE,y,centerN-n];
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
-    facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0};
+    facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
+    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -168,11 +169,54 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     }
     if(accepted)counts.streetFeatures++;
   }
+  // NYC_OFFICIAL_2022_ROADBED_CORE_V1 — exact source FIDs from OTI's
+  // Roadbed_2022 dataset, simplified from original ArcGIS shapes at <=.057m
+  // Hausdorff/<=.088% area change; this opt-in Times Square core slice is
+  // ONLY 11 road/intersection polygons, not a complete 2026 paving survey.
+  // The original DCM-width bands are explicitly illustrative *outside* the
+  // supplied source polygons. Roadbed faces sit 0.055m above those bands;
+  // the source geometries themselves are never stretched to fit the grid.
+  if(officialRoadbed!==null){
+    if(officialRoadbed.v!==1||officialRoadbed.imagery!==2022||
+       !Array.isArray(officialRoadbed.origin)||
+       officialRoadbed.origin.length!==2||
+       !officialRoadbed.origin.every(Number.isFinite)||
+       !Array.isArray(officialRoadbed.polygons)||
+       !officialRoadbed.polygons.length||
+       officialRoadbed.polygons.length>80||
+       !officialRoadbed.source?.includes('/Roadbed_2022/FeatureServer/20'))
+      throw Error('Invalid official source roadbed slice');
+    const [offsetE,offsetN]=wgs84ToMeters(officialRoadbed.origin,massing.origin);
+    const seen=new Set();
+    for(const [fid,subtype,ring] of officialRoadbed.polygons){
+      if(!Number.isSafeInteger(fid)||seen.has(fid)||
+         ![350000,350010].includes(subtype)||
+         !Array.isArray(ring)||ring.length<3||ring.length>300||
+         !ring.every(p=>Array.isArray(p)&&p.length===2&&
+           p.every(Number.isFinite)))
+        throw Error('Invalid NYC OTI roadbed footprint or repeated source FID');
+      seen.add(fid);
+      // Ear clip concave contours; never fan triangles across a turning
+      // road edge. A source polygon with holes would need constrained
+      // triangulation and is explicitly out of scope for this 11-FID slice.
+      const triangles=triangulateSimplePolygon(ring);
+      const pavement=subtype===350010?[.235,.254,.268]:[.178,.194,.205];
+      const positions=ring.map(([e,n])=>
+        point([e+offsetE,n+offsetN],-.075));
+      for(const [a,b,d] of triangles)
+        tri(positions[a],positions[b],positions[d],pavement,2);
+      counts.officialRoadbedPolygons++;
+      counts.officialRoadbedTriangles+=triangles.length;
+      if(subtype===350010)counts.officialRoadbedIntersections++;
+    }
+  }
   return {interleaved:new Float32Array(v),strideFloats:MESH_STRIDE,
     center:{east:centerE,north:centerN},
     bounds:massing.boundsMeters,
     counts:{...counts,triangles:v.length/(MESH_STRIDE*3)},
     provenance:{buildings:massing.source,streets:streetSource.source,
-      streetSourceDate:streetSource.capturedAt},
-    caveat:'1:1 official footprints, source heights and DCM centreline ALIGNMENT; all facades, road widths, surfaces and roof finishes are illustrative, not measured.'};
+      streetSourceDate:streetSource.capturedAt,
+      roadbed:officialRoadbed?.source||null,
+      roadbedImageryYear:officialRoadbed?.imagery||null},
+    caveat:'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
 }
