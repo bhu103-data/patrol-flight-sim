@@ -47,6 +47,14 @@ try{
     '11 central roadbed polygons are NOT a full city roadbed verification');
   check(report.initial.spawnFromOfficialStreet===true,
     'Free-flight spawn is not on an accepted official Seventh Avenue centerline');
+  check(report.initial.safeStreetCandidateCount>=1,
+    'No clearance-checked source street spawn candidates');
+  check(report.initial.streetClearanceRadiusMetres===1.2,
+    'Missing 1.2m official building footprint clearance');
+  check(report.initial.streetEyeMetres===3.2&&
+    Math.abs(report.initial.camera[1]-3.2)<.001,
+    'Labelled street view must use 3.2m eye height, not 65m: '+
+      JSON.stringify(report.initial.camera));
   check(report.initial.windowVisuals>100,'No bounded facade detail');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   const initial=await page.locator('#scene').screenshot({
@@ -83,6 +91,8 @@ try{
   const moved=Math.hypot(...before.map((v,i)=>after[i]-v));
   report.flightMetres=moved;
   check(moved>4&&moved<70,'Flight camera did not move plausibly: '+moved);
+  check(Math.abs(after[1]-3.2)<.01,
+    'Horizontal W flight unexpectedly changed the 3.2m street eye height');
   const afterPng=await page.locator('#scene').screenshot({
     path:out+'/02-after-flythrough.png',timeout:90000});
   report.initialSHA256=createHash('sha256').update(initial).digest('hex');
@@ -96,6 +106,9 @@ try{
     window.PatrolMetricFlightQA.frames>2,null,{timeout:60000});
   report.fallback=await page.evaluate(()=>window.PatrolMetricFlightQA);
   check(report.fallback.windowVisuals===0,'Low detail still generates window geometry');
+  check(report.fallback.streetEyeMetres===3.2&&
+    Math.abs(report.fallback.camera?.[1]-3.2)<.001,
+    'Low graphics mode lost source-street eye height');
   check(report.fallback.sourceStreetCount===report.initial.sourceStreetCount,
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
