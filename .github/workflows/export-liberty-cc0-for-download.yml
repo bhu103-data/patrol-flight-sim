@@ -1,0 +1,52 @@
+name: Export verified Liberty CC0 candidate GLB
+on:
+  push:
+    branches:
+      - qa/liberty-glb-export-20261122-chat
+    paths:
+      - .github/workflows/export-liberty-cc0-for-download.yml
+permissions:
+  contents: read
+jobs:
+  export-pinned-glb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify publisher-source CC0 GLB binary exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=assets/nyc/scenario/liberty.glb
+          test -f "$file"
+          actual=$(sha256sum "$file" | cut -d ' ' -f 1)
+          expected=34ed58d06e008adcced5e60376bbcc11d675f3d4ec01434016df92d244f33225
+          test "$actual" = "$expected"
+          test "$(wc -c < "$file" | tr -d ' ')" = "913936"
+          python3 - <<'PY'
+          import json,struct,hashlib
+          from pathlib import Path
+          data=Path('assets/nyc/scenario/liberty.glb').read_bytes()
+          assert data[:4] == b'glTF'
+          assert struct.unpack_from('<I',data,4)[0] == 2
+          n=struct.unpack_from('<I',data,12)[0]
+          gltf=json.loads(data[20:20+n])
+          triangles=sum(gltf['accessors'][p['indices']]['count']//3 for m in gltf['meshes'] for p in m['primitives'])
+          assert triangles==15900,triangles
+          Path('liberty-source-verification.json').write_text(json.dumps({
+            'source':'bhu103-data/patrol-flight-sim/assets/nyc/scenario/liberty.glb',
+            'copyright':'Innerscene original CC0 1.0 publisher declaration',
+            'sha256':hashlib.sha256(data).hexdigest(),
+            'bytes':len(data),
+            'triangles':triangles,
+            'manifest_enabled':False
+          },indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patrol-liberty-cc0-verified-glb
+          path: |
+            assets/nyc/scenario/liberty.glb
+            liberty-source-verification.json
+          if-no-files-found: error
+          retention-days: 3
