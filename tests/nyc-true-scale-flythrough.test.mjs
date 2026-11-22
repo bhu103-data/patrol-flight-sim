@@ -138,3 +138,17 @@ test('PATROL launcher routes experimental map to real-source free-flight entry',
   assert.doesNotMatch(page,/https?:\/\/(?:google\.com|maps\.google|cesium\.com)/);
   assert.match(page,/not the original aircraft physics/);
 });
+
+
+test('source street view has upstream 3.2m eye and 1.2m footprint clearance, not 65m aerial',async()=>{
+  const html=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  assert.match(html,/Street height \(3\.2m\)/);
+  assert.match(html,/const streetEyeMetres=3\.2,streetClearanceMetres=1\.2;/);
+  assert.match(html,/safeOffsets\.some\(\(\[de,dn\]\)=>/);
+  assert.match(html,/buildingContains\(massing,east\+de,north\+dn,streetEyeMetres\)/);
+  assert.match(html,/position:\[site\[0\],streetEyeMetres,site\[1\]\]/);
+  assert.match(html,/streetClearanceRadiusMetres:streetClearanceMetres/);
+  assert.doesNotMatch(html,/buildingContains\(massing,east,north,65\)/);
+  assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/);
+});
