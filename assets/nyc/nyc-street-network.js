@@ -29,6 +29,12 @@ export function buildNycStreetNetwork({
     dumboCrack=[.179,.202,.222],dumboCurbStain=[.455,.465,.447],
     dumboSawcut=[.412,.418,.395];
   const inDumboMaterialZone=(i,j)=>i>=9&&i<=20&&j>=-13&&j<=-7;
+  // PATROL_DUMBO_CURB_FACE_V1: the existing DUMBO Warehouse Blocks scenic
+  // view targets (345,-300). Avenue i=16, blocks j=-11..-9 run beside it:
+  // center x = 16*24 + .24*z + 30, z in [-363,-264].
+  // Limit this finish to one existing low-altitude corridor. No new road,
+  // lane, curb width, collision shape, or texture asset is introduced.
+  const inCurbFocus=(kind,i,j)=>kind==='avenue'&&i===16&&j>=-11&&j<=-9;
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
@@ -39,7 +45,7 @@ export function buildNycStreetNetwork({
     intersectionHatching:0,streetNamePlates:0,sidewalkJoints:0,
     multiLaneSegments:0,oneWaySideStreets:0,signalizedIntersections:0,
     dumboSurfaceRepairs:0,dumboTarSeams:0,dumboCrackRuns:0,
-    dumboSidewalkPanels:0,dumboCurbStains:0};
+    dumboSidewalkPanels:0,dumboCurbStains:0,dumboCurbFaceBands:0};
   const hash=(x,z,k=0)=>{
     let n=Math.imul(Math.floor(x),374761393)^Math.imul(Math.floor(z),668265263)^
       Math.imul(k+1,1442695041);
@@ -498,13 +504,41 @@ export function buildNycStreetNetwork({
         }
       }
       const c=shift(a,b,side*(half+.035));
-      slab(c[0],c[1],.22,granite,roadY+.127);
+      const curbFocus=inCurbFocus(kind,i,j);
+      // The original single-color top and wall make the sidewalk transition
+      // read as a grey block at 2–10 m. Preserve the cap, face footprint and
+      // exact heights; only differentiate road-side soot from worn stone.
+      const capTone=curbFocus
+        ?(hash(i,j,191+side)>.5?[.613,.603,.566]:[.573,.565,.535])
+        :granite;
+      slab(c[0],c[1],.22,capTone,roadY+.127);
       const g=shift(a,b,side*(half-.18));
       slab(g[0],g[1],.115,gutter,markY);
-      addQuad(point(c[0][0],c[0][1],roadY),
-        point(c[1][0],c[1][1],roadY),
-        point(c[1][0],c[1][1],roadY+.128),
-        point(c[0][0],c[0][1],roadY+.128),granite);
+      if(curbFocus){
+        // Replace one curb face by two adjacent non-overlapping bands. The
+        // lower half is road-grimed stone; the upper face catches more light.
+        // This is a material boundary, NOT a coplanar decal: there can be no
+        // decal-vs-curb depth fighting. Both bands have the original winding.
+        const breakY=roadY+.068,topY=roadY+.128;
+        const lower=hash(i,j,193+side)>.5
+          ?[.366,.374,.353]:[.397,.403,.379];
+        const upper=hash(i,j,195+side)>.5
+          ?[.526,.524,.490]:[.548,.540,.507];
+        addQuad(point(c[0][0],c[0][1],roadY),
+          point(c[1][0],c[1][1],roadY),
+          point(c[1][0],c[1][1],breakY),
+          point(c[0][0],c[0][1],breakY),lower);
+        addQuad(point(c[0][0],c[0][1],breakY),
+          point(c[1][0],c[1][1],breakY),
+          point(c[1][0],c[1][1],topY),
+          point(c[0][0],c[0][1],topY),upper);
+        stats.dumboCurbFaceBands+=2;
+      }else{
+        addQuad(point(c[0][0],c[0][1],roadY),
+          point(c[1][0],c[1][1],roadY),
+          point(c[1][0],c[1][1],roadY+.128),
+          point(c[0][0],c[0][1],roadY+.128),granite);
+      }
       // Concrete saw-cut lines break the unrealistic uninterrupted sidewalk.
       if(detailBand(...mid)>=(dumboFinish?2:3) &&
          (dumboFinish||hash(i,j,71)>.39)){
