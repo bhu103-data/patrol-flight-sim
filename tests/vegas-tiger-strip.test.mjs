@@ -44,12 +44,22 @@ test('real measured TIGER bends only flush Strip joints and preserves road and f
    ()=>13.6,-35,null,z=>vegasMeasuredRoadX(verified,z));
  const repairs=[];
  const stats=build({addTri:()=>{},addQuad:(a,b,c,d)=>repairs.push([a,b,c,d])});
- assert.equal(stats.roadTriangles,18);
- assert.equal(repairs.length,9);
- for(const [i,vertices] of repairs.entries()){
+ assert.equal(stats.roadTriangles,114);
+ assert.equal(repairs.length,57);
+ for(const [i,vertices] of repairs.slice(0,9).entries()){
    const z=-210+i*11;
    const center=vegasMeasuredRoadX(verified,z);
    const actual=(vertices[0][0]+vertices[2][0])/2;
    assert.ok(Math.abs(actual-center)<1e-7,'road repair aligns with real geodata');
+ }
+ for(const vertices of repairs.slice(9)){
+   const [a,b,c,d]=vertices;
+   const centerA=vegasMeasuredRoadX(verified,a[2]);
+   const centerB=vegasMeasuredRoadX(verified,c[2]);
+   assert.ok(Math.abs((a[0]+b[0])/2-centerA)<7.23);
+   assert.ok(Math.abs((c[0]+d[0])/2-centerB)<7.23);
+   assert.ok([a,b,c,d].every(p=>p[0]>=-43&&p[0]<=-27 &&
+       p[2]>=-210&&p[2]<=-122),
+       'TIGER seams remain within original asphalt footprint');
  }
 });
