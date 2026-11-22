@@ -2906,7 +2906,7 @@ const CENTRAL_PARK_SITES=[
     // compatibility geometry retains the existing lightweight fallback.
     void alaskaGlacierFace(inout vec3 material,inout vec3 n,
                            inout float roughness){
-      if(!uAlaskaMesh || vHarborSurface<11.5 || vHarborSurface>12.5)return;
+      if(!uAlaskaMesh || vHarborSurface<11.5 || vHarborSurface>13.5)return;
       float near=1.0-smoothstep(95.0,375.0,distance(vWorld,uEye));
       if(near<.002)return;
       vec2 uv0=abs(n.y)>.64?vWorld.xz*.115:
@@ -2920,7 +2920,12 @@ const CENTRAL_PARK_SITES=[
       if(uAlaskaPhotoReady){
         // Reuse bundled Poly Haven CC0 snow photo/normal/roughness
         // (atlas column 1 of four), no extra asset/network request.
-        vec2 tile=fract(uv0);
+        // Surface 13 is restricted to static floe snowcaps. Mirror-repeat
+        // removes the visible periodic seam while leaving glacier surface 12
+        // and all other maps/materials on their original tiled UVs.
+        vec2 tile=vHarborSurface>12.5
+          ? 1.0-abs(mod(uv0,vec2(2.0))-1.0)
+          : fract(uv0);
         vec2 uv=vec2((1.0+.022+.956*tile.x)*.25,.022+.956*tile.y);
         vec3 photographed=texture(uAlaskaPhotoAlbedo,uv).rgb;
         vec4 normalRough=texture(uAlaskaPhotoNormalRough,uv);
@@ -2929,6 +2934,12 @@ const CENTRAL_PARK_SITES=[
         vec3 bitangent=normalize(cross(n,tangent));
         n=normalize(n+(tangent*micro.x+bitangent*micro.y)*.10*near);
         material=mix(material,photographed*vec3(.66,.84,.94),.44*near);
+        // The photo atlas is darker than open-water floe snow in daylight.
+        // Lift ONLY photo-ready floe caps (surface 13) at close range;
+        // retain textured microcontrast, clamp highlights, and leave
+        // glacier surface 12 plus missing-atlas fallback untouched.
+        if(vHarborSurface>12.5)
+          material=min(material*(1.0+.20*near),vec3(.95));
         roughness=mix(roughness,clamp(normalRough.a,.38,.88),.75*near);
       }
       float frostFresnel=pow(1.0-abs(dot(n,normalize(uEye-vWorld))),3.0);

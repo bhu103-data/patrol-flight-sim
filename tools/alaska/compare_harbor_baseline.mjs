@@ -4,8 +4,34 @@
  */
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 const root='http://127.0.0.1:8765';
-const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
+const baselineSha=process.env.PATROL_NATIVE_GPU==='1'
+  ? (process.env.PATROL_BASELINE_SHA||'bc155141742811bca3c4b1988672b238bd50a98b')
+  : 'bc155141742811bca3c4b1988672b238bd50a98b';
+// Native mode generates the exact parent snapshot directly from Git: no
+// Windows-shell redirection, PowerShell encoding changes, or manual copies.
+// Default CI retains its existing pinned snapshot setup.
+const comparisonFiles=[
+  ['alaska-baseline.html','index.html'],
+  ['assets/alaska/alaska-fjord-detail-baseline-qa.js','assets/alaska/alaska-fjord-detail.js']
+];
+if(process.env.PATROL_NATIVE_GPU==='1'){
+  for(const [local,gitPath] of comparisonFiles){
+    const raw=execFileSync('git',['show',baselineSha+':'+gitPath],
+      {maxBuffer:2_000_000});
+    writeFileSync(local,raw);
+  }
+}
+// Reject accidentally mixing a different baseline file with a claimed SHA.
+for(const [local,gitPath] of comparisonFiles){
+  const actual=readFileSync(local,'utf8');
+  const expected=execFileSync('git',['show',baselineSha+':'+gitPath],
+    {encoding:'utf8',maxBuffer:2_000_000});
+  if(actual!==expected)
+    throw Error('Pinned baseline bytes do not match '+baselineSha+':'+gitPath);
+}
+
 // Add the SAME QA-only camera hook to both documents in temporary copies.
  // Neither the actual game source nor the benchmark geometry is changed.
  function cameraQAPage(input,output){
@@ -71,12 +97,21 @@ const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
  }
  cameraQAPage('alaska-baseline.html','alaska-qa-baseline.html');
  cameraQAPage('index.html','alaska-qa-updated.html');
- const browser=await chromium.launch({headless:true,args:[
-  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
-]});
+ // CI uses pinned SwiftShader for repeatable functional screenshots only.
+ // For a physical Windows PC, opt in to a visible Edge window and reject
+ // software GPU fallbacks instead of quietly accepting misleading FPS.
+ const nativeGpu=process.env.PATROL_NATIVE_GPU==='1';
+ const browserChannel=process.env.PATROL_BROWSER_CHANNEL||'msedge';
+ const browser=await chromium.launch(nativeGpu
+   ? {headless:false,channel:browserChannel,args:['--enable-webgl','--use-gl=angle']}
+   : {headless:true,args:[
+     '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+     '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
+   ]});
 mkdirSync('artifacts',{recursive:true});
-const records={baselineSha,headSha:process.env.GITHUB_SHA||null,viewport:[1280,800]};
+const records={baselineSha,headSha:process.env.GITHUB_SHA||null,viewport:[1280,800],
+  captureMode:nativeGpu?'physical-gpu-raf':'swiftshader-ci',
+  browserChannel:nativeGpu?browserChannel:'playwright-chromium'};
 
 async function verifySamePageMapSwitch(page){
   // Use the shipped Flight Menu and launcher, never set selectedMap by hand.
@@ -127,8 +162,21 @@ async function capture(label,file){
   const response=await page.goto(root+'/'+file+'?alaskaView=harbor',
     {waitUntil:'domcontentloaded',timeout:30000});
   if(response?.status()!==200)throw Error('HTTP error for '+label);
-  if(!await page.evaluate(()=>Boolean(document.querySelector('#glCanvas')?.getContext('webgl2'))))
-    throw Error('WebGL2 unavailable for '+label);
+  const gpu=await page.evaluate(()=>{
+    const gl=document.querySelector('#glCanvas')?.getContext('webgl2');
+    if(!gl)return null;
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    return {
+      vendor:ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR),
+      renderer:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER),
+      version:gl.getParameter(gl.VERSION),unmasked:Boolean(ext)
+    };
+  });
+  if(!gpu)throw Error('WebGL2 unavailable for '+label);
+  if(nativeGpu && (!gpu.unmasked ||
+    /swiftshader|llvmpipe|softpipe|software|microsoft basic render|warp|cpu raster/i
+      .test(gpu.vendor+' '+gpu.renderer)))
+    throw Error('Real GPU cannot be verified for '+label+': '+JSON.stringify(gpu));
   await page.locator('input[name="flightMap"][value="alaska"]').check({force:true});
   await page.locator('#startFlight').click({timeout:15000});
   await page.waitForFunction(()=>{
@@ -185,26 +233,36 @@ async function capture(label,file){
   const floePose=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
   if(!floePose?.playing||floePose.map!=='alaska')
     throw Error(label+' did not retain a live Alaska floe view');
-  // Fixed-pose RAF cadence on headless SwiftShader: diagnostic ONLY, not GPU FPS.
-  // Bound measurement to 12 intervals or 15 seconds if software GL is slow.
-  const intervals=await page.evaluate(()=>new Promise(resolve=>{
+  // RequestAnimationFrame cadence measures displayed frame pacing, never GPU
+  // timer-query execution time. Native mode gathers 180 samples on a GPU
+  // identified by WEBGL_debug_renderer_info; CI's 12-sample default stays.
+  const maxIntervals=nativeGpu?180:12;
+  const sampleTimeoutMs=nativeGpu?30000:15000;
+  const intervals=await page.evaluate(({maxIntervals,sampleTimeoutMs})=>new Promise(resolve=>{
     let previous=null,done=false;const values=[];
-    const timeout=setTimeout(()=>{done=true;resolve(values);},15000);
+    const timeout=setTimeout(()=>{done=true;resolve(values);},sampleTimeoutMs);
     const frame=now=>{
       if(done)return;
       if(previous!==null)values.push(now-previous);
       previous=now;
-      if(values.length>=12){
+      if(values.length>=maxIntervals){
         done=true;clearTimeout(timeout);resolve(values);
       }else requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
-  }));
+  }),{maxIntervals,sampleTimeoutMs});
+  if(nativeGpu && intervals.length<120)
+    throw Error('Insufficient native GPU RAF samples: '+intervals.length);
   const sorted=intervals.slice().sort((a,b)=>a-b);
   const percentile=p=>sorted.length?sorted[Math.max(0,Math.ceil(p*sorted.length)-1)]:null;
   records[label]={...state.flight,after,near,floe,floePose,alaskaModules,pageErrors:errors,
-    firstPlayableMs,softwareRafSamples:sorted.length,
-    softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
+    firstPlayableMs,gpu,
+    softwareRafSamples:nativeGpu?null:sorted.length,
+    softwareRafP50Ms:nativeGpu?null:percentile(.5),
+    softwareRafP95Ms:nativeGpu?null:percentile(.95),
+    nativeRafSamples:nativeGpu?sorted.length:null,
+    nativeRafP50Ms:nativeGpu?percentile(.5):null,
+    nativeRafP95Ms:nativeGpu?percentile(.95):null};
   if(label==='updated'){
     // The screenshot-only HUD concealment includes the Flight Menu button.
     // Restore normal UI before exercising the real, clickable map selector.
@@ -235,8 +293,53 @@ try{
      records.baseline.floePose.yaw!==records.updated.floePose.yaw)
     throw Error('Floe candidate and baseline do not show the same admitted polygon');
   if(nearDrift>.5)throw Error('Near-view QA pose is not identical');
-  console.log('Alaska paired screenshot state:',JSON.stringify(records));
   if(displacement>9||yawDelta>.20)
     throw Error('Baseline/updated harbor camera moved too far for visual comparison');
+
+  if(nativeGpu){
+    const base=records.baseline,candidate=records.updated;
+    if(base.gpu.renderer!==candidate.gpu.renderer||
+       base.gpu.vendor!==candidate.gpu.vendor)
+      throw Error('Physical GPU adapter changed during A/B capture: '+
+        JSON.stringify({baseline:base.gpu,updated:candidate.gpu}));
+    const positiveEnv=name=>{
+      const raw=process.env[name];
+      if(raw===undefined||raw==='')return null;
+      const num=Number(raw);
+      if(!Number.isFinite(num)||num<=0)
+        throw Error(name+' must be a positive finite number: '+raw);
+      return num;
+    };
+    const p95BudgetMs=positiveEnv('PATROL_NATIVE_P95_BUDGET_MS');
+    const maxP95RegressionPct=positiveEnv('PATROL_NATIVE_MAX_P95_REGRESSION_PCT');
+    const p95DeltaMs=candidate.nativeRafP95Ms-base.nativeRafP95Ms;
+    const p50DeltaMs=candidate.nativeRafP50Ms-base.nativeRafP50Ms;
+    const p95RegressionPct=100*p95DeltaMs/base.nativeRafP95Ms;
+    const violations=[];
+    if(p95BudgetMs!==null&&candidate.nativeRafP95Ms>p95BudgetMs)
+      violations.push('candidate RAF P95 exceeds '+p95BudgetMs+' ms');
+    if(maxP95RegressionPct!==null&&p95RegressionPct>maxP95RegressionPct)
+      violations.push('candidate RAF P95 regression exceeds '+maxP95RegressionPct+'%');
+    records.nativeGpuAssessment={
+      evidenceType:'native Edge display RAF intervals, NOT GPU timer-query duration',
+      singleRunOnly:true, // repeat trials on the same physical GPU before release
+      baselineSha,baselineRenderer:base.gpu.renderer,
+      baseline:{p50Ms:base.nativeRafP50Ms,p95Ms:base.nativeRafP95Ms,
+        firstPlayableMs:base.firstPlayableMs,samples:base.nativeRafSamples},
+      candidate:{p50Ms:candidate.nativeRafP50Ms,p95Ms:candidate.nativeRafP95Ms,
+        firstPlayableMs:candidate.firstPlayableMs,samples:candidate.nativeRafSamples},
+      p50DeltaMs,p95DeltaMs,p95RegressionPct,
+      firstPlayableDeltaMs:candidate.firstPlayableMs-base.firstPlayableMs,
+      configuredLimits:{p95BudgetMs,maxP95RegressionPct},
+      status:violations.length?'configured-raf-budget-failed':
+        p95BudgetMs!==null||maxP95RegressionPct!==null
+          ? 'within-configured-raf-budget':'measurement-only',
+      violations
+    };
+  }
+  console.log('Alaska paired screenshot state:',JSON.stringify(records));
   writeFileSync('artifacts/alaska-cabin-port-camera.json',JSON.stringify(records,null,2));
+  if(records.nativeGpuAssessment?.violations.length)
+    throw Error('Native GPU RAF budget exceeded: '+
+      records.nativeGpuAssessment.violations.join('; '));
 }finally{await browser.close();}
