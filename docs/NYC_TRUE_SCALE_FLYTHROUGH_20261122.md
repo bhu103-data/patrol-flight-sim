@@ -80,7 +80,7 @@ This **small reusable core slice** consists of source FIDs
 \`21362,21367,22195,22209,22454,22459,23654,23665,23947,24700,24701\`.
 Three are original source-code **350010** intersection polygons; eight
 are **350000** paved roadbed polygons. This is **not a full city/neighborhood
-roadbed inventory**. Original 1,403 vertices across those 11 source records
+roadbed inventory**. Original 1,293 vertices across those 11 source records
 were topology-preservingly reduced with 0.05m simplification followed by
 0.01m coordinate rounding, leaving 229 vertices. The actual worst observed
 post-rounding boundary Hausdorff difference is **0.060106m**, and worst
