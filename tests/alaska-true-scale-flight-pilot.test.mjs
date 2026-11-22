@@ -169,6 +169,8 @@ test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15
   assert.ok(src.includes('indices=new Uint32Array((n-1)*(m-1)*6)'));
   assert.ok(loader.includes("manifest.sourceVerticalCrs!=='EPSG:5703'"));
   assert.ok(loader.includes("manifest.geoid!=='GEOID09'"));
+  assert.ok(loader.includes('geoid:manifest.geoid'));
+  assert.ok(loader.includes('sourceHorizontalCrs:manifest.sourceHorizontalCrs'));
   assert.ok(loader.includes('manifest.project'));
   assert.ok(loader.includes('manifest.workunit'));
   assert.ok(loader.includes('manifest.coverageValidFraction!==1'));
