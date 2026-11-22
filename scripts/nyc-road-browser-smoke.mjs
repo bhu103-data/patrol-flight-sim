@@ -66,7 +66,8 @@ await page.route('**/index.html*',async route=>{
    '        const band=nycDetailBand(east,north);info["band"+band]++;',
    '        if(!(east>-185&&east<175&&north>-526&&north<-155))continue;',
    '        info.inRegion++;if(band!==1)continue;info.regionBand1++;',
-   '        if(!(h>20)&&!destroyed)continue;',
+   '        if(info.examples.length<16)info.examples.push({east,north,w,d,h,band,destroyed});',
+   '        if(!(h>20)||destroyed)continue;',
    '        info.regionBand1Tall++;',
    '        const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-MANHATTAN_GRID.offset)/MANHATTAN_GRID.blockWidth);',
    '        const gridZ=Math.floor(north/MANHATTAN_GRID.blockLength);',
@@ -74,7 +75,7 @@ await page.route('**/index.html*',async route=>{
    '          Math.imul(gridX*gridZ,83492791))>>>0;',
    '        if(((seed>>>4)&3)!==0)continue;info.seedHit++;',
    '        if(w>6.2&&d>5.5&&h*(.62+(seed%13%3)*.09)>11)info.geometryEligible++;',
-   '        if(info.examples.length<12)info.examples.push({east,north,w,d,h,band,seed});',
+   '        if(info.examples.length<16)info.examples.push({east,north,w,d,h,band,seed});',
    '      }',
    '      window.__patrolLodEligibility=info;',
    '    }'
