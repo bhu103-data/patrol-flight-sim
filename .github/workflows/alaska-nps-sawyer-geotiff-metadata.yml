@@ -1,0 +1,37 @@
+name: Alaska NPS Sawyer full GeoTIFF metadata audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tools/alaska/audit_nps_sawyer_raster_metadata.py
+      - .github/workflows/alaska-nps-sawyer-geotiff-metadata.yml
+
+permissions:
+  contents: read
+
+jobs:
+  archive-survey-metadata:
+    if: github.head_ref == 'qa/alaska-nps-sawyer-survey-preflight-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install pinned GeoTIFF metadata reader (no training)
+        run: python3 -m pip install --disable-pip-version-check rasterio==1.4.3
+      - name: Python source syntax
+        run: python3 -m py_compile tools/alaska/audit_nps_sawyer_raster_metadata.py
+      - name: Stream two official NPS archives within 350 MiB each; extract metadata only
+        run: |
+          python3 tools/alaska/audit_nps_sawyer_raster_metadata.py \
+            --timeout 90 --output artifacts/alaska-nps-sawyer-geotiff-metadata.json
+      - name: Upload JSON manifest only, even when source metadata is blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-nps-sawyer-geotiff-metadata-only
+          path: artifacts/alaska-nps-sawyer-geotiff-metadata.json
+          if-no-files-found: warn
+          retention-days: 7
