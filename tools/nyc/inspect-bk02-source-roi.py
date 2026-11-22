@@ -108,9 +108,12 @@ def inspect():
         layer_names={i:str(x.FullPath or x.Name) for i,x in enumerate(model.Layers)}
         layer_kind={}
         for i,name in layer_names.items():
-            if "RoofTop Surface" in name:layer_kind[i]="roof"
-            elif "Facade Surface" in name:layer_kind[i]="facade"
-            elif "Foot Print Surface" in name or "FootPrint Surface" in name:
+            if "RoofTop Surface" in name or "Surface_Roof Top" in name:
+                layer_kind[i]="roof"
+            elif "Facade Surface" in name or "Surface_Facade" in name:
+                layer_kind[i]="facade"
+            elif ("Foot Print Surface" in name or "FootPrint Surface" in name
+                  or "Surface_Foot Print" in name):
                 layer_kind[i]="footprint"
         if not {"roof","facade"}.issubset(set(layer_kind.values())):
             raise ValueError("Official BK02 roof/facade surface layers are missing")
