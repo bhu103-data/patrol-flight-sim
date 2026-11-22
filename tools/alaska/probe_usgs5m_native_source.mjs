@@ -43,7 +43,7 @@ function queryUrl(layer,params){
   return url;
 }
 function xmlValue(text,tag){
-  const m=text.match(new RegExp('<'+tag+'>([\\\\s\\\\S]*?)</'+tag+'>'));
+  const m=text.match(new RegExp('<'+tag+'>([\\s\\S]*?)</'+tag+'>'));
   return m?m[1].replaceAll('&amp;','&').replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&quot;','"'):null;
 }
 function pointInRing(x,y,ring){
