@@ -11,7 +11,7 @@ test('2014 source rooftops are strictly opt-in, not the default NYC metre flight
   assert.match(html,/if\(!mn05RoofToggle\.checked\)return/);
   assert.match(html,/sourceVerticalDatumVerified!==false/);
   assert.match(html,/sourceYear:2014,sourceVerticalDatumVerified:false/);
-  assert.match(html,/2014.*2026|2026.*2014/);
+  assert.match(html,/2014[\s\S]{0,200}2026|2026[\s\S]{0,200}2014/);
 });
 test('only official hash-pinned cached roof meshes share existing true metres',()=>{
   assert.match(html,/mn05-cached-roof-metric-preview\.json/);
