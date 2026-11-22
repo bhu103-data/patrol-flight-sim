@@ -68,6 +68,7 @@ jobs:
           done
           node scripts/nyc-mn05-current-facade-browser-smoke.mjs
           test -s artifacts/nyc-official-mn05/current-2014-facade-aerial.png
+          test -s artifacts/nyc-official-mn05/current-2014-facade-close.png
           test -s artifacts/nyc-official-mn05/current-2014-facade-rotated.png
           test -s artifacts/nyc-official-mn05/current-2014-facade-full.png
       - name: Delete temporary 627 MB source model before evidence upload
@@ -88,6 +89,7 @@ jobs:
             artifacts/nyc-official-mn05/times-square-footprints.json
             artifacts/nyc-official-mn05/current-2014-facade-preview.html
             artifacts/nyc-official-mn05/current-2014-facade-aerial.png
+            artifacts/nyc-official-mn05/current-2014-facade-close.png
             artifacts/nyc-official-mn05/current-2014-facade-rotated.png
             artifacts/nyc-official-mn05/current-2014-facade-full.png
             artifacts/nyc-official-mn05/current-2014-facade-preview-report.json
