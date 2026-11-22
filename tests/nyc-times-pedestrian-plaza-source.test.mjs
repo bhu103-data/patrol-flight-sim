@@ -75,7 +75,7 @@ test('rejects empty, misleading and non-GeoJSON official responses',async()=>{
     async()=>({ok:true,json:async()=>({type:'FeatureCollection',
       features:[{type:'Feature',properties:{OBJECTID:4},
         geometry:{type:'Point',coordinates:[-73.98,40.76]}}]})})),
-    /No official|No valid/);
+    /No official|No valid|returned no valid polygons/);
 });
 test('all three real source layers must share identical geographic origin',()=>{
   const props={projection:{originLonLat:ORIGIN},buildings:[
