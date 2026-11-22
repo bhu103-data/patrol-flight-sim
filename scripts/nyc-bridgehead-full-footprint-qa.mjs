@@ -189,10 +189,29 @@ const injection=String.raw`
         pair.firstIssue??={t,gap,a,b};
       }
     }
+    // Real browser-loaded controller: test the leader-pace join, rather
+    // than only checking its final nine-unit distance cap.
+    let followerBlend=null;
+    if(cars.length===2&&cars[1].bridgeheadLeader===cars[0]){
+      const lead=cars[0],sedan=cars[1];
+      const speedAt=(t,h=.0005)=>
+        (bridgeheadResolvedTravel(sedan,t+h)-
+          bridgeheadResolvedTravel(sedan,t-h))/(2*h);
+      const joinTime=(lead.offset-sedan.offset-9)/
+        (sedan.pace-lead.pace);
+      followerBlend={
+        joinTime,entrySpeed:speedAt(.2),beforeSpeed:speedAt(joinTime-.025),
+        centerSpeed:speedAt(joinTime),afterSpeed:speedAt(joinTime+.025),
+        cruiseSpeed:speedAt(joinTime+5),
+        clearance:bridgeheadResolvedTravel(lead,joinTime)-
+          bridgeheadResolvedTravel(sedan,joinTime)
+      };
+    }
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
       streetY:STREET_Y,waterY:WATER_H,
-      lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair};
+      lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair,
+      followerBlend};
   };
   // Test-only snapshot clock: drive the production signal's actual scene
   // time to known red/green windows for a stable physical-lens comparison.
@@ -288,6 +307,15 @@ try{
     traffic.pair.minGap>=traffic.pair.minimumRequiredClearance,
     'Live taxi/sedan body envelopes collide during long-run bridge traffic: '+
     JSON.stringify(traffic.pair));
+  const blend=traffic.followerBlend;
+  assert(blend&&Math.abs(blend.joinTime-5)<.001&&
+    Math.abs(blend.entrySpeed-5.6)<.01&&
+    Math.abs(blend.centerSpeed-5.3)<.02&&
+    Math.abs(blend.beforeSpeed-blend.afterSpeed)<.025&&
+    Math.abs(blend.cruiseSpeed-5)<.01&&
+    blend.clearance>=9,
+    'Loaded scene follower velocity must blend without a sudden speed step: '+
+    JSON.stringify(blend));
   for(const car of traffic.rows){
     assert(car.routePoints>traffic.bridgeLinePoints,'Vehicle never enters DUMBO branch');
     assert(car.samples>100&&car.bridgeSamples>0&&car.streetSamples>0&&car.turnSamples>0&&
