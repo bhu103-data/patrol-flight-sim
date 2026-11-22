@@ -35,11 +35,32 @@ jobs:
       - name: Download real 2022 NYC street centerline and roadbed polygons
         run: |
           node scripts/nyc-times-true-scale-pilot.mjs
-          node scripts/nyc-times-roadbed-polygon-source.mjs
+          # Official OTI ArcGIS can intermittently timeout on hosted runners.
+          # Retry ONLY the genuine official query, bounded 3 times; if it
+          # remains unreachable, fail rather than synthesize/restore geometry.
+          for attempt in 1 2 3; do
+            if node scripts/nyc-times-roadbed-polygon-source.mjs; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Official NYC OTI roadbed unavailable after 3 queries" >&2
+              exit 1
+            fi
+            sleep "$((attempt*7))"
+          done
           test -s artifacts/nyc-roadbed-source/roadbed.json
       - name: Download genuine sidewalk polygons, curb and curb cut feature lines
         run: |
-          node scripts/nyc-times-sidewalk-curb-source.mjs
+          for attempt in 1 2 3; do
+            if node scripts/nyc-times-sidewalk-curb-source.mjs; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Official NYC OTI sidewalk/curb source unavailable after 3 queries" >&2
+              exit 1
+            fi
+            sleep "$((attempt*7))"
+          done
           test -s artifacts/nyc-curb-sidewalk-source/edges.json
           test -s artifacts/nyc-curb-sidewalk-source/sidewalk-curb.svg
       - name: Audit same-metre official roadbed, sidewalk, building and curb topology
