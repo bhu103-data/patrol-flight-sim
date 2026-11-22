@@ -6480,47 +6480,110 @@ const CENTRAL_PARK_SITES=[
     // final PATROL h stays at the existing worker collision roof height.
     const floors=Math.max(2,Math.min(6,
       Math.floor(source.roofHeightFt/22)));
+    // PATROL_DUMBO_OTI_RECESSED_BAYS_V2 — real wall voids, not overlaid
+    // flat glass. Every new face stays inside the old road-cleared proxy.
+    const edges=ring.map((a,i)=>{
+      const b=ring[(i+1)%ring.length];
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      return {len,outZ:len>0?(b[0]-a[0])/len:0};
+    });
+    let doorEdge=-1,bestDoorLength=0;
+    for(let i=0;i<edges.length;i++)
+      if(edges[i].len>3.2&&edges[i].outZ<-.35&&
+        edges[i].len>bestDoorLength){
+        bestDoorLength=edges[i].len;doorEdge=i;
+      }
+    if(doorEdge<0){
+      for(let i=0;i<edges.length;i++)
+        if(edges[i].len>4&&edges[i].len>bestDoorLength){
+          bestDoorLength=edges[i].len;doorEdge=i;
+        }
+    }
+    let doors=0,windowReveals=0;
     for(let k=0;k<ring.length;k++){
       const a=ring[k],b=ring[(k+1)%ring.length];
-      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const len=edges[k].len;
       if(len<.075)continue;
-      addQuad([a[0],y,a[1]],[b[0],y,b[1]],
-        [b[0],roofY,b[1]],[a[0],roofY,a[1]],brick,12);
       walls++;
-      // Inset-looking WGS84 edge-specific bay spacing; authored window
-      // surfaces are not a survey of actual window locations.
       const bays=Math.min(4,Math.floor(len/2.15));
       const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
-      const at=(t,yy,out=.055)=>[
+      const at=(t,yy,out=0)=>[
         a[0]+(b[0]-a[0])*t+nx*out,yy,
         a[1]+(b[1]-a[1])*t+nz*out
       ];
-      if(bays>=1){
+      const strip=(l,r,y0,y1,tone=brick,id=12,out=0)=>{
+        if(r-l<=.0001||y1-y0<=.0001)return;
+        addQuad(at(l,y0,out),at(r,y0,out),
+          at(r,y1,out),at(l,y1,out),tone,id);
+      };
+      const rows=[];
+      if(bays>0){
         for(let row=0;row<floors;row++){
           const floorStep=(h-3.6)/floors;
           const low=y+2.75+floorStep*row+.21;
-          const high=Math.min(roofY-.40,low+Math.min(1.58,floorStep*.65));
-          if(high<=low+.30)continue;
-          for(let j=0;j<bays;j++){
-            const left=(j+.22)/bays,right=(j+.78)/bays;
-            const tone=((source.fid+k*11+row*7+j*13)%7===0)
-              ?[.36,.35,.32]:glass;
-            addQuad(at(left,low),at(right,low),
-              at(right,high),at(left,high),tone,13);
-            addQuad(at(left-.016,high+.04,.078),
-              at(right+.016,high+.04,.078),
-              at(right+.016,high+.12,.078),
-              at(left-.016,high+.12,.078),stone,12);
-            if((row+j)%2===0){
-              const mid=(left+right)*.5;
-              addQuad(at(mid-.007,low,.079),at(mid+.007,low,.079),
-                at(mid+.007,high,.079),at(mid-.007,high,.079),frame,12);
-            }
-            windows++;
-          }
+          const high=Math.min(roofY-.40,
+            low+Math.min(1.58,floorStep*.65));
+          if(high>low+.30)rows.push([row,low,high]);
         }
       }
-      // Low, brick roof-rim step without altering existing roof collider.
+      // Only one broad south-facing side receives an original, clearly
+      // authored ground entrance; no sourced doorway position is implied.
+      const baseTop=rows[0]?.[1]??roofY;
+      if(k===doorEdge&&baseTop>y+2.62&&len>3.2){
+        const half=Math.min(.86/len,.17);
+        const left=.5-half,right=.5+half;
+        const top=y+2.4,doorInset=-.18;
+        strip(0,left,y,top);
+        strip(right,1,y,top);
+        strip(0,1,top,baseTop);
+        addQuad(at(left,y,doorInset),at(right,y,doorInset),
+          at(right,top,doorInset),at(left,top,doorInset),
+          [.12,.20,.22],13);
+        addQuad(at(left,y,0),at(left,y,doorInset),
+          at(left,top,doorInset),at(left,top,0),stone,12);
+        addQuad(at(right,y,doorInset),at(right,y,0),
+          at(right,top,0),at(right,top,doorInset),stone,12);
+        addQuad(at(left,top,doorInset),at(right,top,doorInset),
+          at(right,top,0),at(left,top,0),brick,12);
+        strip(left-.025,right+.025,top+.02,top+.16,stone,12,.065);
+        strip(.495,.505,y+.1,top-.1,frame,12,doorInset+.012);
+        doors++;
+      }else strip(0,1,y,baseTop);
+      let previous=baseTop;
+      for(const [row,low,high] of rows){
+        strip(0,1,previous,low);
+        let cursor=0;
+        for(let j=0;j<bays;j++){
+          const left=(j+.22)/bays,right=(j+.78)/bays;
+          strip(cursor,left,low,high);
+          const glassInset=-.18;
+          const tone=((source.fid+k*11+row*7+j*13)%7===0)
+            ?[.36,.35,.32]:glass;
+          addQuad(at(left,low,glassInset),at(right,low,glassInset),
+            at(right,high,glassInset),at(left,high,glassInset),
+            tone,13);
+          // Four real, solid reveals enclose the cut opening.
+          addQuad(at(left,low,0),at(left,low,glassInset),
+            at(left,high,glassInset),at(left,high,0),brick,12);
+          addQuad(at(right,low,glassInset),at(right,low,0),
+            at(right,high,0),at(right,high,glassInset),brick,12);
+          addQuad(at(left,low,0),at(right,low,0),
+            at(right,low,glassInset),at(left,low,glassInset),stone,12);
+          addQuad(at(left,high,glassInset),at(right,high,glassInset),
+            at(right,high,0),at(left,high,0),brick,12);
+          strip(left-.013,right+.013,high+.015,high+.13,stone,12,.055);
+          if((row+j)%2===0){
+            const mid=(left+right)*.5;
+            strip(mid-.007,mid+.007,low,high,frame,12,glassInset+.012);
+          }
+          windows++;windowReveals+=4;
+          cursor=right;
+        }
+        strip(cursor,1,low,high);
+        previous=high;
+      }
+      strip(0,1,previous,roofY);
+      // Retain the original measured-budget roof silhouette.
       addQuad([a[0],roofY-.12,a[1]],[b[0],roofY-.12,b[1]],
         [b[0],roofY+.12,b[1]],[a[0],roofY+.12,a[1]],stone,12);
       parapets++;
@@ -6556,7 +6619,7 @@ const CENTRAL_PARK_SITES=[
       if(!clipped)break;
     }
     return {fid:source.fid,ring,roofY,floors,
-      walls,windows,roofTriangles,parapets,
+      walls,windows,doors,windowReveals,roofTriangles,parapets,
       originalArea:Math.abs(signed(ring))};
   }
 
