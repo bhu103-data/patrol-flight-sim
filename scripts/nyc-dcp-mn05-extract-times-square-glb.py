@@ -170,7 +170,11 @@ def polygon_from_current(feature):
 def match_footprints(dcp_footprints, current_features):
     current = []
     for rec in current_features:
-        if len(rec.get("rings", [])) != 1:
+        if (not isinstance(rec.get("fid"), int) or
+            not isinstance(rec.get("heightFt"), (int, float)) or
+            not math.isfinite(float(rec["heightFt"])) or
+            not (0 < float(rec["heightFt"]) <= 2500) or
+            len(rec.get("rings", [])) != 1):
             continue
         poly = polygon_from_current(rec)
         if poly is not None:
@@ -207,7 +211,7 @@ def assign_surface(vertices, faces, footprints, layer):
     centroid, normal_xy = mesh_centroid_normal(vertices, faces)
     point = Point(float(centroid[0]), float(centroid[1]))
     if layer == "Facade Surface" and np.linalg.norm(normal_xy) > 0.5:
-        p1 = Point(*(centroid[:2] + normal_xy * 0.30))
+        p1 = Point(*(centroid[:2] + normal_xy * (0.30 / FTUS_M)))
         p2 = Point(*(centroid[:2] - normal_xy * 0.30))
         c1 = [fp for fp in footprints if fp["poly"].contains(p1)]
         c2 = [fp for fp in footprints if fp["poly"].contains(p2)]
@@ -219,7 +223,7 @@ def assign_surface(vertices, faces, footprints, layer):
         if candidates:
             return min(candidates, key=lambda fp: fp["poly"].area)
     best = min(footprints, key=lambda fp: fp["poly"].distance(point))
-    return best if best["poly"].distance(point) <= 2.0 else None
+    return best if best["poly"].distance(point) <= (2.0 / FTUS_M) else None
 
 
 def append_mesh(target, vertices, faces, color):
