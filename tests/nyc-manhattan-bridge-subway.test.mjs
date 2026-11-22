@@ -81,3 +81,25 @@ test('trains follow the same sloped rail corridor, with deterministic two-way mo
   assert.throws(()=>rail.trainPose(0,rail.runs[0],4),/Invalid/);
   assert.throws(()=>rail.trainPose(Number.NaN,rail.runs[0],0),/Invalid/);
 });
+
+test('engineering tower and deck proportions are derived from credited control data',()=>{
+  const c=rail.engineering,h=rail.calibratedHeights,game=rail.spec;
+  assert.ok(c&&h,'sourced dimensions must be exposed for review');
+  assert.equal(c.lowerDeckAboveMhw,42.18432);
+  assert.equal(c.upperDeckAboveMhw,49.3776);
+  assert.equal(c.saddleAboveMhw,98.298);
+  assert.equal(c.mainSpan,448.056);
+  assert.equal(c.suspendedSpan,890.016);
+  const gameSpan=game.east-game.west;
+  const observedMain=game.towerXs[1]-game.towerXs[0];
+  const expectedMain=gameSpan*c.mainSpan/c.suspendedSpan;
+  assert.ok(Math.abs(observedMain-expectedMain)/expectedMain<0.04,
+    'Manhattan Bridge towers should have real main-span / anchorage proportions');
+  const normalized=(game.deck-game.water)/c.lowerDeckAboveMhw;
+  assert.ok(Math.abs(h.saddle-(game.water+c.saddleAboveMhw*normalized))<1e-8,
+    'tower height follows measured prototype saddle ratio');
+  assert.ok(h.saddle<game.deck+24,'reject unsupported skyscraper-height cable towers');
+  assert.ok(h.saddle>h.upper+8,'upper roadway must remain below tower cap');
+  assert.ok(h.cableMid>h.upper,'cable must clear raised road in compressed scene');
+  assert.ok(h.anchorage<game.deck,'anchorage descends toward real river-edge datum');
+});

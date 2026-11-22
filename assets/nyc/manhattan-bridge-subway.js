@@ -11,6 +11,23 @@ const SPEC=Object.freeze({
   trackOffsets:Object.freeze([-9.5,-6.3,6.3,9.5]),
   towerXs:Object.freeze([31,150]), pace:7.4, carPitch:13.35
 });
+// Derived from Ethical Tech CoLab's source-governed control skeleton (CC BY 4.0).
+// The dimensions are prototype metres; PATROL compresses them into game space.
+// Attribution: https://github.com/Ethical-Tech-CoLab/manhattan-bridge-3d
+// Source: viewer/metadata/build_report.json, CTL-005 / 008 / 020 / 022 etc.
+const CONTROL=Object.freeze({
+  lowerDeckAboveMhw:42.18432, upperDeckAboveMhw:49.3776,
+  saddleAboveMhw:98.298, cableMidAboveMhw:49.3776,
+  anchorageCableAboveMhw:41.148, mainSpan:448.056,
+  suspendedSpan:890.016
+});
+const vScale=(SPEC.deck-SPEC.water)/CONTROL.lowerDeckAboveMhw;
+const sourceY=metres=>SPEC.water+metres*vScale;
+// Preserve 3.13-unit NYC train's existing roof clearance despite compact world.
+const UPPER_ROAD_Y=Math.max(sourceY(CONTROL.upperDeckAboveMhw),SPEC.deck+4.25);
+const TOWER_SADDLE_Y=sourceY(CONTROL.saddleAboveMhw);
+const CABLE_MID_Y=Math.max(sourceY(CONTROL.cableMidAboveMhw),UPPER_ROAD_Y+0.24);
+const CABLE_ANCHOR_Y=sourceY(CONTROL.anchorageCableAboveMhw);
 const RUNS=Object.freeze([
   Object.freeze({service:'D',side:6.3,direction:1,phase:16.0}),
   Object.freeze({service:'Q',side:-6.3,direction:-1,phase:103.0})
@@ -35,7 +52,7 @@ function trainPose(time,run,car){
 function build({box,addQuad,beam}){
   if(typeof box!=='function'||typeof addQuad!=='function'||typeof beam!=='function')
     throw Error('Manhattan Bridge requires the existing WebGL geometry callbacks');
-  const structural=[.29,.35,.40],rivets=[.20,.26,.29],
+  const structural=[.19,.32,.43],rivets=[.22,.29,.33],
     walkway=[.52,.54,.51],deckColor=[.23,.28,.31],
     trackBed=[.25,.29,.33],rail=[.56,.60,.62],
     sleeper=[.38,.39,.37],anchor=[.54,.51,.47],
@@ -54,11 +71,18 @@ function build({box,addQuad,beam}){
       B(point(x,side*12.0,SPEC.deck-.10),point(nx,side*12.0,SPEC.deck-.10),.31,structural);
       B(point(x,side*3.9,SPEC.deck-.23),point(nx,side*3.9,SPEC.deck-.23),.24,structural);
     }
-    Q(point(x,-3.75,SPEC.deck+4.55),point(nx,-3.75,SPEC.deck+4.55),
-      point(nx,3.75,SPEC.deck+4.55),point(x,3.75,SPEC.deck+4.55),deckColor);
-    // The elevated road and train decks have distinct structural elevations.
-    B(point(x,-3.95,SPEC.deck+4.36),point(nx,-3.95,SPEC.deck+4.36),.32,structural);
-    B(point(x,3.95,SPEC.deck+4.36),point(nx,3.95,SPEC.deck+4.36),.32,structural);
+    // Real bridge has a central lower roadway, flanked by B/D and N/Q subway
+    // rails, plus two raised roads; vertical clearance preserves the car mesh.
+    Q(point(x,-3.75,SPEC.deck+.04),point(nx,-3.75,SPEC.deck+.04),
+      point(nx,3.75,SPEC.deck+.04),point(x,3.75,SPEC.deck+.04),deckColor);
+    for(const side of [-1,1]){
+      const inner=Math.min(side*4.05,side*11.65);
+      const outer=Math.max(side*4.05,side*11.65);
+      Q(point(x,inner,UPPER_ROAD_Y),point(nx,inner,UPPER_ROAD_Y),
+        point(nx,outer,UPPER_ROAD_Y),point(x,outer,UPPER_ROAD_Y),deckColor);
+      B(point(x,side*12.0,UPPER_ROAD_Y-.21),
+        point(nx,side*12.0,UPPER_ROAD_Y-.21),.32,structural);
+    }
   }
   for(const side of SPEC.trackOffsets){
     for(const railSide of [-.72,.72]){
@@ -77,26 +101,35 @@ function build({box,addQuad,beam}){
       const z=at(tx,side*12.65);
       const pierHeight=SPEC.deck-SPEC.water+2.8;
       X(tx,SPEC.water-1.6+pierHeight*.5,z,3.25,pierHeight,3.05,anchor);
-      X(tx,SPEC.deck+21.5,z,2.45,43.6,2.30,structural);
-      X(tx,SPEC.deck+43.12,z,4.0,1.15,3.4,anchor);
-      for(const h of [7,22,37])
-        X(tx,SPEC.deck+h,z,2.70,.36,2.55,rivets);
+      const towerH=TOWER_SADDLE_Y-SPEC.deck;
+      // Split each side pylon into two upright legs. This leaves a readable
+      // structural archway instead of an unscaled monolithic high-rise box.
+      for(const xx of [tx-1.22,tx+1.22])
+        X(xx,SPEC.deck+towerH*.5,z,1.02,towerH+.1,1.55,structural);
+      X(tx,TOWER_SADDLE_Y,z,4.0,1.15,3.4,anchor);
+      for(const f of [.19,.52,.83])
+        X(tx,SPEC.deck+towerH*f,z,3.72,.29,2.34,rivets);
     }
-    for(const h of [12.8,33.4])
-      B(point(tx,-12.65,SPEC.deck+h),point(tx,12.65,SPEC.deck+h),
-        .61,structural);
-    B(point(tx,-12.65,SPEC.deck+30.5),
-      point(tx,12.65,SPEC.deck+12.8),.35,structural);
-    B(point(tx,12.65,SPEC.deck+30.5),
-      point(tx,-12.65,SPEC.deck+12.8),.35,structural);
+    const towerH=TOWER_SADDLE_Y-SPEC.deck;
+    for(const f of [.30,.73])
+      B(point(tx,-12.65,SPEC.deck+towerH*f),
+        point(tx,12.65,SPEC.deck+towerH*f),.55,structural);
+    B(point(tx,-12.65,SPEC.deck+towerH*.67),
+      point(tx,12.65,SPEC.deck+towerH*.30),.30,structural);
+    B(point(tx,12.65,SPEC.deck+towerH*.67),
+      point(tx,-12.65,SPEC.deck+towerH*.30),.30,structural);
   }
   function cableHeight(x){
     // A bounded catenary approximation: highest at the towers, lowest midspan.
     const t=Math.max(0,Math.min(1,(x-SPEC.towerXs[0])/
       (SPEC.towerXs[1]-SPEC.towerXs[0])));
-    if(x<SPEC.towerXs[0])return SPEC.deck+42-14*(SPEC.towerXs[0]-x)/(SPEC.towerXs[0]-SPEC.west);
-    if(x>SPEC.towerXs[1])return SPEC.deck+42-14*(x-SPEC.towerXs[1])/(SPEC.east-SPEC.towerXs[1]);
-    return SPEC.deck+18+24*Math.pow(2*t-1,2);
+    if(x<SPEC.towerXs[0])
+      return TOWER_SADDLE_Y-(TOWER_SADDLE_Y-CABLE_ANCHOR_Y)*
+        (SPEC.towerXs[0]-x)/(SPEC.towerXs[0]-SPEC.west);
+    if(x>SPEC.towerXs[1])
+      return TOWER_SADDLE_Y-(TOWER_SADDLE_Y-CABLE_ANCHOR_Y)*
+        (x-SPEC.towerXs[1])/(SPEC.east-SPEC.towerXs[1]);
+    return CABLE_MID_Y+(TOWER_SADDLE_Y-CABLE_MID_Y)*Math.pow(2*t-1,2);
   }
   for(const side of [-1,1]){
     const spanSide=side*12.35;
@@ -141,6 +174,9 @@ function build({box,addQuad,beam}){
   return Object.freeze({beams,boxes,quads,total:beams+boxes+quads});
 }
 root.PatrolNycManhattanSubway=Object.freeze({
-  spec:SPEC,runs:RUNS,at,point,trainPose,build
+  spec:SPEC,engineering:CONTROL,
+  calibratedHeights:Object.freeze({lower:SPEC.deck,upper:UPPER_ROAD_Y,
+    saddle:TOWER_SADDLE_Y,cableMid:CABLE_MID_Y,anchorage:CABLE_ANCHOR_Y}),
+  runs:RUNS,at,point,trainPose,build
 });
 })(typeof window==='undefined'?globalThis:window);
