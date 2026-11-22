@@ -64,17 +64,58 @@ test('actual source topology produces non-box silhouettes and watertight roof ar
     for(const t of roof){
       assert.ok(cross(...t.slice(0,3))<-.000001,
         'all roof triangles face up with +Y normal in native game WebGL');
-      assert.ok(t.slice(0,3).every(v=>Math.abs(v[1]-(ground+lot[4]))<1e-7));
+      const heights=src.fid===1080628
+        ? [ground+lot[4],ground+lot[4]-.64]
+        : [ground+lot[4]];
+      assert.ok(t.slice(0,3).every(v=>
+        heights.some(y=>Math.abs(v[1]-y)<1e-7)),
+        'roof facets preserve exact external outline and bounded internal drop');
     }
     assert.ok(result.walls>=8&&result.windows>=20);
     assert.ok(result.floors>=3);
-    assert.ok(quads.filter(q=>q.at(-1)===13).length===result.windows,
+    assert.ok(quads.filter(q=>q.at(-1)===13).length===result.windows+result.doors,
       'one source-derived window pane per authored bay, no duplicate main box');
-    assert.ok(quads.length<=165 && tris.length<=13,
+    assert.ok(quads.length<=(src.fid===1080628?1100:500) && tris.length<=13,
       'bounded same-mesh quad/triangle budget for WebGL2');
   }
   assert.ok(new Set(shapeCounts).size>=2,
     'GIS silhouettes should not be three clone rectangles');
+});
+
+test('192 source-pilot panes, including 108 Nexus condo bays, retain recessed window geometry',()=>{
+  assert.match(source,/PATROL_DUMBO_OTI_RECESSED_BAYS_V2/);
+  const {select,build}=setup();
+  let totalWindows=0,totalDoors=0,totalQuads=0;
+  for(const lot of sites){
+    const {result,quads,tris}=audit(lot,select(lot,3),build);
+    assert.equal(result.doors,1,'exactly one authored entry per pilot');
+    assert.equal(result.windowReveals,4*result.windows,
+      'left/right/sill/header are real 3D faces for every window');
+    const panes=quads.filter(q=>q.at(-1)===13);
+    assert.equal(panes.length,result.windows+result.doors);
+    for(const pane of panes){
+      const cx=pane.slice(0,4).reduce((s,p)=>s+p[0],0)/4;
+      const cz=pane.slice(0,4).reduce((s,p)=>s+p[2],0)/4;
+      let distance=Infinity;
+      for(let k=0;k<result.ring.length;k++){
+        const a=result.ring[k],b=result.ring[(k+1)%result.ring.length];
+        const dx=b[0]-a[0],dz=b[1]-a[1];
+        const t=Math.max(0,Math.min(1,
+          ((cx-a[0])*dx+(cz-a[1])*dz)/(dx*dx+dz*dz)));
+        distance=Math.min(distance,
+          Math.hypot(cx-a[0]-t*dx,cz-a[1]-t*dz));
+      }
+      assert.ok(distance>=.17&&distance<=.19,
+        'each glass/door plane must sit 0.18 units behind the shell');
+    }
+    assert.ok(quads.length<=(result.fid===1080628?1100:500)&&tris.length<=13,
+      'recessed detail must remain within native one-batch mesh budget');
+    totalWindows+=result.windows;totalDoors+=result.doors;
+    totalQuads+=quads.length;
+  }
+  assert.equal(totalWindows,192);
+  assert.equal(totalDoors,3);
+  assert.ok(totalQuads<=1900);
 });
 
 test('fitted WGS84 polygon never crosses original road-cleared collision proxy',()=>{
