@@ -32,12 +32,23 @@ Open Data Terms apply; no commercial imagery/tiles are used.
 
 The source contains **22 returned records, 20 polygon parts**, 8 contributing
 feature IDs, **577 serialized triangles**, approximately **3,714.73 m²**
-of paved plan-area in the bounded clip. Source vertices were rounded to
+of **summed serialized triangle area (NOT unique pavement coverage)** in the bounded clip. Source vertices were rounded to
 **0.001 m**, producing **24 degenerate microtriangles** after rounding;
 `prepareOfficialDumboRoadbed` omits these for rendering (553 valid
 WebGL triangles), while retaining the original read-only source and
 recording the count and area. This is a data-quality observation rather
 than invented replacement geometry.
+
+**Independent topology check, not yet a CI gate:** Unioning the 553
+nondegenerate triangles using Shapely in the recorded source's *east/north
+metre plane* yields approximately **3,467.03 m² of distinct polygon
+coverage**. The triangle-area sum is **3,714.84 m² after rounding**;
+the difference, approximately **247.81 m² (6.67%)**, is overlapping
+official source triangles, not newly invented streets. The 2022 pavement
+polygons must not be counted as disjoint parcels. Opaque pavement rendering
+can overdraw those coincident surfaces. This snapshot only proves the
+limited 2022 *pavement geometry*, not whole-street connectivity or verified
+present-day dimensions.
 
 The source's road X/east and Y/north local coordinates are inverted to
 WGS84 at their **own** `(-73.992042, 40.702634)` origin, then transformed
