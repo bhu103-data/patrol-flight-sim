@@ -2,6 +2,7 @@
   "request": "one-time official model import for Flatiron",
   "source": "NYC DCP / DOITT NYC 3D Model by Community District, Manhattan CD05, 2014",
   "source_archive": "nyc_3dmodel_mn05.zip",
+  "source_archive_url": "https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_mn05.zip",
   "target": {
     "name": "Flatiron Building",
     "BIN": 1016278,
