@@ -1,0 +1,74 @@
+name: NYC DUMBO BK02 official 2014 Rhino roof and facade source QA
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/nyc/probe-official-bk02-rhino.py'
+      - 'tools/nyc/inspect-bk02-source-roi.py'
+      - 'tools/nyc/official_bk02_projection.py'
+      - 'tools/nyc/dumbo-2014-source-preview.html'
+      - 'scripts/dumbo-2014-source-browser-smoke.mjs'
+      - 'tests/nyc-bk02-coordinate-frame.test.py'
+      - 'tests/nyc-bk02-source-mesh.test.py'
+      - 'assets/nyc/dumbo-oti-metric-48.json'
+      - '.github/workflows/nyc-dumbo-2014-rhino-source.yml'
+permissions:
+  contents: read
+jobs:
+  official-bk02-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate projection and install read-only Rhino 3DM parser
+        run: |
+          python -m py_compile tools/nyc/official_bk02_projection.py
+          python -m py_compile tools/nyc/probe-official-bk02-rhino.py
+          python -m py_compile tools/nyc/inspect-bk02-source-roi.py
+          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2
+          python tests/nyc-bk02-coordinate-frame.test.py
+      - name: Download exact official BK02 2014 Rhino archive with hard size/path limits
+        run: PATROL_KEEP_BK02=1 python tools/nyc/probe-official-bk02-rhino.py
+      - name: Extract only original roof/facade/footprint cached meshes inside 48-building DUMBO AOI
+        run: |
+          python tools/nyc/inspect-bk02-source-roi.py
+          python tests/nyc-bk02-source-mesh.test.py
+      - name: Prepare isolated source viewer and install pinned browser harness
+        run: |
+          cp tools/nyc/dumbo-2014-source-preview.html artifacts/nyc-official-bk02/dumbo-2014-source-preview.html
+          cp assets/nyc/dumbo-oti-metric-48.json artifacts/nyc-official-bk02/dumbo-oti-metric-48.json
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Render original 2014 DUMBO roof/facade geometry in actual WebGL2
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-official-bk02 >/tmp/nyc-bk02-source-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8765/dumbo-2014-source-preview.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/dumbo-2014-source-browser-smoke.mjs
+      - name: Upload bounded provenance, source mesh and WebGL screenshots (never original 3DM)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-bk02-2014-roof-facade-source-QA
+          path: |
+            artifacts/nyc-official-bk02/bk02-probe.json
+            artifacts/nyc-official-bk02/dumbo-2014-source-roi.json
+            artifacts/nyc-official-bk02/dumbo-2014-source-mesh.json
+            artifacts/nyc-official-bk02/browser-report.json
+            artifacts/nyc-official-bk02/01-bk02-2014-source-oblique.png
+            artifacts/nyc-official-bk02/02-bk02-2014-source-overhead.png
+            artifacts/nyc-official-bk02/03-bk02-2014-source-rotated.png
+            artifacts/nyc-official-bk02/dumbo-2014-source-preview.html
+            artifacts/nyc-official-bk02/dumbo-oti-metric-48.json
+          retention-days: 7
+          if-no-files-found: ignore
