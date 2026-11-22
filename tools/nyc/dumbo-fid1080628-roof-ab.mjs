@@ -13,7 +13,7 @@ const modes=['fidRoof','otiStreet'];
 const report={
   expectedFid:1080628,
   roofSource:'NYC OTI BUILDING_view footprint + HEIGHT_ROOF; interior tier authored, not surveyed',
-  baselineSha:'91fb2191040e088ec26b2cd884aedffc0e5e6171',
+  baselineSha:'c93c6d1fa9c5f9a24eae6cc0cf5a764523dfaffb',
   candidateSha:process.env.PATROL_QA_CANDIDATE_SHA||'current PR head',
   order,modes,observations:[],comparisons:[],visualComparisons:[],errors:[],warnings:[],
   visualPassed:false,performanceStatus:'pending',
