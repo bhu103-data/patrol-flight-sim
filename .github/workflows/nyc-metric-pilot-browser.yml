@@ -1,0 +1,48 @@
+name: NYC true-metre Times Square pilot browser QA
+
+on:
+  pull_request:
+    paths:
+      - "assets/nyc/nyc-metric-geometry-pilot.js"
+      - "assets/nyc/times-square-footprints.json"
+      - "nyc-times-square-metric-pilot.html"
+      - "scripts/nyc-metric-pilot-browser-qa.mjs"
+      - "tests/nyc-metric-geometry-pilot.test.mjs"
+      - ".github/workflows/nyc-metric-pilot-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geometry-and-two-view-WebGL2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify official snapshot projection and triangulation
+        run: node --test tests/nyc-metric-geometry-pilot.test.mjs
+      - name: Install free headless software WebGL2 Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve isolated metric reference (does not launch flight map)
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-metric-server.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/nyc-times-square-metric-pilot.html >/dev/null
+      - name: Measure model state and photograph two physical-metre camera orbits
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-metric-pilot-browser-qa.mjs
+      - name: Upload two actual WebGL2 PNGs and JSON, including failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-metric-pilot-browser-evidence
+          path: artifacts/nyc-metric-pilot/
+          retention-days: 7
+          if-no-files-found: warn
