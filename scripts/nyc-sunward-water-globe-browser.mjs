@@ -80,15 +80,20 @@ function instrument(src){
    .replace('gl.uniform1f(uWorld.time, time);',
      'gl.uniform1f(uWorld.time, window.__patrolSunwaterQA?.active && selectedMap.city ? 20.0 : time);');
 }
-function stats(bytes){
+function stats(bytes,facing){
  const im=PNG.sync.read(bytes),bins=new Set();
  let colored=0,n=0;for(let y=40;y<im.height;y+=5)for(let x=0;x<im.width;x+=5){
   const p=(y*im.width+x)*4;
   bins.add((im.data[p]>>4)*256+(im.data[p+1]>>4)*16+(im.data[p+2]>>4));
   colored+=Number(im.data[p]+im.data[p+1]+im.data[p+2]>90);n++;
  }
- ensure(im.width===1280&&im.height===720&&bins.size>55&&colored>n*.35,
-   'Empty 3D WebGL canvas '+JSON.stringify({bins:bins.size,colored,n}));
+ // A physically valid midnight Moon view is dark; it cannot satisfy a
+ // daytime "bright pixels" threshold, even while stars and moon are visible.
+ const moonNight=facing==='moon',minBins=moonNight?25:55,
+   minVisible=moonNight?.08:.35;
+ ensure(im.width===1280&&im.height===720&&bins.size>minBins&&
+   colored>n*minVisible,
+   'Empty 3D WebGL canvas '+JSON.stringify({facing,bins:bins.size,colored,n}));
  return {width:im.width,height:im.height,colors:bins.size,
    visibleFraction:colored/n,sha256:createHash('sha256').update(bytes).digest('hex')};
 }
@@ -189,7 +194,7 @@ async function launch(mode,map='manhattan'){
        bytes=await page.locator('#glCanvas').screenshot({path:dir+'/'+mode+'-'+facing+'.png',
          timeout:90000,animations:'disabled'});
      }finally{await page.evaluate(()=>document.body.classList.remove('patrol-water-qa'))}
-     samples.push({facing,snap,shot:stats(bytes)});
+     samples.push({facing,snap,shot:stats(bytes,facing)});
    }
    const raf=await page.evaluate(async()=>{
      const d=[];let prev=performance.now();
