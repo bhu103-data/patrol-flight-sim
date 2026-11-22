@@ -26,11 +26,11 @@
 <p class="muted" id="metadata"></p>
 <p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; procedurally authored windows, facade colours and road widths are NOT actual surveyed materials, pavement, current-year buildings or a complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
-<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Reset view</button></p>
+<p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street view</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button></p>
 </aside>
 <footer>NYC OTI + DCM source data · metres · flythrough pilot · authored facade textures</footer>
 <script type="module">
-import {buildMeteredMassing} from './times-square-metered-massing.mjs';
+import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
@@ -133,9 +133,37 @@ async function start(){
   gl.vertexAttribPointer(3,1,gl.FLOAT,false,40,36);gl.enableVertexAttribArray(3);
   gl.enable(gl.DEPTH_TEST);
   const uView=gl.getUniformLocation(prg,'uView'),uProj=gl.getUniformLocation(prg,'uProj'),uEye=gl.getUniformLocation(prg,'uEye');
-  const reset=()=>({position:[0,155,Math.min(450,span*.55)],yaw:0,pitch:-.32});
+  // Spawn from a REAL official Seventh Avenue DCM centreline, not an
+  // arbitrary point that can start inside a source-derived skyscraper.
+  const [eOffset,nOffset]=wgs84ToMeters(roadSource.originWGS84,massing.origin);
+  const sourceStreetCandidates=[];
+  for(const road of roadSource.roads){
+    if(road[0]!=='7 Avenue')continue;
+    for(const [a,b] of road[2]){
+      const east=(a[0]+b[0])*.5+eOffset,
+        north=(a[1]+b[1])*.5+nOffset,
+        dx=b[0]-a[0],dn=b[1]-a[1];
+      const site=[east-geometry.center.east,
+        geometry.center.north-north];
+      if(Math.hypot(...site)>250||
+         buildingContains(massing,east,north,65)!==null)continue;
+      sourceStreetCandidates.push({position:[site[0],65,site[1]],
+        yaw:Math.atan2(dx,dn),pitch:-.08,
+        distance:Math.hypot(...site)});
+    }
+  }
+  sourceStreetCandidates.sort((a,b)=>a.distance-b.distance);
+  const sourceStreetSpawn=sourceStreetCandidates[0]||{
+    position:[0,320,Math.min(450,span*.55)],yaw:0,pitch:-.35};
+  const reset=()=>({
+    position:[...sourceStreetSpawn.position],
+    yaw:sourceStreetSpawn.yaw,pitch:sourceStreetSpawn.pitch
+  });
   let camera=reset(),last=0,frames=0;
   document.getElementById('reset').addEventListener('click',()=>camera=reset());
+  document.getElementById('aerial').addEventListener('click',()=>{
+    camera={position:[0,340,Math.min(450,span*.55)],yaw:0,pitch:-.40};
+  });
   const keySet=new Set();
   window.addEventListener('keydown',e=>{
     if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();
@@ -164,6 +192,7 @@ async function start(){
     sourceRoads:geometry.provenance.streets,
     sourceBuildings:geometry.provenance.buildings,
     renderer:'native WebGL2',usesOriginalAircraftPhysics:false,
+    spawnFromOfficialStreet:sourceStreetCandidates.length>0,
     frames:0,errors:[]};
   const bound=Math.max(420,span*.7);
   function frame(t){
@@ -187,9 +216,17 @@ async function start(){
       Math.max(2.5,Math.min(480,camera.position[1]+dy*speed)),
       Math.max(-bound,Math.min(bound,camera.position[2]+dz*speed))
     ];
-    if(!buildingContains(massing,proposed[0]+geometry.center.east,
-      geometry.center.north-proposed[2],proposed[1]))
+    if(![t,dt,camera.yaw,...camera.position,dx,dy,dz,speed,bound,...proposed]
+      .every(Number.isFinite)){
+      qa.errors.push('Rejected non-finite flight motion '+JSON.stringify({
+        t,dt,yaw:camera.yaw,old:camera.position,dx,dy,dz,speed,bound,
+        proposed
+      }));
+      camera=reset();
+    }else if(!buildingContains(massing,proposed[0]+geometry.center.east,
+      geometry.center.north-proposed[2],proposed[1])){
       camera.position=proposed;
+    }
     const scale=Math.min(devicePixelRatio||1,1.5);
     const w=Math.max(1,Math.floor(canvas.clientWidth*scale)),
       h=Math.max(1,Math.floor(canvas.clientHeight*scale));
