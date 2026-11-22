@@ -49,7 +49,7 @@ export function makeCsclRibbon(segment,widthMetres=1.8){
   const p=[a[0]+nx,.08,a[2]+nz],q=[b[0]+nx,.08,b[2]+nz],
     r=[b[0]-nx,.08,b[2]-nz],s=[a[0]-nx,.08,a[2]-nz];
   // Clockwise x/z order yields positive-Y face normals in WebGL.
-  return [[p,r,q],[p,s,r]];
+  return [[p,q,r],[p,r,s]];
 }
 export function prepareDumboCsclStreetNetwork(snapshot,frame){
   if(snapshot?.dataset!=='inkn-q76z'||snapshot.crs!=='EPSG:4326'||
