@@ -22,6 +22,14 @@ The separate NYC OTI Building Footprints metadata states:
 - **HEIGHTROOF** is the roof height above ground elevation, not an elevation
   above sea level.
 - **GEOMSOURCE** distinguishes photogrammetric capture from manual/other sources.
+- Significantly altered or demolished footprints are moved from the current
+  Building Footprints layer into the separate Building Historic dataset.
+
+The Historic layer retains construction/demolition year, ground elevation,
+roof height, geometry source, last-edited date and last-status type. Its status
+values include Demolition, Alteration, Geometry, Initialization and Correction.
+This matters because a 2014 roof may no longer match the current footprint if a
+building was significantly altered after the 2014 survey.
 
 NYC's 2017 LiDAR metadata explicitly specifies NAVD88 Geoid 12B. This is useful
 cross-source evidence, but it does not by itself prove that every 2014 Rhino
@@ -63,6 +71,11 @@ Official references:
 6. Report signed and absolute differences, sample counts and the DCP ±1.6 ft
    published accuracy band. This is a comparison of a historical model to
    current OTI attributes; it is not an independent survey.
+7. Query the bounded NYC Building Historic layer and independently match the
+   same original roof objects against its historic polygons. Compare historical
+   GROUNDELEV + HEIGHTROOF values where the historical geometry source is
+   photogrammetric, retaining demolition year and LAST_STATUS_TYPE. Current and
+   historic matches remain separate; neither is silently preferred or merged.
 
 ## Fail-closed rules
 
@@ -72,6 +85,8 @@ Official references:
 - Missing OTI attributes, non-photogrammetric geometry sources, holes,
   ambiguous footprint matches, and post-2014 edits are explicitly retained as
   exclusions/uncertainties.
+- Historic-layer matches are evidence about the historical footprint, not proof
+  that the same structure still exists in the current 2026 scene.
 - A small difference from current OTI roof-top attributes is supporting
   evidence only. It cannot silently turn the DCP model's undocumented Z datum
   into a verified NAVD88 datum.
