@@ -154,3 +154,31 @@ a richer source-aligned native WebGL2 3-D batch, a walk/fly camera,
 a launcher option, Node/browser regression and evidence workflow.
 No writes to \`main\`, integration branch, aircraft physics, other maps or
 original Manhattan scene generation.
+
+
+## Georeferenced camera registration — child QA addition
+
+### WGS84 transform spot checks (not camera GCPs)
+
+Three exact vertices from official footprint FIDs 22922, 212747 and 384606
+are checked against independent WGS84 ellipsoidal inverse-geodesic ENU
+reference values. The local tangent transform residual is below 0.004m for
+all three. The source vertices themselves are rounded to 1e-6 degree
+(roughly 0.11m in latitude), so this millimetre-scale math residual does not
+improve or supersede the source coordinate accuracy. These are geodetic
+transform checks, **not** surveyed ground-control points, not photo
+registration residuals, and not evidence that a rendered camera matches a
+real photograph.
+
+The live 1:1 viewer now emits a repeatable camera record containing its
+horizontal WGS84 origin, local east/north/up eye vector, WGS84 eye coordinate,
+yaw/pitch, vertical FOV, viewport, source building FIDs and source street
+record count. Two same-pose Chromium captures must produce identical
+registration fingerprints. The 3.2 m eye height is relative to the preview
+ground plane only: **absolute altitude remains null and vertical datum remains
+unknown**. This is camera traceability, not a surveyed camera-control-point
+fit, photogrammetric registration, or proof of facade accuracy.
+
+The browser artifact includes the first and repeat fixed-camera PNGs plus the
+two records and capture timestamps. SwiftShader continues to validate
+rendering logic only; it does not provide native GPU performance evidence.

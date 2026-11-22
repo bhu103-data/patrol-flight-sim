@@ -37,7 +37,8 @@ jobs:
           node --check /tmp/nyc-true-scale-inline.mjs
           node --check scripts/nyc-true-scale-flight-browser-smoke.mjs
           node --check tests/nyc-true-scale-flythrough.test.mjs
-          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-metric-c185-airborne.test.mjs
+          node --check tests/nyc-wgs84-control-points.test.mjs
+          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-metric-c185-airborne.test.mjs tests/nyc-wgs84-control-points.test.mjs
       - name: Install free WebGL test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
