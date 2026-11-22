@@ -124,7 +124,7 @@ const injection=String.raw`
       const radius=actor.laneOffset??1.07;
       const period=2*(actor.route.total+Math.PI*radius);
       const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
-        (actor.signalQueueSlot??0)*5.5;
+        (actor.signalQueueSlot??0)*6.05;
       // Construct an actor whose next crossing would nominally be amber.
       // Reuse real route, pace and signal controller; no mock clock.
       const amberActor={...actor,offset:stopAt-actor.pace*29};
@@ -159,8 +159,25 @@ const injection=String.raw`
     });
     // Check both real bridgehead actors together over 3600 seconds.
     // The original per-actor sweep missed long-session same-lane overlap.
+    // Conservative 2D oriented car hull: the actual buildStreetVehicle()
+    // shell/mirrors are within half-width 1.05 and half-length 2.05.
+    const pairBodyOverlaps=(a,b)=>{
+      const af=[Math.sin(a.yaw),Math.cos(a.yaw)],
+        ar=[Math.cos(a.yaw),-Math.sin(a.yaw)],
+        bf=[Math.sin(b.yaw),Math.cos(b.yaw)],
+        br=[Math.cos(b.yaw),-Math.sin(b.yaw)];
+      const dot=(u,v)=>u[0]*v[0]+u[1]*v[1];
+      const delta=[b.x-a.x,b.z-a.z];
+      for(const axis of [af,ar,bf,br]){
+        const reach=2.05*(Math.abs(dot(axis,af))+Math.abs(dot(axis,bf)))+
+          1.05*(Math.abs(dot(axis,ar))+Math.abs(dot(axis,br)));
+        if(Math.abs(dot(axis,delta))>=reach)return false;
+      }
+      return true;
+    };
     const pair={samples:0,minCenter:Infinity,minSameHeading:Infinity,
-      sameHeadingSamples:0,opposingHeadingSamples:0,closest:null};
+      sameHeadingSamples:0,opposingHeadingSamples:0,obbHits:0,
+      firstObbHit:null,closest:null};
     if(cars.length===2){
       for(let tick=0;tick<=3600*4;tick++){
         const time=tick/4,a=trafficPose(cars[0],time),
@@ -175,6 +192,10 @@ const injection=String.raw`
           pair.closest={time,center,headingDot,
             a:{x:a.x,y:a.y,z:a.z,yaw:a.yaw},
             b:{x:b.x,y:b.y,z:b.z,yaw:b.y}};
+        }
+        if(pairBodyOverlaps(a,b)){
+          pair.obbHits++;
+          pair.firstObbHit??={time,a,b,center,headingDot};
         }
         if(headingDot>.9){
           pair.sameHeadingSamples++;
@@ -271,7 +292,8 @@ try{
   assert(traffic.pair?.samples===14401&&
     traffic.pair.sameHeadingSamples>100&&
     traffic.pair.opposingHeadingSamples>50&&
-    traffic.pair.minSameHeading>=4.7&&traffic.pair.minCenter>=2.0,
+    traffic.pair.minSameHeading>=4.7&&traffic.pair.minCenter>=2.0&&
+    traffic.pair.obbHits===0,
     'Long-session bridgehead pairwise center clearance failed: '+
     JSON.stringify(traffic.pair));
   for(const sig of traffic.signalRows){
