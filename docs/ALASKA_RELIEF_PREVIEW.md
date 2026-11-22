@@ -59,3 +59,34 @@ rendering; it must not bypass the shipped physics.
 Do not merge this preview into `main` or the shared integration branch until
 the latest revision is accepted. PR #183 normal-only shading and PR #190
 calving-front geometry are separate scopes.
+
+## Windows native-GPU verification (manual, not run by Actions)
+
+Requires Windows D3D11 graphics hardware, Microsoft Edge, Git, Python 3 and
+Node.js 22+. Check out the feature branch and run from repository root:
+
+    pwsh -File .\tools\alaska\run-relief-gpu-bench.ps1
+
+The PowerShell launcher starts a localhost static web server, installs pinned
+Playwright 1.56.1 (open-source, no paid service), and launches visible Edge
+with ANGLE D3D11. The Node benchmark compares integration SHA 38a9be19
+to opt-in Alaska relief 95 on the SAME west/east cameras, frozen GPU time 42,
+noon/clear/summer, viewport 1280x720 and fixed 0.60 internal render scale.
+
+Evidence: artifacts/alaska-relief-hardware-*.png and
+artifacts/alaska-relief-hardware-gpu.json with GPU renderer identity, p50/p95,
+RAF pacing, click-to-ready wall-clock times, sample counts, camera parity and
+baseline/preview ratios. The GPU timer is WebGL2's
+EXT_disjoint_timer_query_webgl2 on the fullscreen terrain/sky/water shader pass
+ONLY, not all GPU draw calls or total game frame time. RAF and GPU durations
+must not be confused.
+
+If the Edge adapter is SwiftShader/software, the renderer cannot be verified,
+the timer extension is unavailable, fewer than 20 valid samples resolve, or
+camera/internal framebuffer comparison fails, the command exits with an
+UNVERIFIED hardware gate rather than claiming a PASS. A clean sample collection
+still requires human inspection of visual frames and GPU p50/p95 before merge.
+
+Temporary HTML test copies are removed by the script; actual index.html,
+shipped assets and physics are not changed. Hardware GPU QA and real device
+load-time thresholds remain OPEN until results are attached to PR #212.
