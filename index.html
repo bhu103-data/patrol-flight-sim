@@ -9492,11 +9492,69 @@ const CENTRAL_PARK_SITES=[
     plantedCourt(4,43,9.2,10.5);
     plantedCourt(3.6,24,9.2,11.8);
     plantedCourt(-2.5,57,21,7);
-    mass('Venetian Campanile',-11,8,3.85,3.85,16.4,[0.57,0.32,0.24]);
-    box(-11,ground+15.2,8,4.32,2.5,4.32,cream);
-    for(const side of [-1,1])for(let i=-1;i<=1;i++){
-      box(-11+side*2.18,ground+15.14,8+i*1.19,0.055,1.49,0.58,glass);
-      box(-11+i*1.19,ground+15.14,8+side*2.18,0.58,1.49,0.055,glass);
+    // PATROL_VEGAS_VENETIAN_CAMPANILE_BELFRY_V1
+    // The resort's campanile has a red masonry shaft, a genuinely OPEN
+    // pale stone belfry and green pyramidal spire, not a filled white cube.
+    // Architecture reference: The Venetian Resort official Art & Architecture.
+    // These are original authored details, not copied models or exact survey.
+    // Preserve the existing tower's 16.4-high collision and 20.75-high spire.
+    const bellX=-11,bellZ=8,bellBrick=[.57,.32,.24],
+      bellShade=[.41,.22,.17],bellTrim=[.88,.80,.68];
+    box(bellX,ground+(13.75-.4)/2,bellZ,3.85,14.15,3.85,bellBrick);
+    solidAt('Venetian Campanile',bellX,bellZ,ground,ground+16.4,1.925,1.925);
+    // Projecting brick corner pilasters and narrow real mesh slit windows.
+    for(const side of [-1,1]){
+      for(const offset of [-1.68,1.68]){
+        box(bellX+offset,ground+7.18,bellZ+side*1.952,
+          .19,12.65,.095,bellShade);
+        box(bellX+side*1.952,ground+7.18,bellZ+offset,
+          .095,12.65,.19,bellShade);
+      }
+      for(const level of [3.4,5.9,8.4,10.7]){
+        box(bellX,ground+level,bellZ+side*1.956,
+          .23,.46,.067,bellShade);
+        box(bellX,ground+level,bellZ+side*1.994,
+          .12,.34,.033,glass);
+        box(bellX+side*1.956,ground+level,bellZ,
+          .067,.46,.23,bellShade);
+        box(bellX+side*1.994,ground+level,bellZ,
+          .033,.34,.12,glass);
+      }
+    }
+    // An open set of bell chambers. Unlike the old solid cap, the sky is
+    // visible between masonry columns. A single shallow crown slab remains.
+    box(bellX,ground+13.88,bellZ,4.34,.31,4.34,bellTrim);
+    box(bellX,ground+16.23,bellZ,4.42,.34,4.42,cream);
+    for(const ux of [-1.89,1.89])for(const uz of [-1.89,1.89])
+      box(bellX+ux,ground+15.06,bellZ+uz,.52,2.22,.52,cream);
+    for(const face of [-1,1])for(const axis of ['x','z']){
+      const point=(u,y,depth=2.174)=>axis==='z'
+        ?[bellX+u,ground+y,bellZ+face*depth]
+        :[bellX+face*depth,ground+y,bellZ+u];
+      for(const u of [-1.10,0,1.10]){
+        // Three genuinely empty arched apertures per facade. The ring is
+        // polygonal, never an opaque rectangular plane behind dark paint.
+        for(const end of [-.52,.52]){
+          const v=u+end;
+          if(axis==='z')box(bellX+v,ground+14.73,bellZ+face*2.105,
+            .12,1.32,.17,cream);
+          else box(bellX+face*2.105,ground+14.73,bellZ+v,
+            .17,1.32,.12,cream);
+        }
+        for(let seg=0;seg<8;seg++){
+          const a=seg*Math.PI/8,b=(seg+1)*Math.PI/8;
+          const p=(theta,rad)=>point(u+Math.cos(theta)*rad,
+            15.34+Math.sin(theta)*rad);
+          const quad=[p(a,.43),p(b,.43),p(b,.58),p(a,.58)];
+          if((axis==='z'&&face<0)||(axis==='x'&&face>0))
+            quad.reverse();
+          addQuad(...quad,seg%3===0?bellTrim:cream);
+        }
+      }
+    }
+    for(const y of [13.96,16.26])for(const side of [-1,1]){
+      box(bellX,ground+y,bellZ+side*2.18,4.46,.14,.19,cream);
+      box(bellX+side*2.18,ground+y,bellZ,.19,.14,4.46,cream);
     }
     for(const side of [-1,1]){
       const clock=(u,v)=>[-11+side*1.949,ground+12.04+v,8+u];
@@ -11171,6 +11229,9 @@ const CENTRAL_PARK_SITES=[
       detail:'Roman portico, columns and fountain court'},
     {site:VEGAS_SITES.venetian, x:5,z:27,height:15,bearing:-58,radius:64,rise:20,
       detail:'Campanile, canal bridge and moving gondolas'},
+    {site:{name:'Venetian Campanile Close-up'},x:-11,z:8,height:12,
+      bearing:138,radius:18,rise:3.4,
+      detail:'Open bell arches, brick shaft, clock and stone cornices'},
     {site:VEGAS_SITES.wynn, x:12,z:155,height:20,bearing:-72,radius:70,rise:21,
       detail:'Curved bronze glazing and gold facade bands'},
     {site:VEGAS_SITES.paris,x:10,z:-165,height:21,bearing:-46,radius:75,rise:26,
