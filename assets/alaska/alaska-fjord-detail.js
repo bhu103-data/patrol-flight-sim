@@ -76,11 +76,16 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     // footprint and top silhouette; a restrained outboard knot catches
     // low-angle light without moving the DEM, water or collision surface.
     // Vary the middle height and lateral offset to avoid a repeated "tile".
-    const edgeWidth=Math.abs(R[0]-L[0]);
+    // Alternating low/high, left/right and recessed/protruding planes
+    // prevent a symmetric diamond/X lattice along the calving front.
+    const lateral=[.19,.76,.36,.63,.48][i%5]+(j-.5)*.12;
+    const rise=[.33,.71,.53,.22,.64][i%5]+(q-.5)*.09;
+    const depth=.28+.57*hash(i*43+5);
+    const cutBack=deepFracture || i%7===5;
     const knot=[
-      (L[0]+R[0])*.5+(j-.5)*edgeWidth*.22,
-      (waterY-.23)+(Math.min(topL,topR)-(waterY-.23))*(.47+.16*q),
-      Math.min(zL,zR)-(.24+.55*hash(i*43+5))
+      L[0]+(R[0]-L[0])*lateral,
+      (waterY-.23)+(Math.min(topL,topR)-(waterY-.23))*rise,
+      cutBack?Math.max(zL,zR)+depth:Math.min(zL,zR)-depth
     ];
     iceTri(a,b,knot,undercut);
     iceTri(b,c,knot,muted);
