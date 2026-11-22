@@ -6381,10 +6381,12 @@ const CENTRAL_PARK_SITES=[
     quads+=2;
     for(const sign of [-1,1]){
       const u=sign*cw*.5;
-      if(sign<0)addTri(p(u,-cd*.5,low),p(u,0,ridge),
-        p(u,cd*.5,low),dark,12);
-      else addTri(p(u,cd*.5,low),p(u,0,ridge),
+      // Outward-facing gable normals: -X on west, +X on east.
+      // The opposite winding backface-culled both physical endwalls.
+      if(sign<0)addTri(p(u,cd*.5,low),p(u,0,ridge),
         p(u,-cd*.5,low),dark,12);
+      else addTri(p(u,-cd*.5,low),p(u,0,ridge),
+        p(u,cd*.5,low),dark,12);
       triangles++;
       for(const side of [-1,1]){
         beam(p(u,side*cd*.5,low),p(u,0,ridge),.034,metal);
