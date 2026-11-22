@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - "assets/nyc/nyc-metric-footprints.mjs"
+      - "tools/nyc/fetch-times-square-cscl.mjs"
+      - "assets/nyc/nyc-metric-centerlines.mjs"
       - "assets/nyc/times-square-footprints.json"
       - "nyc-metric-pilot.html"
       - "scripts/nyc-metric-pilot-browser.mjs"
@@ -22,6 +24,8 @@ jobs:
           node-version: "22"
       - name: Verify geospatial metre geometry without overlays
         run: node --test tests/nyc-metric-footprint-pilot.test.mjs
+      - name: Pin real public NYC street centrelines as QA artifact (never fabricated)
+        run: node tools/nyc/fetch-times-square-cscl.mjs
       - name: Install open-source WebGL2 test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
