@@ -18,7 +18,8 @@ import rhino3dm
 HERE=pathlib.Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 from official_mn05_projection import (
-    metric_to_mn05_stateplane,mn05_stateplane_to_metric)
+    metric_to_mn05_stateplane,mn05_stateplane_to_metric,
+    US_SURVEY_FOOT_IN_METRES)
 
 FOLDER=pathlib.Path("artifacts/nyc-official-mn05")
 SOURCE=FOLDER/"mn05-source.3dm"
@@ -152,7 +153,8 @@ def original_cached_face_mesh(mesh,bbox,roof_id,brep_face_index):
         for triplet in source_triangles:
             if min(triplet)<0 or max(triplet)>=count:
                 raise ValueError("Original Rhino source face index outside vertex pool")
-            p,q,r=[points[i] for i in triplet]
+            p,q,r=[[points[i][0],points[i][1],
+                     points[i][2]*US_SURVEY_FOOT_IN_METRES] for i in triplet]
             u=[q[j]-p[j] for j in range(3)]
             v=[r[j]-p[j] for j in range(3)]
             cross=(u[1]*v[2]-u[2]*v[1],
