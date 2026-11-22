@@ -103,8 +103,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/nyc/nyc-mn05-2014-source-mesh.json
-          git commit -m "assets(nyc): import matched official 2014 MN05 roof and facade meshes"
-          git push origin "HEAD:${BRANCH_NAME}"
+          if git diff --cached --quiet; then
+            echo "Generated official source mesh is byte-identical to the committed runtime asset."
+          else
+            git commit -m "assets(nyc): import matched official 2014 MN05 roof and facade meshes"
+            git push origin "HEAD:${BRANCH_NAME}"
+          fi
       - name: Publish mesh, provenance and visual QA evidence
         if: always()
         uses: actions/upload-artifact@v4
