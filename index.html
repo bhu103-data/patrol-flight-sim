@@ -8837,7 +8837,7 @@ const CENTRAL_PARK_SITES=[
               box:(...args)=>addModelBox(dataMesh.addQuad,...args),
               ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
               protectedSites:protectedTimesSites,
-              skipFids:new Set(skipFids)
+              skipFids:nycFidProbeEnabled?new Set(skipFids):null
             });
             return {mesh:dataMesh.upload(),stats};
           };
