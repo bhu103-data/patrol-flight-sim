@@ -1,0 +1,37 @@
+{
+  "licence": "CC0 1.0; https://tevy.dev/models/car-ferry",
+  "description": "Generic ro-ro ferry, not survey of NYC Ferry vessel",
+  "note": "Uncompressed vertices/PNG to match PATROL custom WebGL2 GLB decoder",
+  "staged": {
+    "lod0": {
+      "bytes": 5936236,
+      "sha256": "143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288",
+      "triangles": 52069,
+      "textures": 1,
+      "images": 3,
+      "required_extensions": [],
+      "nodes": 30,
+      "meshes": 16
+    },
+    "lod1": {
+      "bytes": 2176996,
+      "sha256": "c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91",
+      "triangles": 19775,
+      "textures": 1,
+      "images": 3,
+      "required_extensions": [],
+      "nodes": 30,
+      "meshes": 16
+    },
+    "lod2": {
+      "bytes": 505076,
+      "sha256": "7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b",
+      "triangles": 5478,
+      "textures": 1,
+      "images": 2,
+      "required_extensions": [],
+      "nodes": 30,
+      "meshes": 16
+    }
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "source_page": "https://tevy.dev/models/car-ferry",
+  "publisher": "tevy.dev / tevy",
+  "source_version": "v1 2026-10-27",
+  "license": "CC0 1.0 Universal, publisher model-page dedication",
+  "license_text_url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+  "commercial": true,
+  "modify": true,
+  "redistribute": true,
+  "caveat": "Generic ro-ro car ferry, NOT measured NYC Ferry, Staten Island Ferry or a brand-approved design",
+  "assets": {
+    "lod0": {
+      "url": "https://tevy.dev/models/car-ferry/v1/lod0.glb",
+      "lod": 0,
+      "status": "OK",
+      "bytes": 2975148,
+      "sha256": "c6afaae8bb66da747e3059d5dc17df56a221a94e6a13c8e9a199ddeb9154e0d5",
+      "triangles": 52069,
+      "nodes": 30,
+      "meshes": 16,
+      "materials": 7,
+      "textures": 3,
+      "base_color_texture_indices": [
+        0
+      ],
+      "images": [
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        },
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        },
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        }
+      ],
+      "extensionsUsed": [
+        "EXT_meshopt_compression",
+        "KHR_materials_emissive_strength",
+        "KHR_materials_transmission",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "extensionsRequired": [
+        "EXT_meshopt_compression",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "has_scale_tracks": false
+    },
+    "lod1": {
+      "url": "https://tevy.dev/models/car-ferry/v1/lod1.glb",
+      "lod": 1,
+      "status": "OK",
+      "bytes": 1106608,
+      "sha256": "1013a80e4fc662e46ebbfe78bf1771f41a0fef6a46655a83705d746b123ab2b5",
+      "triangles": 19775,
+      "nodes": 30,
+      "meshes": 16,
+      "materials": 7,
+      "textures": 3,
+      "base_color_texture_indices": [
+        0
+      ],
+      "images": [
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        },
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        },
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        }
+      ],
+      "extensionsUsed": [
+        "EXT_meshopt_compression",
+        "KHR_materials_emissive_strength",
+        "KHR_materials_transmission",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "extensionsRequired": [
+        "EXT_meshopt_compression",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "has_scale_tracks": false
+    },
+    "lod2": {
+      "url": "https://tevy.dev/models/car-ferry/v1/lod2.glb",
+      "lod": 2,
+      "status": "OK",
+      "bytes": 233108,
+      "sha256": "619acc4a52c9405c521fc6ea5443f186231fe9fe6dc0d2f6e5d3735a98217db2",
+      "triangles": 5478,
+      "nodes": 30,
+      "meshes": 16,
+      "materials": 6,
+      "textures": 2,
+      "base_color_texture_indices": [
+        0
+      ],
+      "images": [
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        },
+        {
+          "mimeType": "image/ktx2",
+          "embedded": true,
+          "uri": null
+        }
+      ],
+      "extensionsUsed": [
+        "EXT_meshopt_compression",
+        "KHR_materials_emissive_strength",
+        "KHR_materials_transmission",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "extensionsRequired": [
+        "EXT_meshopt_compression",
+        "KHR_mesh_quantization",
+        "KHR_texture_basisu"
+      ],
+      "has_scale_tracks": false
+    }
+  },
+  "source_page_sha256": "6a19c5fd2f86522ecceabd641a2d4f3df53b162ee7770bcc63cce2f12e1d54d3"
+}
