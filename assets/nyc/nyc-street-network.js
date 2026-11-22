@@ -2,12 +2,10 @@
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
-import {buildDumboFrontDockRoad} from './dumbo-front-dock-road.js';
-
 export function buildNycStreetNetwork({
   addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
   grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true,
-  frontDockRoadbed=null
+  frontDockRoadbed=null,buildFrontDockRoad=null
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -426,10 +424,10 @@ export function buildNycStreetNetwork({
   // Rejected source geometry leaves conventional streets intact.
   let officialFrontDock;
   try{
-    officialFrontDock=buildDumboFrontDockRoad(frontDockRoadbed,{
+    officialFrontDock=buildFrontDockRoad?buildFrontDockRoad(frontDockRoadbed,{
       addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
       streetY,waterY,detailBand
-    });
+    }):{enabled:false,officialTriangles:0,reason:'nyc feature opt-in disabled'};
   }catch(error){
     // Invalid or stale Open Data cannot take down all Manhattan streets.
     console.warn('[PATROL] DUMBO OTI roadway safe fallback',error);
