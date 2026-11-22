@@ -10,11 +10,11 @@ const {buildAlaskaFjordDetail}=await import('data:text/javascript;base64,'+
   Buffer.from(moduleSource).toString('base64'));
 
 test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
-  const triangles=[];
+  const triangles=[],quads=[];
   const stats=buildAlaskaFjordDetail({
     waterY:12.2,terrainAt:()=>11,
     addTri(a,b,c,color,surface=0){triangles.push({a,b,c,color,surface});},
-    addQuad(){}
+    addQuad(a,b,c,d,color){quads.push({a,b,c,d,color});}
   });
   const snowcaps=triangles.filter(({color})=>
     color[0]>=.69&&color[0]<=.80&&
@@ -29,8 +29,8 @@ test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
   assert.equal(stats.iceFloesRejectedShore,0);
   assert.equal(snowcaps.length,expected);
   assert.equal(stats.floeCapTriangles,expected);
-  assert.ok(stats.floeCapMaxRelief>.1&&stats.floeCapMaxRelief<.30,
-    'snow ridge lift is subtle and bounded below one game unit');
+  assert.ok(stats.floeCapMaxRelief>.23&&stats.floeCapMaxRelief<.58,
+    'snow ridge lift is visible but bounded below one game unit');
   assert.ok(snowcaps.every(face=>face.surface===13),
     'every sculpted cap triangle must retain mirrored CC0 surface 13');
   const sculpted=snowcaps.filter(({a,b,c})=>
@@ -40,6 +40,23 @@ test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
   assert.ok(snowcaps.every(({a,b,c})=>[a,b,c].every(p=>
     p[1]>=12.2+.035+.15-.001&&p[1]<12.2+1)),
     'raised ice ridges stay above the static slab and below a bounded roof');
+  // The snowcap's lower outside silhouette stays precisely waterline-safe.
+  // For every ice skirt, its upper two vertices are also actual cap vertices
+  // in the same float coordinates: no open triangles or texture-through gaps.
+  const waterBottom=12.2+.035-.12;
+  const skirts=quads.filter(q=>
+    Math.abs(q.c[1]-waterBottom)<1e-6&&
+    Math.abs(q.d[1]-waterBottom)<1e-6);
+  assert.equal(skirts.length,oldCount);
+  const key=p=>p.map(x=>x.toFixed(7)).join(',');
+  const capVertices=new Set(snowcaps.flatMap(face=>[
+    key(face.a),key(face.b),key(face.c)
+  ]));
+  assert.ok(skirts.every(q=>capVertices.has(key(q.a))&&
+    capVertices.has(key(q.b))),
+    'every lifted ice rim must be sealed by top and side-wall geometry');
+  assert.ok(skirts.every(q=>q.a[1]>=q.c[1]&&q.b[1]>=q.d[1]),
+    'floe side walls cannot sink beneath their static waterline');
 });
 
 test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
@@ -53,8 +70,8 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
   assert.ok(renderer.includes('uAlaskaPhotoNormalRough'));
   assert.ok(renderer.includes('uAlaskaPhotoAlbedo'));
   assert.ok(moduleSource.includes('addTri(crown,ridge[k],ridge[next],top,13)'));
-  assert.ok(moduleSource.includes('addTri(ridge[k],a,b,top,13)'));
-  assert.ok(moduleSource.includes('addTri(ridge[k],b,ridge[next],top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],rimA,rimB,top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],rimB,ridge[next],top,13)'));
   const photoStart=renderer.indexOf('if(uAlaskaPhotoReady)',renderer.indexOf('void alaskaGlacierFace('));
   const lift=renderer.indexOf('material=min(material*(1.0+.20*near),vec3(.95));',photoStart);
   const photoEnd=renderer.indexOf('      }',lift);
