@@ -1974,9 +1974,21 @@ const CENTRAL_PARK_SITES=[
           )*0.38;
           vec2 slope = wind * gust * (swell.yz + chop.yz + noiseSlope) + ripple.yz * mix(0.35, 0.72, openWater);
           if(hasOceanCascades()){
-            swell=oceanCascade(xz,uTime,pixel,0)*oceanShoaling(depth);
-            chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
-            ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
+            // Shading-only low-frequency domain warp. Perturb the repeated
+            // parallel normals using *existing* slope/noise samples; the
+            // shared CPU buoyancy oceanHeight and geometry remain unchanged.
+            // Filter the warp at distance so small waves cannot alias.
+            vec2 oceanNormalXZ=xz;
+            if(uManhattan){
+              float warpFade=1.0-smoothstep(0.45,1.85,pixel);
+              float warpScale=mix(0.65,1.85,harborExposure)*warpFade;
+              oceanNormalXZ+=warpScale*vec2(
+                (noiseH-0.5)*1.65+noiseSlope.y*11.0,
+                (0.5-noiseH)*1.05-noiseSlope.x*11.0);
+            }
+            swell=oceanCascade(oceanNormalXZ,uTime,pixel,0)*oceanShoaling(depth);
+            chop=oceanCascade(oceanNormalXZ,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
+            ripple=oceanCascade(oceanNormalXZ,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
             // Break the overly regular parallel bright bands with the
             // existing low-frequency gust and three previously evaluated
             // noise derivatives; filter fine normals at flight distance.
@@ -2436,8 +2448,12 @@ const CENTRAL_PARK_SITES=[
                 float hFrac = clamp((cp.y - cloudBase()) / (cloudTop() - cloudBase()), 0.0, 1.0);
                 // Cloud silhouettes fade into the base and the rounded top;
                 // denser cells hold a taller crown. No extra ray steps.
+                // Density-shaped cloud crowns are lower near feathered
+                // edges, taller in dense centers, with no extra noise.
+                float cloudCrown=smoothstep(0.18,0.85,d);
+                float cloudPeak=0.54+0.36*cloudCrown;
                 float cloudEnvelope=smoothstep(0.0,0.11,hFrac)*
-                  (1.0-smoothstep(0.73+0.12*d,0.98,hFrac));
+                  (1.0-smoothstep(cloudPeak-0.13,cloudPeak+0.07,hFrac));
                 d*=cloudEnvelope;
                 // Stepped peach/violet cloud shading
                 float shadeBand = floor((hFrac * 0.75 + (1.0 - d) * 0.35) * 3.0) / 2.0;

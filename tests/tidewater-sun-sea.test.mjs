@@ -71,13 +71,21 @@ test('cloud masses favor broad scales with a feathered and density-shaped ceilin
  const cloud=between('      \/\/ Cumulus cloud layer below cruise altitude',
    '      gl_FragDepth = 1.0;');
  assert.match(cloud,/float cloudEnvelope=smoothstep\(0\.0,0\.11,hFrac\)/);
- assert.match(cloud,/1\.0-smoothstep\(0\.73\+0\.12\*d,0\.98,hFrac\)/);
+ assert.match(cloud,/float cloudCrown=smoothstep\(0\.18,0\.85,d\)/);
+ assert.match(cloud,/float cloudPeak=0\.54\+0\.36\*cloudCrown/);
+ assert.match(cloud,/1\.0-smoothstep\(cloudPeak-0\.13,cloudPeak\+0\.07,hFrac\)/);
  assert.match(cloud,/d\*=cloudEnvelope/);
 });
 
 test('ocean normals become irregular without editing shared 18-mode buoyancy',()=>{
  const water=between('          float gust = mix(0.82, 1.18,', '          vec3 wn = normalize');
  assert.match(water,/float swellShear=mix\(0\.79,1\.19,/);
+ assert.match(water,/float warpFade=1\.0-smoothstep\(0\.45,1\.85,pixel\)/);
+ assert.match(water,/if\(uManhattan\)\{/);
+ assert.match(water,/swell=oceanCascade\(oceanNormalXZ,uTime,pixel,0\)/);
+ assert.match(water,/chop=oceanCascade\(oceanNormalXZ,uTime,pixel,6\)/);
+ assert.match(water,/ripple=oceanCascade\(oceanNormalXZ,uTime,pixel,12\)/);
+ assert.doesNotMatch(water,/oceanHeight\s*=\s*/);
  assert.match(water,/float smallWavePatch=mix\(0\.80,1\.20,noiseH\)/);
  assert.match(water,/float patchLod=1\.0-smoothstep\(0\.22,1\.28,pixel\)/);
  assert.match(water,/\+noiseSlope\*patchLod\*\(0\.31\+0\.20\*openWater\)/);
