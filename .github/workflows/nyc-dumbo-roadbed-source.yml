@@ -1,0 +1,50 @@
+name: NYC DUMBO official 2022 pavement source extraction
+on:
+  pull_request:
+    paths:
+      - "scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs"
+      - ".github/workflows/nyc-dumbo-roadbed-source.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  extract-official-road:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify official source-fetch program syntax
+        run: node --check scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs
+      - name: Install triangulator pinned for offline baking only
+        run: npm install --prefix /tmp/patrol-roadbed --ignore-scripts --no-save --no-audit --no-fund earcut@2.2.4
+      - name: Download bounded NYC OTI real pavement geometry 2022
+        run: node scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs
+      - name: Preserve exact first source snapshot on this independent PR branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'feat/nyc-dumbo-front-dock-roadbed-signal-20261122-chat'
+        shell: bash
+        run: |
+          mkdir -p assets/nyc
+          test -s artifacts/nyc-dumbo-front-dock-source/roadbed-2022.json
+          if test ! -e assets/nyc/dumbo-front-dock-roadbed-2022.json; then
+            cp artifacts/nyc-dumbo-front-dock-source/roadbed-2022.json assets/nyc/dumbo-front-dock-roadbed-2022.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add assets/nyc/dumbo-front-dock-roadbed-2022.json
+            git commit -m "NYC: pin exact 2022 OTI roadbed polygons for one DUMBO corridor"
+            git push origin HEAD:feat/nyc-dumbo-front-dock-roadbed-signal-20261122-chat
+          else
+            echo "Official static source already pinned; no refresh in gameplay code"
+          fi
+      - name: Upload source-traceable geometry and audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-front-dock-oti-2022-audit
+          path: artifacts/nyc-dumbo-front-dock-source/
+          retention-days: 14
+          if-no-files-found: warn

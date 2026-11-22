@@ -7544,7 +7544,20 @@ const CENTRAL_PARK_SITES=[
     // PATROL_NYC_STREETS_V10: city-only streets and street-level props.
     // Static geometry in its own draw batch, no WebGPU or second renderer.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
-      import('./assets/nyc/nyc-street-network.js').then(({buildNycStreetNetwork})=>{
+      const useOfficialFrontDock=new URLSearchParams(location.search)
+        .get('nycDumboRoadbed')==='on';
+      const frontDockSource=useOfficialFrontDock
+        ?fetch('./assets/nyc/dumbo-front-dock-roadbed-2022.json')
+          .then(r=>{if(!r.ok)throw Error('OTI roadbed HTTP '+r.status);return r.json();})
+          .catch(error=>{console.warn('[PATROL] NYC official Front/Dock source fallback',error);return null;})
+        :Promise.resolve(null);
+      const frontDockPainter=useOfficialFrontDock
+        ?import('./assets/nyc/dumbo-front-dock-road.js')
+          .catch(error=>{console.warn('[PATROL] DUMBO painter fallback',error);return null;})
+        :Promise.resolve(null);
+      Promise.all([import('./assets/nyc/nyc-street-network.js'),
+        frontDockSource,frontDockPainter])
+        .then(([{buildNycStreetNetwork},frontDockRoadbed,frontDockModule])=>{
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
         const stats=buildNycStreetNetwork({
@@ -7560,6 +7573,8 @@ const CENTRAL_PARK_SITES=[
             .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
           detailBand:nycDetailBand,grid:MANHATTAN_GRID,
           streetY:STREET_Y,waterY:WATER_H,
+          frontDockRoadbed,
+          buildFrontDockRoad:frontDockModule?.buildDumboFrontDockRoad||null,
           timesBounds:TIMES_SQUARE.bounds,
           existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],
           lettering:(label,p,w,h,color)=>addVegasLettering(detail.addQuad,label,
@@ -7571,7 +7586,11 @@ const CENTRAL_PARK_SITES=[
         });
         const uploaded=detail.upload();
         if(heroEpoch!==nycHeroEpoch||gl.isContextLost())disposeSceneMesh(uploaded);
-        else{nycStreetMesh=uploaded;console.info('[PATROL] NYC streets',stats);}
+        else{
+          nycStreetMesh=uploaded;
+          window.PatrolDumboRoadQA=stats.officialFrontDock;
+          console.info('[PATROL] NYC streets',stats);
+        }
       }).catch(error=>console.warn('[PATROL] NYC road fallback:',error));
     }
     // Separate single-batch harbor geometry; no extra renderer/scene graph.
@@ -11115,6 +11134,16 @@ const CENTRAL_PARK_SITES=[
       detail:'Close to the suspension cables, raised timber walkway and limestone towers'},
     // Dedicated close-view camera lets CI inspect Brooklyn street façades
     // and block infill, rather than only the suspension bridge foreground.
+    // Existing in-game Manhattan-mode camera (no new standalone preview).
+    // A second ORIGINAL-GAME camera, high-oblique to inspect the genuine
+    // OTI polygons when the street-level view is blocked by a model warehouse.
+    // Both conditions use precisely this SAME preset, no external viewer.
+    {name:'DUMBO · Front Dock Road Aerial',x:356,z:-297,height:1.6,
+      bearing:145,radius:42,rise:51,
+      detail:'High-oblique source-road outline and bike-lane audit in the actual Manhattan flight map; visual scale is compressed, not geo-registered.'},
+    {name:'DUMBO · Front Dock Real Road',x:356,z:-296,height:4.5,
+      bearing:220,radius:34,rise:9,
+      detail:'2022 official OTI roadbed geometry with 2026 NYC DOT proposed bike marks, as a game-scale visual-only patch; signals are not actual timing.'},
     {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
       detail:'Inspect industrial brick facades, rooflines, road grid and street fixtures'},
     {name:'Lower Manhattan Waterfront',x:-118,z:-448,height:8,bearing:258,radius:53,rise:10,

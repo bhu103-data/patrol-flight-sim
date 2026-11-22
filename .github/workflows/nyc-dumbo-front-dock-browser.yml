@@ -1,0 +1,56 @@
+name: NYC DUMBO live official roadway, lane and signal WebGL2 A/B
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/nyc/nyc-street-network.js'
+      - 'assets/nyc/dumbo-front-dock-road.js'
+      - 'assets/nyc/dumbo-front-dock-roadbed-2022.json'
+      - 'tests/nyc-dumbo-front-dock-production-road.test.mjs'
+      - 'scripts/nyc-dumbo-front-dock-production-browser.cjs'
+      - '.github/workflows/nyc-dumbo-front-dock-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-nyc-front-dock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regress source footprint, allowed bike markings and rollback
+        run: node --test tests/nyc-dumbo-front-dock-production-road.test.mjs
+      - name: Verify actual PATROL one-page renderer and Node syntax
+        run: |
+          node --check assets/nyc/dumbo-front-dock-road.js
+          node --check assets/nyc/nyc-street-network.js
+          node --check scripts/nyc-dumbo-front-dock-production-browser.cjs
+      - name: Install pinned free screenshot browser
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-save --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Serve the original actual PATROL flight map
+        shell: bash
+        run: |
+          python3 -m http.server 8137 --bind 127.0.0.1 >/tmp/patrol-dumbo-http.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8137/index.html -o /dev/null && \
+               curl -fsS http://127.0.0.1:8137/assets/nyc/dumbo-front-dock-roadbed-2022.json -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Same named flight-map scenic camera ON/OFF official road + frame time
+        timeout-minutes: 11
+        run: node scripts/nyc-dumbo-front-dock-production-browser.cjs
+      - name: Preserve real untouched screenshots and measurement report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-front-dock-official-road-production-webgl
+          path: artifacts/nyc-dumbo-front-dock-live/
+          retention-days: 14
+          if-no-files-found: warn
