@@ -1,0 +1,109 @@
+name: NYC twilight haze fixed-camera evidence
+
+on:
+  pull_request:
+    branches: [codex/patrol-integration-20261121]
+    paths:
+      - index.html
+      - tests/nyc-dusk-fog-parity.test.mjs
+      - scripts/nyc-time-visibility-browser.mjs
+      - .github/workflows/nyc-twilight-haze-qa.yml
+
+# Isolated, opt-in QA lane; does not change the main branch or the shared
+# integration branch and does not run the ten-view NYC/Chongqing suites.
+concurrency:
+  group: nyc-time-fog-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  same-camera-three-times:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/patrol-integration-20261121
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          path: revised
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify NYC dusk shader scope and day/night invariants
+        working-directory: revised
+        run: node --test tests/nyc-dusk-fog-parity.test.mjs
+      - name: Install isolated software WebGL2 Chromium
+        working-directory: revised
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          # Ubuntu runner already has the Chrome runtime; avoid flaky apt
+          # optional-font packages that fail on some runner image mirrors.
+          npx playwright install chromium
+      - name: Serve unchanged integration baseline and proposed patch
+        run: |
+          (cd baseline && python3 -m http.server 8871 --bind 127.0.0.1 >/tmp/patrol-env-baseline-http.log 2>&1 &)
+          (cd revised && python3 -m http.server 8872 --bind 127.0.0.1 >/tmp/patrol-env-revised-http.log 2>&1 &)
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8871/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8872/index.html >/dev/null
+      - name: Capture noon dusk night from baseline Manhattan camera
+        working-directory: revised
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8871
+          PATROL_ENV_VARIANT: before-6d50bfd
+        run: node scripts/nyc-time-visibility-browser.mjs
+      - name: Capture noon dusk night from proposed Manhattan camera
+        working-directory: revised
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8872
+          PATROL_ENV_VARIANT: after-patch
+        run: node scripts/nyc-time-visibility-browser.mjs
+      - name: Report pixel-based exposure and contrast changes
+        working-directory: revised
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('artifacts/nyc-time-visibility')
+          old=json.loads((root/'before-6d50bfd/metrics.json').read_text())
+          new=json.loads((root/'after-patch/metrics.json').read_text())
+          assert old['passed'] and new['passed']
+          assert old['camera']==new['camera']
+          assert old['resolution']==new['resolution']
+          assert len(old['shots'])==len(new['shots'])==5
+          print('FIXED MANHATTAN CAMERA:', old['camera'], old['resolution'])
+          print('WEATHER / SEASON / ZOOM:', old['weather'],old['season'],old['zoom'])
+          for before,after in zip(old['shots'],new['shots']):
+              assert before['name']==after['name']
+              assert before['state']['clock']==after['state']['clock']
+              assert before['state']['weather']==after['state']['weather']
+              assert before['state']['status']==after['state']['status']
+              diffs={key:round(after['metrics'][key]-before['metrics'][key],5)
+                  for key in ['meanLuma','p90p10Contrast','clippedChannelFraction',
+                              'nearBlackFraction']}
+              roi_delta={key:round(after['metrics']['regionMeanLuma'][key]-
+                   before['metrics']['regionMeanLuma'][key],3)
+                   for key in before['metrics']['regionMeanLuma']}
+              print(before['name'], 'before=',before['metrics'],
+                    'after=',after['metrics'],'delta=',diffs,'regionDelta=',roi_delta)
+              if before['name'] in ('noon','midnight'):
+                  assert abs(diffs['meanLuma'])<1.5, \
+                      'NYC fog patch changed daytime or midnight exposure unexpectedly'
+          (root/'comparison.json').write_text(json.dumps({
+              'camera':old['camera'],'conditions':{'season':'Summer','weather':'Clear',
+              'zoom':'42','angle':'0'},'baseline':old['version'],'patch':new['version'],
+              'measurements':[{ 'time':a['name'],
+                'before':a['metrics'],'after':b['metrics']} for a,b in
+                zip(old['shots'],new['shots'])]},indent=2))
+          PY
+      - name: Upload ten screenshots, camera state and measurable contrast
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-time-visibility-before-after
+          path: revised/artifacts/nyc-time-visibility/
+          retention-days: 7
+          if-no-files-found: warn
