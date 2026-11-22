@@ -7,7 +7,8 @@
  * Run only after starting a localhost static server at 127.0.0.1:8765.
  * Uses test-only HTML copies (deleted on exit), not the shipped index.html.
  */
-import {chromium} from 'playwright';
+// Playwright is imported only for the Windows hardware run; CI source validation
+// must work without pretending that a Linux software renderer is target GPU.
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,unlinkSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -156,6 +157,7 @@ async function run(){
     gpuPass:'main terrain/water/sky WebGL fullscreen pass only, not whole game frame',
     rendererVerified:false,hardwareGpuTimerVerified:false,results:{}
   };
+  const {chromium}=await import('playwright');
   const browser=await chromium.launch({channel:'msedge',headless:false,
     args:['--enable-webgl','--use-gl=angle','--use-angle=d3d11','--disable-software-rasterizer']});
   try{
@@ -240,6 +242,19 @@ async function run(){
   if(!report.hardwareGpuTimerVerified)throw Error(
     'HARDWARE GPU GATE UNVERIFIED: missing native D3D11 renderer, EXT timer, 20 samples or camera parity; inspect '+outfile);
 }
-try{await run();}finally{
+try{
+  if(process.argv.includes('--validate-only')){
+    const original=execFileSync('git',['show',SHA+':index.html'],
+      {encoding:'utf8',maxBuffer:8*1024*1024});
+    const head=readFileSync('index.html','utf8');
+    for(const [name,html] of [['baseline',original],['preview',head]]){
+      const injected=instrument(html);
+      if(!injected.includes("window.PatrolAlaskaGPUQA={")||
+         !injected.includes("gl.beginQuery(__gpuExt.TIME_ELAPSED_EXT"))
+        throw Error(name+' hardware shader hook not installed');
+    }
+    console.log('PASS Windows hardware GPU QA source hooks on both exact baselines; no GPU exercised');
+  }else await run();
+}finally{
   for(const name of originals)try{unlinkSync(name);}catch{}
 }
