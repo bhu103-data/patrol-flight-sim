@@ -36,6 +36,23 @@ page.on('console',msg=>{
 });
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
+// The in-game scenic camera eases per render tick, and SwiftShader can render
+// only a handful of frames per second. A fixed 1.2s sleep captures different
+// transient viewpoints between baseline and candidate. Require enough actual
+// animation frames for the same static scenic pose before EACH screenshot.
+// This measures view settling, not an FPS score or a terrain-geometry gate.
+const CAMERA_SETTLE_FRAMES=32;
+async function settleScenicCamera(){
+ await page.evaluate(frameCount=>new Promise((resolve,reject)=>{
+  let frames=0;
+  const timer=setTimeout(()=>reject(new Error('Scenic camera did not render 32 settling frames')),35000);
+  const tick=()=>{
+   if(++frames>=frameCount){clearTimeout(timer);resolve(frames);}
+   else requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+ }),CAMERA_SETTLE_FRAMES);
+}
 let result={status:'failed',qaTag,browserChannel,graphicsProfile,errors,screenshots,shots};
 try {
  const navStarted=Date.now();
@@ -97,7 +114,7 @@ try {
    await page.locator('#hotelZoom').evaluate((el,v)=>{
     el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
    },zoom);
-   await page.waitForTimeout(1200);
+   await settleScenicCamera();
    const telemetry=await page.evaluate(()=>{
     const canvas=document.getElementById('glCanvas');
     const gl=canvas?.getContext('webgl2');
@@ -139,7 +156,7 @@ try {
   await page.locator('#hotelZoom').evaluate(el=>{
    el.value='24';el.dispatchEvent(new Event('input',{bubbles:true}));
   });
-  await page.waitForTimeout(1500);
+  await settleScenicCamera();
   const telemetry=await page.evaluate(()=>{
    const canvas=document.getElementById('glCanvas');
    const gl=canvas?.getContext('webgl2');
