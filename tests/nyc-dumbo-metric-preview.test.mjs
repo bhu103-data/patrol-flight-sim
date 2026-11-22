@@ -47,7 +47,8 @@ test('WGS84↔metric roundtrip and one global scale for every building',()=>{
 test('preview is segregated from flight/gameplay scripts and explicitly rejects false survey claims',()=>{
   const html=readFileSync(new URL('../tools/nyc/dumbo-metric-preview.html',import.meta.url),'utf8');
   assert.match(html,/WebGL2/);
-  assert.match(html,/NOT a surveyed/);
+  assert.match(html,/(?:NOT a surveyed|No surveyed)/i,
+    'source preview must explicitly reject a surveyed reconstruction claim');
   assert.match(html,/assets\/nyc\/dumbo-oti-metric-48\.json/);
   assert.match(html,/prepareDistrict/);
   assert.doesNotMatch(html,/advanceFlight\(|PatrolSpaceBridge|setAircraft\(/);
