@@ -4,7 +4,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../assets/chongqing/market-fronts.js',import.meta.url),'utf8');
-const {CHONGQING_MARKET_SITES,makeChongqingMarketTileRoof,buildChongqingMarketFronts}=
+const {CHONGQING_MARKET_SITES,makeChongqingMarketTileRoof,
+  makeChongqingMarketOpenFacade,buildChongqingMarketFronts}=
   await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 
 class Geo{
@@ -34,8 +35,14 @@ class Batch{
   }
   computeBoundingSphere(){this.boundsUpdated=true}
 }
+class StaticMesh{
+  constructor(geometry,material){
+    this.geometry=geometry;this.material=material;
+    this.position={set(...v){this.values=v}};
+  }
+}
 const THREE={
-  BoxGeometry:Geo,BufferGeometry:Geo,Object3D:Obj,
+  BoxGeometry:Geo,BufferGeometry:Geo,Object3D:Obj,Mesh:StaticMesh,
   Float32BufferAttribute:class{constructor(array,itemSize){this.array=array;this.itemSize=itemSize}},
   MeshStandardMaterial:class{constructor(props){Object.assign(this,props)}},
   InstancedMesh:Batch,StaticDrawUsage:1,DoubleSide:2
@@ -43,11 +50,12 @@ const THREE={
 const ground=(x,z)=>43+.17*(z-345)+.003*x;
 const riverCenter=x=>14*Math.sin(x/130)+29*Math.sin(x/340);
 function generated(riverDist=()=>100){
-  const objects=[],obstacles=[];
+  const all=[],obstacles=[];
   const result=buildChongqingMarketFronts({
-    THREE,scene:{add(x){objects.push(x)}},ground,riverDist,obstacles
+    THREE,scene:{add(x){all.push(x)}},ground,riverDist,obstacles
   });
-  return {objects,obstacles,result};
+  return {objects:all.filter(x=>x instanceof Batch),
+    facades:all.filter(x=>x instanceof StaticMesh),obstacles,result};
 }
 
 test('roof is actual two-slope tiled geometry with normals facing the sky',()=>{
@@ -74,12 +82,15 @@ test('three neighbor shops are NOT PR #93 own first corner building',()=>{
 
 test('real gallery deck, posts, roof, glass and bracing use six bounded batches',()=>{
   const {objects,obstacles,result}=generated();
-  assert.deepEqual(objects.map(m=>m.count),[39,8,15,9,31,3]);
+  assert.deepEqual(objects.map(m=>m.count),[39,8,15,21,31,3]);
   assert.equal(result.stats.sites,3);
   assert.equal(result.stats.roofTriangles,2304);
-  assert.equal(result.stats.instances,105);
+  assert.equal(result.stats.instances,117);
   assert.equal(result.stats.stairTreads,6);
-  assert.equal(result.stats.meshes,6);
+  assert.equal(result.stats.meshes,9);
+  assert.equal(result.stats.batchDraws,6);
+  assert.equal(result.stats.openFacades,3);
+  assert.equal(result.stats.openFacadeTriangles,1872);
   assert.equal(obstacles.length,15);
   assert.ok(objects.every(m=>m.count<=m.capacity&&m.writes<=m.capacity),
     'no GPU instance overflow');
@@ -90,6 +101,46 @@ test('real gallery deck, posts, roof, glass and bracing use six bounded batches'
   assert.notEqual(objects[0].visible,false,'load-bearing timber remains');
   result.setQuality('normal');
   assert.equal(objects[4].visible,true);
+});
+
+test('three genuine open storefronts preserve empty windows, deep jambs and original colliders',()=>{
+  const {facades,obstacles,result}=generated();
+  assert.equal(facades.length,3);
+  assert.equal(result.stats.openFacades,3);
+  const isInsideTri=(x,y,p)=>{
+    const [[ax,ay],[bx,by],[cx,cy]]=p;
+    const area=(by-cy)*(ax-cx)+(cx-bx)*(ay-cy);
+    const a=((by-cy)*(x-cx)+(cx-bx)*(y-cy))/area;
+    const b=((cy-ay)*(x-cx)+(ax-cx)*(y-cy))/area;
+    return a>1e-6&&b>1e-6&&a+b<1-1e-6;
+  };
+  const signatures=[];
+  for(const facade of facades){
+    const g=facade.geometry,verts=g.position.array,uv=g.uv.array;
+    const openings=g.userData.marketOpenings,ix=g.index;
+    assert.equal(openings.length,7,'door, two storefronts, four upper windows');
+    assert.equal(g.userData.wallThickness,.43,'front wall has real Z-depth');
+    assert.ok(g.userData.frontQuads>10&&ix.length/3<900);
+    assert.ok(verts.every(Number.isFinite)&&uv.every(Number.isFinite));
+    for(const hole of openings){
+      const x=(hole.left+hole.right)*.5,y=(hole.bottom+hole.top)*.5;
+      let filled=false;
+      for(let i=0;i<ix.length;i+=3){
+        const points=[ix[i],ix[i+1],ix[i+2]]
+          .map(k=>[verts[k*3],verts[k*3+1],verts[k*3+2]]);
+        if(points.every(p=>Math.abs(p[2])<1e-8)&&
+          isInsideTri(x,y,points.map(p=>p.slice(0,2))))filled=true;
+      }
+      assert.equal(filled,false,'front mesh must have EMPTY aperture, not fake glass rectangle');
+    }
+    signatures.push(openings.map(o=>[o.left,o.right]));
+  }
+  assert.notDeepEqual(signatures[0],signatures[1],
+    'the three shopfront window rhythms are not identical clones');
+  assert.notDeepEqual(signatures[1],signatures[2]);
+  assert.equal(obstacles.length,15,'original 3 decks, 6 posts, 6 steps unchanged');
+  result.setQuality('low');
+  assert.ok(facades.every(m=>m.visible),'solid architectural reveals remain at low quality');
 });
 
 test('market materials reuse the game CC0 PBR instances, not new downloads',()=>{
