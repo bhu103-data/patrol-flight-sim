@@ -20,11 +20,8 @@ export function buildOverpassQuery(bbox){
     throw new TypeError('Expected [minLon,minLat,maxLon,maxLat] WGS84 bbox');
   const [west,south,east,north]=bbox;
   if(!(west<east&&south<north))throw new RangeError('Invalid WGS84 bbox order');
-  return '[out:json][timeout:45];(way["building"]('+[
-    south,west,north,east
-  ].join(',')+');relation["building"]('+[
-    south,west,north,east
-  ].join(',')+'););out tags geom;';
+  const box=[south,west,north,east].join(',');
+  return '[out:json][timeout:45];(way["building"]('+box+');relation["building"]('+box+');way["building:part"]('+box+');relation["building:part"]('+box+'););out tags geom;';
 }
 
 function toLocal(point,lat0){
@@ -81,6 +78,7 @@ export function analyzeOsmFeatures(source,osm,{retrievedAt=new Date().toISOStrin
     throw new TypeError('Expected NYC source footprints and Overpass elements');
   const ways=osm.elements.map(normalizeWay).filter(Boolean);
   const relations=osm.elements.filter(e=>e?.type==='relation'&&e.tags?.building);
+  const partRelations=osm.elements.filter(e=>e?.type==='relation'&&e.tags?.['building:part']);
   const parts=osm.elements.filter(e=>e?.tags?.['building:part']);
   const official=source.features.map(validFootprint).filter(Boolean);
   const matches=[],ambiguous=[],unmatched=[];
@@ -137,6 +135,7 @@ export function analyzeOsmFeatures(source,osm,{retrievedAt=new Date().toISOStrin
       allElements:osm.elements.length,
       buildingWays:ways.length,
       buildingRelations:relations.length,
+      buildingPartRelations:partRelations.length,
       buildingParts:parts.length
     },
     join:{
