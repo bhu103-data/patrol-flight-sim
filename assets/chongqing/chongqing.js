@@ -1389,7 +1389,9 @@ window.PatrolSpaceBridge={getState:()=>({
   signalStopLines:streetBuild.stats.stopLines,
   signalAspect:streetBuild.snapshot().signalAspect,
   marketGalleryRoofs:marketFronts.stats.curvedRoofs,
-  marketGalleryInstances:marketFronts.stats.instances
+  marketGalleryInstances:marketFronts.stats.instances,
+  marketOpenFacades:marketFronts.stats.openFacades,
+  marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
