@@ -39,6 +39,16 @@ const mockGl=()=>({
   deleteVertexArray(v){this.deleted.push(v);},
   deleteTexture(v){this.deleted.push(v);}
 });
+test('source-authorized near ferry fits the special GLB float budget while other landmarks retain default',()=>{
+  const decoder=readFileSync(new URL('../assets/nyc/nyc-realism.js',import.meta.url),'utf8');
+  assert.match(decoder,/decodeGLB\(gl,buffer,targetHeight,maxPositionFloats=240000\)/);
+  assert.match(decoder,/maxPositionFloats>480000/);
+  assert.match(src,/spec\.tier==='near'\?480000:240000/);
+  assert.equal(52069*9,468621);
+  assert.ok(468621<480000 && 468621>240000);
+  assert.ok(19775*9<=240000 && 5478*9<=240000);
+});
+
 test('real converted CC0 ferry assets have pinned hashes and expected native LOD budgets',()=>{
   assert.equal(facts.length,3);
   assert.equal(blobs.get('near').tris,52069);
