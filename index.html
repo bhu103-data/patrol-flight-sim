@@ -6321,7 +6321,8 @@ const CENTRAL_PARK_SITES=[
   function buildDumboBridgeheadInfillRoofline(addTri,addQuad,box,beam,site){
     const {x,y,z,w,d,h,brick,stone,seed}=site;
     const roofY=y+h,metal=[.26,.30,.32],dark=[.18,.21,.23];
-    const glass=[.16,.28,.31],style=seed%3;
+    // Vary silhouettes by actual neighboring block, not repeating arch seed.
+    const glass=[.16,.28,.31],style=((Math.floor(x/24)%3)+3)%3;
     const put=(...args)=>{box(...args);boxes++};
     let boxes=0,quads=0,triangles=0,beams=0;
     const topCap=(cx,cy,cz,bw,bh,bd,color)=>put(
