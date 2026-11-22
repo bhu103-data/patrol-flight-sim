@@ -8139,7 +8139,7 @@ const CENTRAL_PARK_SITES=[
         }
       }
     } else if(selectedMap.vegas) {
-      buildVegasStrip({box,lamp,cylinder,solidAt,place,addQuad:solid.addQuad,lightQuad:lights.addQuad});
+      buildVegasStrip({box,lamp,cylinder,solidAt,place,addTri:solid.addTri,addQuad:solid.addQuad,lightQuad:lights.addQuad});
     }
     buildLocalLandmark({box,lamp,cylinder,addQuad:solid.addQuad,solidAt,place,shed});
     if(sceneryPlaces.length || selectedMap.vegas){
