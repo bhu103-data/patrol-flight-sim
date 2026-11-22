@@ -4894,7 +4894,10 @@ const CENTRAL_PARK_SITES=[
       box(end,y,headZ,.26,.88,.33,shell);
       box(end-side*.145,y,headZ,.04,.78,.28,iron);
       for(const [dy,color] of [[.25,[.28,.08,.06]],[0,[.31,.22,.07]],[-.25,[.19,.75,.33]]]){
-        box(end-side*.174,y+dy,headZ,.026,.13,.15,color);
+        // Darken the east-side fixed lenses; the live color is drawn
+        // per frame over this housing so green never stays lit on red.
+        const lens=side>0?(dy>0?[.26,.07,.06]:dy<0?[.06,.23,.12]:color):color;
+        box(end-side*.174,y+dy,headZ,.026,.13,.15,lens);
         box(end-side*.20,y+dy+.083,headZ,.13,.033,.22,iron);
       }
     }
@@ -5023,10 +5026,46 @@ const CENTRAL_PARK_SITES=[
     return makeTrafficRoute(points);
   }
 
+  // PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1. Eastbound bridge-to-DUMBO
+  // signal uses the same scene clock as its physically illuminated lens.
+  // Red 12s, green 20s. Only the two dedicated bridge connector cars
+  // obey this stop line; no change to other city traffic or maps.
+  function bridgeheadSignalGreen(time){
+    const phase=((time%32)+32)%32;
+    return phase>=12;
+  }
+
+  // Analytic travel with red-light waits, independent of draw cadence.
+  // The signal is checked at the stop line; clearing after green resumes
+  // progress without teleporting or modifying the authored road route.
+  function bridgeheadSignalTravel(actor,time){
+    if(time<=0 || !Number.isFinite(time))return actor.offset+time*actor.pace;
+    const radius=actor.laneOffset??1.07;
+    const period=2*(actor.route.total+Math.PI*radius);
+    const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
+      (actor.signalQueueSlot??0)*5.5;
+    let now=0,distance=actor.offset;
+    for(let count=0;count<256 && now<time;count++){
+      const laps=Math.floor((distance-stopAt)/period)+1;
+      const nextStop=stopAt+laps*period;
+      const arrival=now+(nextStop-distance)/actor.pace;
+      if(arrival>=time)return distance+(time-now)*actor.pace;
+      distance=nextStop;now=arrival;
+      if(!bridgeheadSignalGreen(now)){
+        const phase=((now%32)+32)%32;
+        now+=12-phase;
+      }
+      if(now>=time)return distance;
+    }
+    // Fail closed on an extreme time jump instead of jumping past red.
+    return distance;
+  }
+
   function bridgeheadTrafficPose(actor,time){
     const {route,pace,offset}=actor,rad=actor.laneOffset??1.07;
     const turnLength=Math.PI*rad,period=2*(route.total+turnLength);
-    const phase=((time*pace+offset)%period+period)%period;
+    const traveled=actor.signalized?bridgeheadSignalTravel(actor,time):time*pace+offset;
+    const phase=((traveled%period)+period)%period;
     const first=route.points[0],last=route.points.at(-1);
     const tangent=(a,b)=>{
       const dx=b[0]-a[0],dz=b[1]-a[1],m=Math.hypot(dx,dz)||1;
@@ -5128,6 +5167,7 @@ const CENTRAL_PARK_SITES=[
       if(connector)for(let j=0;j<2;j++){
         cityTraffic.push({kind:j?'sedan':'taxi',bridgehead:true,
           bridgeSegmentCount:CITY_STREETS[0].length-1,
+          signalized:true,signalQueueSlot:j,
           route:connector,offset:connector.total*(.18+j*.46),
           pace:5.0+j*.6,livery:j});
       }
@@ -5594,6 +5634,15 @@ const CENTRAL_PARK_SITES=[
     buildStreetVehicle('officer',[0.18,0.25,0.35],[0.73,0.54,0.40]),
     buildStreetVehicle('officer',[0.19,0.26,0.36],[0.51,0.36,0.29])
   ];
+  // Single tiny dynamic lens for the existing NYC bridgehead signal.
+  const nycBridgeheadSignalFaces=(()=>{
+    const make=color=>{
+      const mesh=createTriangleMesh();
+      addModelBox(mesh.addQuad,0,0,0,.034,.135,.158,color);
+      return mesh.upload();
+    };
+    return {red:make([.99,.115,.065]),green:make([.14,.98,.28])};
+  })();
   const taxiLamps=(()=>{
     const mesh=createTriangleMesh();
     for(const side of [-1,1]){
@@ -5647,6 +5696,15 @@ const CENTRAL_PARK_SITES=[
     if (!selectedMap.city && !selectedMap.vegas && !selectedMap.dc) return;
     const origin = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if (bridgeRails) drawMesh(bridgeRails,origin);
+    if(selectedMap.city){
+      const bridge=EAST_RIVER_BRIDGE;
+      const end=bridge.x+bridge.halfLength+bridge.ramp;
+      const headZ=bridge.z-(bridge.halfWidth+.36)+1.05;
+      const green=bridgeheadSignalGreen(sceneryTime);
+      const lamp=green?nycBridgeheadSignalFaces.green:nycBridgeheadSignalFaces.red;
+      const lampPos=[end-.202,STREET_Y+3.83+(green?-.25:.25),headZ];
+      drawMesh(lamp,mat4FromBasis(lampPos,[1,0,0],worldUp,[0,0,1],1),true);
+    }
     for (const actor of cityTraffic) {
       if(actor.kind==='train'){
         for(let car=0;car<4;car++){
