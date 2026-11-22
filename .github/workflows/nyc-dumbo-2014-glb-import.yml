@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.ref }}
+          ref: ${{ github.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -58,7 +58,7 @@ jobs:
           git add assets/nyc/dumbo-bk02-2014-source.glb assets/nyc/dumbo-bk02-2014-source-provenance.json
           if ! git diff --cached --quiet; then
             git commit -m "Import DUMBO 2014 official source surfaces as GLB"
-            git push origin "HEAD:\${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
       - name: Install pinned browser harness
         run: |
