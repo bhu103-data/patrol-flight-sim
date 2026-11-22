@@ -186,18 +186,34 @@ export function buildChongqingMarketFronts({
     position(beams,x,earth+10.84,z+5.57,17.6,.22,.28);
     // Recessed, asymmetrical doorway and real mullioned shop windows.
     const doorX=x+doorSide*5.2;
-    position(glass,doorX,earth+3.15,z+2.53,3.05,5.3,.10);
+    // Glass is behind both sides of the 0.43-unit-deep real jamb,
+    // with a visible dark reveal gap; the old solid market front is absent.
+    // Keep the site's original seven glazing cards (not additional draws).
+    position(glass,doorX,earth+3.15,z+2.11,3.05,5.3,.10);
+    position(lattice,doorX,earth+3.15,z+2.42,.09,5.1,.18);
     for(const dx of [-7.1,0,7.1]){
       if(Math.abs((x+dx)-doorX)<3.0)continue;
-      position(glass,x+dx,earth+5.6,z+2.53,4.2,4.3,.1);
+      position(glass,x+dx,earth+5.6,z+2.11,4.2,4.3,.1);
       position(beams,x+dx,earth+5.6,z+2.65,.11,4.65,.18);
+      // Individual sash and transom positions vary subtly by shop.
+      position(lattice,x+dx+(site.id==='stone-stair'?.12:-.10),
+        earth+5.6,z+2.42,.095,4.12,.16);
+      position(lattice,x+dx,earth+6.35+(site.id==='tea-lane'?.23:-.18),
+        z+2.42,4.04,.10,.16);
     }
     // Upper windows sit behind the 3D jambs, ahead of the old box wall.
     const upper=site.id==='tea-lane'?[-6.4,-2.15,2.2,6.35]:
       site.id==='stone-stair'?[-6.6,-2.35,2.3,6.6]:[-6.15,-2,2,6.15];
-    for(let i=0;i<upper.length;i++)
-      position(glass,x+upper[i],earth+13.41,z+2.55,
-        site.id==='river-market'&&i===1?2.24:2.40,2.38,.1);
+    for(let i=0;i<upper.length;i++){
+      const bayWidth=site.id==='river-market'&&i===1?2.24:2.40;
+      position(glass,x+upper[i],earth+13.41,z+2.11,
+        bayWidth,2.38,.1);
+      position(lattice,x+upper[i]+(i%2?.12:-.10),earth+13.41,
+        z+2.42,.09,2.36,.18);
+      // Real projecting slate sill outside the jamb; not a painted line.
+      position(stone,x+upper[i],earth+12.03,z+2.91,
+        bayWidth+.18,.17,.46);
+    }
     for(const dx of [-8.4,-4.2,0,4.2,8.4]){
       // Two-storey dark timber window rhythm varies by archetype and does
       // not cover the original shop sign immediately below the roof.
