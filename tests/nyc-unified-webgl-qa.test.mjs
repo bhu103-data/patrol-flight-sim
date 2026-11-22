@@ -16,14 +16,14 @@ test('ten NYC cameras include near-field building facades and nonblank PNG check
   '03-dumbo-warehouse.png','04-liberty-crown.png',
   '05-times-square-street.png','06-times-square-led-canyon.png',
   '07-one-times-square.png','08-duffy-square.png',
-  '09-manhattan-window-facades.png'
+  '09-manhattan-window-facades.png','11-flatiron-dcp-import.png'
  ];
  for(const file of named){
   assert.ok(script.includes(file),'missing actual screenshot '+file);
  }
  for(const label of ['Times Square Street Level','44th Street LED Canyon',
    'One Times Square','Duffy Square Street View','Statue of Liberty',
-   'DUMBO · Warehouse Blocks','Lower Manhattan · Window Facades']){
+   'DUMBO · Warehouse Blocks','Lower Manhattan · Window Facades','Flatiron Building']){
   assert.ok(script.includes(label),'missing physical camera '+label);
  }
  assert.ok(script.includes('PATROL_NYC_QA_DAYLIGHT_LOCK_V1'));
@@ -38,6 +38,9 @@ test('ten NYC cameras include near-field building facades and nonblank PNG check
  assert.match(script,/result=\{passed:true,state,bridge,dumbo,liberty,(?:petalwakeQa,)?\s*screenshots,pixels,controlPixels,captureTimings,warnings\}/,
   'real browser report retains all verified cameras and optional road QA');
  assert.ok(script.includes("page.locator('#glCanvas').screenshot"));
+ assert.ok(script.includes('runFlatironImport'));
+ assert.ok(script.includes('flatironImport.passed'));
+ assert.ok(script.includes('11-flatiron-dcp-import.png'));
  assert.ok(script.includes('body.patrol-qa-scene-only * {visibility:hidden !important;}'));
  assert.ok(script.includes('body.patrol-qa-scene-only #glCanvas {visibility:visible !important;}'));
  assert.ok(script.includes("getComputedStyle(el).visibility==='hidden'"));
