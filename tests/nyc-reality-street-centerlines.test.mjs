@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
   NYC_DCM_SOURCE,NYC_STREET_BBOX,officialStreetQuery,clipWGS84Line,
-  projectDCMRoads,fetchOfficialDCM
+  projectDCMRoads,fetchOfficialDCM,chooseOfficialStreetCamera
 } from '../assets/nyc/nyc-reality-street-centerlines.mjs';
 import {NYC_REALITY_ORIGIN,lonLatToENU}
   from '../assets/nyc/nyc-reality-projection.mjs';
@@ -83,4 +83,17 @@ test('standalone viewer marks roads as source centerlines, not a game road netwo
   assert.match(html,/DCM lines are <strong>street centerlines only/);
   assert.match(html,/PatrolRealityStreetStatus/);
   assert.doesNotMatch(html,/buildTimesSquareDistrict\(/);
+});
+
+test('street-height camera derives solely from a built 7 Avenue DCM segment',()=>{
+  const records=projectDCMRoads(lines).records;
+  const shot=chooseOfficialStreetCamera(records);
+  assert.equal(shot.streetName,'7 Avenue');
+  assert.equal(shot.objectId,7);
+  assert.equal(shot.eye[1],2.3);
+  assert.equal(shot.look[1],2.3);
+  assert.ok(Math.hypot(shot.look[0]-shot.eye[0],
+    shot.look[2]-shot.eye[2])>30);
+  assert.match(shot.source,/not curb\/roadbed/);
+  assert.throws(()=>chooseOfficialStreetCamera(records,'Fake road'),/No source-verified/);
 });
