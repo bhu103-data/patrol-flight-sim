@@ -47,7 +47,7 @@ function instrument(src){
  '          return vehicleAt(p[0],WATER_H+2,p[1],.48)?.kind||null;',
  '        })():null,',
  '        sameEye:this.origin&&[...this.origin],',
- '        sun:this.sun,moon:this.moon,',
+ '        sun:this.sun,moon:this.moon,sunClock:this.sunClock,skyWeather:this.skyWeather,skySeason:this.skySeason,',
  '        sunHeight:this.sun?.[1],sphereActive:!!sphereMesh,',
  '        moonAngularRadiusRadians:selectedMap.city?0.00455:0.026,',
  '        eye:[...camPos],face:this.facing,',
@@ -172,14 +172,14 @@ async function launch(mode,map='manhattan'){
      await page.evaluate(facing=>{window.__patrolSunwaterQA.facing=facing;},facing);
      await page.waitForFunction(facing=>{
        const v=window.__patrolSunwaterQA;
-       return v&&v.face!==facing&&v.sun&&v.moon;
+       return v&&v.facing===facing&&v.sun&&v.moon;
      },facing,{timeout:18000}).catch(()=>{});
      await page.waitForTimeout(800);
      const snap=await page.evaluate(()=>window.__patrolSunwaterQA.read());
      ensure(!snap.contextLost&&snap.webglError===0 && snap.sphereActive===false &&
        snap.sameEye.every((n,i)=>Math.abs(n-snap.eye[i])<.001),
        'Invalid WebGL/precise-camera '+JSON.stringify(snap));
-     if(facing!=='moon')ensure(snap.sunClock==='18.5'||snap.sunClock===undefined,
+     if(facing!=='moon')ensure(snap.sunClock==='18.5'&&snap.skyWeather==='Clear'&&snap.skySeason==='1',
        'Sun/anti setting drift');
      await page.addStyleTag({content:'body.patrol-water-qa *{visibility:hidden!important} '+
        'body.patrol-water-qa #glCanvas{visibility:visible!important}'});
