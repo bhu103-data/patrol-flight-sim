@@ -69,8 +69,13 @@ async function visit(variant,passIndex){
       const camera='  function getScenicCamera() {';
       const traffic='  function prepareCityTraffic() {';
       const model='  function buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,source,y){';
-      for(const token of [adapt,tick,camera,traffic,model])
+      for(const token of [adapt,tick,camera,traffic])
         assert(html.split(token).length===2,'QA source hook missing: '+token);
+      const modelCount=html.split(model).length-1;
+      const expectedModelCount=variant==='candidate'?1:0;
+      assert(modelCount===expectedModelCount,
+        'Unexpected OTI source-mesh baseline/candidate state: '+
+          JSON.stringify({variant,modelCount,expectedModelCount}));
       const adapted=adapt.replace('if (','if (!window.__patrolPerfQaFixed && ');
       const frozen=tick+[
         '    if(window.__patrolPerfQaFixed){',
@@ -96,9 +101,12 @@ async function visit(variant,passIndex){
       ].join('\n')+'\n'+traffic;
       const sourceCounter=model+
         '\n    (window.__patrolPerfQaFids??=[]).push(source.fid);';
-      const htmlQA=html.replace(adapt,adapted).replace(tick,frozen)
-        .replace(camera,fixedCamera).replace(traffic,modeSetter)
-        .replace(model,sourceCounter);
+      let htmlQA=html.replace(adapt,adapted).replace(tick,frozen)
+        .replace(camera,fixedCamera).replace(traffic,modeSetter);
+      // The parent #211 baseline intentionally has no OTI pilot helper.
+      // Instrument the source function only in the candidate, then assert
+      // the baseline emits zero FIDs and the candidate emits all three.
+      if(variant==='candidate')htmlQA=htmlQA.replace(model,sourceCounter);
       await route.fulfill({response,body:htmlQA});
     });
     const loadStart=Date.now();
@@ -126,8 +134,9 @@ async function visit(variant,passIndex){
       null,{timeout:15000});
     await page.locator('#hotelTarget').selectOption({label:'Brooklyn Bridge · Deck View'});
     const fids=await page.evaluate(()=>[...new Set(window.__patrolPerfQaFids||[])].sort());
-    assert(JSON.stringify(fids)===JSON.stringify([1031082,1051309,1080628]),
-      'Missing OTI source mesh: '+JSON.stringify(fids));
+    const expectedFids=variant==='candidate'?[1031082,1051309,1080628]:[];
+    assert(JSON.stringify(fids)===JSON.stringify(expectedFids),
+      'Unexpected OTI source mesh FIDs: '+JSON.stringify({variant,fids,expectedFids}));
     for(const mode of modes){
       await page.evaluate(x=>window.__patrolPerfQaSetMode(x),mode);
       await page.evaluate(()=>new Promise(resolve=>
@@ -149,7 +158,8 @@ async function visit(variant,passIndex){
       const perfMeasured=pacing.samples>=10&&Number.isFinite(pacing.p50Ms)&&
         Number.isFinite(pacing.p95Ms);
       const row={variant,passIndex,mode,firstLoadMs,framebuffer:before.size,
-        ...pacing,performanceStatus:perfMeasured?'measured':'inconclusive'};
+        sourceFids:fids,...pacing,
+        performanceStatus:perfMeasured?'measured':'inconclusive'};
       if(!perfMeasured)report.warnings.push(
         variant+'/'+mode+': SwiftShader delivered only '+pacing.samples+
         ' rAF intervals in '+pacing.elapsedMs+'ms; performance comparison omitted');
