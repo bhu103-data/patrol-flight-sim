@@ -11135,6 +11135,12 @@ const CENTRAL_PARK_SITES=[
     // Dedicated close-view camera lets CI inspect Brooklyn street façades
     // and block infill, rather than only the suspension bridge foreground.
     // Existing in-game Manhattan-mode camera (no new standalone preview).
+    // A second ORIGINAL-GAME camera, high-oblique to inspect the genuine
+    // OTI polygons when the street-level view is blocked by a model warehouse.
+    // Both conditions use precisely this SAME preset, no external viewer.
+    {name:'DUMBO · Front Dock Road Aerial',x:356,z:-297,height:1.6,
+      bearing:145,radius:42,rise:51,
+      detail:'High-oblique source-road outline and bike-lane audit in the actual Manhattan flight map; visual scale is compressed, not geo-registered.'},
     {name:'DUMBO · Front Dock Real Road',x:356,z:-296,height:4.5,
       bearing:220,radius:34,rise:9,
       detail:'2022 official OTI roadbed geometry with 2026 NYC DOT proposed bike marks, as a game-scale visual-only patch; signals are not actual timing.'},
