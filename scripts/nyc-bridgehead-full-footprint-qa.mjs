@@ -17,6 +17,9 @@ const injection=String.raw`
   window.__patrolBridgeheadQa = () => {
     const cars=cityTraffic.filter(a=>a.bridgehead);
     const rows=cars.map(actor=>{
+      // Geometry QA scans pure distance positions even when the real actor
+      // waits at a red light. Separate signal timing is checked below.
+      const geometryActor={...actor,signalized:false};
       const radius=actor.laneOffset??1.07;
       const turnLength=Math.PI*radius,period=2*(actor.route.total+turnLength);
       const stats={kind:actor.kind,routePoints:actor.route.points.length,
@@ -34,7 +37,7 @@ const injection=String.raw`
       // vehicle spawn offsets, at 0.25 units of route movement per sample.
       for(let phase=0;phase<=period+.00001;phase+=.25){
         const at=Math.min(period,phase);
-        const pose=trafficPose(actor,(at-actor.offset)/actor.pace);
+        const pose=trafficPose(geometryActor,(at-actor.offset)/actor.pace);
         const finite=[pose.x,pose.y,pose.z,pose.yaw].every(Number.isFinite);
         const expectedY=pose.onBridge
           ?bridgeRoadHeight(pose.x)+.055:STREET_Y+.07;
@@ -99,9 +102,38 @@ const injection=String.raw`
       }
       return stats;
     });
+    const signalRows=cars.map(actor=>{
+      const radius=actor.laneOffset??1.07;
+      const period=2*(actor.route.total+Math.PI*radius);
+      const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
+        (actor.signalQueueSlot??0)*5.5;
+      let prev=bridgeheadSignalTravel(actor,0);
+      let previousHeld=false,redHoldSamples=0,greenResumeSamples=0,
+        movingSamples=0,misplacedStops=0,invalidDistance=0;
+      for(let t=.25;t<=1000;t+=.25){
+        const at=bridgeheadSignalTravel(actor,t);
+        const delta=at-prev;
+        if(!Number.isFinite(at)||delta<-.00001||delta>actor.pace*.25+.0001)
+          invalidDistance++;
+        const held=Math.abs(delta)<.00001;
+        if(held&&!bridgeheadSignalGreen(t-.125)){
+          redHoldSamples++;
+          const offset=((at-stopAt)%period+period)%period;
+          if(Math.min(offset,period-offset)>.001)misplacedStops++;
+        }
+        if(previousHeld&&!held&&bridgeheadSignalGreen(t-.125))greenResumeSamples++;
+        if(!held)movingSamples++;
+        prev=at;previousHeld=held;
+      }
+      return {kind:actor.kind,signalized:actor.signalized,
+        signalQueueSlot:actor.signalQueueSlot,stopAt,
+        redHoldSamples,greenResumeSamples,movingSamples,
+        misplacedStops,invalidDistance};
+    });
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
-      streetY:STREET_Y,waterY:WATER_H,rows};
+      streetY:STREET_Y,waterY:WATER_H,
+      lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows};
   };
 `;
 
@@ -159,6 +191,14 @@ try{
   assert(traffic.mapCity,'Loaded map is not NYC');
   assert(traffic.bridgeheadCount===2,
     'Expected two live bridge-to-DUMBO cars; actual '+traffic.bridgeheadCount);
+  assert(traffic.signalRows?.length===2,
+    'Missing live signal controller on both bridgehead cars');
+  for(const sig of traffic.signalRows){
+    assert(sig.signalized===true&&sig.redHoldSamples>=8&&
+      sig.greenResumeSamples>0&&sig.movingSamples>0&&
+      sig.misplacedStops===0&&sig.invalidDistance===0,
+      'Red stop/green restart failed in real NYC runtime: '+JSON.stringify(sig));
+  }
   for(const car of traffic.rows){
     assert(car.routePoints>traffic.bridgeLinePoints,'Vehicle never enters DUMBO branch');
     assert(car.samples>100&&car.bridgeSamples>0&&car.streetSamples>0&&car.turnSamples>0&&
