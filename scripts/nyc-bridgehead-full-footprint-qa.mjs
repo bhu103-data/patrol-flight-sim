@@ -21,7 +21,9 @@ const injection=String.raw`
       const turnLength=Math.PI*radius,period=2*(actor.route.total+turnLength);
       const stats={kind:actor.kind,routePoints:actor.route.points.length,
         routeLength:actor.route.total,period,samples:0,bridgeSamples:0,
-        streetSamples:0,turnSamples:0,wetStreetSamples:0,
+        streetSamples:0,turnSamples:0,outboundSamples:0,
+        inboundSamples:0,dumboTurnSamples:0,bridgeTurnSamples:0,
+        wetStreetSamples:0,
         occupiedStreetSamples:0,badHeightSamples:0,invalidSamples:0,
         footprintStreetSamples:0,footprintWaterHits:0,
         footprintBuildingHits:0,bridgeRailHits:0,firstFootprintIssue:null,
@@ -45,6 +47,12 @@ const injection=String.raw`
         stats.samples++;
         if(pose.onBridge)stats.bridgeSamples++;else stats.streetSamples++;
         if(pose.turning)stats.turnSamples++;
+        // Explicitly distinguish each leg and both U-turns so a full
+        // period cannot falsely pass by only sampling one side.
+        if(at<actor.route.total)stats.outboundSamples++;
+        else if(at<actor.route.total+turnLength)stats.dumboTurnSamples++;
+        else if(at<2*actor.route.total+turnLength)stats.inboundSamples++;
+        else stats.bridgeTurnSamples++;
         if(wet)stats.wetStreetSamples++;
         if(occupied)stats.occupiedStreetSamples++;
         // Conservative full-car planar envelope, not merely its center.
@@ -153,8 +161,10 @@ try{
     'Expected two live bridge-to-DUMBO cars; actual '+traffic.bridgeheadCount);
   for(const car of traffic.rows){
     assert(car.routePoints>traffic.bridgeLinePoints,'Vehicle never enters DUMBO branch');
-    assert(car.samples>100&&car.bridgeSamples>0&&car.streetSamples>0&&car.turnSamples>0,
-      'No full bridge/street/U-turn coverage: '+JSON.stringify(car));
+    assert(car.samples>100&&car.bridgeSamples>0&&car.streetSamples>0&&car.turnSamples>0&&
+      car.outboundSamples>0&&car.inboundSamples>0&&
+      car.dumboTurnSamples>=10&&car.bridgeTurnSamples>=10,
+      'Both directions and both U-turn arcs must be independently covered: '+JSON.stringify(car));
     assert(car.invalidSamples===0&&car.badHeightSamples===0,
       'Non-finite or wrong road height: '+JSON.stringify(car));
     assert(car.wetStreetSamples===0&&car.occupiedStreetSamples===0,
