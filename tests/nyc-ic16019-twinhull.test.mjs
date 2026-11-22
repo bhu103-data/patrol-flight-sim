@@ -69,6 +69,21 @@ test('NYC has 26×8 game scale envelope and distinct under-deck twin hulls',()=>
    'existing Y placement is preserved and not derived from 1.9m MAX draft');
 });
 
+test('NYC collision top bounds real mesh mast and animated vertical bob',()=>{
+  const mesh=buildShipMesh('nycFerry');
+  const maxY=mesh.max[1];
+  const bobAmplitude=0.16; // production drawCoastalTraffic() source
+  assert.ok(maxY>=9.6125-1e-6,
+    'the authored roof mast must be included in measured mesh bounds');
+  assert.equal(SHIP_TYPES.nycFerry.top,ref.ship.hullModel.gameClearanceTop);
+  assert.ok(SHIP_TYPES.nycFerry.top>=maxY+bobAmplitude+0.02,
+    'bridge/floatplane obstacle must clear the tallest rendered mast at high bob');
+  assert.equal(SHIP_TYPES.ferry.top,7.5,
+    'non-NYC ferry clearance envelope remains unchanged');
+  assert.match(game,/const bob = 0\\.16\\*Math\\.sin\\(1\\.75\\*sceneryTime\\+boat\\.phase\\)/);
+  assert.match(game,/WATER_H\\+size\\.top<bridgeRoadHeight\\(px\\)-1\\.52/);
+});
+
 test('legacy ferry and non-NYC vessel meshes remain untouched',()=>{
  assert.deepEqual(SHIP_TYPES.ferry,{halfLength:13,halfWidth:3.3,top:7.5,name:'ferry'});
  const old=buildShipMesh('ferry'),ny=buildShipMesh('nycFerry');
