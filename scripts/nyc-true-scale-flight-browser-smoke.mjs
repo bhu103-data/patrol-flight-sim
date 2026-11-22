@@ -70,6 +70,15 @@ try{
   const sourceAerial=await page.locator('#scene').screenshot({
     path:out+'/03-2022-source-roadbed-aerial.png',timeout:90000
   });
+  await page.locator('#roadbedFocus').click();
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.camera?.[1]===70,
+    null,{timeout:45000});
+  const sourceCore=await page.locator('#scene').screenshot({
+    path:out+'/05-source-roadbed-FID24700-core.png',timeout:90000
+  });
+  report.sourceCoreCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
+  check(report.initial.roadbedFocusFID===24700,
+    'Source roadbed intersection camera is not tied to official FID 24700');
   await page.locator('#reset').click();
   report.visibleSamples=pixels;
   check(pixels>1000,'New NYC scene is blank or black');
@@ -133,6 +142,18 @@ try{
   const sourceOffAerial=await page.locator('#scene').screenshot({
     path:out+'/04-old-invented-roadbands-aerial.png',timeout:90000
   });
+  await page.locator('#roadbedFocus').click();
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.camera?.[1]===70,
+    null,{timeout:45000});
+  const sourceOffCore=await page.locator('#scene').screenshot({
+    path:out+'/06-old-roadbands-FID24700-core.png',timeout:90000
+  });
+  report.sourceOffCoreCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
+  check(report.sourceCoreCamera.every((v,i)=>
+    Math.abs(v-report.sourceOffCoreCamera[i])<1e-8),
+    'Core intersection on/off camera differs: '+JSON.stringify({
+      source:report.sourceCoreCamera,baseline:report.sourceOffCoreCamera
+    }));
   const a=PNG.sync.read(sourceAerial),b=PNG.sync.read(sourceOffAerial);
   check(a.width===b.width&&a.height===b.height,
     'A/B screenshot framebuffer sizes differ');
@@ -145,7 +166,22 @@ try{
   report.aerialRoadbedDifferencePixelsOver18=changed;
   report.aerialComparisonResolution=[a.width,a.height];
   report.aerialComparisonNote='Identical fixed source/old aerial pose with sky/HUD excluded; pixel-difference is geometry-localization QA, not photoreal score';
-  check(changed>80,'Official roadbed core not visibly different from old invented bands: '+changed);
+  check(changed>80,'Official roadbed aerial not distinguishable from old bands: '+changed);
+  const src=PNG.sync.read(sourceCore),ref=PNG.sync.read(sourceOffCore);
+  check(src.width===ref.width&&src.height===ref.height,
+    'FID24700 true-roadbed A/B framebuffer differs');
+  let changedCore=0;
+  for(let y=210;y<src.height;y+=2)for(let x=2;x<src.width;x+=2){
+    const i=(y*src.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(src.data[i+j]-ref.data[i+j])))>18)
+      changedCore++;
+  }
+  report.coreRoadbedPixelsDifferentOver18=changedCore;
+  report.coreRoadbedAB={sourceFID:24700,sourceYear:2022,
+    sourceCamera:report.sourceCoreCamera,
+    referenceCamera:report.sourceOffCoreCamera,
+    sampledStepPixels:2,excludedHUDTopPixels:210};
+  check(changedCore>300,'Source roadbed FID24700 geometry invisible from the identical focused camera: '+changedCore);
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
