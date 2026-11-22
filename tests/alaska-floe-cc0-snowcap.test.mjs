@@ -68,4 +68,13 @@ test('native Edge GPU QA cannot be mistaken for CI SwiftShader FPS',()=>{
   assert.ok(qaHarness.includes('nativeRafP95Ms'));
   assert.ok(qaHarness.includes('softwareRafP95Ms'));
   assert.ok(qaHarness.includes('timer-query execution time'));
+  assert.ok(qaHarness.includes("if(process.env.PATROL_NATIVE_GPU==='1'){"));
+  assert.ok(qaHarness.includes("writeFileSync(local,raw)"));
+  assert.ok(qaHarness.includes("'PATROL_NATIVE_P95_BUDGET_MS'"));
+  assert.ok(qaHarness.includes("'PATROL_NATIVE_MAX_P95_REGRESSION_PCT'"));
+  assert.ok(qaHarness.includes('p95RegressionPct=100*p95DeltaMs/base.nativeRafP95Ms'));
+  assert.ok(qaHarness.includes("status:violations.length?'configured-raf-budget-failed'"));
+  assert.ok(qaHarness.includes("'measurement-only'"));
+  assert.ok(qaHarness.includes("writeFileSync('artifacts/alaska-cabin-port-camera.json'"));
+  assert.ok(qaHarness.includes('Native GPU RAF budget exceeded'));
 });
