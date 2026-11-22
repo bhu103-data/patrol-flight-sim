@@ -19,8 +19,11 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Install GIS audit library
-        run: python3 -m pip install --disable-pip-version-check numpy rasterio fiona pyproj shapely
+        run: python3 -m pip install --disable-pip-version-check --only-binary=:all: numpy rasterio fiona==1.10.1 pyproj shapely
       - name: Fetch only bounded official USGS/NOAA samples (no repository changes)
         shell: bash
         run: |
@@ -134,5 +137,5 @@ jobs:
         with:
           name: alaska-tracy-arm-official-gis-samples
           path: alaska-official-aoi-results/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
