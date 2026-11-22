@@ -1,0 +1,51 @@
+name: NYC source-backed recessed facades live game A/B WebGL2
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "index.html"
+      - "assets/nyc/nyc-gis-infill.js"
+      - "assets/nyc/nyc-gis-recessed-facade-pilot.mjs"
+      - "tests/nyc-gis-recessed-facade-pilot.test.mjs"
+      - "scripts/nyc-architecture-pilot-browser-smoke.mjs"
+      - ".github/workflows/nyc-architecture-pilot-browser.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live-facade-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify true void geometry and zero pilot on default
+        run: |
+          node --check assets/nyc/nyc-gis-recessed-facade-pilot.mjs
+          node --check scripts/nyc-architecture-pilot-browser-smoke.mjs
+          node --test tests/nyc-gis-recessed-facade-pilot.test.mjs
+      - name: Install free Chromium + PNG parser
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unmodified PATROL game entrypoint
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-architecture-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Render Times Square live WebGL2 at two cameras, normal vs opt-in
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-architecture-pilot-browser-smoke.mjs
+      - name: Upload source A/B PNGs and diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-architecture-pilot-webgl2-ab
+          path: artifacts/nyc-architecture-pilot/
+          retention-days: 7
+          if-no-files-found: ignore

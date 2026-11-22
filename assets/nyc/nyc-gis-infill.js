@@ -87,13 +87,16 @@ function roof(poly,y,color,addTri){
   }
   return emitted;
 }
-export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites}){
+export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites,recessedFacade=null}){
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
   const [west,east,south,north]=bounds;
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
     shopfrontFaces=0,shopfrontQuads=0;
   const sourceFids=new Set();
+  // Opt-in geometry-only architectural QA. Defaults to the previous scene.
+  const pilotFids=new Set();
+  let pilotFacades=0,pilotWindows=0,pilotQuads=0;
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
       s.z-s.d*.5-.32,s.z+s.d*.5+.32]),
@@ -145,11 +148,28 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
       for(let k=0;k<ring.length;k++){
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
-        addQuad([a[0],ground,a[1]],[b[0],ground,b[1]],
-          [b[0],top,b[1]],[a[0],top,a[1]],wall,6);
-        // Narrow, recessed dark windows. Never exceed mobile detail budget.
+        // Exact municipal footprint edge in compressed PATROL coordinates.
+        // Optional true-void upper windows are strictly batched into the
+        // same existing GIS mesh, not the scene collision or city route mesh.
         const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
         const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+        const pilotEligible=typeof recessedFacade==='function' &&
+          rec.fid!==958605 && h>9 && len>=3.4 &&
+          pilotFacades<28 && pilotWindows<280;
+        const pilot=pilotEligible?recessedFacade({
+          a,b,ground,top,wall,addQuad,maxWindows:Math.min(12,280-pilotWindows),
+          glass:family%2===0?[.12,.21,.285]:[.105,.18,.23],
+          trim:wall.map(c=>Math.min(.85,c*.72+.085))
+        }):null;
+        if(pilot?.windows){
+          pilotFacades++;pilotWindows+=pilot.windows;pilotQuads+=pilot.quads;
+          pilotFids.add(rec.fid);
+        }else{
+          addQuad([a[0],ground,a[1]],[b[0],ground,b[1]],
+            [b[0],top,b[1]],[a[0],top,a[1]],wall,6);
+        }
+        // Legacy shallow painted windows are intentionally NOT emitted
+        // on a true-aperture wall. All other faces stay exactly as before.
         // PATROL_NYC_TIMES_FID384606_SHOPFRONT_V1: the 5.98-unit polygon
         // at the 44th Street camera's right foreground had zero window quads:
         // the generic h<9 infill gate skipped it. Keep the municipal polygon,
@@ -251,7 +271,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
           shopfrontFaces++;
           addedGroundShop=true;
         }
-        if(len<3.2||h<9||windows>=2200)continue;
+        if(pilot?.windows||len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
           floors=Math.min(12,Math.floor((h-2.2)/2.35));
         for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
@@ -326,5 +346,9 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
-    maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
+    maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
+    recessedPilot:{active:typeof recessedFacade==='function',
+      facades:pilotFacades,windows:pilotWindows,quads:pilotQuads,
+      sourceFids:[...pilotFids],maximumFacades:28,maximumWindows:280,
+      sourceAccuracy:'source footprint only; authored facades, compressed game scale'}};
 }
