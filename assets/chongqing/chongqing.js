@@ -10,6 +10,7 @@ import { buildChongqingWetStreets } from './wetstreets.js';
 import { buildChongqingRiverlife } from './riverlife.js';
 import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
+import { marketCliffRockTint } from './cliff-rock-tint.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
 import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,collectChongqingShorelineRoadEnds } from './road-clearance.js';
@@ -143,7 +144,7 @@ function ground(x,z) {
 
 const worldGeometry=new THREE.BufferGeometry();
 const positions=[],colors=[],indexes=[],uvs=[];
-const color=new THREE.Color();
+const color=new THREE.Color(),cliffRockColor=new THREE.Color();
 const gx=208,gz=148;
 for(let iz=0;iz<=gz;iz++){
   const z=-690+1380*iz/gz;
@@ -154,6 +155,17 @@ for(let iz=0;iz<=gz;iz++){
     const n=clamp((y-9)/145,0,1);
     color.setHSL(0.25-0.12*n,0.13+0.06*n,0.28+0.1*(1-n));
     if(y<0)color.setRGB(0.09,0.22,0.26);
+    // Expose pre-existing rocky atlas strata on the steep foreground cliff
+    // near the upper market, without moving terrain or changing collider heights.
+    // Evaluate extra height samples ONLY for the small bounded cliff band.
+    if(x>195&&x<294&&z>275&&z<444){
+      const grade=(ground(x+9,z)-ground(x-9,z))/18;
+      const tint=marketCliffRockTint(x,z,grade,y);
+      if(tint.weight>0){
+        cliffRockColor.setRGB(tint.r,tint.g,tint.b);
+        color.lerp(cliffRockColor,tint.weight);
+      }
+    }
     colors.push(color.r,color.g,color.b);
   }
 }
