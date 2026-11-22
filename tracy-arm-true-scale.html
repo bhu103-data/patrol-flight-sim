@@ -359,7 +359,12 @@ async function boot(){
          nativeSource.bbox.some((v,i)=>Math.abs(v-correctedBbox[i])>1e-8)||
          nativeSource.sourceVerticalCrs!=='EPSG:5703'||
          nativeSource.geoid!=='GEOID09'||
-         nativeSource.sourceTileSha256?.length!==2)
+         nativeSource.sourceTileSha256?.length!==2||
+         nativeSource.coverageValidFraction!==1||
+         !(nativeSource.tileSeamP95Metres>0&&nativeSource.tileSeamP95Metres<=10)||
+         !(nativeSource.tileOverlapRmseMetres>=0&&nativeSource.tileOverlapRmseMetres<=.5)||
+         !(nativeSource.tileOverlapP95AbsMetres>=0&&nativeSource.tileOverlapP95AbsMetres<=1)||
+         nativeSource.sourceLicense!=='USGS 3DEP public domain')
         throw Error('Native IfSAR source metadata does not match the verified full AOI');
       sourceAudit={
         sourceCellCount:nativeSource.width*nativeSource.height,
@@ -370,7 +375,13 @@ async function boot(){
         sourceProject:nativeSource.sourceProject,
         workunit:nativeSource.workunit,
         sourceTileSha256:[...nativeSource.sourceTileSha256],
-        sourceCoverageValidFraction:1
+        sourceCoverageValidFraction:nativeSource.coverageValidFraction,
+        tileSeamP95Metres:nativeSource.tileSeamP95Metres,
+        withinTileGradientP95Metres:nativeSource.withinTileGradientP95Metres,
+        tileOverlapRmseMetres:nativeSource.tileOverlapRmseMetres,
+        tileOverlapP95AbsMetres:nativeSource.tileOverlapP95AbsMetres,
+        sourceLicense:nativeSource.sourceLicense,
+        verticalDatumEvidence:nativeSource.verticalDatumEvidence
       };
       dem=decimateIfsarRaster(nativeSource,3);
       detailMode='source-native-ifsar5m-lod15m';
