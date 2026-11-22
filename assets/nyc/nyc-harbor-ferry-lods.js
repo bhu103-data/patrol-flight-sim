@@ -26,7 +26,8 @@ export function createNycHarborFerryLods(gl, decodeGLB, opts={}) {
   const controllers=new Set();
   const models=new Map();
   let disposed=false,started=false;
-  const stats={ready:[],failed:[],bytes:0,loadedTriangles:0,requested:[]};
+  const stats={ready:[],failed:[],bytes:0,loadedTriangles:0,requested:[],
+    selections:{near:0,mid:0,far:0,fallback:0}};
   async function loadOne(spec){
     const ctrl=new AbortController();
     const timer=setTimeout(()=>ctrl.abort(),13000);
@@ -76,9 +77,15 @@ export function createNycHarborFerryLods(gl, decodeGLB, opts={}) {
   }
   function select(distance){
     if(disposed||!Number.isFinite(distance))return null;
+    // Never draw the 52k near tier at long distance: a missing far tier
+    // must fall back to the cheap authored hull, not to expensive geometry.
     const tiers=distance<140?['near','mid','far']:
-      distance<380?['mid','far','near']:['far','mid','near'];
-    for(const tier of tiers)if(models.has(tier))return models.get(tier);
+      distance<380?['mid','far']:['far'];
+    for(const tier of tiers)if(models.has(tier)){
+      stats.selections[tier]++;
+      return models.get(tier);
+    }
+    stats.selections.fallback++;
     return null;
   }
   function dispose(){
