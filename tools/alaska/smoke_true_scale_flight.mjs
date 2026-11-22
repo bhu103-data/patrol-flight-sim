@@ -41,9 +41,13 @@ try{
     throw Error('Incorrect true source WGS84 origin');
   await page.screenshot({path:'artifacts/alaska-true-scale-source-flight-start.png'});
   result.images.push('alaska-true-scale-source-flight-start.png');
+  // Screenshot can advance many frames. Capture the counter *after* the
+  // screenshot; otherwise the wait may already be true before the key press.
+  const beforeMovementFrames=await page.evaluate(()=>window.PatrolTrueScaleQA().frames);
+  await page.locator('#scene').focus({timeout:10000});
   await page.keyboard.down('w');
-  await page.waitForFunction(startFrames=>window.PatrolTrueScaleQA().frames>=startFrames+5,
-    start.frames,{timeout:120000});
+  await page.waitForFunction(startFrames=>window.PatrolTrueScaleQA().frames>=startFrames+8,
+    beforeMovementFrames,{timeout:120000});
   await page.keyboard.up('w');
   const after=await page.evaluate(()=>window.PatrolTrueScaleQA());
   const distance=Math.hypot(after.camera[0]-start.camera[0],
