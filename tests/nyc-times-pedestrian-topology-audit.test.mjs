@@ -61,9 +61,9 @@ test('identifies precise source-derived centerline gaps, not false road drivable
     plaza:[feature(ring(350,-5,500,5))],
     sidewalk:[feature(ring(500,-5,550,5))]};
   const source={projection:frame,roads:[{objectId:459,streetName:'Broadway',
-    lines:[[[0,0],[600,0]]]}]};
+    lines:[Array.from({length:7},(_,i)=>[i*100,0])]}]};
   const result=classifyCenterlines(source,road,plaza);
-  assert.equal(result.total.segmentCount,1);
+  assert.equal(result.total.segmentCount,6);
   assert.equal(result.broadwayUncovered.portions.length,2);
   assert.ok(Math.abs(result.broadwayUncovered.lengthMeters-150)<1e-7);
   assert.equal(result.broadwayUncovered.portions[0].objectId,459);
