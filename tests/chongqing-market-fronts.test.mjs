@@ -263,6 +263,9 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   assert.match(game,/if\(marketDetailTarget\)cameraAim\.set\(\.\.\.marketDetailTarget\)/);
   assert.match(game,/if\(marketDetailTarget&&\[/,
     'flight movement must clear close-up lens target');
+  assert.match(game,/pointerdown',e=>\{marketDetailTarget=null;dragging=true/);
+  assert.match(game,/pointerdown',e=>\{\n  if\(joystickPointer!==null\)return;\n  e\.preventDefault\(\);marketDetailTarget=null;joystickPointer/);
+  assert.match(game,/wheel',e=>\{marketDetailTarget=null;camDistance=/);
   assert.match(html,/<kbd>8<\/kbd> 窗洞特写/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
