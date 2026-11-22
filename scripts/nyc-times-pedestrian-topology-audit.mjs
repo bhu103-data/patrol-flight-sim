@@ -183,6 +183,19 @@ export async function run(){
   mkdirSync(output,{recursive:true});
   writeFileSync(output+'/centreline-surface-topology.json',
     JSON.stringify(audit,null,2));
+  // Red strokes locate unresolved official 2022 centerline segments in the
+  // SAME source metre CRS. They do NOT mean roads closed or open in 2026.
+  const plan=readFileSync(output+'/pedestrian-roadbed-overlay.svg','utf8');
+  const gaps=audit.broadwayUncovered.portions
+    .filter(g=>g.lengthMeters>=.05).map(g=>'<line class="unclassified-broadway" '+
+      'x1="'+g.startMeters[0].toFixed(3)+'" y1="'+(-g.startMeters[1]).toFixed(3)+'" '+
+      'x2="'+g.endMeters[0].toFixed(3)+'" y2="'+(-g.endMeters[1]).toFixed(3)+'" '+
+      'stroke="#ff5365" stroke-width="2.2" stroke-linecap="round"/>').join('');
+  if(!plan.includes('</svg>')||!gaps)
+    throw Error('Official Broadway source map or its nonroadbed portions missing');
+  const note='<g id="broadway-unclassified-segments">'+gaps+'</g>';
+  writeFileSync(output+'/broadway-unclassified-segments.svg',
+    plan.replace('</svg>',note+'</svg>'));
   console.log(JSON.stringify({
     centrelineMetres:audit.total.centrelineMetres,
     roadbedPercent:audit.total.roadbedPercent,
