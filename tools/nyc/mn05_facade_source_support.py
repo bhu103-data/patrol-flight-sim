@@ -56,8 +56,13 @@ def cached_mesh_triangles(mesh, transform):
     return triangles, xy_points
 
 
-def match_roof_triangles(triangles, buildings, min_coverage=0.60):
-    """Match a source roof patch only to a newer footprint it actually covers."""
+def match_roof_triangles(triangles, buildings, min_coverage=0.60,
+                          min_coverage_margin=0.08):
+    """Match a source roof patch only when one current footprint is clearly best.
+
+    A high best overlap is not enough if a second building has a nearly equal
+    overlap. Near-ties are rejected rather than assigned by list order.
+    """
     pieces = []
     total_area = 0.0
     for tri in triangles:
@@ -73,15 +78,28 @@ def match_roof_triangles(triangles, buildings, min_coverage=0.60):
     footprint = unary_union(pieces)
     if footprint.area < 1.0 or total_area > footprint.area * 1.05:
         return None
-    best = None
+
+    ranked = []
     for building in buildings:
         area = footprint.intersection(building["geometry"]).area
-        if best is None or area > best[0]:
-            best = (area, building)
-    if not best or best[0] / footprint.area < min_coverage:
+        if area <= 1e-9:
+            continue
+        coverage = min(1.0, float(area / footprint.area))
+        ranked.append((coverage, float(area), building))
+    ranked.sort(key=lambda row: (-row[0], -row[1], int(row[2]["fid"])))
+    if not ranked or ranked[0][0] < min_coverage:
         return None
-    return {"building": best[1], "coverage": best[0] / footprint.area}
 
+    second_best = ranked[1][0] if len(ranked) > 1 else 0.0
+    margin = ranked[0][0] - second_best
+    if len(ranked) > 1 and margin < min_coverage_margin:
+        return None
+    return {
+        "building": ranked[0][2],
+        "coverage": ranked[0][0],
+        "secondBestCoverage": second_best,
+        "coverageMargin": margin,
+    }
 
 def match_facade_patch(xy_points, buildings, max_boundary_distance=2.0,
                        min_boundary_coverage=0.78):
