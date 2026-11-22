@@ -1,4 +1,4 @@
-name: Alaska floe sculpted-cap source-exact WebGL2 A/B
+name: Alaska floe skyward normals source-exact WebGL2 A/B
 on:
   pull_request:
     paths:
@@ -36,9 +36,9 @@ jobs:
           exit 1
       - name: Read source-exact parent game and floating ice module
         run: |
-          git show 918685cf4296792df036955bd41107a89da934e4:index.html > alaska-floe-relief-base.html
-          git show 918685cf4296792df036955bd41107a89da934e4:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
-      - name: Capture actual WebGL2 frozen-time 3D snowcap geometry A/B
+          git show 080392ecc4d2d507fba4ffe3326efa583c48431e:index.html > alaska-floe-relief-base.html
+          git show 080392ecc4d2d507fba4ffe3326efa583c48431e:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
+      - name: Capture WebGL2 parent-inward vs upward snowcap normals at frozen time
         run: node tools/alaska/compare_floe_relief.mjs
       - uses: actions/upload-artifact@v4
         if: always()

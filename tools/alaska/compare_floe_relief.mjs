@@ -1,11 +1,11 @@
-/** Source-exact parent #176 vs floe-top geometry A/B in the live PATROL WebGL2 game.
+/** Source-exact parent #202 vs outward-normal correction in live PATROL WebGL2.
  * QA temporary HTML only: identical GPU time and flyable world, no runtime edit.
  * Software RAF intervals are not target hardware GPU frame timings.
  */
 import {chromium} from 'playwright';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 
-const baseSha='918685cf4296792df036955bd41107a89da934e4';
+const baseSha='080392ecc4d2d507fba4ffe3326efa583c48431e';
 const sourceBaseline=readFileSync('alaska-floe-relief-base.html','utf8');
 const sourceCandidate=readFileSync('index.html','utf8');
 if(sourceBaseline!==sourceCandidate)
@@ -112,7 +112,7 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
 ]});
 const record={baselineSha:baseSha,headSha:process.env.GITHUB_SHA||null,
-  capture:'live game WebGL2, same-source game HTML, identical pose and shader phase',
+  capture:'live game WebGL2, parent #202 inward vs corrected outward normals at identical pose/time',
   softwareOnly:true,frozenShaderTime:photoPhase,scenarios:{}};
 async function capture(name,file,expectedModule){
   const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:1});
@@ -182,11 +182,11 @@ async function capture(name,file,expectedModule){
   }finally{await page.close();}
 }
 try{
-  await capture('parent','alaska-floe-relief-baseline-qa.html',
+  await capture('parent-inward','alaska-floe-relief-baseline-qa.html',
     '/assets/alaska/alaska-fjord-detail-baseline-qa.js');
-  await capture('sculpted','alaska-floe-relief-candidate-qa.html',
+  await capture('corrected-outward','alaska-floe-relief-candidate-qa.html',
     '/assets/alaska/alaska-fjord-detail.js');
-  const a=record.scenarios.parent,b=record.scenarios.sculpted;
+  const a=record.scenarios['parent-inward'],b=record.scenarios['corrected-outward'];
   const drift=Math.hypot(...a.pose.position.map((v,i)=>v-b.pose.position[i]));
   if(a.selected.index!==b.selected.index||
      Math.abs(a.selected.radius-b.selected.radius)>.00001||
