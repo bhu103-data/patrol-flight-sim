@@ -34,7 +34,7 @@ def source_roi():
     return bounds,(min(p[0] for p in corners),min(p[1] for p in corners),
                    max(p[0] for p in corners),max(p[1] for p in corners))
 
-def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name):
+def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name,roi_bounds):
     if mesh is None:return None
     count=len(mesh.Vertices);nfaces=len(mesh.Faces)
     if count<3 or nfaces<1 or count>MAX_VERTICES_PER_PATCH or nfaces>MAX_FACES_PER_PATCH:
@@ -49,7 +49,7 @@ def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name):
                     max(raw_bounds[3],x),max(raw_bounds[4],y),max(raw_bounds[5],z)]
         east,south=stateplane_to_dumbo_metres(x,y)
         vertices.extend([round(east,4),round(south,4),round(z,4)])
-    triangles=[];degenerate=0
+    triangles=[];degenerate=0;outside_roi=0
     for face in mesh.Faces:
         if isinstance(face,(tuple,list)):idx=[int(v) for v in face]
         else:idx=[int(getattr(face,k)) for k in ("A","B","C","D")]
@@ -62,6 +62,12 @@ def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name):
             p=[vertices[tri[0]*3:tri[0]*3+3],
                vertices[tri[1]*3:tri[1]*3+3],
                vertices[tri[2]*3:tri[2]*3+3]]
+            centroid_e=sum(v[0] for v in p)/3
+            centroid_s=sum(v[1] for v in p)/3
+            if not (roi_bounds[0]<=centroid_e<=roi_bounds[2] and
+                    roi_bounds[1]<=centroid_s<=roi_bounds[3]):
+                outside_roi+=1
+                continue
             u=[p[1][k]-p[0][k] for k in range(3)]
             v=[p[2][k]-p[0][k] for k in range(3)]
             cross=(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
@@ -80,7 +86,8 @@ def face_mesh_record(mesh,bbox,source_uuid,face_index,kind,layer_name):
       "brepFaceIndex":face_index,"vertices":vertices,"triangles":triangles,
       "vertexCount":count,"triangleCount":len(triangles)//3,
       "degenerateSourceTrianglesRejected":degenerate,
-      "sourceBoundsUSSurveyFeet":[round(v,3) for v in raw_bounds]}
+      "outsideRoiTrianglesDiscarded":outside_roi,
+      "sourceBoundsRawModelUnits":[round(v,3) for v in raw_bounds]}
 
 def inspect():
     bounds_m,bounds_ft=source_roi()
@@ -89,14 +96,20 @@ def inspect():
       "sourceCRS":"EPSG:2263 NAD83 Long Island, US survey feet XY",
       "viewerCRS":"WGS84 local DUMBO east/south metres",
       "originWGS84":[-73.989,40.702],"rootMetreBounds":bounds_m,
-      "sourceFootBounds":bounds_ft,"sourceVerticalDatumVerified":False,
-      "sourceZInterpretation":"RAW_2014_RHINO_Z_UNVERIFIED_VERTICAL_DATUM",
+      "sourceXYBoundsUSSurveyFeet":bounds_ft,"sourceVerticalDatumVerified":False,
+      "sourceZInterpretation":"RAW_2014_RHINO_DOCUMENT_FEET_VERTICAL_DATUM_UNVERIFIED",
       "sourceMeshMeaning":"Original Rhino cached display tessellation; not exact Brep trim topology",
       "meshAccepted":False,"layerStats":{},"sourceMeshStats":{},"errors":[]}
     try:
         previous=json.loads(PROBE.read_text())
         if previous.get("imported") is not True:
             raise ValueError("Official BK02 source probe did not pass")
+        if previous.get("zipSha256")!="e16f1dae5521f02835042ac5a6a36f3750603b03170d218d7d6b9f2a616c6ff1":
+            raise ValueError("BK02 ZIP differs from the reviewed official source snapshot")
+        if previous.get("source3dmSha256")!="c22a7e7225425e01b5f50e5d68f6dc75b93a9d05c8a4ae566f1c1d40ec981493":
+            raise ValueError("BK02 Rhino 3DM differs from the reviewed official source snapshot")
+        if previous.get("modelUnitSystem")!="UnitSystem.Feet":
+            raise ValueError("Unexpected Rhino model unit system; relative Z preview must be reviewed")
         if hashlib.sha256(SOURCE.read_bytes()).hexdigest()!=previous.get("source3dmSha256"):
             raise ValueError("BK02 3DM bytes differ from exact source-probe SHA")
         model=rhino3dm.File3dm.Read(str(SOURCE))
@@ -143,15 +156,15 @@ def inspect():
                 try:
                     cached=face.GetMesh(rhino3dm.MeshType.Any)
                     patch=face_mesh_record(cached,bbox,str(obj.Attributes.Id),
-                                           face_index,kind,layer_names[idx])
+                                           face_index,kind,layer_names[idx],bounds_m)
                     if patch is None:
                         counters[kind+"CachedMeshMissing"]+=1;continue
                     source_triangles+=patch["triangleCount"]
                     source_vertices+=patch["vertexCount"]
                     if source_triangles>MAX_SOURCE_TRIANGLES or source_vertices>MAX_SOURCE_VERTICES:
                         raise ValueError("BK02 source mesh exceeds bounded WebGL preview budget")
-                    z_min=min(z_min,patch["sourceBoundsUSSurveyFeet"][2])
-                    z_max=max(z_max,patch["sourceBoundsUSSurveyFeet"][5])
+                    z_min=min(z_min,patch["sourceBoundsRawModelUnits"][2])
+                    z_max=max(z_max,patch["sourceBoundsRawModelUnits"][5])
                     patches.append(patch);totals[kind]+=1
                     counters[kind+"CachedMeshFacesAccepted"]+=1
                     if len(patches)>MAX_PATCHES:
@@ -166,7 +179,8 @@ def inspect():
         report["sourceMeshStats"]={"roofPatches":totals["roof"],
           "facadePatches":totals["facade"],"footprintPatches":totals["footprint"],
           "triangles":source_triangles,"vertices":source_vertices,
-          "rawSourceZFeetRange":[z_min,z_max] if math.isfinite(z_min) else None,
+          "rawSourceZRhinoFeetRange":[z_min,z_max] if math.isfinite(z_min) else None,
+          "outsideRoiTrianglesDiscarded":sum(p["outsideRoiTrianglesDiscarded"] for p in patches),
           "degenerateSourceTrianglesRejected":sum(p["degenerateSourceTrianglesRejected"] for p in patches)}
         report["readyForBoundedPreview"]=(totals["roof"]>10 and totals["facade"]>50 and
           source_triangles>500 and source_vertices>500 and math.isfinite(z_min) and z_max>z_min)
@@ -176,10 +190,11 @@ def inspect():
               "role":"ISOLATED_2014_DCP_SOURCE_MESH_PREVIEW_NOT_2026_PATROL_GAME",
               "sourceZipSha256":previous.get("zipSha256"),
               "source3dmSha256":previous.get("source3dmSha256"),
-              "sourceCRS":"EPSG:2263 (US survey feet XY; raw Z datum unverified)",
+              "sourceCRS":"EPSG:2263 US survey feet XY; Rhino document Feet Z; vertical datum unverified",
               "viewerCRS":"DUMBO local east/south metres",
               "originWGS84":[-73.989,40.702],"boundsMeters":bounds_m,
-              "rawSourceZFeetRange":[z_min,z_max],
+              "modelUnitSystem":previous.get("modelUnitSystem"),
+              "rawSourceZRhinoFeetRange":[z_min,z_max],
               "verticalDatumVerified":False,"meshPatches":patches,
               "counts":report["sourceMeshStats"]
             },separators=(",",":")))
