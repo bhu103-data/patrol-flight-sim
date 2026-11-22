@@ -124,17 +124,31 @@ try{
   await page.waitForFunction(
     'window.__metricFly?.getState().travelledMetres>0.05',null,{timeout:20000});
  }finally{await page.keyboard.up('e');}
- const movedState=await page.evaluate(()=>window.__metricFly.getState());
- assert.ok(movedState.position[1]>spawnState.position[1]+.02,
+ const afterLift=await page.evaluate(()=>window.__metricFly.getState());
+ assert.ok(afterLift.position[1]>spawnState.position[1]+.02,
   'Trusted E input must actually move camera vertically in metric metres');
- assert.ok(movedState.travelledMetres>.05);
+ assert.ok(afterLift.travelledMetres>.05);
+ assert.equal(afterLift.blockedAttempts,0);
+ // Real trusted W-key input: verify horizontal movement ALONG the source
+ // Front Street bearing, not only a mode switch or vertical debug jump.
+ await page.keyboard.down('w');
+ try{
+  await page.waitForFunction(
+    'window.__metricFly?.getState().travelledMetres>1.10',null,{timeout:20000});
+ }finally{await page.keyboard.up('w');}
+ const movedState=await page.evaluate(()=>window.__metricFly.getState());
+ assert.ok(movedState.position[0]>afterLift.position[0]+.15,
+  'True-metre Front St W input must advance EAST along its official line');
+ assert.ok(Math.abs(movedState.position[2]-afterLift.position[2])<1.2,
+  'Front St eastgoing travel should not teleport north/south off axis');
+ assert.ok(movedState.travelledMetres>afterLift.travelledMetres+.2);
  assert.equal(movedState.blockedAttempts,0);
  const flyImage=await page.screenshot({path:output+'/05-dumbo-true-metre-safe-lowflight.png'});
  assert.ok(PNG.sync.read(flyImage).width===1280);
  await page.keyboard.press('Escape');
  assert.equal(await page.evaluate(()=>window.__metricFly.getState().enabled),false);
- const flight={spawn:spawnState,afterMovement:movedState,fixture:flyFixture,
-   liveKeyboardVerified:true,
+ const flight={spawn:spawnState,afterLift,afterMovement:movedState,fixture:flyFixture,
+   liveVerticalEAndForwardWKeysVerified:true,
    sourceCrossingRoadsDriveable:false,
    genuineAircraftFlightDynamics:false,
    groundElevationAndBridgesSurveyed:false};
