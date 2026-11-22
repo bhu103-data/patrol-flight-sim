@@ -124,7 +124,7 @@ const injection=String.raw`
       const radius=actor.laneOffset??1.07;
       const period=2*(actor.route.total+Math.PI*radius);
       const stopAt=actor.route.lengths[actor.bridgeSegmentCount]-5.5-
-        (actor.signalQueueSlot??0)*5.5;
+        (actor.signalQueueSlot??0)*9;
       // Construct an actor whose next crossing would nominally be amber.
       // Reuse real route, pace and signal controller; no mock clock.
       const amberActor={...actor,offset:stopAt-actor.pace*29};
@@ -134,11 +134,11 @@ const injection=String.raw`
         redEnd:bridgeheadSignalTravel(amberActor,44),
         greenAfter:bridgeheadSignalTravel(amberActor,44.5)
       };
-      let prev=bridgeheadSignalTravel(actor,0);
+      let prev=bridgeheadResolvedTravel(actor,0);
       let previousHeld=false,redHoldSamples=0,greenResumeSamples=0,
         movingSamples=0,misplacedStops=0,invalidDistance=0;
       for(let t=.25;t<=1000;t+=.25){
-        const at=bridgeheadSignalTravel(actor,t);
+        const at=bridgeheadResolvedTravel(actor,t);
         const delta=at-prev;
         if(!Number.isFinite(at)||delta<-.00001||delta>actor.pace*.25+.0001)
           invalidDistance++;
@@ -157,10 +157,42 @@ const injection=String.raw`
         redHoldSamples,greenResumeSamples,movingSamples,
         misplacedStops,invalidDistance,amberStops};
     });
+    // Independent pairwise vehicle envelope verification on the *live*
+    // loaded bridge-to-DUMBO route; do not substitute the artificial clear
+    // terrain Node fixture or collide oncoming lane centerpoints.
+    const pair={samples:0,nearPasses:0,badSamples:0,minGap:Infinity,
+      firstIssue:null,horizonSeconds:9000,bodyHalfWidth:1.0,
+      bodyHalfLength:2.05,minimumRequiredClearance:.08};
+    const carAxes=p=>[[Math.cos(p.yaw),-Math.sin(p.yaw)],
+      [Math.sin(p.yaw),Math.cos(p.yaw)]];
+    const carGap=(a,b)=>{
+      const axesA=carAxes(a),axesB=carAxes(b);
+      const dx=a.x-b.x,dz=a.z-b.z;
+      let separation=-Infinity;
+      for(const axis of [...axesA,...axesB]){
+        const extent=axes=>Math.abs(
+          axis[0]*axes[0][0]+axis[1]*axes[0][1])*pair.bodyHalfWidth+
+          Math.abs(axis[0]*axes[1][0]+axis[1]*axes[1][1])*pair.bodyHalfLength;
+        separation=Math.max(separation,
+          Math.abs(dx*axis[0]+dz*axis[1])-extent(axesA)-extent(axesB));
+      }
+      return separation;
+    };
+    if(cars.length===2)for(let k=0;k<=36000;k++){
+      const t=k*.25,a=trafficPose(cars[0],t),b=trafficPose(cars[1],t);
+      if(Math.abs(a.y-b.y)>1.5)continue; // Elevated bridge vs dry street.
+      const gap=carGap(a,b);pair.samples++;
+      if(gap<pair.minGap)pair.minGap=gap;
+      if(gap<.5)pair.nearPasses++;
+      if(!Number.isFinite(gap)||gap<pair.minimumRequiredClearance){
+        pair.badSamples++;
+        pair.firstIssue??={t,gap,a,b};
+      }
+    }
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
       streetY:STREET_Y,waterY:WATER_H,
-      lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows};
+      lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair};
   };
   // Test-only snapshot clock: drive the production signal's actual scene
   // time to known red/green windows for a stable physical-lens comparison.
@@ -251,6 +283,11 @@ try{
       sig.amberStops.greenAfter>sig.stopAt,
       'Red stop/green restart failed in real NYC runtime: '+JSON.stringify(sig));
   }
+  assert(traffic.pair?.samples>1000&&traffic.pair.nearPasses>5&&
+    traffic.pair.badSamples===0&&
+    traffic.pair.minGap>=traffic.pair.minimumRequiredClearance,
+    'Live taxi/sedan body envelopes collide during long-run bridge traffic: '+
+    JSON.stringify(traffic.pair));
   for(const car of traffic.rows){
     assert(car.routePoints>traffic.bridgeLinePoints,'Vehicle never enters DUMBO branch');
     assert(car.samples>100&&car.bridgeSamples>0&&car.streetSamples>0&&car.turnSamples>0&&
