@@ -116,9 +116,13 @@ def source_trim_loop_points(loop):
 
 
 MESH_OUT=FOLDER/"times-square-original-roof-mesh.json"
+FACADE_OUT=FOLDER/"times-square-original-facade-mesh.json"
 MAX_SOURCE_ROOFS=2500
 MAX_SOURCE_TRIANGLES=150000
 MAX_SOURCE_VERTICES=250000
+MAX_SOURCE_FACADE_PATCHES=24000
+MAX_SOURCE_FACADE_TRIANGLES=250000
+MAX_SOURCE_FACADE_VERTICES=400000
 
 def original_cached_face_mesh(mesh,bbox,roof_id,brep_face_index):
     """Transform only real Rhino-cached tessellation, retaining source face IDs.
@@ -204,6 +208,8 @@ def inspect():
        "meshAccepted":False,
        "roofSamples":[],"layerStats":{},"errors":[],
        "sourceMeshStats":{},"meshOutput":str(MESH_OUT),
+       "facadeMeshStats":{},"facadeMeshOutput":str(FACADE_OUT),
+       "facadeMeshAccepted":False,
        "sourceVerticalStatus":"UNKNOWN (raw 2014 Rhino Z retained in feet)",
        "sourceCachedMeshMeaning":"Rhino-authored cached display tessellation; not exact NURBS or 2026 surveyed roof"}
     try:
@@ -232,9 +238,13 @@ def inspect():
         counter=collections.Counter()
         admitted=[]
         source_roof_meshes=[]
+        source_facade_meshes=[]
         source_triangles=0
         source_vertices=0
         source_degenerate_triangles=0
+        facade_triangles=0
+        facade_vertices=0
+        facade_degenerate_triangles=0
         for i,obj in enumerate(model.Objects):
             idx=obj.Attributes.LayerIndex
             if idx not in roof_indices and idx not in facade_indices:continue
@@ -250,7 +260,27 @@ def inspect():
             if b.X<MINX or a.X>MAXX or b.Y<MINY or a.Y>MAXY:
                 continue
             counter[kind+"InsideROI"]+=1
-            if kind=="facade":continue
+            if kind=="facade":
+                # Only original NYC 2014 Brep face render caches, never fake
+                # rectangle facades from source-footprint extrusions.
+                if hasattr(geom,"Faces"):
+                    for j,face in enumerate(geom.Faces):
+                        cached=face.GetMesh(rhino3dm.MeshType.Any)
+                        original=original_cached_face_mesh(
+                            cached,bbox,str(obj.Attributes.Id),j)
+                        if original is None:
+                            counter["facadeCachedMeshMissing"]+=1
+                            continue
+                        facade_triangles+=original["triangleCount"]
+                        facade_vertices+=original["vertexCount"]
+                        facade_degenerate_triangles+=original["degenerateSourceTrianglesRejected"]
+                        if len(source_facade_meshes)>=MAX_SOURCE_FACADE_PATCHES or (
+                            facade_triangles>MAX_SOURCE_FACADE_TRIANGLES or
+                            facade_vertices>MAX_SOURCE_FACADE_VERTICES):
+                            raise ValueError("Official 2014 facade source mesh exceeds bounded WebGL budget")
+                        source_facade_meshes.append(original)
+                        counter["facadeCachedMeshFacesAccepted"]+=1
+                continue
             if len(source_roof_meshes)>=MAX_SOURCE_ROOFS:
                 raise ValueError("Too many official 2014 source rooftop faces in pilot")
             if hasattr(geom,"Faces"):
@@ -336,6 +366,27 @@ def inspect():
             "degenerateSourceTrianglesRejected":source_degenerate_triangles,
             "roiRoofBreps":counter["roofInsideROI"],
             "roiFacadeBreps":counter["facadeInsideROI"]}
+        report["facadeMeshStats"]={
+            "cachedSourceFacadeMeshPatches":len(source_facade_meshes),
+            "actualFacadeSourceTriangles":facade_triangles,
+            "actualFacadeSourceVertices":facade_vertices,
+            "degenerateFacadeTrianglesRejected":facade_degenerate_triangles,
+            "roiFacadeBreps":counter["facadeInsideROI"]}
+        report["facadeMeshAccepted"]=(
+            len(source_facade_meshes)>100 and facade_triangles>200 and
+            facade_vertices>300 and counter["facadeInsideROI"]>100)
+        if report["facadeMeshAccepted"]:
+            FACADE_OUT.write_text(json.dumps({
+                "schema":"patrol-mn05-authentic-2014-cached-facade-mesh-qa-v1",
+                "role":"ORIGINAL_2014_MUNICIPAL_FACADE_CACHED_MESH_NOT_2026_PATROL_GAME",
+                "source3dmSHA256":previous["source3dmSha256"],
+                "sourceCRS":"EPSG:2263 (US survey feet)",
+                "viewerCRS":"WGS84 local east/north metres",
+                "originLonLat":[-73.9864883,40.756421],
+                "facadeZInterpretation":"RAW_2014_RHINO_SOURCE_FOOT_UNKNOWN_VERTICAL_DATUM",
+                "sourceFacade3dMeshPatches":source_facade_meshes,
+                "counts":report["facadeMeshStats"]
+            },separators=(",",":")))
         report["readyForBoundedMeshConversion"]=(
             len(source_roof_meshes)>50 and source_triangles>100
             and source_vertices>150 and counter["roofInsideROI"]>100)
@@ -359,6 +410,8 @@ def inspect():
         SOURCE.unlink(missing_ok=True)
         if not report["meshAccepted"]:
             MESH_OUT.unlink(missing_ok=True)
+        if not report["facadeMeshAccepted"]:
+            FACADE_OUT.unlink(missing_ok=True)
         OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2))
         print(json.dumps({k:v for k,v in report.items() if k!="roofSamples"},
                          ensure_ascii=False,indent=2))
@@ -368,6 +421,9 @@ def inspect():
         # Genuine source cached roof meshes were not found within budget;
         # do not silently substitute a flat box or synthetic roof.
         raise SystemExit(2)
+    if not report["facadeMeshAccepted"]:
+        # Do not label a roof-only source mesh as a complete city building.
+        raise SystemExit(3)
 
 
 if __name__=="__main__":
