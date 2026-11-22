@@ -867,7 +867,7 @@ function stopJoystick(e){
 }
 joystick.addEventListener('pointerdown',e=>{
   if(joystickPointer!==null)return;
-  e.preventDefault();joystickPointer=e.pointerId;
+  e.preventDefault();marketInspect=null;joystickPointer=e.pointerId;
   joystick.setPointerCapture(e.pointerId);updateJoystick(e);
 });
 joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
@@ -980,6 +980,10 @@ function scenicView(key){
   return true;
 }
 function press(key,once=false){
+  // Mobile buttons call press() directly, bypassing keydown inspection exit.
+  if(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','Space',
+      'ControlLeft','ControlRight','ArrowUp','ArrowDown','ArrowLeft',
+      'ArrowRight','KeyF'].includes(key))marketInspect=null;
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
   if(once&&key==='Space')jumpQueued=true;
