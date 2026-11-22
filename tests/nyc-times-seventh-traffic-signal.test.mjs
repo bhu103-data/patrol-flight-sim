@@ -118,5 +118,14 @@ test('Manhattan only and preserves low graphics and map-switch fallback',()=>{
   assert.match(html,/nycTimesSignalMeshes=buildTimesSeventhSignalMeshes\(\)/);
   assert.match(html,/if\(selectedMap\.city && nycTimesSignalMeshes\)/);
   assert.match(html,/nycTimesSignalMeshes=null/);
+  const dispose=html.indexOf('if(nycTimesSignalMeshes)for(const m of Object.values(nycTimesSignalMeshes))');
+  const build=html.indexOf('landscapeDetails = smoothScenery() ? createLandscapeDetails() : null');
+  const mapScenery=html.indexOf('createMapScenery();',build);
+  assert.ok(dispose>0&&dispose<build&&build<mapScenery,
+    'release previous signal meshes before rebuilding the new city landscape');
+  const mapCreation=html.slice(html.indexOf('function createMapScenery() {'),build);
+  assert.ok(!mapCreation.includes('nycTimesSignalMeshes=null'),
+    'late map scenery initialization must not destroy live signal geometry');
+
   assert.match(html,/safe\(12,6\)&&safe\(12,1\)&&safe\(7\.05,6\.45\)/);
 });
