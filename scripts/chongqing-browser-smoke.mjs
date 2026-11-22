@@ -93,6 +93,18 @@ async function capture(name){
     }
     pixels.hotpotUpperWindowColorBins=windowColors.size;
     pixels.hotpotUpperWindowRoughContrast=contrast/Math.max(1,3*n);
+    // Anti-glare regression probe: the initial screenshot had 10.3% of
+    // strongly orange pixels inside this exact fixed-window ROI, caused
+    // by smooth metallic glass catching the hotpot point light. Preserve
+    // the metric even when sun/exposure changes; evaluate before merge.
+    let hot=0,windowCount=0;
+    for(let y=0;y<120;y+=2)for(let x=800;x<1180;x+=2){
+      const i=(y*png.width+x)*4;
+      const r=png.data[i],g=png.data[i+1],b=png.data[i+2];
+      if(r>95&&r>g*1.45&&r>b*1.4)hot++;
+      windowCount++;
+    }
+    pixels.hotpotUpperWindowOrangeFraction=hot/Math.max(1,windowCount);
 
   }
   if(name==='00-spawn'){
