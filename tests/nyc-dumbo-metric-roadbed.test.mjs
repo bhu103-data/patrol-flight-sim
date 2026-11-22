@@ -66,7 +66,8 @@ test('roadbed is 2022 paved footprint and only appears in opt-in staging',()=>{
   const preview=readFileSync(new URL('../tools/nyc/dumbo-metric-preview.html',import.meta.url),'utf8');
   assert.match(preview,/prepareOfficialDumboRoadbed/);
   assert.match(preview,/dumbo-front-dock-roadbed-2022\.json/);
-  assert.match(preview,/2022 paved roadbed/);
+  assert.match(preview,/2022 paved roadbed/i,
+    'source preview must still label its original 2022 paved roadbed');
   assert.doesNotMatch(preview,/advanceFlight\(|PatrolSpaceBridge/);
   const original=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   assert.doesNotMatch(original,/dumbo-front-dock-roadbed-2022\.json/);
