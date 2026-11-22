@@ -26,7 +26,7 @@ test('Manhattan rain uses sparse varied streaks instead of the dense screen-spec
 test('non-Manhattan rain shader remains the original shared fallback',()=>{
   assert.match(legacy,/vec2\(p\.x\+p\.y\*0\.19,p\.y\)\*vec2\(194\.0,15\.0\)/);
   assert.match(legacy,/step\(0\.35,seed\)\*uWeatherVisual\.x\*0\.43/);
-  assert.match(html,/uNyCinema,selectedMap\.city && !graphicsCompat/);
+  assert.match(html,/uniform1f\(uDither\.nyCinema,selectedMap\.city && !graphicsCompat/);
 });
 
 test('snow rendering and the existing WebGL compositor remain intact',()=>{
