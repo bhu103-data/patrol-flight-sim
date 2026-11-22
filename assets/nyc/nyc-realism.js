@@ -251,8 +251,11 @@ export async function loadNycRealism(gl){
   // QA rollback must skip ALL imported landmark meshes, including the older
   // bundled Liberty GLB, not merely skip the manifest-approved Scenario GLBs.
   // Keep PBR terrain/street photos independent of the landmark choice.
-  const useProceduralLandmarks=typeof location!=='undefined' &&
-    new URLSearchParams(location.search).get('nycModels')==='legacy';
+  const options=typeof location!=='undefined'?new URLSearchParams(location.search):new URLSearchParams();
+  const useProceduralLandmarks=options.get('nycModels')==='legacy';
+  // Explicit, isolated opt-in; the production manifest stays disabled for Liberty.
+  // This uses the SAME reviewed 15.9k CC0 GLB already staged in PR #103.
+  const libertyCC0Pilot=options.get('nycLibertyCC0')==='1' && !useProceduralLandmarks;
   const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
     // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
@@ -284,7 +287,9 @@ export async function loadNycRealism(gl){
       if(manifest.schema_version!==1||!manifest.landmarks)return;
       const allowed=new Set(['liberty','trade','empire','chrysler','flatiron','times']);
       await Promise.all(Object.entries(manifest.landmarks).map(async ([kind,spec])=>{
-        if(!allowed.has(kind)||!spec||spec.enabled!==true)return;
+        const stagedLiberty=kind==='liberty'&&libertyCC0Pilot&&
+          spec?.enabled===false&&spec.file==='scenario/liberty.glb';
+        if(!allowed.has(kind)||!spec||(spec.enabled!==true&&!stagedLiberty))return;
         if(typeof spec.file!=='string' ||
            !/^scenario\/[a-z0-9_-]+\.glb$/.test(spec.file) ||
            !Number.isFinite(spec.target_height)||spec.target_height<10||
@@ -308,9 +313,15 @@ export async function loadNycRealism(gl){
           const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles);
           mesh.source='scenario';
           if(models[kind]){
-            for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
-            gl.deleteVertexArray(models[kind].vao);
-            if(models[kind].texture)gl.deleteTexture(models[kind].texture);
+            if(stagedLiberty){
+              // Reuse the existing original low-poly GLB as LOD1 and as the
+              // working fallback; never download/copy a second 3D asset.
+              models.libertyLow=models[kind];
+            }else{
+              for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
+              gl.deleteVertexArray(models[kind].vao);
+              if(models[kind].texture)gl.deleteTexture(models[kind].texture);
+            }
           }
           models[kind]=mesh;
         }catch(error){failures.push('scenario '+kind+': '+error.message);}
