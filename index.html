@@ -8520,13 +8520,20 @@ const CENTRAL_PARK_SITES=[
       if(!graphicsCompat && smoothScenery() &&
          new URLSearchParams(location.search).get('nycGIS')!=='off'){
         const sceneEpoch=heroEpoch;
+        // Opt-in real polygon-edge aperture depth; source FIDs retained.
+        // Never reinterprets compressed game X/Z as surveyed metres.
+        const architecturePilot=new URLSearchParams(location.search)
+          .get('nycArchitecture')==='1';
         Promise.all([
           import('./assets/nyc/nyc-gis-infill.js'),
           fetch('./assets/nyc/times-square-footprints.json').then(r=>{
             if(!r.ok)throw Error('NYC GIS HTTP '+r.status);
             return r.json();
-          })
-        ]).then(([module,asset])=>{
+          }),
+          architecturePilot
+            ?import('./assets/nyc/nyc-gis-recessed-facade-pilot.mjs')
+            :Promise.resolve(null)
+        ]).then(([module,asset,architecture])=>{
           if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
           const dataMesh=createTriangleMesh();
           const stats=module.buildTimesSquareGisInfill(asset,{
@@ -8536,7 +8543,8 @@ const CENTRAL_PARK_SITES=[
               dataMesh.addTri(a,b,c,color,surface),
             box:(...args)=>addModelBox(dataMesh.addQuad,...args),
             ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
-            protectedSites:protectedTimesSites
+            protectedSites:protectedTimesSites,
+            recessedFacade:architecture?.emitRecessedFacade||null
           });
           const uploaded=dataMesh.upload();
           if(sceneEpoch!==nycHeroEpoch||gl.isContextLost())
