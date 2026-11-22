@@ -90,7 +90,7 @@ class RoofVerticalReferenceAuditTests(unittest.TestCase):
             "FID": 1001, "BIN": 123, "DOITT_ID": 456,
             "GROUNDELEV": 20, "HEIGHTROOF": 80,
             "GEOMSOURCE": "Photogrammetric", "CNSTRCT_YR": 2000,
-            "LSTMODDATE": modified, "FEAT_CODE": 2100,
+            "LSTMODDATE": modified, "LSTSTATTYPE": "Initialization", "FEAT_CODE": 2100,
         }}
         report = audit.build_audit(mesh, probe, footprints, {}, current)
         self.assertEqual(report["verticalDatumStatus"], "NOT_CERTIFIED")
@@ -102,6 +102,38 @@ class RoofVerticalReferenceAuditTests(unittest.TestCase):
         self.assertEqual(
             report["verticalComparison"]["stableSince2014Candidates"]["sampleCount"], 1
         )
+        self.assertEqual(report["perBuilding"][0]["lastStatusType"], "Initialization")
+
+    def test_historic_footprint_crosscheck_preserves_status_and_datum_uncertainty(self):
+        mesh = {
+            "sourceRooftop3dMeshPatches": [{
+                "sourceObjectUUID": "historic-source-object",
+                "vertexCount": 4,
+                "vertices": [2, 2, 100, 18, 2, 100, 18, 18, 100, 2, 18, 100],
+            }],
+        }
+        probe = {"modelUnitSystem": "UnitSystem.Feet"}
+        historic_footprints = [{
+            "fid": 77,
+            "ring": [(0, 0), (20, 0), (20, 20), (0, 20)],
+        }]
+        historic_attributes = {77: {
+            "OBJECTID": 77, "BIN": 123, "DOITT_ID": 456,
+            "GROUND_ELEVATION": 20, "HEIGHT_ROOF": 80,
+            "GEOM_SOURCE": "Photogrammetric", "CONSTRUCTION_YEAR": 1970,
+            "DEMOLITION_YEAR": 2020, "LAST_STATUS_TYPE": "Alteration",
+            "LAST_EDITED_DATE": int(
+                dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc).timestamp() * 1000
+            ),
+            "FEATURE_CODE": 2100,
+        }}
+        report = audit.build_historic_comparison(
+            mesh, probe, historic_footprints, historic_attributes
+        )
+        self.assertEqual(report["matching"]["uniqueMatchedBuildingCount"], 1)
+        self.assertEqual(report["photogrammetricMatches"]["sampleCount"], 1)
+        self.assertEqual(report["perHistoricBuilding"][0]["deltaSourceMinusHistoricFt"], 0.0)
+        self.assertEqual(report["perHistoricBuilding"][0]["lastStatusType"], "Alteration")
 
 
 if __name__ == "__main__":
