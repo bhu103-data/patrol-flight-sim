@@ -38,6 +38,68 @@ function mappedLine(line){
   const points=line.map(p=>toLocalMeters(p).map(v=>round(v)));
   return points.every(p=>p.every(Number.isFinite))?points:null;
 }
+// ArcGIS "intersects bounding box" selects full source street features;
+// it does NOT clip their complete geometry. The former SVG included roads
+// extending >1 km beyond the Times Square audit tile, shrinking its scale.
+// Clip only the INSPECTABLE copy; preserve the original source OBJECTID and
+// status. Boundary endpoints are exact line intersections, not invented roads.
+export const SOURCE_TILE_METRES=Object.freeze((()=>{
+  const sw=toLocalMeters([BBOX[0],BBOX[1]]);
+  const ne=toLocalMeters([BBOX[2],BBOX[3]]);
+  return [sw[0],sw[1],ne[0],ne[1]];
+})());
+export function clipSourceStreetLine(line,bounds=SOURCE_TILE_METRES){
+  if(!Array.isArray(line)||line.length<2)return [];
+  const [left,bottom,right,top]=bounds;
+  if(![left,bottom,right,top].every(Number.isFinite)||
+     !(left<right&&bottom<top))
+    throw Error('Invalid NYC metric query bounds');
+  const fragments=[];
+  let active=[];
+  const flush=()=>{
+    if(active.length>1)fragments.push(active);
+    active=[];
+  };
+  const close=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1])<.0015;
+  for(let i=1;i<line.length;i++){
+    const a=line[i-1],b=line[i];
+    if(!a||!b||!a.every(Number.isFinite)||!b.every(Number.isFinite)){
+      flush();continue;
+    }
+    const dx=b[0]-a[0],dy=b[1]-a[1];
+    if(Math.hypot(dx,dy)<.00001)continue;
+    const p=[-dx,dx,-dy,dy];
+    const q=[a[0]-left,right-a[0],a[1]-bottom,top-a[1]];
+    let t0=0,t1=1,valid=true;
+    for(let k=0;k<4;k++){
+      if(Math.abs(p[k])<1e-12){
+        if(q[k]<0){valid=false;break;}
+      }else{
+        const t=q[k]/p[k];
+        if(p[k]<0)t0=Math.max(t0,t);
+        else t1=Math.min(t1,t);
+        if(t0>t1){valid=false;break;}
+      }
+    }
+    if(!valid){flush();continue;}
+    const point=t=>[
+      round(Math.max(left,Math.min(right,a[0]+dx*t))),
+      round(Math.max(bottom,Math.min(top,a[1]+dy*t)))
+    ];
+    const start=point(t0),end=point(t1);
+    if(close(start,end)){
+      if(t1<1)flush();
+      continue;
+    }
+    if(active.length&&!close(active.at(-1),start))flush();
+    if(!active.length)active.push(start);
+    if(!close(active.at(-1),end))active.push(end);
+    if(t1<1-1e-10)flush(); // exits tile before source vertex
+  }
+  flush();
+  return fragments;
+}
+
 export function buildingsInMeters(snapshot){
   if(!Array.isArray(snapshot?.features))throw Error('Missing vetted NYC building FIDs');
   const ids=new Set(),out=[];
@@ -66,7 +128,7 @@ export function roadsInMeters(geojson){
     const shape=f.geometry;
     if(shape?.type!=='LineString'&&shape?.type!=='MultiLineString')continue;
     const lines=(shape.type==='LineString'?[shape.coordinates]:shape.coordinates)
-      .map(mappedLine).filter(Boolean);
+      .map(mappedLine).filter(Boolean).flatMap(line=>clipSourceStreetLine(line));
     if(!lines.length)continue;
     ids.add(id);
     const widthRaw=String(p.Streetwidth??'').trim();
@@ -160,10 +222,12 @@ export async function run(){
       'Streetwidth is source attribute, NOT verified lane or pavement width',
       'Official 3-D massing, terrain, glass facades and traffic not yet integrated',
       'Some DCM records may represent paper/record streets',
-      'Existing compressed PATROL coordinates intentionally NOT used'],
+      'Existing compressed PATROL coordinates intentionally NOT used',
+      'Intersects-envelope source roads clipped at the metric tile boundary (not extended)'],
     counts:{buildings:buildings.length,roadFeatures:roads.length,
       roadLines:roads.reduce((n,r)=>n+r.lines.length,0)},
-    boundsMetres:bboxLocal,buildings,roads
+    boundsMetres:bboxLocal,clipBoundsMetres:SOURCE_TILE_METRES.map(v=>round(v,3)),
+    buildings,roads
   };
   mkdirSync('artifacts/nyc-true-scale',{recursive:true});
   writeFileSync('artifacts/nyc-true-scale/source.json',JSON.stringify(packageData,null,2));
