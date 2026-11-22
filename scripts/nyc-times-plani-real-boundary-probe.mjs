@@ -155,7 +155,14 @@ export function audit2022RoadbedCoverage(csclRecords,roadbeds,plazas,stepMetres=
   const motor=csclRecords.filter(r=>r.constructedVehicleCandidate);
   const roads=polygonsIndex(roadbeds.filter(r=>['roadbed','intersection'].includes(r.roadbedVsIntersection)));
   const pedestrian=polygonsIndex(plazas);
-  let pts=0,roadMatches=0,plazaMatches=0;
+  // ArcGIS 'intersects envelope' returns the WHOLE source road polyline.
+  // Never score those extraneous outside-query sections against polygons that
+  // were only fetched INSIDE BBOX. A wider arbitrary game-world frame caused
+  // a false 98.11% coverage estimate (60/3170 outside-source misses).
+  const sw=toLocalMeters(BBOX[0],BBOX[1]);
+  const ne=toLocalMeters(BBOX[2],BBOX[3]);
+  const roi=[sw[0],sw[1],ne[0],ne[1]];
+  let pts=0,roadMatches=0,plazaMatches=0,outsideBboxDiscarded=0;
   const perSegment=[];
   for(const rec of motor){
     let samples=0,hits=0;
@@ -166,9 +173,11 @@ export function audit2022RoadbedCoverage(csclRecords,roadbeds,plazas,stepMetres=
       for(let k=0;k<n;k++){
         const t=(k+.5)/n,p=[a[0]+(b[0]-a[0])*t,
           a[1]+(b[1]-a[1])*t];
-        // Only samples in the shared pilot bounds. Source polygons from
-        // spatial intersection queries may extend beyond the pilot bounds.
-        if(p[0]<-350||p[0]>400||p[1]<-120||p[1]>460)continue;
+        // Clip samples to the EXACT official spatial query envelope.
+        // Do not treat unqueried 2022 outside-ROI roadbed as absent pavement.
+        if(p[0]<roi[0]||p[0]>roi[2]||p[1]<roi[1]||p[1]>roi[3]){
+          outsideBboxDiscarded++;continue;
+        }
         samples++;pts++;
         if(covered(p,roads)){hits++;roadMatches++;}
         if(covered(p,pedestrian))plazaMatches++;
@@ -179,6 +188,8 @@ export function audit2022RoadbedCoverage(csclRecords,roadbeds,plazas,stepMetres=
       hitFraction:samples?+(hits/samples).toFixed(4):null});
   }
   return {motorRecords:motor.length,samples:pts,
+    officialSpatialQueryBoundsMetres:roi,
+    outsideBboxSamplesDiscarded:outsideBboxDiscarded,
     insideHistoric2022Roadbed:roadMatches,
     onHistoricPlaza:plazaMatches,
     coverageFraction:pts?+(roadMatches/pts).toFixed(4):null,
