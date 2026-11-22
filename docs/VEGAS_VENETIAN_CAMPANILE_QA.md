@@ -6,7 +6,11 @@ Only the existing game-space Venetian campanile at x=-11, z=8 is remodeled.
 The former opaque 4.32-unit upper cube is replaced with a real open belfry:
 four corner piers, three arched openings on each of four faces, 96 voussoir
 quads, a cap and stone stringcourses, plus narrow shaft openings and brick
-corner pilasters. The original clock, spire, canals and traffic are preserved.
+corner pilasters. The original clock location, spire, canals and traffic are
+preserved. The clock now receives twelve 3D hour ticks and two low-profile
+stylized hands on each of its two existing wall-facing dials. One low-poly
+bronze bell and clapper hang within the still-open arcade (10- and 8-sided
+radial pieces); none of these details add collision solids.
 
 The gameplay scene is spatially compressed. This is a **reference-inspired
 authored lightweight model, not a survey or photogrammetric reconstruction**.
@@ -32,8 +36,10 @@ included, downloaded or redistributed.
   are not modified.
 * Bell openings are physical empty space inside **visual** geometry but the
   original conservative building obstacle remains solid for safety.
-* Typical added visual geometry: 96 arch quads (192 triangles) plus fewer than
-  115 batched box primitives; no texture or WebGL draw-call changes.
+* Typical added visual geometry: 96 arch quads (192 triangles), 28 extra
+  clock tick/hand quads (56 triangles), one 10-sided bell, one 8-sided
+  clapper and fewer than 120 batched box primitives. All primitives use
+  existing material batches; no texture download, shader or draw-call change.
 
 ## QA
 
