@@ -108,7 +108,7 @@ async function capture(label,file){
     if(state.menuError||state.gpuLost||!state.flight?.playing||state.flight.map!=='alaska')
       throw Error(label+' Alaska load failed: '+JSON.stringify(state));
     // Oblique ridges from opposite sides of USGS terrain corridor.
-    const scenarios=[['west-ridge','west','15'],['east-ridge','east','10']];
+    const scenarios=[['west-ridge','west','12'],['east-ridge','east','12']];
     const record={};
     for(const [name,mode,hour] of scenarios){
       await page.evaluate(({mode,hour})=>{
@@ -116,6 +116,7 @@ async function capture(label,file){
         for(const [id,value] of [['skyTime',hour],['skyWeather','Clear'],['skySeason','1']]){
           const el=document.getElementById(id);
           el.value=value;
+          if(el.value!==value)throw Error('Invalid QA environment option '+id+'='+value);
           el.dispatchEvent(new Event('change',{bubbles:true}));
         }
         window.PatrolAlaskaNormalQA(mode);
