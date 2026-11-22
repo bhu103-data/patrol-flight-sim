@@ -30,6 +30,10 @@ try{
      info.streetWidthEnvelopes.derivedWidthFeatures<20||
      info.streetWidthEnvelopes.missingWidthRecords<8||
      info.streetWidthEnvelopes.triangles<30||
+     info.historySource?.actualPolygons!==17||
+     info.historySource?.renderedPolygons<14||
+     info.historySource?.crs!=='EPSG:32118'||
+     info.historySource?.visible()!==false||
      !/metres/.test(info.projection))throw Error('Invalid official-source view '+JSON.stringify(info));
   const shot=async name=>{
     await page.waitForTimeout(400);
@@ -38,6 +42,15 @@ try{
     shots.push(name);
   };
   await shot('01-metric-aerial');
+  // Toggle only genuine 2015–2017 source geometry in EXACTLY same camera.
+  // This is NOT the 2026 city lane network.
+  await page.locator('#historicToggle').check();
+  if(!(await page.evaluate(()=>window.geoPilotQA.historySource.visible())))
+    throw Error('Historical source toggle did not activate actual polygon draw');
+  await shot('01a-historic-CityGML-median-on');
+  await page.locator('#historicToggle').uncheck();
+  if(await page.evaluate(()=>window.geoPilotQA.historySource.visible()))
+    throw Error('Historic source must default back OFF for contemporary view');
   await page.click('#toggleFlight');
   const initial=await page.evaluate(()=>window.geoPilotQA.getFlight());
   if(!initial.mode||initial.collision||initial.position[1]!==8)
