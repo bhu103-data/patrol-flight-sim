@@ -5,8 +5,8 @@ import {readFileSync} from 'node:fs';
 const src=readFileSync(new URL('../tracy-arm-true-scale.html',import.meta.url),'utf8');
 const game=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const geoSrc=readFileSync(new URL('../assets/alaska/tracy-arm-geodesy.js',import.meta.url),'utf8');
-const {rasterCellToLocalEnu,rasterCellWgs84,sourceTileOrigin,oldPatrolGamePointToWgs84,
-  sampleSourceElevationMetres,wgs84ToLocalEnu}=await import('data:text/javascript;base64,'+
+const {rasterCellToLocalEnu,rasterCellWgs84,sourceTileOrigin,
+  sampleSourceElevationMetres}=await import('data:text/javascript;base64,'+
   Buffer.from(geoSrc).toString('base64'));
 const raw=JSON.parse(readFileSync(new URL('../assets/alaska/tracy-arm-3dep.json',import.meta.url),'utf8'));
 const decodeSrc=readFileSync(new URL('../assets/alaska/usgs-dem.js',import.meta.url),'utf8');
@@ -50,12 +50,28 @@ test('north-up terrain spans more than 7.5km E and 8km N, no 90deg rotation',()=
   assert.ok(Math.abs(lon0+133.2)<.00001&&Math.abs(lat0-57.887)<.00001);
 });
 test('flight starts from a verified water source location and keeps real dynamic envelope',()=>{
-  const coords=oldPatrolGamePointToWgs84(dem,-19,-667);
-  const start=sampleSourceElevationMetres(dem,...coords);
-  assert.ok(start<=3,'source DEM start must be on water');
-  const [e,n]=wgs84ToLocalEnu(...coords,0,...sourceTileOrigin(dem));
-  assert.ok(e<0&&Number.isFinite(n));
-  assert.match(src,/spawn=\[e,225,north\]/);
+  const [lon,lat]=rasterCellWgs84(dem,170,105);
+  const start=sampleSourceElevationMetres(dem,lon,lat);
+  assert.ok(start<=1,'source DEM launch channel must be on water');
+  const [e,n]=rasterCellToLocalEnu(dem,170,105,0);
+  assert.ok(Number.isFinite(e)&&Number.isFinite(n));
+  assert.match(src,/spawn=\[e,320,north\]/);
+  assert.match(src,/if\(dem\.heights\[105\*dem\.width\+170\]>1\)/);
   assert.match(src,/Math\.max\(Math\.max\(0,surface\)\+18,Math\.min\(3800,pose\.xyz\[1\]\)\)/);
   assert.match(src,/gl\.drawElements\(gl\.TRIANGLES,m\.count,gl\.UNSIGNED_INT,0\)/);
+});
+
+test('materials are reused from already-bundled CC0 rather than unsourced scenery',()=>{
+  const manifest=JSON.parse(readFileSync(
+    new URL('../assets/alaska/alaska-photo-manifest.json',import.meta.url),'utf8'));
+  assert.equal(manifest.license,'CC0');
+  assert.deepEqual(manifest.columns.slice(0,3),[
+    'rock_01','snow_02','forest_ground_04'
+  ]);
+  assert.match(src,/\.\/assets\/alaska\/alaska-photo-albedo\.webp/);
+  assert.match(src,/vec3 rock=atlasColor\(0\.0,n\)/);
+  assert.match(src,/vec3 forest=atlasColor\(2\.0,n\)/);
+  assert.match(src,/vec3 ice=atlasColor\(1\.0,n\)/);
+  assert.match(src,/photoReady=false/);
+  assert.match(src,/if\(uPhoto\)/);
 });
