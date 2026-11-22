@@ -141,6 +141,86 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
+  // The game renders desktop screenshots above, but its separate mobile
+  // joystick and on-screen flight button must also release this fixed eye.
+  // Use Chromium's CDP touch input on the real on-screen controls,
+  // rather than a desktop mouse click with pointerType="mouse". This validates
+  // browser-emulated touch, not a physical phone or native GPU performance.
+  const touchSession=await page.context().newCDPSession(page);
+  await page.evaluate(()=>{
+    document.getElementById('joystick').style.display='block';
+    document.getElementById('mobile').style.display='grid';
+    window.__patrolTouchQa={};
+    for(const [name,selector] of [
+      ['joystick','#joystick'],['space','#mobile button[data-key="Space"]'],
+      ['hotpot','#mobile button[data-key="KeyE"]'],
+      ['flight','#mobile button[data-key="KeyF"]']
+    ]){
+      document.querySelector(selector).addEventListener('pointerdown',event=>{
+        window.__patrolTouchQa[name]={
+          pointerType:event.pointerType,isTrusted:event.isTrusted
+        };
+      },{once:true});
+    }
+  });
+  // Touch CDP dispatch works in the existing non-mobile desktop browser
+  // context, so the original twelve screenshot camera presets are unchanged.
+  const tapTouch=async selector=>{
+    const rect=await page.locator(selector).boundingBox();
+    check(rect&&rect.width>0&&rect.height>0,'Missing touch target: '+selector);
+    const x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+    await touchSession.send('Input.dispatchTouchEvent',{
+      type:'touchStart',touchPoints:[{x,y,id:1}]
+    });
+    await touchSession.send('Input.dispatchTouchEvent',{
+      type:'touchEnd',touchPoints:[]
+    });
+  };
+  try{
+    await touchSession.send('Emulation.setTouchEmulationEnabled',{
+      enabled:true,maxTouchPoints:1
+    });
+    await tapTouch('#joystick');
+    const joystickTouch=await page.evaluate(()=>window.__patrolTouchQa.joystick);
+    check(joystickTouch?.pointerType==='touch'&&joystickTouch.isTrusted,
+      'Joystick QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'Touch joystick pointerdown left Digit8 inspection camera active');
+    await page.keyboard.press('8');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Could not re-enter Digit8 after touch joystick exit');
+    await tapTouch('#mobile button[data-key="Space"]');
+    const buttonTouch=await page.evaluate(()=>window.__patrolTouchQa.space);
+    check(buttonTouch?.pointerType==='touch'&&buttonTouch.isTrusted,
+      'Flight button QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'Touch Space flight button left Digit8 inspection camera active');
+    // Interactions that do not move the avatar must retain the inspection view.
+    // KeyE may show an out-of-range hotpot message but must not exit Digit8.
+    await page.keyboard.press('8');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Could not re-enter Digit8 before nonmovement touch control');
+    await tapTouch('#mobile button[data-key="KeyE"]');
+    const hotpotTouch=await page.evaluate(()=>window.__patrolTouchQa.hotpot);
+    check(hotpotTouch?.pointerType==='touch'&&hotpotTouch.isTrusted,
+      'Hotpot button QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===true,
+      'Nonmovement touch KeyE incorrectly dismissed Digit8 inspection camera');
+    await tapTouch('#mobile button[data-key="KeyF"]');
+    const flightTouch=await page.evaluate(()=>window.__patrolTouchQa.flight);
+    check(flightTouch?.pointerType==='touch'&&flightTouch.isTrusted,
+      'Flight toggle QA did not exercise a trusted Chromium touch pointer');
+    check((await page.evaluate(()=>window.PatrolSpaceBridge.getState())).marketInspectorActive===false,
+      'Touch KeyF flight toggle left Digit8 inspection camera active');
+  }finally{
+    await touchSession.send('Emulation.setTouchEmulationEnabled',{enabled:false});
+    await touchSession.detach();
+    await page.evaluate(()=>{
+      document.getElementById('joystick').style.removeProperty('display');
+      document.getElementById('mobile').style.removeProperty('display');
+      delete window.__patrolTouchQa;
+    });
+  }
   await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
