@@ -28,9 +28,10 @@ jobs:
       - name: Download bounded NOAA Tracy Arm CUSP index candidates (PR 201 only)
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 201
         run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: mapbox-vector-tile==2.2.0 fiona==1.10.1 shapely pyproj
+          python -m pip install --disable-pip-version-check --only-binary=:all: mapbox-vector-tile==2.2.0 fiona==1.10.1 shapely pyproj numpy tifffile rasterio
           python tools/alaska/fetch_noaa_cusp_index.py
           python tools/alaska/clip_noaa_cusp_tracy_arm.py
+          python tools/alaska/audit_usgs_3dep_live.py
       - name: Upload NOAA CUSP index QA result (PR 201 only)
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 201
         uses: actions/upload-artifact@v4
@@ -39,5 +40,6 @@ jobs:
           path: |
             alaska-official-aoi-results/noaa-cusp-index/
             alaska-official-aoi-results/noaa-cusp-tracy-arm-qa/
+            alaska-official-aoi-results/3dep-live-qa/
           if-no-files-found: warn
           retention-days: 7
