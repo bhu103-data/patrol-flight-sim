@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PATROL_C185_AIRBORNE,makeC185AirborneState,
-  c185SourceAirborneStep,c185SceneCollision}
+  c185SourceAirborneStep,c185SceneCollision,
+  C185_HALF_SPAN_METRES,C185_HALF_LENGTH_METRES}
   from '../assets/nyc/nyc-c185-metre-airborne.mjs';
 import {buildMeteredMassing} from '../assets/nyc/times-square-metered-massing.mjs';
 import {buildingContains} from '../assets/nyc/nyc-true-scale-neighborhood.mjs';
@@ -86,6 +87,23 @@ test('official 1:1 footprint collision samples source building FID and roof heig
   assert.equal(collision([east,3,-north]),true);
   assert.equal(collision([east,b.roofHeightMeters+2,-north]),false);
   assert.equal(collision([10000,80,10000]),false);
+});
+
+test('source C185 10.922m wingtip is collision-checked far beyond spectator radius',()=>{
+  assert.equal(C185_HALF_SPAN_METRES,5.461);
+  assert.equal(C185_HALF_LENGTH_METRES,3.90525);
+  const fakeBuilding=(_,east,north,height)=>
+    Math.abs(east-5.461)<.15&&Math.abs(north)<.15&&height<95?123:null;
+  const collision=c185SceneCollision({buildings:[]},{east:0,north:0},
+    fakeBuilding,.6);
+  assert.equal(collision([0,80,0],{yaw:0,pitch:0,bank:0}),true,
+    'wing must hit an obstacle 5.46m from the center');
+  assert.equal(collision([0,100,0],{yaw:0,pitch:0,bank:0}),false,
+    'wing passing above the real roof must be clear');
+  // Roll rotates wing height; no unrealistically level wing tip in bank.
+  assert.equal(collision([0,80,0],{yaw:0,pitch:0,bank:.2}),true);
+  assert.equal(collision([0,80,0],{yaw:Math.PI/2,pitch:0,bank:0}),false,
+    'wingtip must rotate with current original PATROL yaw');
 });
 
 test('metric aircraft scene uses true map WGS84 and admits no original-physics false claim',()=>{
