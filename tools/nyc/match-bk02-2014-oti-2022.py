@@ -7,6 +7,7 @@ from __future__ import annotations
 import collections,json,math,pathlib,statistics,sys
 from shapely.geometry import Polygon,Point
 from shapely.ops import unary_union
+from shapely.affinity import translate
 from shapely.validation import make_valid
 HERE=pathlib.Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
@@ -94,9 +95,50 @@ def main():
             distance=f["geometry"].centroid.distance(g.centroid)
             if iou>0.01:
                 pairs.append({"otiIndex":i,"sourceUUID":uid,"iou":iou,
-                  "centroidDistanceM":distance,"sourceToOtiAreaRatio":ratio,
+                  "centroidDistanceM":distance,"deltaEastM":s.centroid.x-g.centroid.x,
+                  "deltaSouthM":s.centroid.y-g.centroid.y,
+                  "sourceToOtiAreaRatio":ratio,
                   "sourceAreaM2":g.area,"otiAreaM2":f["geometry"].area})
     pairs.sort(key=lambda p:(-p["iou"],p["centroidDistanceM"]))
+    best_by_oti={}
+    for p in pairs:
+        best_by_oti.setdefault(p["otiIndex"],p)
+    calibration=[p for p in best_by_oti.values()
+      if .80<=p["sourceToOtiAreaRatio"]<=1.20 and
+         2.0<=p["centroidDistanceM"]<=5.0 and p["iou"]>.20]
+    if len(calibration)<20:
+        raise ValueError("Insufficient stable 2014/2022 footprint pairs for translation diagnosis")
+    median_dx=statistics.median(p["deltaEastM"] for p in calibration)
+    median_dz=statistics.median(p["deltaSouthM"] for p in calibration)
+    mad_dx=statistics.median(abs(p["deltaEastM"]-median_dx) for p in calibration)
+    mad_dz=statistics.median(abs(p["deltaSouthM"]-median_dz) for p in calibration)
+    shift_e=-median_dx;shift_s=-median_dz
+    post_shift_scores=[]
+    for p in best_by_oti.values():
+        i=p["otiIndex"];f=current[i];g=source[p["sourceUUID"]]
+        moved=translate(g,xoff=shift_e,yoff=shift_s)
+        inter=f["geometry"].intersection(moved).area
+        union=f["geometry"].union(moved).area
+        p["postShiftFootprintIoU"]=inter/union if union else 0
+        p["postShiftCentroidDistanceM"]=f["geometry"].centroid.distance(moved.centroid)
+        post_shift_scores.append(p)
+    post_high=sum(p["postShiftFootprintIoU"]>=.85 and
+      p["postShiftCentroidDistanceM"]<=.5 and
+      .85<=p["sourceToOtiAreaRatio"]<=1.15 for p in post_shift_scores)
+    translation_diagnostic={
+      "sampleCount":len(calibration),
+      "sourceMinusOtiMedianEastM":median_dx,
+      "sourceMinusOtiMedianSouthM":median_dz,
+      "sourceMinusOtiMadEastM":mad_dx,"sourceMinusOtiMadSouthM":mad_dz,
+      "candidateTranslationToApplyTo2014EastM":shift_e,
+      "candidateTranslationToApplyTo2014SouthM":shift_s,
+      "medianIoUBefore":statistics.median(p["iou"] for p in calibration),
+      "medianIoUAfterCandidateTranslation":statistics.median(p["postShiftFootprintIoU"] for p in calibration),
+      "meanIoUAfterCandidateTranslation":statistics.mean(p["postShiftFootprintIoU"] for p in calibration),
+      "highConfidenceAfterCandidateTranslation":post_high,
+      "appliedToSourceMesh":False,
+      "interpretation":"A stable XY offset is a diagnostic only. Do not apply it to game geometry until independently verified against survey control or a second official source."
+    }
     assigned_oti=set();assigned_source=set();assigned={}
     for p in pairs:
         i=p["otiIndex"];uid=p["sourceUUID"]
@@ -131,6 +173,14 @@ def main():
           "footprintIoU":round(p["iou"],6) if p else None,
           "centroidDistanceM":round(p["centroidDistanceM"],3) if p else None,
           "sourceToOtiAreaRatio":round(p["sourceToOtiAreaRatio"],5) if p else None,
+          "sourceMinusOtiDeltaEastM":round(p["deltaEastM"],4) if p else None,
+          "sourceMinusOtiDeltaSouthM":round(p["deltaSouthM"],4) if p else None,
+          "postShiftFootprintIoU":round(p["postShiftFootprintIoU"],6) if p and "postShiftFootprintIoU" in p else None,
+          "postShiftCentroidDistanceM":round(p["postShiftCentroidDistanceM"],3) if p and "postShiftCentroidDistanceM" in p else None,
+          "postShiftMatchStatus":(
+            "high-confidence-after-diagnostic-offset" if p and p.get("postShiftFootprintIoU",0)>=.85 and p.get("postShiftCentroidDistanceM",99)<=.5 and .85<=p["sourceToOtiAreaRatio"]<=1.15
+            else "possible-after-diagnostic-offset" if p and p.get("postShiftFootprintIoU",0)>=.60 and p.get("postShiftCentroidDistanceM",99)<=1.0
+            else "still-low-after-diagnostic-offset" if p else "no-overlap-candidate"),
           "secondBestIoU":round(candidates[1]["iou"],6) if len(candidates)>1 else None,
           "heightComparisonStatus":height_status,
           "heightDeltaFeet":round(delta,2) if delta is not None else None,
@@ -143,6 +193,7 @@ def main():
       "heightComparison":"relative roof minus footprint Z only; not absolute elevation or 2026 status",
       "sourceFootprintObjects":len(source),"otiBuildings":len(current),
       "uniqueOneToOneAssignments":len(assigned),"candidatePairs":len(pairs),
+      "translationDiagnostic":translation_diagnostic,
       "matchCounts":dict(status_counts),"matches":rows,
       "releaseRule":"No automatic import. Only high-confidence XY matches are candidates; 2014 age and relative height must be reviewed independently."}
     OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2))
