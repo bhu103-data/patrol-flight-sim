@@ -108,6 +108,13 @@ try{
     physicalIDs:Number(match[1]),segments:Number(match[2]),
     quality:q3,roadChangeFraction,webglError:streetGl,
     disclaimer:'1:1 official centerlines ONLY: no asphalt roadbed width'};
+  // Remove only the explanatory HTML panel for a geometry-only camera image.
+  // Never alter source mesh, projection, roads, colors or renderer in QA.
+  await page.locator('.panel').evaluate(el=>{el.style.display='none';});
+  const unobstructed=await page.locator('#scene').screenshot(
+    {path:out+'/04-truegeo-source-unobstructed.png'});
+  report.screenshots.push('04-truegeo-source-unobstructed.png');
+  report.metrics.unobstructed=quality(unobstructed);
   fail(report.errors.length===0,'Browser exceptions: '+report.errors.join('; '));
   report.passed=true;
 }catch(error){
