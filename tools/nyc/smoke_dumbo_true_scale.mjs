@@ -4,6 +4,7 @@
  */
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {mkdirSync,writeFileSync} from 'node:fs';
 
 const browser=await chromium.launch({headless:true,args:[
@@ -11,7 +12,11 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
 ]});
 const images='artifacts';mkdirSync(images,{recursive:true});
-const report={headSha:process.env.GITHUB_SHA||null,source:'NYC OTI BUILDING_view original WGS84',screenshots:[]};
+const headSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+if(process.env.PR_HEAD_SHA && process.env.PR_HEAD_SHA!==headSha)
+  throw Error('Checkout does not match authored PR head: '+headSha);
+const report={headSha,triggerSha:process.env.GITHUB_SHA||null,
+  source:'NYC OTI BUILDING_view original WGS84',screenshots:[]};
 try{
   const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
   const errors=[],responses=[];
