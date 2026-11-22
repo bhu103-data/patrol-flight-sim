@@ -3131,9 +3131,28 @@ const CENTRAL_PARK_SITES=[
           material=mix(material,vec3(0.81,0.86,0.90),flatRoof*uSurfaceWeather.x*0.62);
         }
         material*=1.0-uSurfaceWeather.y*max(n.y,0.0)*0.18;
-        float haze = 1.0-exp(-distanceToEye*(0.00096+0.009*uAtmosphere.w));
+        // NYC_TWILIGHT_HAZE_PARITY_V1: the raymarched terrain uses
+        // 0.0008 extinction and sun-facing amber haze; the old mesh path
+        // used 0.00096 and a fixed pink hue, breaking distant skyline depth.
+        // Blend only at twilight; noon, midnight and other maps remain intact.
+        float fogExtinction=0.00096+0.009*uAtmosphere.w;
+        if(uManhattanView)
+          fogExtinction=mix(fogExtinction,0.0008+0.009*uAtmosphere.w,
+                            clamp(uAtmosphere.y,0.0,1.0));
+        float haze=1.0-exp(-distanceToEye*fogExtinction);
+        // WORLD_FS.applyFog caps its color blend at 96%. Only during NYC
+        // twilight, match that cap so thick fog does not erase the distant
+        // mesh skyline faster than the terrain and harbor behind it.
+        if(uManhattanView)
+          haze=mix(haze,min(haze,0.96),clamp(uAtmosphere.y,0.0,1.0));
         vec3 horizon=mix(vec3(0.084,0.10,0.17),vec3(0.64,0.73,0.79),uAtmosphere.x);
-        horizon=mix(horizon,vec3(0.48,0.33,0.35),uAtmosphere.y*0.58);
+        if(uManhattanView){
+          float sunward=max(dot(normalize(vWorld-uEye),uSun),0.0);
+          vec3 warmMist=vec3(0.42,0.29,0.35)+vec3(0.28,0.08,0.0)*sunward;
+          horizon=mix(horizon,warmMist,uAtmosphere.y*0.58);
+        }else{
+          horizon=mix(horizon,vec3(0.48,0.33,0.35),uAtmosphere.y*0.58);
+        }
         vec3 nightFill=uTwilight?vec3(0.57,0.54,0.61):uManhattanView?vec3(0.40,0.43,0.52):vec3(0.25,0.32,0.45);
         vec3 shaded=material*light*mix(nightFill,vec3(1.0),uAtmosphere.x)+windowLight;
         if(uDcSurface>=0 || (vHarborSurface>=3.5 && vHarborSurface<5.5) ||
