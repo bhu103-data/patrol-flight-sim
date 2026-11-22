@@ -4,6 +4,8 @@ on:
     paths:
       - 'nyc-reality.html'
       - 'assets/nyc/nyc-reality-projection.mjs'
+      - 'assets/nyc/nyc-reality-street-centerlines.mjs'
+      - 'tests/nyc-reality-street-centerlines.test.mjs'
       - 'assets/nyc/times-square-footprints.json'
       - 'tests/nyc-reality-georef.test.mjs'
       - 'tests/nyc-reality-browser-smoke.cjs'
@@ -24,7 +26,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test actual WGS84 metric scale, source count, height and hole rejection
-        run: node --test tests/nyc-reality-georef.test.mjs
+        run: node --test tests/nyc-reality-georef.test.mjs tests/nyc-reality-street-centerlines.test.mjs
   webgl-view:
     needs: strict-geodesy
     runs-on: ubuntu-24.04
