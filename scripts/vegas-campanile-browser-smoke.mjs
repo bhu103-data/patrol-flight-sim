@@ -34,8 +34,19 @@ const stats=bytes=>{
  }
  centerVariance=Math.sqrt(Math.max(0,centerSum2/Math.max(1,n)-
   (centerSum/Math.max(1,n))**2));
+ // The campanile's green pyramidal spire must not be clipped by the top
+ // framebuffer edge in the near/noon camera. This is a narrow object-color
+ // guard, NOT a metric of photorealism.
+ let greenAtTop=0,topSamples=0;
+ for(let y=0;y<Math.min(8,im.height);y++)
+  for(let x=Math.floor(im.width*.34);x<Math.ceil(im.width*.66);x++){
+   const i=(y*im.width+x)*4,r=im.data[i],g=im.data[i+1],b=im.data[i+2];
+   topSamples++;
+   if(g>=26&&g>r+12&&g>b+2)greenAtTop++;
+  }
  return {width:im.width,height:im.height,colorBins:unique.size,
-  nearBlackFraction:nearBlack/total,centerStdDev:centerVariance};
+  nearBlackFraction:nearBlack/total,centerStdDev:centerVariance,
+  topGreenFraction:greenAtTop/Math.max(1,topSamples)};
 };
 async function settle(frames=32){
  await page.evaluate(n=>new Promise((resolve,reject)=>{
@@ -103,6 +114,10 @@ try{
    const pixels=stats(bytes);
    assert(pixels.width>=640&&pixels.height>=360&&pixels.colorBins>35&&
     pixels.nearBlackFraction<.9,'blank campanile scene '+file+' '+JSON.stringify(pixels));
+   if(light==='noon'&&distance==='near')
+    assert(pixels.topGreenFraction<.005,
+      'Campanile green roof is clipped by the top viewport edge: '+
+      JSON.stringify(pixels));
    checks.push({file,...pixels});
    shots.push({file,...view});
   }
