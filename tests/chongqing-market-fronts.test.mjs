@@ -262,13 +262,16 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   assert.match(game,/inspectCamera:\[site\.x\+13,site\.base\+12,site\.z\+22\]/);
   assert.match(game,/if\(marketDetailCamera\)cameraDesired\.set\(\.\.\.marketDetailCamera\)/);
   assert.match(game,/avatar\.visible=!marketDetailCamera/);
+  assert.match(game,/avatar\.visible=!marketDetailCamera;\n  state\.pos\.set\(\.\.\.next\.pos\)/,
+    'viewpoint switch must restore pilot visibility synchronously');
+  assert.match(game,/marketDetailCamera=null;avatar\.visible=true/);
   assert.match(game,/marketDetailTarget=next\.inspectTarget\?\?null/);
   assert.match(game,/if\(marketDetailTarget\)cameraAim\.set\(\.\.\.marketDetailTarget\)/);
   assert.match(game,/if\(marketDetailTarget&&\[/,
     'flight movement must clear close-up lens target');
-  assert.match(game,/pointerdown',e=>\{marketDetailTarget=marketDetailCamera=null;dragging=true/);
-  assert.match(game,/pointerdown',e=>\{\n  if\(joystickPointer!==null\)return;\n  e\.preventDefault\(\);marketDetailTarget=marketDetailCamera=null;joystickPointer/);
-  assert.match(game,/wheel',e=>\{marketDetailTarget=marketDetailCamera=null;camDistance=/);
+  assert.match(game,/pointerdown',e=>\{marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;dragging=true/);
+  assert.match(game,/pointerdown',e=>\{\n  if\(joystickPointer!==null\)return;\n  e\.preventDefault\(\);marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;joystickPointer/);
+  assert.match(game,/wheel',e=>\{marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;camDistance=/);
   assert.match(html,/<kbd>8<\/kbd> 窗洞特写/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
