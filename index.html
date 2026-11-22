@@ -8557,22 +8557,39 @@ const CENTRAL_PARK_SITES=[
             :Promise.resolve(null)
         ]).then(([module,asset,architecture])=>{
           if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())return;
-          const dataMesh=createTriangleMesh();
-          const stats=module.buildTimesSquareGisInfill(asset,{
-            addQuad:(a,b,c,d,color,surface=0)=>
-              dataMesh.addQuad(a,b,c,d,color,surface),
-            addTri:(a,b,c,color,surface=0)=>
-              dataMesh.addTri(a,b,c,color,surface),
-            box:(...args)=>addModelBox(dataMesh.addQuad,...args),
-            ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
-            protectedSites:protectedTimesSites,
-            recessedFacade:architecture?.emitRecessedFacade||null
-          });
-          const uploaded=dataMesh.upload();
+          const buildGisMesh=(skipFids=[])=>{
+            const dataMesh=createTriangleMesh();
+            const stats=module.buildTimesSquareGisInfill(asset,{
+              addQuad:(a,b,c,d,color,surface=0)=>
+                dataMesh.addQuad(a,b,c,d,color,surface),
+              addTri:(a,b,c,color,surface=0)=>
+                dataMesh.addTri(a,b,c,color,surface),
+              box:(...args)=>addModelBox(dataMesh.addQuad,...args),
+              ground:STREET_Y+0.09,bounds:[-34,56,-52,68],
+              protectedSites:protectedTimesSites,
+              recessedFacade:architecture?.emitRecessedFacade||null,
+              skipFids:new Set(skipFids)
+            });
+            return {mesh:dataMesh.upload(),stats};
+          };
+          const built=buildGisMesh(),uploaded=built.mesh,stats=built.stats;
           if(sceneEpoch!==nycHeroEpoch||gl.isContextLost())
             disposeSceneMesh(uploaded);
           else{
             nycGisMesh=uploaded;
+            if(nycVisualProbeEnabled && window.__patrolNycVisualProbe){
+              window.__patrolNycVisualProbe.setGisSkippedFids=ids=>{
+                if(!Array.isArray(ids)||ids.length>128||
+                    !ids.every(Number.isSafeInteger))
+                  throw Error('Invalid diagnostic GIS FID list');
+                if(!selectedMap.city||sceneEpoch!==nycHeroEpoch||gl.isContextLost())
+                  throw Error('Diagnostic GIS FID swap is no longer on the active NYC scene');
+                const next=buildGisMesh(ids),previous=nycGisMesh;
+                nycGisMesh=next.mesh;
+                if(previous)disposeSceneMesh(previous);
+                return next.stats;
+              };
+            }
             if(architecturePilot)
               window.__patrolNycArchitectureQa={...stats.recessedPilot,
                 sourceBuildings:stats.sourceBuildings,roofTriangles:stats.roofTriangles};
