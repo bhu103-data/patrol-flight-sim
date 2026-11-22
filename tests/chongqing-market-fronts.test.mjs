@@ -256,6 +256,13 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   assert.match(game,/if\(key==='Digit8'\)/);
   assert.match(game,/eyeX=site\.x\+3,eyeZ=site\.z\+18/);
   assert.match(game,/viewPitch=key==='Digit8'\?-.22/);
+  // The previous screenshot centered the helmet and hid the actual recesses.
+  // Camera collision origin remains the pilot; only visual aim changes.
+  assert.match(game,/inspectTarget:\[site\.x\+2\.4,site\.base\+6\.8,site\.z\+2\.78\]/);
+  assert.match(game,/marketDetailTarget=next\.inspectTarget\?\?null/);
+  assert.match(game,/if\(marketDetailTarget\)cameraAim\.set\(\.\.\.marketDetailTarget\)/);
+  assert.match(game,/if\(marketDetailTarget&&\[/,
+    'flight movement must clear close-up lens target');
   assert.match(html,/<kbd>8<\/kbd> 窗洞特写/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
