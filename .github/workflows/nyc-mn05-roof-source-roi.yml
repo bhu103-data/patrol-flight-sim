@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'tools/nyc/inspect-mn05-roof-source-roi.py'
+      - 'tools/nyc/mn05-authentic-roof-facade-preview.html'
+      - 'scripts/nyc-mn05-source-roof-facade-browser-smoke.mjs'
+      - 'tests/nyc-official-2014-facade-source-mesh.test.py'
       - 'tools/nyc/mn05-actual-roofs-source-preview.html'
       - 'scripts/nyc-mn05-source-roof-browser-smoke.mjs'
       - 'tests/nyc-official-2014-roof-mesh-source.test.py'
@@ -36,18 +39,22 @@ jobs:
           python tools/nyc/inspect-mn05-roof-source-roi.py
           test -s artifacts/nyc-official-mn05/times-square-roof-source-roi.json
           test -s artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+          test -s artifacts/nyc-official-mn05/times-square-original-facade-mesh.json
           python tests/nyc-official-2014-roof-mesh-source.test.py
+          python tests/nyc-official-2014-facade-source-mesh.test.py
       - name: Install free browser and run actual cached rooftop WebGL QA
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
           npx playwright install --with-deps chromium
           cp tools/nyc/mn05-actual-roofs-source-preview.html artifacts/nyc-official-mn05/mn05-actual-roofs-source-preview.html
+          cp tools/nyc/mn05-authentic-roof-facade-preview.html artifacts/nyc-official-mn05/mn05-authentic-roof-facade-preview.html
           python3 -m http.server 8766 --bind 127.0.0.1 --directory artifacts/nyc-official-mn05 > /tmp/nyc-roof-src-http.log 2>&1 &
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:8766/mn05-actual-roofs-source-preview.html -o /dev/null; then break; fi
             sleep 1
           done
           node scripts/nyc-mn05-source-roof-browser-smoke.mjs
+          node scripts/nyc-mn05-source-roof-facade-browser-smoke.mjs
       - name: Upload source evidence and polygon boundary diagnosis, never the 627MB source model
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,9 +64,14 @@ jobs:
             artifacts/nyc-official-mn05/mn05-probe.json
             artifacts/nyc-official-mn05/times-square-roof-source-roi.json
             artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+            artifacts/nyc-official-mn05/times-square-original-facade-mesh.json
             artifacts/nyc-official-mn05/2014-real-roof-source-aerial.png
             artifacts/nyc-official-mn05/2014-real-roof-source-rotated.png
             artifacts/nyc-official-mn05/source-roof-browser-report.json
+            artifacts/nyc-official-mn05/2014-authentic-roof-facade-aerial.png
+            artifacts/nyc-official-mn05/2014-authentic-roof-facade-rotated.png
+            artifacts/nyc-official-mn05/source-roof-facade-browser-report.json
+            artifacts/nyc-official-mn05/mn05-authentic-roof-facade-preview.html
             artifacts/nyc-official-mn05/mn05-actual-roofs-source-preview.html
           retention-days: 7
           if-no-files-found: warn
