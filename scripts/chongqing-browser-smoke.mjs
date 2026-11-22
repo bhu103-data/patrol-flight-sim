@@ -112,8 +112,11 @@ try{
   await page.waitForTimeout(1000);
   const marketState=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(marketState.marketGalleryRoofs===3 &&
-    marketState.marketGalleryInstances>=70,
-    'New secondary timber shopfronts not integrated in the live city');
+    marketState.marketGalleryInstances===117 &&
+    marketState.marketOpenFacades===3 &&
+    marketState.marketOpenFacadeTriangles===1872,
+    'Three physical facade apertures or batched shop geometry missing in live WebGL: '+
+      JSON.stringify(marketState));
   check(marketState.avatarFlying,'Market inspector must remain above the hillside');
   await capture('03d-marketfront-night-low');
   const savedPose=marketState.position;
