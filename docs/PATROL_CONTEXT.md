@@ -76,3 +76,15 @@ Expected next artifacts: valid-source/forged-source/failure/rollback JSON, 3 dis
 - Central NYC realism acceptance [#229](https://github.com/bhu103-data/patrol-flight-sim/issues/229).
 
 **Resume instruction:** read this file; check #103/#253/#256 latest heads and exact Git trees first; if any head changed, refresh evidence before acting. Never report functional CI green as photorealism approved. No merge, manifest enable, or source/code edits were made during this audit; only this docs-only handoff branch was created.
+
+
+## 7. Continuation: exact runtime fingerprint child QA (2026-11-22)
+
+- **New independent child Draft [#272](https://github.com/bhu103-data/patrol-flight-sim/pull/272)**, based exclusively on #256 `10cfa432fbd77350e66a66d45da1550b3d5cfb10`, head initially `7e2dc74f32bb35d9492b810e63f4e33f00536f12`.
+- Branch: `fix/nyc-liberty-cc0-failclosed-sha-20261122-chat`. Exactly **three text paths** changed relative to pinned #256: `assets/nyc/nyc-realism.js`, `tests/nyc-liberty-cc0-production-optin.test.mjs`, `scripts/nyc-liberty-production-lod-browser.mjs`. No changes to actual GLB, `index.html`, `scenario-manifest.json`, main, #103, #211, #253, #256 or this handoff's base.
+- Runtime source fix: ported from #253 the **exact SHA-256 check of received GLB before decoder or GPU allocation**, and then guards indexed 15,900 triangles + decoded dimensions 9.323×31.3×9.323 before marking `mesh.source='scenario'`. Failure keeps original bundled model and does **not** arm CC0 radial collider. The selected URL query remains only #256's `nycLibertyCC0=1`; manifest default stays disabled.
+- Browser negative-control test: intercept **HTTP 200** Liberty GLB, mutate exactly one BIN data byte without changing glTF JSON, size or indexed 15,900-triangle count; verify runtime reports SHA mismatch, keeps bundled **292-triangle** model and refuses scenario-shape collision and near CC0 LOD. Also retain four existing real PATROL game cases: default, genuine source, legacy rollback, HTTP failure. Five static browser PNGs and JSON on success.
+- **CI was queued at the time of this handoff update**, e.g. [exact-head workflow 45038906061](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45038906061). **DO NOT state success until the updated exact-head Actions and artifacts are inspected.** Fix only #272 if QA script fails; do not hide a failing test.
+- This is a security/collision correctness gate, **not** a merge or geographic/photoreal performance approval. Other P0 blockers remain: mid/far actual camera+aircraft LOD snapshots, Fort Wood low-altitude sweeps, parent #103 source/rights approval and rebase of #256 onto #103, native Windows GPU mean/P95 frame time.
+
+**Resume after this note:** first fetch #272 current head, workflow conclusion and artifact; if changed, reread source; inspect the specific tampered `report.scenarios` entry for source/triangle/hash/collision refusal, then record final verdict in #256 and here. No merge or manifest activation.
