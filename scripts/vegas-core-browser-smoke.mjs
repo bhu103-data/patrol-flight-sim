@@ -36,7 +36,22 @@ page.on('console',msg=>{
 });
 page.on('requestfailed',r=>{if(r.url().startsWith(base))errors.push('failed local asset: '+r.url());});
 const assert=(yes,message)=>{if(!yes)throw Error(message);};
-let result={status:'failed',qaTag,browserChannel,graphicsProfile,errors,screenshots,shots};
+// Only this CI smoke test gets a constant inner WebGL framebuffer size.
+// The production game's adaptive scaler and physics are never modified.
+// Both baseline and candidate are served with identical internal resolution,
+// making the six paired PNG A/B comparisons reproducible.
+const QA_FIXED_SCENE_SCALE=0.55;
+await page.route('**/index.html*',async route=>{
+ const source=await route.fetch();
+ const html=await source.text();
+ const needle='const scale=Math.min(resScale,targetLimit);';
+ assert(html.split(needle).length===2,
+  'QA-only framebuffer scale anchor missing or repeated');
+ await route.fulfill({response:source,
+  body:html.replace(needle,
+   'const scale=Math.min('+QA_FIXED_SCENE_SCALE+',targetLimit);')});
+});
+let result={status:'failed',qaTag,browserChannel,graphicsProfile,qaFixedSceneScale:QA_FIXED_SCENE_SCALE,errors,screenshots,shots};
 try {
  const navStarted=Date.now();
  const response=await page.goto(base+'/index.html'+(graphicsProfile==='compat'?'?graphics=compat':''),{waitUntil:'domcontentloaded',timeout:60000});
@@ -111,6 +126,8 @@ try {
       zoom:document.getElementById('hotelZoom')?.value};
    });
    assert(telemetry.webgl2&&telemetry.error===0,'Vegas WebGL2/context error');
+   assert(telemetry.canvasSize?.[0]===704&&telemetry.canvasSize?.[1]===396,
+    'QA fixed 55% scene framebuffer not applied: '+JSON.stringify(telemetry));
    assert(telemetry.selected==='vegas'&&telemetry.target===expectedTarget,
     'Vegas scenic camera not selected');
    const shotName='vegas-core-'+view+'-'+preset+'.png';
@@ -144,12 +161,15 @@ try {
    const canvas=document.getElementById('glCanvas');
    const gl=canvas?.getContext('webgl2');
    return {webgl2:Boolean(gl&&!gl.isContextLost()),error:gl?.getError(),
+    canvasSize:[canvas?.width,canvas?.height],
     target:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
     selected:document.querySelector('input[name="flightMap"]:checked')?.value,
     angle:document.getElementById('hotelAngle')?.value,
     zoom:document.getElementById('hotelZoom')?.value};
   });
   assert(telemetry.webgl2&&telemetry.error===0,'Ridge view WebGL2/context error');
+  assert(telemetry.canvasSize?.[0]===704&&telemetry.canvasSize?.[1]===396,
+   'Ridge QA fixed scene framebuffer not applied: '+JSON.stringify(telemetry));
   assert(telemetry.target===site&&telemetry.selected==='vegas'&&
    telemetry.zoom==='24','Ridge scenic camera mismatch: '+JSON.stringify(telemetry));
   const shotName='vegas-ridge-'+wing+'-noon.png';
@@ -172,7 +192,7 @@ try {
   };
   requestAnimationFrame(tick);
  }));
- result={status:'passed',qaTag,browserChannel,graphicsProfile,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
+ result={status:'passed',qaTag,browserChannel,graphicsProfile,qaFixedSceneScale:QA_FIXED_SCENE_SCALE,loadMs,errors,screenshots,shots,startupSnapshots,ridgeLoadMessages,
    frameSampling,incrementalGeometry:{triangles:qaTag==='candidate'?1554:0,textures:0}};
  assert(errors.length===0,'Browser errors: '+JSON.stringify(errors));
 } catch(error) {
