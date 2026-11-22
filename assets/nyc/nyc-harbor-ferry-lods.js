@@ -5,9 +5,9 @@
 // Gameplay routes, ship collision, C185 footprint and wreck split use the
 // existing procedural SHIP_TYPES and never depend on these visual meshes.
 const SOURCES = [
-  {tier:'far',file:'tevy-ro-ro-lod2.glb',bytes:505076,sha256:'7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b',tris:5478},
-  {tier:'mid',file:'tevy-ro-ro-lod1.glb',bytes:2176996,sha256:'c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91',tris:19775},
-  {tier:'near',file:'tevy-ro-ro-lod0.glb',bytes:5936236,sha256:'143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288',tris:52069}
+  {tier:'far',file:'tevy-ro-ro-lod2.glb',bytes:505076,sha256:'7b14324877e0da022a3e3cbf27bc00206bfbc7a693b7ee3d35d85a528cfaea1b',tris:5502,sourceTris:5478},
+  {tier:'mid',file:'tevy-ro-ro-lod1.glb',bytes:2176996,sha256:'c30c18eb05f3ba2f8479bc782794b8fd7115ae6aefd2e1ac9cd244cdeb1baa91',tris:19827,sourceTris:19775},
+  {tier:'near',file:'tevy-ro-ro-lod0.glb',bytes:5936236,sha256:'143815ec7d9830970f6d568ba5ec4495d8c422b2be8e2465fc4274819fc58288',tris:52121,sourceTris:52069}
 ];
 const PREFIX='./assets/nyc/harbor/';
 function hex(buffer) {
@@ -43,7 +43,9 @@ export function createNycHarborFerryLods(gl, decodeGLB, opts={}) {
       const digest=hex(await globalThis.crypto.subtle.digest('SHA-256',bytes));
       if(digest!==spec.sha256)throw Error('Asset integrity mismatch');
       if(disposed||gl.isContextLost())return;
-      // LOD0 has 52,069 indexed triangles (468,621 expanded XYZ floats).
+      // LOD0 has 52,069 unique indexed triangles but 52,121 drawn triangles
+      // (469,089 expanded XYZ floats) because both door-ram nodes share
+      // and instantiate the same 52-triangle mesh. Keep both copies.
       // Only the SHA/length-verified near tier can exceed the native
       // 240,000-float landmark budget; all other GLBs keep that default.
       const mesh=await decodeGLB(gl,bytes,7.5,
