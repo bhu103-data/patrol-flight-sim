@@ -523,7 +523,7 @@ def main() -> int:
         roadbed_path = next(
             args.output_dir / "geojson" / layer["roiGeoJson"]
             for dataset in report["datasets"] if dataset["key"] == "roadbed"
-            for layer in dataset["layers"] if layer["roiFeatureCount"] > 0
+            for layer in dataset["layers"] if layer["featureCount"] > 0
         )
         if not args.current_cscl.exists():
             raise RuntimeError(f"Missing current CSCL GeoJSON: {args.current_cscl}")
