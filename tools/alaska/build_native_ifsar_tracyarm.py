@@ -353,26 +353,56 @@ def main():
    "edges":{side:edge_comparison(side) for side in ("west","east","south","north")}
  }
  # Reproject output is north-first; runtime geodesy module expects south-first.
+ # Store a 2D predictive residual grid (left/up/up-left) before gzip. The
+ # absolute elevation range is retained exactly at 0.1m int16 precision.
  south_first=dst[::-1,:]
  q=np.full(south_first.shape,-32768,dtype="<i2")
  q[valid[::-1,:]]=np.rint(south_first[valid[::-1,:]]/QUANT).clip(-32767,32767).astype("<i2")
- raw=q.tobytes(order="C")
- compressed=gzip.compress(raw,compresslevel=9,mtime=0)
- gz_path=ART/"alaska-tracyarm-ifsar5m-int16.bin.gz"
- b64_path=ART/"alaska-tracyarm-ifsar5m-int16.bin.gz.b64"
+ absolute_raw=q.tobytes(order="C")
+ delta=q.astype(np.int32)
+ delta[0,1:]=q[0,1:].astype(np.int32)-q[0,:-1].astype(np.int32)
+ delta[1:,0]=q[1:,0].astype(np.int32)-q[:-1,0].astype(np.int32)
+ delta[1:,1:]=(q[1:,1:].astype(np.int32)-q[1:,:-1].astype(np.int32)
+   -q[:-1,1:].astype(np.int32)+q[:-1,:-1].astype(np.int32))
+ if delta.min()<-32767 or delta.max()>32767:
+  raise RuntimeError("2D elevation residual exceeds signed int16; do not truncate")
+ delta_raw=delta.astype("<i2").tobytes(order="C")
+ compressed=gzip.compress(delta_raw,compresslevel=9,mtime=0)
+ gz_path=ART/"alaska-tracyarm-ifsar5m-delta2-int16.bin.gz"
+ b64_path=ART/"alaska-tracyarm-ifsar5m-delta2-int16.bin.gz.b64"
  gz_path.write_bytes(compressed)
  b64_path.write_text(base64.b64encode(compressed).decode("ascii")+"\n")
  report["runtimeAsset"]={
-   "format":"patrol-ifsar5m-int16-gzip-base64-v1",
-   "rawBytes":len(raw),"gzipBytes":len(compressed),
-   "base64Bytes":b64_path.stat().st_size,
-   "rawSha256":hashlib.sha256(raw).hexdigest(),
-   "gzipSha256":sha256(gz_path),
-   "base64Sha256":sha256(b64_path),
+   "format":"patrol-ifsar5m-delta2-int16-gzip-base64-v1",
+   "encoding":"2d-residual: first-row horizontal deltas; first-column vertical deltas; interior current-left-up+up-left",
+   "absoluteRawBytes":len(absolute_raw),"deltaRawBytes":len(delta_raw),
+   "gzipBytes":len(compressed),"base64Bytes":b64_path.stat().st_size,
+   "absoluteRawSha256":hashlib.sha256(absolute_raw).hexdigest(),
+   "deltaRawSha256":hashlib.sha256(delta_raw).hexdigest(),
+   "gzipSha256":sha256(gz_path),"base64Sha256":sha256(b64_path),
+   "assetPath":"assets/alaska/tracy-arm-ifsar5m-delta2-int16.bin.gz.b64",
    "width":TARGET_WIDTH,"height":TARGET_HEIGHT,
    "metresPerInteger":QUANT,"noDataInt16":-32768,
    "bboxWgs84":bbox,"rowOrder":"south-first"
  }
+ manifest={
+   "format":"patrol-ifsar5m-delta2-int16-gzip-base64-v1",
+   "assetPath":"./tracy-arm-ifsar5m-delta2-int16.bin.gz.b64",
+   "width":TARGET_WIDTH,"height":TARGET_HEIGHT,
+   "bboxWgs84":bbox,"crs":"EPSG:4326","rowOrder":"south-first",
+   "metresPerInteger":QUANT,"noDataInt16":-32768,
+   "sourceHorizontalCrs":"ESRI:102247",
+   "sourceVerticalCrs":"EPSG:5703","verticalDatum":"NAVD88",
+   "geoid":"GEOID09","collectionStart":source_meta["collect_start"],
+   "collectionEnd":source_meta["collect_end"],
+   "workunit":source_meta["workunit"],"project":source_meta["project"],
+   "sourceTileSha256":[x["sha256"] for x in report["sourceTiles"]],
+   "absoluteRawSha256":report["runtimeAsset"]["absoluteRawSha256"],
+   "deltaRawSha256":report["runtimeAsset"]["deltaRawSha256"],
+   "gzipSha256":report["runtimeAsset"]["gzipSha256"],
+   "encoding":report["runtimeAsset"]["encoding"]
+ }
+ (ART/"alaska-tracyarm-ifsar5m-manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
  report["status"]="native-5m-mosaic-verified; optional-true-scale-renderer-integration-next"
  report["notYetProven"]=[
    "No post-2025 landslide LiDAR/DEM is included; source acquisition dates are 2010-2012.",
