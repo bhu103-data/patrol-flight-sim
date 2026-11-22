@@ -1,0 +1,60 @@
+name: NYC true-metre official street low-flight WebGL proof
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/true-scale-flight.mjs'
+      - 'tools/nyc/true-scale-flight-browser-smoke.mjs'
+      - 'tests/nyc-times-true-scale-flight.test.mjs'
+      - '.github/workflows/nyc-times-true-scale-flight.yml'
+      - 'scripts/nyc-times-true-scale-pilot.mjs'
+      - 'assets/nyc/times-square-footprints.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fly-source-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test official metre source, polygons and swept flight collision
+        run: |
+          node --check tools/nyc/true-scale-flight.mjs
+          node --check tools/nyc/true-scale-flight-browser-smoke.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs
+      - name: Fetch actual NYC DCM road geometry, no artificial road fallback
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          test -s artifacts/nyc-true-scale/source.json
+          cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
+          cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
+      - name: Install Chromium for source WebGL and flight acceptance
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve actual metric geometry only
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-true-scale > /tmp/nyc-metric-flight-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Re-run source WebGL reference and new low-flight/anti-tunnel QA
+        run: |
+          node tools/nyc/true-scale-browser-smoke.mjs
+          node tools/nyc/true-scale-flight-browser-smoke.mjs
+      - name: Upload exact-run official source, real screenshots and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-official-metre-lowflight-evidence
+          path: artifacts/nyc-true-scale/
+          retention-days: 7
+          if-no-files-found: ignore
