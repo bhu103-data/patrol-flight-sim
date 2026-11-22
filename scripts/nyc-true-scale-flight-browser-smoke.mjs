@@ -92,14 +92,14 @@ try{
   const cameraAngleError=Math.max(
     Math.abs(onCamera.yawRadians-offCamera.yawRadians),
     Math.abs(onCamera.pitchRadians-offCamera.pitchRadians));
-  const onPngData=await focusOnPage.evaluate(()=>
-    document.querySelector('#scene').toDataURL('image/png').split(',')[1]);
-  const offPngData=await focusOffPage.evaluate(()=>
-    document.querySelector('#scene').toDataURL('image/png').split(',')[1]);
-  await writeFile(out+'/03-2014-matched-building-model-on.png',Buffer.from(onPngData,'base64'));
-  await writeFile(out+'/04-2014-matched-building-model-off.png',Buffer.from(offPngData,'base64'));
-  const meshOnPng=PNG.sync.read(Buffer.from(onPngData,'base64'));
-  const meshOffPng=PNG.sync.read(Buffer.from(offPngData,'base64'));
+  await Promise.all([focusOnPage,focusOffPage].map(p=>p.addStyleTag({
+    content:'aside,footer{display:none!important}'
+  })));
+  const onPng=await focusOnPage.screenshot({
+    path:out+'/03-2014-matched-building-model-on.png',timeout:90000});
+  const offPng=await focusOffPage.screenshot({
+    path:out+'/04-2014-matched-building-model-off.png',timeout:90000});
+  const meshOnPng=PNG.sync.read(onPng),meshOffPng=PNG.sync.read(offPng);
   check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
     '2014 mesh A/B canvas frames do not share the same viewport');
   check(cameraPositionError<1e-6&&cameraAngleError<1e-9&&
