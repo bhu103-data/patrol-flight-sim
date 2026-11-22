@@ -237,7 +237,9 @@ window.__metricFly={
   probe:(a,b)=>flySafety.sweep(a,b),
   check:p=>flySafety.obstacle(p),
   sourceProbe:{fid:buildings[0].fid,roofY:buildings[0].roofY,
-    vertex:[...buildings[0].ring[0]]},
+    vertex:[...buildings[0].ring[0]],
+    clearanceAltitude:Math.max(...buildings.map(b=>b.roofY))+
+      flySafety.roofMargin+1},
   attempt:(dx,dy,dz)=>flyStep([dx,dy,dz]),
   safety:{radius:flySafety.radius,roofMargin:flySafety.roofMargin,
     buildingCount:flySafety.buildingCount}
