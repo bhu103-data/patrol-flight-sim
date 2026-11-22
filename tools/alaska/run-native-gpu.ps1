@@ -49,16 +49,16 @@ try {
   [Environment]::SetEnvironmentVariable('PATROL_NATIVE_P95_BUDGET_MS', $null, 'Process')
   [Environment]::SetEnvironmentVariable('PATROL_NATIVE_MAX_P95_REGRESSION_PCT', $null, 'Process')
   if ($null -ne $P95BudgetMs) {
-    if ($P95BudgetMs.Value -le 0) { throw 'P95BudgetMs must be positive' }
+    if (([double]$P95BudgetMs) -le 0) { throw 'P95BudgetMs must be positive' }
     $env:PATROL_NATIVE_P95_BUDGET_MS =
-      $P95BudgetMs.Value.ToString([Globalization.CultureInfo]::InvariantCulture)
+      ([double]$P95BudgetMs).ToString([Globalization.CultureInfo]::InvariantCulture)
   }
   if ($null -ne $MaxP95RegressionPct) {
-    if ($MaxP95RegressionPct.Value -le 0) {
+    if (([double]$MaxP95RegressionPct) -le 0) {
       throw 'MaxP95RegressionPct must be positive'
     }
     $env:PATROL_NATIVE_MAX_P95_REGRESSION_PCT =
-      $MaxP95RegressionPct.Value.ToString([Globalization.CultureInfo]::InvariantCulture)
+      ([double]$MaxP95RegressionPct).ToString([Globalization.CultureInfo]::InvariantCulture)
   }
 
   $python = (Get-Command python).Source
