@@ -110,9 +110,9 @@
       const asset=await response.json();
       const {interleaved,stats}=buildMetricFootprintMesh(asset);
       const buildings=vaoFromFloats(interleaved);
-      const size=50*Math.ceil(Math.max(
+      const size=50*Math.ceil((Math.max(
         Math.abs(stats.minX),Math.abs(stats.maxX),
-        Math.abs(stats.minZ),Math.abs(stats.maxZ))+50)/50;
+        Math.abs(stats.minZ),Math.abs(stats.maxZ))+50)/50);
       const ticks=Math.ceil(size/50),grid=[];
       function line(a,b){
         for(const p of [a,b])grid.push(...p,.21,.35,.41);
