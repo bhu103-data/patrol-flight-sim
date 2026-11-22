@@ -228,6 +228,31 @@ def main():
  if not all(x["validNativeRaster"] for x in sample):
   raise RuntimeError("Native raster fails one or more 25-point footprint checks")
  report["nativeRasterCoverageSamples"]=sample
+ # Cross-check the independent dynamic ImageServer 5m sample against the
+ # source-native OPR mosaic at identical WGS84 pixel centres.
+ fine_path=ART/"alaska-tracyarm-five-metre-tile.json"
+ if fine_path.exists():
+  fine_meta=json.loads(fine_path.read_text())
+  fine=np.frombuffer(base64.b64decode(fine_meta["heightsBase64"],validate=True),
+    dtype="<i2").reshape((fine_meta["height"],fine_meta["width"])).astype(np.float64)*float(fine_meta["metresPerInteger"])
+  FW,FS,FE,FN=fine_meta["bbox"]
+  fx=FW+(np.arange(fine_meta["width"])+.5)*(FE-FW)/fine_meta["width"]
+  fy=FS+(np.arange(fine_meta["height"])+.5)*(FN-FS)/fine_meta["height"]
+  FX,FY=np.meshgrid((fx-west)/(east-west)*TARGET_WIDTH-.5,
+                    (fy-south)/(north-south)*TARGET_HEIGHT-.5)
+  native_south=dst[::-1,:]
+  native_at_fine=bilinear(native_south,FX,FY)
+  fine_valid=(fine!=fine_meta["noDataInt16"])&np.isfinite(fine)
+  report["dynamic5mImageServerCrossCheck"]={
+    "adjustAspectRatio":fine_meta.get("adjustAspectRatio"),
+    "sourceRawTiffSha256":fine_meta.get("sourceRawTiffSha256"),
+    "sameWgs84Coordinates":True,
+    "finePixelCount":int(fine_valid.sum()),
+    "native5mMinusDynamic5m":dist((native_at_fine-fine)[fine_valid]),
+    "interpretation":"Independent dynamic ImageServer 5m sample vs official source-native OPR 5m tiles; source consistency diagnostic."
+  }
+ else:
+  report["dynamic5mImageServerCrossCheck"]={"status":"not-run; sample asset not built before native mosaic"}
  # Fetch the exact original 30m ImageServer TIFF and inspect its GeoTIFF
  # pixel-to-world tags. f=json extent is not assumed to equal TIFF extent.
  old_url=coarse["sourceQuery"]
