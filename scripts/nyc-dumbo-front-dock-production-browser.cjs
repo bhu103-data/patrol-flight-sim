@@ -55,7 +55,9 @@ function difference(a,b){
     '--disable-gpu-sandbox'
   ]});
   try{
-    const imgs=[];
+    const imgs=[],aerialImgs=[];
+    report.aerialCamera='DUMBO · Front Dock Road Aerial';
+    report.aerialSnapshots=[];
     for(const mode of ['off','on']){
       const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
       page.on('pageerror',e=>report.errors.push(mode+' page: '+String(e)));
@@ -130,6 +132,26 @@ function difference(a,b){
         'Black or empty production game screenshot');
       report.snapshots.push({mode,...summary});
       imgs.push(png);
+      // A second SAME flight-map camera looks down onto source pavement,
+      // above foreground warehouse roofs that obscure the street-level view.
+      // Hide only the non-game HUD for source-geometry screenshot QA; the
+      // real WebGL canvas is unchanged and aircraft controls remain native.
+      await page.locator('#hotelTarget').selectOption({label:report.aerialCamera});
+      await page.waitForTimeout(1500);
+      await page.addStyleTag({content:
+        'body.patrol-dumbo-qa-photo *{visibility:hidden!important}'+
+        'body.patrol-dumbo-qa-photo #glCanvas{visibility:visible!important}'});
+      await page.evaluate(()=>document.body.classList.add('patrol-dumbo-qa-photo'));
+      const aerialPNG=await page.locator('#glCanvas').screenshot({
+        path:path.join(output,'front-dock-aerial-'+mode+'.png'),
+        timeout:45000,animations:'disabled'
+      });
+      aerialImgs.push(aerialPNG);
+      const aerialSummary=samplePNG(aerialPNG);
+      assert(aerialSummary.palette>25&&aerialSummary.bright>100,
+        'Aerial production screenshot is empty');
+      report.aerialSnapshots.push({mode,...aerialSummary});
+      await page.evaluate(()=>document.body.classList.remove('patrol-dumbo-qa-photo'));
       if(mode==='on'){
         // This exact original aircraft game, not the #248 standalone pilot:
         // aircraft control must change actual native plane state in flight.
@@ -181,6 +203,9 @@ function difference(a,b){
       await page.close();
     }
     report.difference=difference(imgs[0],imgs[1]);
+    report.aerialDifference=difference(aerialImgs[0],aerialImgs[1]);
+    assert(report.aerialDifference.roadCameraChanged>80,
+      'High oblique same-camera source pavement must make a visible difference');
     assert(report.difference.roadCameraChanged>120,
       'Official roadbed does not change the actual DUMBO camera image sufficiently');
     assert.equal(report.errors.length,0);
