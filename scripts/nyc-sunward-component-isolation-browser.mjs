@@ -13,7 +13,7 @@ const report={passed:false,errors:[],scenes:[],
   note:'Same scene height/exposure/time controls. SwiftShader RAF != native GPU time. Source-verified geometry and controls, NOT city photogrammetry.'};
 const ensure=(ok,msg)=>{if(!ok)throw Error(msg)};
 const prod=await readFile('index.html','utf8');
-const nycGuardedCrest='if(!uManhattan)\\n              waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
+const nycGuardedCrest='if(!uManhattan)\n              waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
 const oldUnconditionalCrest='waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
 if(prod.split(nycGuardedCrest).length!==2)
   throw Error('Cannot reconstruct the exact legacy view-sun radiance for causal QA');
