@@ -39,5 +39,10 @@ test('source QA fails fast instead of hanging on missing assets or empty scene',
   assert.match(browser,/stats\.officialRoadbed2022\.triangles<7000/);
   assert.match(browser,/stats\.officialPedestrian2022\.curbCuts<150/);
   assert.match(browser,/stats\.noInventedStreetSurface/);
+  assert.match(browser,/sidewalkDisplayMask/);
+  assert.match(source,/derive_sidewalk_display_mask\.py/);
+  assert.match(source,/nyc-sidewalk-display-mask\.test\.py/);
+  assert.match(lowflight,/derive_sidewalk_display_mask\.py/);
+  assert.match(lowflight,/nyc-sidewalk-display-mask\.test\.py/);
   assert.match(source,/feat\/nyc-tsq-meter-crs-road-source-20261122-chat/);
 });

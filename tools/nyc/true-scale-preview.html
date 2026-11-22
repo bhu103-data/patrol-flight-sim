@@ -26,13 +26,13 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
 <h1>时代广场 · 官方测绘形体预览</h1>
 <p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
 <p id="status">正在读取官方建筑与道路数据...</p>
-<p>灰色：官方建筑体量；蓝线：官方 DCM 道路中心线；绿色：官方 OTI 2022 道路面、黄色：路口面；<strong>浅色：2022 人行道、橙色：广场、青色：路缘、橙红色：路缘开口</strong>。所有层的高度只是避免遮挡的绘图偏移，<strong>不是实测高程或 2026 年车道和坡道</strong>。仍无真实建筑立面。</p>
+<p>灰色：官方建筑体量；蓝线：官方 DCM 道路中心线；绿色：官方 OTI 2022 道路面、黄色：路口面；<strong>浅色：2022 OTI 人行道（显示层按官方建筑足迹做遮挡掩膜，原始源数据未改）、橙色：广场、青色：路缘、橙红色：路缘开口</strong>。所有层的高度只是避免遮挡的绘图偏移，<strong>不是实测高程或 2026 年车道和坡道</strong>。仍无真实建筑立面。</p>
 <small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
 </aside>
 <section id="flightPanel">
   <button id="toggleFlight" type="button" disabled>进入真实米制低空穿行</button>
   <button id="resetFlight" type="button" disabled>返回官方道路起点</button>
-  <button id="pedestrianToggle" type="button" disabled>隐藏官方 2022 广场／人行道</button>
+  <button id="pedestrianToggle" type="button" disabled>隐藏官方 2022 广场／建筑遮罩人行道</button>
   <p id="flightState">等待官方建筑、道路数据核验...</p>
   <small>低空模式：W/S 前后 · A/D 平移 · Q/E 下降/上升 · Shift 加速
   · 鼠标拖动调整方向 · Esc 释放鼠标</small>
@@ -294,7 +294,7 @@ try{
   let showPedestrian=new URLSearchParams(location.search).get('pedestrian')!=='off';
   const updatePedestrianLabel=()=>{
     togglePedestrian.textContent=showPedestrian?
-      '隐藏官方 2022 广场／人行道':'显示官方 2022 广场／人行道';
+      '隐藏官方 2022 广场／建筑遮罩人行道':'显示官方 2022 广场／建筑遮罩人行道';
   };
   togglePedestrian.disabled=false;updatePedestrianLabel();
   togglePedestrian.addEventListener('click',()=>{
@@ -351,6 +351,8 @@ try{
     officialPedestrian2022:{sources:pedestrian.sources,
       plazas:pedestrian.counts.plazaFeatures,
       sidewalks:pedestrian.counts.sidewalkFeatures,
+      displaySidewalks:pedestrian.counts.displaySidewalkFeatures,
+      sidewalkDisplayMask:pedestrian.sourceSidewalkMask,
       curb:pedestrian.counts.curbFeatures,
       curbCuts:pedestrian.counts.curbCutFeatures,
       surfaceTriangles:pedestrian.counts.surfaceTriangles,
@@ -375,7 +377,7 @@ try{
 
   status.textContent='官方建筑 '+source.counts.buildings+' 栋 · 街道要素 '+source.counts.roadFeatures+
     ' 条 · 2022 道路面 '+roadbed.counts.features+' 处 · 人行道 '+
-    pedestrian.counts.sidewalkFeatures+' · 广场 '+pedestrian.counts.plazaFeatures+
+    pedestrian.counts.displaySidewalkFeatures+' 个建筑遮罩人行道 · 广场 '+pedestrian.counts.plazaFeatures+
     ' · 路缘 '+pedestrian.counts.curbFeatures+' · 真实范围 '+
     Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
     ' × '+Math.round(source.boundsMetres[3]-source.boundsMetres[1])+' 米';

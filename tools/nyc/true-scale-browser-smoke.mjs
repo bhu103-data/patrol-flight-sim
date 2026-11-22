@@ -54,7 +54,11 @@ try{
      stats.officialPedestrian2022.sidewalks<40||
      stats.officialPedestrian2022.curb<150||
      stats.officialPedestrian2022.curbCuts<150||
-     !stats.noInventedStreetSurface){
+     !stats.noInventedStreetSurface||
+     !stats.officialPedestrian2022?.sidewalkDisplayMask?.visualOnly||
+     !stats.officialPedestrian2022?.sidewalkDisplayMask?.originalSourceIntact||
+     stats.officialPedestrian2022?.sidewalkDisplayMask?.maskedSquareMetres<=0||
+     stats.officialPedestrian2022?.sidewalkDisplayMask?.postMaskBuildingOverlapSquareMetres>1e-6){
     throw Error('Real metre WebGL source preview failed '+JSON.stringify(stats));
   }
   await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));

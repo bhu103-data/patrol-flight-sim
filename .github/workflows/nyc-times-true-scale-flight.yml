@@ -8,6 +8,8 @@ on:
       - 'tests/nyc-times-true-scale-street-envelope.test.mjs'
       - 'tools/nyc/true-scale-flight-browser-smoke.mjs'
       - 'tools/nyc/official-street-topology-audit.py'
+      - 'tools/nyc/derive_sidewalk_display_mask.py'
+      - 'tests/nyc-sidewalk-display-mask.test.py'
       - 'tests/nyc-times-true-scale-flight.test.mjs'
       - '.github/workflows/nyc-times-true-scale-flight.yml'
       - 'scripts/nyc-times-true-scale-pilot.mjs'
@@ -54,8 +56,6 @@ jobs:
           node scripts/nyc-times-pedestrian-plaza-source.mjs
           node scripts/nyc-times-pedestrian-topology-audit.mjs
           node scripts/nyc-times-sidewalk-curb-source.mjs
-          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
-          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
           test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
           test -s artifacts/nyc-true-scale/source.json
           test -s artifacts/nyc-true-scale/roadbed-mesh.json
@@ -65,7 +65,12 @@ jobs:
       - name: Independently audit measured roadbed, sidewalk, curb and building topology
         run: |
           python3 -m pip install --disable-pip-version-check shapely==2.1.2
-          python3 -m py_compile tools/nyc/official-street-topology-audit.py
+          python3 -m py_compile tools/nyc/official-street-topology-audit.py tools/nyc/derive_sidewalk_display_mask.py
+          python3 tests/nyc-sidewalk-display-mask.test.py
+          python3 tools/nyc/derive_sidewalk_display_mask.py
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-display.json
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-report.json
+          test -s artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-plan.svg
           python3 tools/nyc/official-street-topology-audit.py
           test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
           test -s artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
@@ -82,6 +87,11 @@ jobs:
           print("NYC overlap detail QA", len(records), "feature pairs;",
                 len(geo["features"]), "WGS84 conflict geometries")
           PY
+      - name: Build pedestrian mesh from source-preserving display mask
+        run: |
+          node scripts/nyc-metre-pedestrian-lowflight-build.mjs
+          test -s artifacts/nyc-true-scale/pedestrian-mesh.json
+          test -s artifacts/nyc-true-scale/source.json
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -107,6 +117,9 @@ jobs:
             artifacts/nyc-true-scale/
             artifacts/nyc-curb-sidewalk-source/topology-audit.json
             artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+            artifacts/nyc-curb-sidewalk-source/sidewalk-display.json
+            artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-report.json
+            artifacts/nyc-curb-sidewalk-source/sidewalk-occlusion-plan.svg
             artifacts/nyc-curb-sidewalk-source/edges.json
             artifacts/nyc-roadbed-source/roadbed.json
           retention-days: 7

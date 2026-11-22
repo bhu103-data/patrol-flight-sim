@@ -35,6 +35,10 @@ try{
      info.officialPedestrian2022.curb<150||
      info.officialPedestrian2022.curbCuts<150||
      !info.officialPedestrian2022.noSurveyedVerticalDatum||
+     !info.officialPedestrian2022.sidewalkDisplayMask?.visualOnly||
+     !info.officialPedestrian2022.sidewalkDisplayMask?.originalSourceIntact||
+     info.officialPedestrian2022.sidewalkDisplayMask?.maskedSquareMetres<=0||
+     info.officialPedestrian2022.sidewalkDisplayMask?.postMaskBuildingOverlapSquareMetres>1e-6||
      !info.sourceRoadSpawn||!Number.isFinite(info.sourceRoadSpawn.position[0])||
      !info.streetWidthEnvelopes||
      info.streetWidthEnvelopes.derivedWidthFeatures<20||
@@ -101,6 +105,7 @@ try{
     spawn:info.sourceRoadSpawn,initial,climbed,moved,displacement,browserInfo,shots,errors,warnings,
     officialRoadbed2022:info.officialRoadbed2022,
     officialPedestrian2022:info.officialPedestrian2022,
+    sidewalkDisplayMask:info.officialPedestrian2022.sidewalkDisplayMask,
     fixedCameraPedestrianAB:{offSha256:offHash,onSha256:onHash,different:offHash!==onHash},
     caveat:'Actual OTI 2022 flat roadbed/plaza/sidewalk/curb survey-outline sources + FID roof masses + DCM centerlines; no verified 2026 curb heights, lane access, facades, terrain, DOT traffic or aircraft physics'});
 }catch(e){
