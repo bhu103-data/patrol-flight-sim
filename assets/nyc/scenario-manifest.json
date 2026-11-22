@@ -9,7 +9,8 @@
       "file": "scenario/liberty.glb",
       "target_height": 31.3,
       "min_triangles": 500,
-      "license": ""
+      "license": "Innerscene Free Parts Library original Statue of Liberty on its pedestal; CC0 1.0. https://www.innerscene.com/tools/library/3d-parts/statue-of-liberty-on-its-pedestal-c8a7318f . Modified 15900-triangle PATROL GLB staged by PR #103; see docs/NYC_LIBERTY_CC0_GLB_QA.md. No survey/photogrammetry claim.",
+      "reference_only": true
     },
     "trade": {
       "enabled": true,
