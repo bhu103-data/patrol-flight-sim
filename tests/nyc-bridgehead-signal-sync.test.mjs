@@ -8,8 +8,8 @@ const start=html.indexOf('  function bridgeheadSignalGreen(time){');
 const end=html.indexOf('  function bridgeheadTrafficPose(actor,time){',start);
 assert.ok(start>=0&&end>start,'Production signal controller not found');
 const js=html.slice(start,end);
-const {green,travel}=new Function(js+
-  'return {green:bridgeheadSignalGreen,travel:bridgeheadSignalTravel};')();
+const {green,state,travel}=new Function(js+
+  'return {green:bridgeheadSignalGreen,state:bridgeheadSignalState,travel:bridgeheadSignalTravel};')();
 
 function actor(slot=0){
   const stop=194.5-slot*5.5;
@@ -18,14 +18,18 @@ function actor(slot=0){
     pace:7,offset:stop-35};
 }
 
-test('NYC red-green control repeats on the same world clock as rendered lens',()=>{
+test('NYC red-green-amber control repeats on the same world clock as rendered lens',()=>{
   for(let n=-2;n<5;n++){
     assert.equal(green(n*32),false);
+    assert.equal(state(n*32),'red');
     assert.equal(green(n*32+11.999),false);
     assert.equal(green(n*32+12),true);
-    assert.equal(green(n*32+31.999),true);
+    assert.equal(state(n*32+28.999),'green');
+    assert.equal(green(n*32+29),false);
+    assert.equal(state(n*32+29),'amber');
+    assert.equal(state(n*32+31.999),'amber');
   }
-  assert.match(html,/const green=bridgeheadSignalGreen\(sceneryTime\)/);
+  assert.match(html,/const state=bridgeheadSignalState\(sceneryTime\)/);
   assert.match(html,/const traveled=actor\.signalized\?bridgeheadSignalTravel\(actor,time\)/);
   assert.match(html,/signalized:true,signalQueueSlot:j/);
   assert.match(html,/PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1/);
@@ -40,6 +44,20 @@ test('arriving on red stops before the crossing; green resumes without a jump',(
   assert.ok(travel(a,12.1)>194.5,'car must depart on green');
   assert.ok(travel(a,12.1)<195.5,'departure must not teleport');
   assert.ok(travel(a,18)>travel(a,12.1));
+});
+
+test('arriving on amber waits for next-cycle green without reversing time',()=>{
+  const a=actor();
+  a.offset=194.5-a.pace*30; // reach first stop exactly at amber t=30
+  assert.equal(state(30),'amber');
+  assert.ok(Math.abs(travel(a,30)-194.5)<1e-8);
+  for(const t of [30.001,31,32,35,43.999,44]){
+    assert.ok(Math.abs(travel(a,t)-194.5)<1e-7,
+      'amber and following red must hold at '+t);
+  }
+  assert.equal(state(44),'green');
+  assert.ok(travel(a,44.1)>194.5,'car resumes at the next green');
+  assert.ok(travel(a,44.1)<195.5,'resume may not teleport');
 });
 
 test('queue slots stop at distinct physical points and never reverse travel',()=>{

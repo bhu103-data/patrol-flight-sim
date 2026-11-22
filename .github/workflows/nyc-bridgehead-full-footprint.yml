@@ -15,7 +15,8 @@ on:
       - tests/nyc-bridgehead-vehicle-connector.test.mjs
 
 concurrency:
-  group: nyc-bridgehead-full-footprint-qa
+  # Isolate PRs so overlapping NYC drafts do not cancel each other's screenshots.
+  group: nyc-bridgehead-full-footprint-qa-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:

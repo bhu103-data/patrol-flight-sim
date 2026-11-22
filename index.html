@@ -5028,11 +5028,16 @@ const CENTRAL_PARK_SITES=[
 
   // PATROL_NYC_BRIDGEHEAD_SIGNAL_SYNC_V1. Eastbound bridge-to-DUMBO
   // signal uses the same scene clock as its physically illuminated lens.
-  // Red 12s, green 20s. Only the two dedicated bridge connector cars
+  // Red 12s, green 17s, amber 3s. Only the two bridge connector cars
   // obey this stop line; no change to other city traffic or maps.
   function bridgeheadSignalGreen(time){
     const phase=((time%32)+32)%32;
-    return phase>=12;
+    return phase>=12&&phase<29;
+  }
+  function bridgeheadSignalState(time){
+    if(bridgeheadSignalGreen(time))return 'green';
+    const phase=((time%32)+32)%32;
+    return phase<12?'red':'amber';
   }
 
   // Analytic travel with red-light waits, independent of draw cadence.
@@ -5053,7 +5058,9 @@ const CENTRAL_PARK_SITES=[
       distance=nextStop;now=arrival;
       if(!bridgeheadSignalGreen(now)){
         const phase=((now%32)+32)%32;
-        now+=12-phase;
+        // During amber, the next green starts in the FOLLOWING cycle.
+        // Subtracting phase from 12 would move scene time backward.
+        now+=phase<12?12-phase:44-phase;
       }
       if(now>=time)return distance;
     }
@@ -5641,7 +5648,8 @@ const CENTRAL_PARK_SITES=[
       addModelBox(mesh.addQuad,0,0,0,.034,.135,.158,color);
       return mesh.upload();
     };
-    return {red:make([.99,.115,.065]),green:make([.14,.98,.28])};
+    return {red:make([.99,.115,.065]),amber:make([1.0,.64,.085]),
+      green:make([.14,.98,.28])};
   })();
   const taxiLamps=(()=>{
     const mesh=createTriangleMesh();
@@ -5700,9 +5708,10 @@ const CENTRAL_PARK_SITES=[
       const bridge=EAST_RIVER_BRIDGE;
       const end=bridge.x+bridge.halfLength+bridge.ramp;
       const headZ=bridge.z-(bridge.halfWidth+.36)+1.05;
-      const green=bridgeheadSignalGreen(sceneryTime);
-      const lamp=green?nycBridgeheadSignalFaces.green:nycBridgeheadSignalFaces.red;
-      const lampPos=[end-.202,STREET_Y+3.83+(green?-.25:.25),headZ];
+      const state=bridgeheadSignalState(sceneryTime);
+      const lamp=nycBridgeheadSignalFaces[state];
+      const lampOffset=state==='red'?.25:state==='green'?-.25:0;
+      const lampPos=[end-.202,STREET_Y+3.83+lampOffset,headZ];
       drawMesh(lamp,mat4FromBasis(lampPos,[1,0,0],worldUp,[0,0,1],1),true);
     }
     for (const actor of cityTraffic) {

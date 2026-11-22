@@ -52,21 +52,34 @@ test('actual city renderer suppresses ordinary cars over water but preserves ele
   sedan:'dry downtown car',van:'elevated expressway van'};
  const mesh=Object.fromEntries(Object.entries(identities).map(([kind,id])=>[kind,{id}]));
  const drawn=[];
+ let lightState='red';
  const render=new Function(
   'selectedMap','bridgeRails','cityTraffic','mat4FromBasis','camPos',
   'railPose','sceneryTime','streetMeshes','nycDetailBand','trafficPose',
   'drawStreetWalker','worldUp','wreckedTaxiMesh','taxiLamps',
   'sampleTerrainHeight','WATER_H','cityLotAt',
-  'EAST_RIVER_BRIDGE','STREET_Y','bridgeheadSignalGreen','nycBridgeheadSignalFaces',
+  'EAST_RIVER_BRIDGE','STREET_Y','bridgeheadSignalState','nycBridgeheadSignalFaces',
   'return ('+sourceOf('drawCityTraffic')+')')(
   {city:true},null,vehicles,(p)=>p,[0,0,0],()=>null,0,mesh,
   ()=>3,actor=>actor.pose,()=>{},[0,1,0],null,null,
   (x,z)=>z<-200?12.2:30,12.2,
   (x,z)=>[82,160,180].includes(x)?{occupied:true}:null,
-  bridge,14.86,()=>false,{red:{id:'bridge signal red'},green:{id:'bridge signal green'}});
+  bridge,14.86,()=>lightState,{
+    red:{id:'bridge signal red'},amber:{id:'bridge signal amber'},
+    green:{id:'bridge signal green'}});
  render((id)=>drawn.push(id.id));
  assert.equal(drawn.filter(x=>x==='bridge signal red').length,1,
-  'physical signal lens must render on the actual bridgehead approach');
+  'physical red lens must render at the actual bridgehead approach');
+ lightState='amber';
+ const amberDrawn=[];
+ render((id)=>amberDrawn.push(id.id));
+ assert.equal(amberDrawn.filter(x=>x==='bridge signal amber').length,1,
+  'yellow lens must render in the middle socket during amber');
+ lightState='green';
+ const greenDrawn=[];
+ render((id)=>greenDrawn.push(id.id));
+ assert.equal(greenDrawn.filter(x=>x==='bridge signal green').length,1,
+  'green lens must render only during the green phase');
  assert.deepEqual(drawn.filter(x=>!x.startsWith('bridge signal ')),
   ['Brooklyn Bridge SUV','dry downtown car','elevated expressway van']);
 });
