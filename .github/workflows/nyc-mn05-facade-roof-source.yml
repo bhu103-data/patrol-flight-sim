@@ -42,6 +42,10 @@ jobs:
         run: |
           python tools/nyc/inspect-mn05-roof-source-roi.py
           test -s artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
+      - name: Reopen pinned source for facade extraction after roof inspector cleanup
+        run: |
+          PATROL_KEEP_MN05=1 python tools/nyc/probe-official-mn05-rhino.py
+          test -s artifacts/nyc-official-mn05/mn05-source.3dm
       - name: Match source roof and facade meshes to unique official current building FIDs
         run: |
           python tools/nyc/extract-mn05-facade-roof-preview.py
