@@ -7,11 +7,13 @@ on:
       - 'tools/nyc/inspect-bk02-source-roi.py'
       - 'tools/nyc/bk02_source_layers.py'
       - 'tools/nyc/official_bk02_projection.py'
+      - 'tools/nyc/match-bk02-2014-oti-2022.py'
       - 'tools/nyc/dumbo-2014-source-preview.html'
       - 'scripts/dumbo-2014-source-browser-smoke.mjs'
       - 'tests/nyc-bk02-coordinate-frame.test.py'
       - 'tests/nyc-bk02-source-layers.test.py'
       - 'tests/nyc-bk02-source-mesh.test.py'
+      - 'tests/nyc-bk02-2014-oti-match.test.py'
       - 'assets/nyc/dumbo-oti-metric-48.json'
       - '.github/workflows/nyc-dumbo-2014-rhino-source.yml'
 permissions:
@@ -27,13 +29,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate projection and install read-only Rhino 3DM parser
+      - name: Validate projection, source layers and install pinned geometry parsers
         run: |
           python -m py_compile tools/nyc/official_bk02_projection.py
           python -m py_compile tools/nyc/probe-official-bk02-rhino.py
           python -m py_compile tools/nyc/inspect-bk02-source-roi.py
           python -m py_compile tools/nyc/bk02_source_layers.py
-          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2
+          python -m py_compile tools/nyc/match-bk02-2014-oti-2022.py
+          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
           python tests/nyc-bk02-coordinate-frame.test.py
           python tests/nyc-bk02-source-layers.test.py
       - name: Download exact official BK02 2014 Rhino archive with hard size/path limits
@@ -44,6 +47,10 @@ jobs:
           test ! -e artifacts/nyc-official-bk02/bk02-source.3dm
           test ! -e artifacts/nyc-official-bk02/bk02-source.zip
           python tests/nyc-bk02-source-mesh.test.py
+      - name: Match 2014 source footprint surfaces to 2022 OTI FID/BIN without auto-import
+        run: |
+          python tools/nyc/match-bk02-2014-oti-2022.py
+          python tests/nyc-bk02-2014-oti-match.test.py
       - name: Prepare isolated source viewer and install pinned browser harness
         run: |
           cp tools/nyc/dumbo-2014-source-preview.html artifacts/nyc-official-bk02/dumbo-2014-source-preview.html
@@ -61,7 +68,7 @@ jobs:
             sleep 1
           done
           node scripts/dumbo-2014-source-browser-smoke.mjs
-      - name: Upload bounded provenance, source mesh and WebGL screenshots (never original 3DM)
+      - name: Upload bounded provenance, match report, source mesh and WebGL screenshots (never original 3DM)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -70,6 +77,7 @@ jobs:
             artifacts/nyc-official-bk02/bk02-probe.json
             artifacts/nyc-official-bk02/dumbo-2014-source-roi.json
             artifacts/nyc-official-bk02/dumbo-2014-source-mesh.json
+            artifacts/nyc-official-bk02/dumbo-2014-oti-2022-match.json
             artifacts/nyc-official-bk02/browser-report.json
             artifacts/nyc-official-bk02/01-bk02-2014-source-oblique.png
             artifacts/nyc-official-bk02/02-bk02-2014-source-overhead.png
