@@ -123,29 +123,47 @@ async function main(){
     url.searchParams.set('list-type','2');url.searchParams.set('max-keys','1000');
     url.searchParams.set('prefix',prefix.replace(/\/?$/,'/'));
     console.log('Listing native OPR product directory '+url.toString());
-    let xml='',response=null,last;
-    for(let attempt=1;attempt<=4;attempt++){
-      try{
-        response=await fetch(url,{headers:{Accept:'application/xml'},signal:AbortSignal.timeout(45000)});
-        xml=await response.text();
-        if(response.ok)break;
-        last=Error('Native OPR S3 listing HTTP '+response.status+': '+xml.slice(0,300));
-      }catch(error){last=error}
-      if(attempt===4)throw last;
-      console.log('Retry native OPR listing '+attempt+'/4: '+last.message);
-      await new Promise(resolve=>setTimeout(resolve,1000*2**attempt));
-    }
-    const objects=[];
-    for(const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)){
-      const block=m[1],key=xmlValue(block,'Key'),size=Number(xmlValue(block,'Size'));
-      if(!key)continue;
-      const file=key.split('/').pop();
-      objects.push({key,file,size,lastModified:xmlValue(block,'LastModified'),
-        url:'https://prd-tnm.s3.amazonaws.com/'+key.split('/').map(encodeURIComponent).join('/')});
+    let xml='',response=null,last,objects=[];
+    try{
+      for(let attempt=1;attempt<=3;attempt++){
+        try{
+          response=await fetch(url,{headers:{Accept:'application/xml'},signal:AbortSignal.timeout(18000)});
+          xml=await response.text();
+          if(response.ok)break;
+          last=Error('Native OPR S3 listing HTTP '+response.status+': '+xml.slice(0,300));
+        }catch(error){last=error}
+        if(attempt===3)throw last;
+        console.log('Retry native OPR listing '+attempt+'/3: '+last.message);
+        await new Promise(resolve=>setTimeout(resolve,1000*2**attempt));
+      }
+      for(const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)){
+        const block=m[1],key=xmlValue(block,'Key'),size=Number(xmlValue(block,'Size'));
+        if(!key)continue;
+        const file=key.split('/').pop();
+        objects.push({key,file,size,lastModified:xmlValue(block,'LastModified'),
+          url:'https://prd-tnm.s3.amazonaws.com/'+key.split('/').map(encodeURIComponent).join('/')});
+      }
+      report.s3Listing={url:url.toString(),status:response.status,
+        truncated:xmlValue(xml,'IsTruncated'),keyCount:objects.length};
+    }catch(error){
+      report.s3Listing={url:url.toString(),error:error.message};
+      console.log('S3 list unavailable; trying official USGS OPR GeoTIFF directory mirror...');
+      const workunit=projects.find(a=>a.sourcedem_link)?.workunit;
+      if(!workunit)throw error;
+      const waf=new URL('https://thor-f5.er.usgs.gov/ngtoc/metadata/waf/elevation/opr_dem/geotiff/'+encodeURIComponent(workunit)+'/');
+      const res=await fetch(waf,{headers:{Accept:'text/html'},signal:AbortSignal.timeout(30000)});
+      const html=await res.text();
+      if(!res.ok)throw Error('Official USGS WAF directory HTTP '+res.status+': '+html.slice(0,300));
+      for(const m of html.matchAll(/href=["']([^"'#?]+)["']/gi)){
+        const href=m[1];if(href==='../'||href.startsWith('/'))continue;
+        const file=decodeURIComponent(href.split('/').filter(Boolean).pop()||href);
+        if(!/\.(tif|tiff|zip|xml|pdf)$/i.test(file))continue;
+        objects.push({key:workunit+'/'+href,file,size:null,lastModified:null,
+          url:new URL(href,waf).toString(),discovery:'official-USGS-WAF'});
+      }
+      report.wafListing={url:waf.toString(),status:res.status,keyCount:objects.length};
     }
     report.objects.push(...objects);
-    report.s3Listing={url:url.toString(),status:response.status,
-      truncated:xmlValue(xml,'IsTruncated'),keyCount:objects.length};
   }
   const nativeRasters=report.objects.filter(x=>/\.(tif|tiff)$/i.test(x.file));
   report.nativeRasterCandidates=nativeRasters;
