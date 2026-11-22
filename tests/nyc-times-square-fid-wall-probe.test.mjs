@@ -44,7 +44,7 @@ test('diagnostic FID input is strictly typed and cannot activate from ordinary g
   const baseline=run();
   assert.throws(()=>run([baseline.sourceFids[0]]),/must be a Set/);
   assert.throws(()=>run(new Set(['not-a-fid'])),/non-integer/);
-  assert.match(html,/\\.get\\('nycFidProbe'\\)==='1'/);
-  assert.match(html,/if\\(nycFidProbeEnabled\\)\\{\\s*window\\.__patrolNycFidProbe=/);
-  assert.match(html,/skipFids:new Set\\(skipFids\\)/);
+  assert.match(html,/\.get\('nycFidProbe'\)==='1'/);
+  assert.match(html,/if\(nycFidProbeEnabled\)\{\s*window\.__patrolNycFidProbe=/);
+  assert.match(html,/skipFids:new Set\(skipFids\)/);
 });
