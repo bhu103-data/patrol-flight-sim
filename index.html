@@ -1405,7 +1405,20 @@ const CENTRAL_PARK_SITES=[
   // WebGL2 Setup. If Chrome loses its GPU context, retry once in a
   // compatibility profile that keeps the same scene but avoids the large
   // intermediate framebuffer that can trigger another context loss.
-  const graphicsCompat = new URLSearchParams(location.search).get('graphics') === 'compat';
+  const pageParams = new URLSearchParams(location.search);
+  const graphicsCompat = pageParams.get('graphics') === 'compat';
+  // Opt-in solid-color diagnostics for isolating horizon artifacts. Mode 0
+  // is the production path and must remain byte-for-byte equivalent visually.
+  const diagMode = Math.max(0, Math.min(4, Number.parseInt(pageParams.get('diag') || '0', 10) || 0));
+  const diagEnabled = pageParams.has('diag');
+  let diagnosticCamera = null;
+  let diagnosticEnvironment = null;
+  if(diagEnabled)window.PatrolWaterDiagnostic={
+    setFixedState:({camera,environment})=>{
+      diagnosticCamera=camera;
+      diagnosticEnvironment=environment;
+    }
+  };
 
   const gl = glCanvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) {
@@ -1573,6 +1586,7 @@ const CENTRAL_PARK_SITES=[
     uniform vec3 uMoon;
     uniform vec4 uAtmosphere;
     uniform vec4 uClimate;
+    uniform int uDiagMode;
     vec3 sunDirection() { return uSun; }
     const float WATER_H = 12.2;
     uniform float uTerrainScale;
@@ -1772,7 +1786,7 @@ const CENTRAL_PARK_SITES=[
       return light*visibility*smoothstep(.055,.18,rd.y);
     }
 
-        vec3 getSky(vec3 rd) {
+        vec3 getSky(vec3 rd, bool includeDiscs) {
       float up=clamp(rd.y,0.0,1.0);
       float sunAmt=max(dot(rd,sunDirection()),0.0);
       float day=uAtmosphere.x, twilight=uAtmosphere.y, cloud=uAtmosphere.z;
@@ -1791,15 +1805,15 @@ const CENTRAL_PARK_SITES=[
       horizon+=vec3(0.66,0.74,0.92)*star*(1.0-day)*(1.0-cloud)*smoothstep(0.01,0.20,rd.y);
       if(uAlaska)horizon+=alaskaAurora(rd);
       float openness=(1.0-cloud*0.88)*(1.0-uAtmosphere.w*0.7);
-      horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*smoothstep(-0.08,0.04,uSun.y)*0.40;
+      if(includeDiscs)horizon+=vec3(1.0,0.62,0.30)*pow(sunAmt,22.0)*openness*smoothstep(-0.08,0.04,uSun.y)*0.40;
       float solarRadius=0.0125+0.0025*(1.0-smoothstep(0.02,0.24,uSun.y));
       float solarEdge=1.0-smoothstep(0.94,1.07,sqrt(max(0.0,2.0*(1.0-sunAmt)))/solarRadius);
       float solarCenter=sqrt(clamp(1.0-(2.0*(1.0-sunAmt))/(solarRadius*solarRadius),0.0,1.0));
       vec3 solarTint=mix(vec3(1.0,0.49,0.22),vec3(1.0,0.96,0.85),smoothstep(0.015,0.28,uSun.y));
       solarTint*=mix(0.82,1.0,solarCenter);
-      horizon=mix(horizon,solarTint,solarEdge*openness*smoothstep(-0.018,0.025,uSun.y));
+      if(includeDiscs)horizon=mix(horizon,solarTint,solarEdge*openness*smoothstep(-0.018,0.025,uSun.y));
       float moonAmt=dot(rd,uMoon);
-      if(moonAmt>0.99958 && uMoon.y>-0.025){
+      if(includeDiscs && moonAmt>0.99958 && uMoon.y>-0.025){
         vec3 tangent=normalize(cross(vec3(0.0,1.0,0.0),uMoon+vec3(0.00001,0.0,0.0)));
         vec3 upMoon=cross(uMoon,tangent);
         vec2 uv=vec2(dot(rd,tangent),dot(rd,upMoon))/0.026;
@@ -1825,7 +1839,9 @@ const CENTRAL_PARK_SITES=[
       float sunward=max(dot(rd,uSun),0.0);
       vec3 haze=mix(vec3(0.084,0.10,0.17),vec3(0.64,0.73,0.79),uAtmosphere.x);
       haze=mix(haze,vec3(0.42,0.29,0.35)+vec3(0.28,0.08,0.0)*sunward,uAtmosphere.y*0.58);
-      return mix(col,haze,min(fogAmt,0.96));
+      float appliedFog=min(fogAmt,0.96);
+      if(uDiagMode==3)return vec3(0.0,appliedFog,0.0);
+      return mix(col,haze,appliedFog);
     }
 
     void main() {
@@ -1834,7 +1850,7 @@ const CENTRAL_PARK_SITES=[
       vec3 ro = uCamPos;
       float pixelAngle = abs(dFdy(vUv.y)) * 2.0 * uFovTan;
 
-      vec3 col = getSky(rd);
+      vec3 col = getSky(rd,true);
       float hitDist = 860.0;
       bool hitSurface = false;
 
@@ -1977,7 +1993,11 @@ const CENTRAL_PARK_SITES=[
           float unresolved = smoothstep(0.05, 1.3, pixel);
           float roughness = 0.028 + sqrt(meanSquareSlope) * unresolved;
           vec3 roughRefl = normalize(mix(reflDir, vec3(reflDir.x, max(reflDir.y,0.19), reflDir.z), roughness * 1.7));
-          vec3 reflectedSky = getSky(roughRefl);
+          // Direct solar/lunar discs are evaluated by the GGX glint below.
+          // Sampling them again in the environment term produced a broad,
+          // globe-like duplicate at grazing angles.
+          vec3 reflectedSky = getSky(roughRefl,false);
+          if(uDiagMode==2)reflectedSky=vec3(0.0,1.0,1.0);
           // Exact dielectric air-to-water Fresnel with rough-slope grazing correction.
            // F0 is ~2% instead of a constant +4.5% artistic reflection floor.
            float filteredFresnel=waterFresnel(clamp(ndv-0.035*roughness*
@@ -2010,7 +2030,9 @@ const CENTRAL_PARK_SITES=[
           float alpha2 = max(roughness*roughness,0.0012);
           float ggx = waterDGGX(ndh,alpha2) * waterVSmith(ndl,ndv,alpha2) * waterFresnel(vdh) * ndl;
           float facetSparkle = mix(0.78,1.24,vnoise(xz*1.8+vec2(uTime*0.13,-uTime*0.09)));
-          float glitter = min(ggx * facetSparkle, 18.0) * mix(0.075,0.12,localDetail);
+          // Keep the real-time GGX streak readable without clipping it into
+          // a second white sun. The old cap amplified near-horizon facets.
+          float glitter = min(ggx * facetSparkle, 6.0) * mix(0.045,0.075,localDetail);
           if (uManhattan) glitter *= mix(0.76, 1.0, harborExposure);
           float moonGlint = pow(max(dot(wn, normalize(uMoon - rd + vec3(0.0,0.00001,0.0))), 0.0), 80.0);
           waterCol += sunTint * glitter * clearSky * sunAbove * litFactor;
@@ -2411,6 +2433,7 @@ const CENTRAL_PARK_SITES=[
         vec4 clip = uWorldViewProj * vec4(ro + rd * hitDist, 1.0);
         gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
       }
+      if(uDiagMode==1 && !hitSurface)col=vec3(1.0,0.0,1.0);
       fragColor = vec4(col, 1.0);
     }
   `;
@@ -2460,6 +2483,7 @@ const CENTRAL_PARK_SITES=[
     uniform bool uTwilight;
     uniform bool uManhattanView;
     uniform bool uSphereShow;
+    uniform int uDiagMode;
     uniform float uSpherePattern;
     uniform vec3 uSphereCenter;
     uniform vec4 uSphereImpact;
@@ -3005,6 +3029,10 @@ const CENTRAL_PARK_SITES=[
     }
     void main() {
       if(uSphereShow){
+        if(uDiagMode==4){
+          fragColor=vec4(1.0,1.0,0.0,1.0);
+          return;
+        }
         vec3 radial=normalize(vWorld-uSphereCenter);
         bool automatic=uSpherePattern<0.0;
         float index=automatic?floor(uSceneTime/11.0):uSpherePattern;
@@ -11348,6 +11376,7 @@ const CENTRAL_PARK_SITES=[
   }
 
   function sampleFlightEnvironment(dt){
+    if(diagnosticEnvironment)return diagnosticEnvironment;
     skyElapsed+=dt;
     if(skyTime.value==='auto')skyClock+=dt;
     const day=Math.floor(skyElapsed/ENVIRONMENT_DAY);
@@ -12869,6 +12898,7 @@ const CENTRAL_PARK_SITES=[
     uWorld = {
     sun:gl.getUniformLocation(worldProg,'uSun'), moon:gl.getUniformLocation(worldProg,'uMoon'),
     atmosphere:gl.getUniformLocation(worldProg,'uAtmosphere'), climate:gl.getUniformLocation(worldProg,'uClimate'),
+    diagMode:gl.getUniformLocation(worldProg,'uDiagMode'),
     terrain: gl.getUniformLocation(worldProg, 'uTerrain'),
     terrainScale: gl.getUniformLocation(worldProg, 'uTerrainScale'),
     alaskaPhotoAlbedo:gl.getUniformLocation(worldProg,'uAlaskaPhotoAlbedo'),
@@ -12891,6 +12921,7 @@ const CENTRAL_PARK_SITES=[
     };
     uMesh = {
     sun:gl.getUniformLocation(meshProg,'uSun'), atmosphere:gl.getUniformLocation(meshProg,'uAtmosphere'),
+    diagMode:gl.getUniformLocation(meshProg,'uDiagMode'),
     dimLights:gl.getUniformLocation(meshProg,'uDimLights'),
     timesScreen:gl.getUniformLocation(meshProg,'uTimesScreen'),
     surfaceWeather:gl.getUniformLocation(meshProg,'uSurfaceWeather'),
@@ -14064,10 +14095,10 @@ const CENTRAL_PARK_SITES=[
     }
 
     // 3. Smooth ~1.0s Camera Interpolation
-    const targetCam = scenicViewActive ? getScenicCamera() : crash ? {
+    const targetCam = diagnosticCamera || (scenicViewActive ? getScenicCamera() : crash ? {
       eye: [plane.pos[0]-basis.fwd[0]*16,plane.pos[1]+7,plane.pos[2]-basis.fwd[2]*16],
       look: plane.pos, up:[0,1,0], fov:58
-    } : computeTargetCamera(basis);
+    } : computeTargetCamera(basis));
     if (!camInitialized || targetCam.attached) {
       camPos = [...targetCam.eye];
       camLook = [...targetCam.look];
@@ -14108,6 +14139,7 @@ const CENTRAL_PARK_SITES=[
     gl.uniform3fv(uWorld.moon,environment.moon);
     gl.uniform4fv(uWorld.atmosphere,environment.atmosphere);
     gl.uniform4fv(uWorld.climate,environment.climate);
+    gl.uniform1i(uWorld.diagMode,diagMode);
     gl.uniformMatrix4fv(uWorld.viewProj, false, viewProj);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, terrainTex);
@@ -14172,6 +14204,7 @@ const CENTRAL_PARK_SITES=[
     gl.uniform2f(uMesh.surfaceWeather,environment.climate[2],environment.climate[3]);
     gl.uniform3fv(uMesh.sun,environment.sun);
     gl.uniform4fv(uMesh.atmosphere,environment.atmosphere);
+    gl.uniform1i(uMesh.diagMode,diagMode);
     // The east-right flight projection reverses screen-space triangle winding.
     gl.frontFace(gl.CW);
     gl.uniformMatrix4fv(uMesh.viewProj, false, viewProj);
