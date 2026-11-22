@@ -15,7 +15,6 @@ import collections
 import hashlib
 import json
 import math
-import os
 import pathlib
 import sys
 
@@ -31,9 +30,7 @@ from official_mn05_projection import (
     METRES_PER_DEG_LATITUDE,
     METRES_PER_DEG_LONGITUDE,
     US_SURVEY_FOOT_IN_METRES)
-from inspect_mn05_support import (choose_matched_roof, face_from_cached_mesh,
-    require_feet_model_unit, source_roof_reference_by_fid,
-    anchored_source_height_metres)
+from inspect_mn05_support import choose_matched_roof, face_from_cached_mesh
 
 DIR=pathlib.Path("artifacts/nyc-official-mn05")
 SOURCE=DIR/"mn05-source.3dm"
@@ -137,10 +134,7 @@ def main():
         "horizontalCrs":"EPSG:2263 US survey ft projected to 2022 PATROL local WGS84 metres",
         "localOriginLonLat":list(ORIGIN_WGS84),
         "sourceVerticalDatumVerified":False,
-        "sourceVerticalUnitVerified":False,
-        "sourceZReliefPreserved":False,
-        "sourceModelUnitSystem":None,
-        "visualAnchor":"2014 relative roof Z in verified Rhino feet; each FID highest source point anchored to 2022 HEIGHTROOF; absolute datum unknown",
+        "visualAnchor":"2022 municipal HEIGHTROOF only; 2014 relative Z is not rendered",
         "modelIs2026Survey":False,
         "matchRule":"source saved roof triangles >=0.60 area overlap within single 2022 FID",
         "sourceRooftopFacesRejected":{},"meshAccepted":False,"errors":[]}
@@ -153,9 +147,6 @@ def main():
         model=rhino3dm.File3dm.Read(str(SOURCE))
         if model is None:
             raise RuntimeError("Municipal 2014 Brep source cannot be opened")
-        unit_name=require_feet_model_unit(model.Settings)
-        report["sourceModelUnitSystem"]=unit_name
-        report["sourceVerticalUnitVerified"]=True
         buildings=official_buildings()
         candidates,skipped=source_roof_objects(model)
         report["originalRoofObjectsInBoundedSample"]=len(candidates)
@@ -168,19 +159,9 @@ def main():
                 rejected_match["notOverlappingNewerSourceFootprint"]+=1
                 continue
             selected.append(selected_row)
-        roof_refs,roof_metrics,vertical_rejects=source_roof_reference_by_fid(selected)
-        for fid,reason in vertical_rejects.items():
-            rejected_match["vertical-range:"+reason]+=1
-        selected=[row for row in selected if row["matchedFid"] in roof_refs]
         report["sourceRoofMatchesRejected"]=dict(rejected_match)
-        report["sourceRoofVerticalRangeRejectedFids"]={str(k):v for k,v in vertical_rejects.items()}
-        reliefs=[m["relativeReliefMetres"] for fid,m in roof_metrics.items() if fid in roof_refs]
-        report["sourceRoofReliefRangeMetres"]=[
-            round(min(reliefs),3) if reliefs else 0,
-            round(max(reliefs),3) if reliefs else 0]
-        # Preserve actual relative 2014 Z differences. The highest source roof
-        # point per FID is anchored to 2022 HEIGHTROOF; absolute datum remains
-        # unknown and is deliberately NOT claimed.
+        # Embed only matched source triangles. Genuine original Rhino
+        # triangles in projected XY; 2022 HEIGHTROOF DISPLAY-ONLY Y anchor.
         result_tris=[]
         unique_fids=set()
         for row in selected:
@@ -193,12 +174,8 @@ def main():
                     "matched2022BuildingFid":fid,
                     "matchAreaRatio":round(row["matchAreaRatio"],5),
                     "sourceRawZFt":[round(p[2],4) for p in tri],
-                    "vertices":[[
-                        round(p[0],4),round(p[1],4),
-                        round(anchored_source_height_metres(
-                            p[2],roof_refs[fid],height,
-                            source_vertical_unit_verified=True),4)]
-                        for p in tri]
+                    "vertices":[[round(p[0],4),round(p[1],4),round(height+.35,4)]
+                                for p in tri]
                 })
         if len(unique_fids)<3 or len(result_tris)<10 or len(result_tris)>MAX_TRIANGLES:
             raise RuntimeError("Source true-roof matches too few or oversized: "+
@@ -219,15 +196,12 @@ def main():
             {"fid":b["fid"],"heightMetres":round(b["heightMetres"],3),
              "outline":[[round(x,4),round(z,4)] for x,z in b["geometry"].exterior.coords]}
             for b in buildings if b["fid"] in unique_fids]
-        report["sourceZReliefPreserved"]=True
         report["meshAccepted"]=True
     except Exception as error:
         report["errors"].append(type(error).__name__+": "+str(error))
     finally:
-        # Keep the 627MB original only inside this same CI job when the
-        # facade extractor immediately follows; the facade step deletes it.
-        if os.environ.get("PATROL_KEEP_MN05") != "1":
-            SOURCE.unlink(missing_ok=True)
+        # No 627MB original model is uploaded or committed.
+        SOURCE.unlink(missing_ok=True)
         OUTPUT.write_text(json.dumps(report,ensure_ascii=False,separators=(",",":")))
         print("NYC real cached source rooftop mesh",
               json.dumps({k:v for k,v in report.items()
