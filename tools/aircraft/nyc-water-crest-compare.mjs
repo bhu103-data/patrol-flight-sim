@@ -1,6 +1,5 @@
-// Test-only A/B water color: same NYC camera, same shader time, same
-// game version. The reference shader restores only the old teal crest term.
-// No code/model changes are shipped by this script.
+// Test-only same-camera A/B for NYC water, optical bands and atmosphere.
+// The baseline disables only the selected visual branch; no game changes ship.
 import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 
@@ -24,21 +23,34 @@ const inject=html=>html.replace(camera,`
 `+camera).replace(bridge,`
   window.PatrolCrestCompare={
     fixed:null,
+    skyMode:${skyAtmosphereAB?'true':'false'},
     lock(){
       if(!flying||crash||!waterborne||selectedAircraft!=='seaplane'||
          !selectedMap.city||!usableFloatWater(plane.pos[0],plane.pos[2],plane.yaw))
          throw Error('C185 not afloat on safe NYC water');
       plane.speed=0;plane.afterburner=false;brakes=true;
       const [x,,z]=plane.pos;
-      this.fixed={eye:[x+23,WATER_H+10.6,z+24],
-        look:[x,WATER_H+1.65,z]};
-      return {x,z,yaw:plane.yaw,camera:this.fixed};
+      const environment=sampleFlightEnvironment(0);
+      if(this.skyMode){
+        const sun=environment.sun;
+        this.fixed={eye:[x-sun[0]*28,WATER_H+3.0,z-sun[2]*28],
+          look:[x+sun[0]*182,WATER_H+3.0+sun[1]*182,z+sun[2]*182]};
+      }else{
+        this.fixed={eye:[x+23,WATER_H+10.6,z+24],
+          look:[x,WATER_H+1.65,z]};
+      }
+      return {x,z,yaw:plane.yaw,camera:this.fixed,
+        sky:{time:skyTime.value,season:skySeason.value,weather:skyWeather.value,
+          sun:environment.sun,atmosphere:environment.atmosphere}};
     },
     read(){
       const [x,y,z]=plane.pos;
       const pose=floatOceanPose(x,z,plane.yaw,20.0,selectedMap,WATER_H,sampleFloatOceanFloor);
+      const environment=sampleFlightEnvironment(0);
       return {x,y,z,sceneWave:pose.height,
         waterborne,crashed:Boolean(crash),camera:[...camPos],fixed:this.fixed,
+        sky:{time:skyTime.value,season:skySeason.value,weather:skyWeather.value,
+          sun:environment.sun,atmosphere:environment.atmosphere},
         contextLost:gl.isContextLost()};
     }
   };
@@ -46,23 +58,29 @@ const inject=html=>html.replace(camera,`
     .replace(aircraftClock,'plane.yaw,20.0,');
 const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
 const bandFilterAB=process.env.PATROL_COMPARE_MODE==='band-filter';
+const skyAtmosphereAB=process.env.PATROL_COMPARE_MODE==='sky-atmosphere';
 const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
 const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
 if(seaDetailAB&&src.split(detailEnabled).length!==2)
   throw Error('Missing reversible NYC sea detail marker');
+const skyEnabled='const bool NYC_TIDEWATER_SKY = true;';
+const skyDisabled='const bool NYC_TIDEWATER_SKY = false;';
 const bandEnabled='const bool NYC_HORIZON_SLOPE_FILTER = true;';
 const bandDisabled='const bool NYC_HORIZON_SLOPE_FILTER = false;';
 if(bandFilterAB&&src.split(bandEnabled).length!==2)
   throw Error('Missing reversible NYC horizon shading filter');
-const sourceBefore=inject(bandFilterAB
-  ?src.replace(bandEnabled,bandDisabled)
-  :seaDetailAB?src.replace(detailEnabled,detailDisabled)
-  :src.replace(modern,old));
+if(skyAtmosphereAB&&src.split(skyEnabled).length!==2)
+  throw Error('Missing reversible NYC sky marker');
+const beforeHtml=skyAtmosphereAB?src.replace(skyEnabled,skyDisabled):
+  bandFilterAB?src.replace(bandEnabled,bandDisabled):
+  seaDetailAB?src.replace(detailEnabled,detailDisabled):src.replace(modern,old);
+const sourceBefore=inject(beforeHtml);
 const sourceAfter=inject(src);
 const origin=new URL(url).origin,report={
-  mode:bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
+  mode:skyAtmosphereAB?'sky-atmosphere':bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
-  note:'Test-only fixed shader time, not a runtime setting'};
+  note:skyAtmosphereAB?'Same aircraft/camera/wave time; fixed 07:00 autumn clear sky':
+    'Test-only fixed shader time, not a runtime setting'};
 const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';
 report.browser=chrome?'installed Chrome':'Chromium SwiftShader';
 const browser=await chromium.launch({headless:true,
@@ -116,9 +134,10 @@ try{
         null,{timeout:150000,polling:450});
       // Pin game weather/time and NYC graphics quality, not just shader phase.
       await page.evaluate(()=>{
+        const skyMode=window.PatrolCrestCompare?.skyMode===true;
         for(const [id,value] of [
-          ['skyTime','12'],['skySeason','1'],['skyWeather','Clear'],
-          ['nyStreetQuality','2']]){
+          ['skyTime',skyMode?'7':'12'],['skySeason',skyMode?'2':'1'],
+          ['skyWeather','Clear'],['nyStreetQuality','2']]){
           const control=document.getElementById(id);
           if(!control)throw Error('Missing QA control '+id);
           control.value=value;
@@ -162,6 +181,8 @@ try{
      Math.abs(a.stage.z-b.stage.z)>.0001 ||
      Math.abs(a.stage.yaw-b.stage.yaw)>.0001)
     throw Error('Water-start state differs between paired scenes');
+  if(JSON.stringify(a.state.sky)!==JSON.stringify(b.state.sky))
+    throw Error('Sun direction, time or weather differs between paired scenes');
   report.passed=true;
 }catch(e){report.passed=false;report.failure=String(e.stack||e);process.exitCode=1;}
 finally{
