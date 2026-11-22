@@ -4,8 +4,17 @@
  */
 import {chromium} from 'playwright';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 
 const baseSha='599154e48e06859cf8493fd5c259423f711c2655';
+const checkoutSha=execFileSync('git',['rev-parse','HEAD'],
+  {encoding:'utf8'}).trim();
+if(checkoutSha===baseSha)throw Error('Parent and candidate resolve to one SHA');
+const headModule=execFileSync('git',
+  ['show',checkoutSha+':assets/alaska/alaska-fjord-detail.js'],
+  {encoding:'utf8'});
+if(headModule!==readFileSync('assets/alaska/alaska-fjord-detail.js','utf8'))
+  throw Error('Working floating-ice module differs from exact PR HEAD');
 const sourceBaseline=readFileSync('alaska-floe-relief-base.html','utf8');
 const sourceCandidate=readFileSync('index.html','utf8');
 if(sourceBaseline!==sourceCandidate)
@@ -111,7 +120,8 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
 ]});
-const record={baselineSha:baseSha,headSha:process.env.GITHUB_SHA||null,
+const record={baselineSha:baseSha,headSha:checkoutSha,
+  triggerSha:process.env.GITHUB_SHA||null,
   capture:'live game WebGL2, parent #217 sharp snow lip vs bevelled snow shoulder at identical pose/time',
   softwareOnly:true,frozenShaderTime:photoPhase,scenarios:{}};
 async function capture(name,file,expectedModule){
