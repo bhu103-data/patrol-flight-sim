@@ -182,6 +182,38 @@ try{
     referenceCamera:report.sourceOffCoreCamera,
     sampledStepPixels:2,excludedHUDTopPixels:210};
   check(changedCore>300,'Source roadbed FID24700 geometry invisible from the identical focused camera: '+changedCore);
+  // Evidence-only third view: no invented DCM-width asphalt, with official
+  // 2022 roadbed polygons and real DCM centerline trace left intact.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?roadbed=only',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  report.sourceOnly=await page.evaluate(()=>window.PatrolMetricFlightQA);
+  check(report.sourceOnly.sourceRoadbedOnly===true&&
+    report.sourceOnly.illustrativeRoadBandTriangles===0,
+    'Source-only view still renders fictitious DCM-width asphalt');
+  check(report.sourceOnly.officialRoadbedPolygons===11&&
+    report.sourceOnly.officialRoadbedTriangles===207&&
+    report.sourceOnly.streetSegments===89,
+    'Source-only view dropped official roadbed/centerline geometries');
+  check(report.sourceOnly.triangles===report.initial.triangles-178,
+    'Source-only 1:1 scene must hide exactly 2 fake triangles per 89 DCM segments');
+  await page.locator('#aerial').click();
+  await page.waitForTimeout(350);
+  const sourceOnlyAerial=await page.locator('#scene').screenshot({
+    path:out+'/07-source-only-measured-roadbed-aerial.png',timeout:90000});
+  const srcOnly=PNG.sync.read(sourceOnlyAerial);
+  check(srcOnly.width===a.width&&srcOnly.height===a.height,
+    'Source-only aerial evidence size changed');
+  let onlyDifferent=0;
+  for(let y=230;y<a.height;y+=2)for(let x=2;x<a.width;x+=2){
+    const i=(y*a.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(a.data[i+j]-srcOnly.data[i+j])))>18)
+      onlyDifferent++;
+  }
+  report.sourceOnlyPixelDifferenceOver18=onlyDifferent;
+  check(onlyDifferent>60,
+    'Removing all fake DCM road bands was not visible in fixed aerial evidence: '+onlyDifferent);
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
