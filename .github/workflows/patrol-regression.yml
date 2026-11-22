@@ -28,6 +28,20 @@ jobs:
         run: |
           npm install --global @gltf-transform/cli
           python3 -m pip install --disable-pip-version-check pillow
+          # KhronosGroup official pinned KTX-Software release. Required for
+          # KTX2 -> PNG; do not use a third-party codec binary.
+          curl --fail --location --retry 2 --max-time 100 \
+            'https://github.com/KhronosGroup/KTX-Software/releases/download/v4.4.2/KTX-Software-4.4.2-Linux-x86_64.tar.bz2' \
+            -o /tmp/ktx-4.4.2-linux.tar.bz2
+          sha256sum /tmp/ktx-4.4.2-linux.tar.bz2
+          mkdir -p /tmp/ktx-tools
+          tar -xjf /tmp/ktx-4.4.2-linux.tar.bz2 -C /tmp/ktx-tools
+          KTX_BIN="$(find /tmp/ktx-tools -type f -name ktx | head -n 1)"
+          test -n "$KTX_BIN"
+          chmod +x "$KTX_BIN"
+          export PATH="$(dirname "$KTX_BIN"):$PATH"
+          export LD_LIBRARY_PATH="$(find /tmp/ktx-tools -type f -name 'libktx.so*' -printf '%h\n' | head -n 1):${LD_LIBRARY_PATH:-}"
+          ktx --version
           bash tools/nyc/build_cc0_ferry_lods.sh
       - name: Preserve CC0 publisher source and model metrics (NYC ferry PR only)
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
