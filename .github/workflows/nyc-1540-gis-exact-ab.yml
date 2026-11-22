@@ -1,0 +1,48 @@
+name: NYC 1540 Broadway GIS duplicate exact-camera source A-B
+
+on:
+  pull_request:
+    paths:
+      - "assets/nyc/nyc-gis-infill.js"
+      - "scripts/nyc-1540-gis-exact-source-ab.mjs"
+      - "tests/nyc-1540-broadway-gis-duplicate.test.mjs"
+      - ".github/workflows/nyc-1540-gis-exact-ab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-exact-camera:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate browser QA syntax and exact FID-only source regression
+        run: |
+          node --check scripts/nyc-1540-gis-exact-source-ab.mjs
+          node --test tests/nyc-1540-broadway-gis-duplicate.test.mjs
+      - name: Install free headless Chromium and PNG decoder
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve exact PR commit without altering any repository file
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-1540-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Render 44th Street source-with-duplicate versus FID-only fix plus no-GIS controls
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-1540-gis-exact-source-ab.mjs
+      - name: Preserve six original WebGL2 images and pixel report even on fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-1540-fid-source-ab-evidence
+          path: artifacts/nyc-1540-source-ab/
+          retention-days: 7
+          if-no-files-found: ignore

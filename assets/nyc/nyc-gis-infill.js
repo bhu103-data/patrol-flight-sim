@@ -94,6 +94,16 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
     shopfrontFaces=0,shopfrontQuads=0;
   const sourceFids=new Set();
+  // FID 1000156 is already 1540 Broadway in the authored landmark layer.
+  // The separate GIS projection places the same municipal building at
+  // x≈16..33/z≈17..28 instead of its protected hand-authored x=-15/z=6.
+  // That duplicate is the large grey occluder in the 44th Street camera.
+  // Do not suppress the official GIS footprint in source-only mode.
+  const named1540AlreadyRendered=protectedSites.some(site=>
+    site.name==='1540 Broadway' && Math.abs(site.x+15)<.01 &&
+    Math.abs(site.z-6)<.01 && Math.abs(site.w-13)<.01 &&
+    Math.abs(site.d-10)<.01);
+  let skippedMisregistered1540=0;
   // Opt-in geometry-only architectural QA. Defaults to the previous scene.
   const pilotFids=new Set();
   let pilotFacades=0,pilotWindows=0,pilotQuads=0;
@@ -105,6 +115,10 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   ];
   for(const rec of asset.features){
     if(pieces>=MAX_PIECES)break;
+    if(rec.fid===1000156 && named1540AlreadyRendered){
+      skippedMisregistered1540++;
+      continue;
+    }
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
         !(rec.heightFt>0&&rec.heightFt<2500)||!Array.isArray(rec.rings?.[0])||
         rec.rings[0].length<4||rec.rings[0].length>64)continue;
@@ -347,6 +361,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
+    skippedMisregistered1540,
     recessedPilot:{active:typeof recessedFacade==='function',
       facades:pilotFacades,windows:pilotWindows,quads:pilotQuads,
       sourceFids:[...pilotFids],maximumFacades:28,maximumWindows:280,
