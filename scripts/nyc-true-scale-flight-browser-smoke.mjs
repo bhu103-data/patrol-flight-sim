@@ -56,6 +56,8 @@ try{
     'Labelled street view must use 3.2m eye height, not 65m: '+
       JSON.stringify(report.initial.camera));
   check(report.initial.windowVisuals>100,'No bounded facade detail');
+  check(report.initial.pbrTexturesReady===true&&report.initial.pbrTextureMapCount===7,
+    'The true-scale viewer did not load all seven local CC0 PBR texture maps');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   check(report.initial.historical2014ModelImported===true&&
     report.initial.historical2014SourceYear===2014&&
@@ -135,6 +137,8 @@ try{
     sourceFacadeWindows:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindows),
     sourceFacadeWindowFids:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.historical2014SourceFacadeWindowFids),
     changedCanvasPixelsOver6:historicalChangedPixels,
+    pbrTexturesReady:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.pbrTexturesReady),
+    pbrTextureMapCount:await focusOnPage.evaluate(()=>window.PatrolMetricFlightQA.pbrTextureMapCount),
     sameCanvasViewport:true,cameraPositionErrorMetres:cameraPositionError,
     cameraAngleErrorRadians:cameraAngleError,
     focusCamera:focusQA.cameraPosition,target:focusQA.targetPosition,

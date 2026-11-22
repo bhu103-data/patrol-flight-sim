@@ -104,7 +104,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const half=extent*.85;
   const base=[.43,.45,.46];
   quad([-half,-.29,-half],[-half,-.29,half],[half,-.29,half],
-    [half,-.29,-half],base,2);
+    [half,-.29,-half],base,4);
   counts.groundTriangles+=2;
   const palette=[
     [.58,.61,.65],[.57,.53,.47],[.44,.48,.51],[.48,.55,.60],
@@ -124,7 +124,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     if(!sourceRoofFids.has(Number(b.fid)))for(const ids of b.roofTriangles){
       tri(poly[ids[0]].map((x,i)=>i===1?roof:x),
         poly[ids[1]].map((x,i)=>i===1?roof:x),
-        poly[ids[2]].map((x,i)=>i===1?roof:x),cap);
+        poly[ids[2]].map((x,i)=>i===1?roof:x),cap,3);
       counts.roofTriangles++;
     }
     const perBuildingCap=Math.max(1,Math.floor(maxWindows/massing.buildings.length));
@@ -197,8 +197,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
         b.roofHeightMeters+.35+(row.sourceRawZFt[i]-top)*.3048));
       const u=p[1].map((x,i)=>x-p[0][i]),w=p[2].map((x,i)=>x-p[0][i]);
       const normalY=u[2]*w[0]-u[0]*w[2];
-      if(normalY<0)tri(p[0],p[2],p[1],[.49,.52,.54]);
-      else tri(p[0],p[1],p[2],[.49,.52,.54]);
+      if(normalY<0)tri(p[0],p[2],p[1],[.49,.52,.54],3);
+      else tri(p[0],p[1],p[2],[.49,.52,.54],3);
       counts.historicalRoofTriangles++;
     }
     for(const row of historicalMesh.facadeTriangles){

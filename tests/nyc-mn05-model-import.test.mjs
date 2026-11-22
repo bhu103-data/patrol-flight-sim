@@ -49,6 +49,9 @@ test('original 2014 source meshes enter the same 1:1 WebGL vertex buffer',()=>{
  assert.ok(geometry.counts.historicalSourceFacadeWindows>=100);
  assert.ok(geometry.counts.historicalSourceFacadeWindowFidList.includes(212747));
  assert.ok(geometry.counts.facadeWindows>=geometry.counts.historicalSourceFacadeWindows);
+ const materialIds=new Set();
+ for(let i=9;i<geometry.interleaved.length;i+=10)materialIds.add(geometry.interleaved[i]);
+ for(const material of [0,1,2,3,4])assert.ok(materialIds.has(material),'missing render material '+material);
  assert.ok(geometry.counts.triangles>geometry.counts.historicalRoofTriangles+
    geometry.counts.historicalFacadeTriangles);
  assert.ok(geometry.interleaved.every(Number.isFinite));

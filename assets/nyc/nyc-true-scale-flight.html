@@ -34,6 +34,7 @@ import {buildMeteredMassing,wgs84ToMeters,metersToWgs84} from './times-square-me
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
 import {makeC185AirborneState,c185SourceAirborneStep,c185SceneCollision}
   from './nyc-c185-metre-airborne.mjs';
+import {loadNycPbrTextures} from './nyc-realism.js';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
       metadata=document.getElementById('metadata');
@@ -74,17 +75,80 @@ function program(){
     'in vec3 vPosition;',
     'flat in float vMaterial;',
     'uniform vec3 uEye;',
+    'uniform float uPbrReady;',
+    'uniform sampler2D uWallDiffuse;',
+    'uniform sampler2D uWallNormal;',
+    'uniform sampler2D uWallARM;',
+    'uniform sampler2D uAsphaltDiffuse;',
+    'uniform sampler2D uAsphaltNormal;',
+    'uniform sampler2D uAsphaltARM;',
+    'uniform sampler2D uConcreteDiffuse;',
     'out vec4 color;',
+    'float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
     'void main(){',
     'vec3 n=normalize(vNormal),sun=normalize(vec3(.47,.91,.30));',
-    'float lit=max(dot(n,sun),0.0);',
-    'vec3 base=vColor*(.60+.50*lit);',
-    'if(vMaterial>0.5&&vMaterial<1.5){',
-    'float fresnel=pow(1.-abs(dot(n,normalize(uEye-vPosition))),3.);',
-    'base=mix(base,vec3(.55,.75,.86),fresnel*.45);}',
-    'if(vMaterial>1.5)base=vColor*(.80+.20*lit);',
-    'float fog=smoothstep(250.,1000.,distance(uEye,vPosition));',
-    'color=vec4(mix(base,vec3(.48,.66,.76),fog*.52),1.);}'
+    'vec3 base=vColor;',
+    'float roughness=.78,metallic=.02,ao=1.0;',
+    'if(uPbrReady>.5){',
+    'if(vMaterial<.5){',
+    'vec3 tangent=normalize(vec3(-n.z,0.0,n.x)+vec3(.00001,0.0,.00001));',
+    'vec2 uv=vec2(dot(vPosition,tangent),vPosition.y)*vec2(.30,.29);',
+    'vec3 photo=texture(uWallDiffuse,uv).rgb;',
+    'vec3 arm=texture(uWallARM,uv).rgb;',
+    'vec3 bump=texture(uWallNormal,uv).rgb*2.0-1.0;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'base*=clamp(.68+.65*lum,.60,1.35);',
+    'roughness=clamp(arm.g,.44,.94);metallic=clamp(arm.b,0.0,.25);ao=clamp(arm.r,.45,1.0);',
+    'n=normalize(n+(tangent*bump.x+vec3(0.0,1.0,0.0)*bump.y)*.055);',
+    '}else if(vMaterial>.5&&vMaterial<1.5){',
+    'vec3 view=normalize(uEye-vPosition);',
+    'float fresnel=pow(1.0-clamp(abs(dot(view,n)),0.0,1.0),5.0);',
+    'vec3 sky=mix(vec3(.14,.23,.32),vec3(.40,.55,.66),.58);',
+    'vec2 cell=floor(vec2(vPosition.x*.68+vPosition.z*.57,vPosition.y*.43));',
+    'float occupied=step(.76,hash21(cell+vec2(37.2,19.5)));',
+    'base=mix(base*.72,sky,.28+.45*fresnel);',
+    'base+=vec3(.58,.39,.18)*occupied*.24;',
+    'roughness=.18;metallic=.08;ao=1.0;',
+    '}else if(vMaterial>1.5&&vMaterial<2.5){',
+    'vec2 uv=vPosition.xz*.38;',
+    'vec3 photo=texture(uAsphaltDiffuse,uv).rgb;',
+    'vec3 arm=texture(uAsphaltARM,uv).rgb;',
+    'vec3 bump=texture(uAsphaltNormal,uv).rgb*2.0-1.0;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'base*=clamp(.68+1.15*lum,.70,1.42);',
+    'roughness=clamp(arm.g,.55,.99);metallic=clamp(arm.b,0.0,.08);ao=clamp(arm.r,.45,1.0);',
+    'vec3 tangent=normalize(vec3(1.0,0.0,0.0));',
+    'vec3 bitangent=normalize(cross(n,tangent));',
+    'n=normalize(n+(tangent*bump.x+bitangent*bump.y)*.07);',
+    '}else if(vMaterial>2.5&&vMaterial<3.5){',
+    'vec2 uv=vPosition.xz*.58;',
+    'vec3 photo=texture(uConcreteDiffuse,uv).rgb;',
+    'float lum=dot(photo,vec3(.2126,.7152,.0722));',
+    'float aggregate=hash21(floor(vPosition.xz*2.2));',
+    'base*=clamp(.72+.58*lum,.72,1.22)*(0.97+aggregate*.06);',
+    'roughness=.88;metallic=0.0;ao=.90;',
+    '}',
+    '}',
+    'vec3 view=normalize(uEye-vPosition),halfway=normalize(view+sun);',
+    'float nDotL=max(dot(n,sun),0.0),nDotV=max(dot(n,view),.05);',
+    'float nDotH=max(dot(n,halfway),0.0),vDotH=max(dot(view,halfway),0.0);',
+    'float alpha=max(.04,roughness*roughness),alpha2=alpha*alpha;',
+    'float denom=nDotH*nDotH*(alpha2-1.0)+1.0;',
+    'float D=alpha2/(3.14159265*denom*denom);',
+    'float k=(roughness+1.0)*(roughness+1.0)/8.0;',
+    'float Gv=nDotV/(nDotV*(1.0-k)+k),Gl=nDotL/(nDotL*(1.0-k)+k);',
+    'vec3 F0=mix(vec3(.04),base,metallic);',
+    'vec3 F=F0+(1.0-F0)*pow(1.0-vDotH,5.0);',
+    'vec3 specular=(D*Gv*Gl*F)/(4.0*nDotV*max(nDotL,.001)+.001);',
+    'vec3 diffuse=(1.0-F)*(1.0-metallic)*base/3.14159265;',
+    'vec3 lit=(diffuse+specular)*nDotL*1.45+base*(.24*ao);',
+    'if(vMaterial>.5&&vMaterial<1.5){',
+    'float rim=pow(1.0-clamp(abs(dot(n,view)),0.0,1.0),3.0);',
+    'lit=mix(lit,vec3(.55,.75,.86),rim*.16);',
+    '}',
+    'float fog=smoothstep(250.0,1000.0,distance(uEye,vPosition));',
+    'color=vec4(mix(lit,vec3(.48,.66,.76),fog*.52),1.0);',
+    '}'
   ].join('\n'));
   const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
@@ -144,6 +208,31 @@ async function start(){
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   gl.bufferData(gl.ARRAY_BUFFER,geometry.interleaved,gl.STATIC_DRAW);
   const prg=program();gl.useProgram(prg);
+  const pbrOff=params.get('pbr')==='off';
+  let pbrTextures=null,pbrTextureLoadError=null;
+  if(!pbrOff){
+    try{pbrTextures=await loadNycPbrTextures(gl);}
+    catch(error){pbrTextureLoadError=error.message;console.warn('[PATROL NYC] PBR maps unavailable:',error);}
+  }
+  const pbrBindings=pbrTextures?[
+    ['uWallDiffuse',pbrTextures.wallDiffuse],
+    ['uWallNormal',pbrTextures.wallNormal],
+    ['uWallARM',pbrTextures.wallARM],
+    ['uAsphaltDiffuse',pbrTextures.asphalt],
+    ['uAsphaltNormal',pbrTextures.asphaltNormal],
+    ['uAsphaltARM',pbrTextures.asphaltARM],
+    ['uConcreteDiffuse',pbrTextures.concrete]
+  ]:[];
+  let pbrTextureMapCount=0;
+  for(const [name,texture] of pbrBindings){
+    if(!texture)continue;
+    gl.activeTexture(gl.TEXTURE0+pbrTextureMapCount);
+    gl.bindTexture(gl.TEXTURE_2D,texture);
+    gl.uniform1i(gl.getUniformLocation(prg,name),pbrTextureMapCount);
+    pbrTextureMapCount++;
+  }
+  gl.uniform1f(gl.getUniformLocation(prg,'uPbrReady'),pbrTextureMapCount===7?1:0);
+  gl.activeTexture(gl.TEXTURE0);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(1,3,gl.FLOAT,false,40,12);gl.enableVertexAttribArray(1);
@@ -330,7 +419,8 @@ async function start(){
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
     ' illustrative windows ('+stats.historicalSourceFacadeWindows+
     ' placed on exposed 2014 source faces) · '+stats.historicalRoofFids+' 2014 roof FIDs / '+
-    stats.historicalFacadeFids+' 2014 facade FIDs · '+stats.triangles+' triangles · '+
+    stats.historicalFacadeFids+' 2014 facade FIDs · '+pbrTextureMapCount+
+    ' CC0 PBR maps · '+stats.triangles+' triangles · '+
     '2014 absolute vertical datum UNKNOWN; source meshes visual-only, not collision';
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
@@ -345,6 +435,7 @@ async function start(){
     historical2014FacadeFids:stats.historicalFacadeFids,
     historical2014SourceFacadeWindows:stats.historicalSourceFacadeWindows,
     historical2014SourceFacadeWindowFids:stats.historicalSourceFacadeWindowFidList,
+    pbrTexturesReady:pbrTextureMapCount===7,pbrTextureMapCount,pbrTextureLoadError,
     historical2014CollisionEnabled:false,
     historical2014VerticalDatumVerified:historicalMesh?.sourceVerticalDatumVerified??null,
     historical2014SourceRhinoSha256:historicalMesh?.sourceRhinoSha256??null,

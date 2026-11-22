@@ -26,3 +26,15 @@ test('NYC textures are real, reasonably sized JPEGs',async()=>{
     assert.equal(buffer[1],0xd8,'JPEG signature missing: '+name);
   }
 });
+
+const viewer=await readFile(
+  new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+test('true-scale viewer uses the local CC0 PBR atlas with a controlled rollback',()=>{
+  assert.match(source,/export async function loadNycPbrTextures/);
+  assert.match(source,/new URL\(filename,import\.meta\.url\)/);
+  assert.match(viewer,/loadNycPbrTextures/);
+  for(const name of ['uWallDiffuse','uWallNormal','uWallARM',
+    'uAsphaltDiffuse','uAsphaltNormal','uAsphaltARM','uConcreteDiffuse'])
+    assert.ok(viewer.includes(name),'missing PBR sampler '+name);
+  assert.match(viewer,/params\.get\('pbr'\)==='off'/);
+});
