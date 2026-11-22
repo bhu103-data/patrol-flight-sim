@@ -76,7 +76,7 @@ jobs:
           PATROL_BASE_URL: http://127.0.0.1:8765
         run: node scripts/nyc-road-browser-smoke.mjs
       - name: Verify actual CC0 ferry LOD near/mid/far and across maps (PR 258 only)
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
         run: |
           node --check tools/nyc/smoke_cc0_ferry_webgl.mjs
           node tools/nyc/smoke_cc0_ferry_webgl.mjs
