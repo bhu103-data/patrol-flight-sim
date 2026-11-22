@@ -22,17 +22,17 @@ const geometry=new Function(source+
 const builderSource=extract('buildCityBuildings');
 const grid={tilt:.24,offset:30,blockWidth:24,blockLength:33};
 
-function build(lot,band=3){
+function build(lot,band=3,compat=false,smooth=true){
   const boxes=[],quads=[],beams=[];
   const mesh=()=>({addTri(){},addQuad(...args){quads.push(args)},
     upload(){return {boxes,quads,beams}}});
   const fn=new Function(
     'createTriangleMesh','addModelBox','addRideBeam','nycDetailBand',
     'MANHATTAN_GRID','WATER_H','tintSeed','addDowntownFacadeRelief',
-    'buildDumboBridgeheadInfillApertures',
+    'buildDumboBridgeheadInfillApertures','graphicsCompat','smoothScenery',
     'return ('+builderSource+')'
   )(mesh,(_q,...args)=>boxes.push(args),(_q,a,b,c)=>beams.push([a,b,c]),
-    ()=>band,grid,12.2,()=>.5,()=>0,geometry);
+    ()=>band,grid,12.2,()=>.5,()=>0,geometry,compat,()=>smooth);
   fn([lot]);
   return {boxes,quads,beams};
 }
@@ -94,6 +94,17 @@ test('bridgehead LOD3 replaces opaque boxes, while LOD2 preserves old fallback',
     assert.ok(far.quads.filter(q=>q.at(-1)===13).length===0,
       'LOD1 must not allocate detailed inset glazing');
     assert.ok(near.quads.length<700,'bounded full building mesh for WebGL');
+  }
+});
+
+test('graphics compatibility and low-detail settings retain the original body',()=>{
+  const lot=sites[1],x=lot[0],z=lot[1],w=lot[2],d=lot[3],h=lot[4];
+  for(const {boxes,quads} of [build(lot,3,true,true),build(lot,3,false,false)]){
+    assert.ok(boxes.some(b=>b[0]===x&&b[2]===z&&
+      b[3]===w&&b[4]===h&&b[5]===d),
+      'low-quality rendering must keep the original cheap cuboid');
+    assert.ok(quads.filter(q=>q.at(-1)===13).length<16,
+      'low-quality rendering must not create four-sided aperture shell');
   }
 });
 
