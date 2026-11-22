@@ -9,18 +9,17 @@ import collections
 import hashlib
 import json
 import pathlib
+import re
 import urllib.parse
 import urllib.request
 import zipfile
 
 PACKS = {
     "roads": {
-        "url": "https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1791628607/kenney_city-kit-roads.zip",
         "official_page": "https://kenney.nl/assets/city-kit-roads",
         "keywords": ("trafficlight", "traffic-light", "traffic_light", "traffic signal"),
     },
     "watercraft": {
-        "url": "https://kenney.nl/media/pages/assets/watercraft-kit/a335cfed49-1713519620/kenney_watercraft-pack.zip",
         "official_page": "https://kenney.nl/assets/watercraft-kit",
         "keywords": ("shipcargo", "ship-cargo", "ship_cargo", "ship", "ferry"),
     },
@@ -37,7 +36,46 @@ results = {
 for tag, info in PACKS.items():
     entry = dict(info)
     try:
-        req = urllib.request.Request(info["url"], headers={
+        # Kenney no longer serves a stable static /media ZIP URL. Its
+        # own public download button fetches a temporary signed link via
+        # /download-link/<hex-encoded assets/slug> without payment.
+        official_page = info["official_page"]
+        req_page = urllib.request.Request(official_page, headers={
+            "User-Agent": "PATROL-NYC-source-license-audit/1.0",
+            "Accept": "text/html",
+        })
+        with urllib.request.urlopen(req_page, timeout=30) as response:
+            if urllib.parse.urlsplit(response.geturl()).hostname not in ("kenney.nl", "www.kenney.nl"):
+                raise ValueError("Untrusted publisher page redirect")
+            page_html = response.read(250_001)
+        if len(page_html) > 250_000:
+            raise ValueError("Unexpectedly large publisher page")
+        match = re.search(rb"data-download-id=['\"]([0-9a-fA-F]+)['\"]", page_html)
+        if not match:
+            raise ValueError("Kenney official button has no download ID")
+        download_id = match.group(1).decode("ascii")
+        expected = "assets/" + official_page.rsplit("/", 1)[-1]
+        if bytes.fromhex(download_id).decode("ascii") != expected:
+            raise ValueError("Kenney download link ID does not match expected pack")
+        api_url = "https://kenney.nl/download-link/" + download_id
+        api_req = urllib.request.Request(api_url, headers={
+            "User-Agent": "PATROL-NYC-source-license-audit/1.0",
+            "Accept": "application/json",
+            "Referer": official_page,
+        })
+        with urllib.request.urlopen(api_req, timeout=30) as response:
+            api_payload = json.loads(response.read(20_001))
+        url = api_payload.get("url")
+        if not isinstance(url, str):
+            raise ValueError("Kenney official API did not return a signed ZIP link: "
+                             + str(sorted(api_payload)))
+        link = urllib.parse.urlsplit(url)
+        if link.scheme != "https" or not (link.hostname == "kenney.nl" or
+                                                link.hostname.endswith(".kenney.nl")):
+            raise ValueError("Unexpected Kenney download endpoint host: " + str(link.hostname))
+        entry["delivery_host"] = link.hostname
+        entry["download_method"] = "publisher landing page + official signed download API"
+        req = urllib.request.Request(url, headers={
             "User-Agent": "PATROL-NYC-source-license-audit/1.0",
             "Accept": "application/zip,application/octet-stream,*/*",
         })
@@ -45,7 +83,7 @@ for tag, info in PACKS.items():
         data = bytearray()
         with urllib.request.urlopen(req, timeout=50) as response:
             final = urllib.parse.urlsplit(response.geturl())
-            if final.scheme != "https" or final.hostname not in {"kenney.nl", "www.kenney.nl"}:
+            if final.scheme != "https" or not (final.hostname == "kenney.nl" or final.hostname.endswith(".kenney.nl")):
                 raise ValueError("disallowed source host: " + str(final.hostname))
             if (declared := response.headers.get("Content-Length")) and int(declared) > 15_000_000:
                 raise ValueError("source exceeded per-file byte cap")
@@ -54,6 +92,8 @@ for tag, info in PACKS.items():
                 if total > 15_000_000:
                     raise ValueError("source exceeded streamed byte cap")
                 data.extend(chunk)
+        if not data.startswith(b"PK\\x03\\x04".replace(b"\\\\", b"\\")):
+            raise ValueError("Official response not ZIP: " + repr(bytes(data[:50])))
         zip_path = OUT / (tag + "-original.zip")
         zip_path.write_bytes(data)
         with zipfile.ZipFile(zip_path) as zf:
