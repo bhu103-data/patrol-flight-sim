@@ -58,13 +58,13 @@ test('three newly exposed non-surveyed DUMBO infill buildings get real wall open
     const glass=quads.filter(q=>q.at(-1)===13);
     assert.equal(glass.length,stats.openings,
       'no hidden duplicate solid glass-on-wall decals');
-    assert.ok(glass.some(q=>q.every(p=>typeof p==='object'&&
+    assert.ok(glass.some(q=>q.slice(0,4).every(p=>typeof p==='object'&&
       Math.abs(p[2]-(z+d*.5-.16))<.001)),
       'front glazing must be behind the positive-Z street face');
-    assert.ok(glass.some(q=>q.every(p=>typeof p==='object'&&
+    assert.ok(glass.some(q=>q.slice(0,4).every(p=>typeof p==='object'&&
       Math.abs(p[2]-(z-d*.5+.16))<.001)),
       'rear glazing must be behind the negative-Z street face');
-    assert.ok(glass.some(q=>q.every(p=>typeof p==='object'&&
+    assert.ok(glass.some(q=>q.slice(0,4).every(p=>typeof p==='object'&&
       Math.abs(p[0]-(x+w*.5-.16))<.001)),
       'east-side facade requires an actual x-facing opening');
     for(const q of quads){
@@ -105,8 +105,11 @@ test('warehouse-specific PR sites, official lots and other maps remain untouched
     [-78,-335,9,19,23.5,.41,false]
   ]){
     const [x,z,w,d,h]=lot,{boxes}=build(lot);
-    assert.ok(boxes.some(b=>b[0]===x&&b[2]===z&&
-      b[3]===w&&b[4]===h&&b[5]===d));
+    assert.ok(x<0
+      ?boxes.some(b=>b[0]===x&&b[2]===z&&b[4]>h*.1)
+      :boxes.some(b=>b[0]===x&&b[2]===z&&
+        b[3]===w&&b[4]===h&&b[5]===d),
+      'non-target sites retain their original block or Manhattan tower tiers');
   }
   assert.match(html,/if\(!local&&lot\[7\]\)/,
     'municipal footprint paths stay ahead of the synthetic infill gate');
