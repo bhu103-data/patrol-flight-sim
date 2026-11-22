@@ -22,7 +22,7 @@ test('every previously unprobed Manhattan mesh has an isolated QA gate',()=>{
     ['hand-authored scenery',/mapScenery && !nycVisualProbeOmits\('scenery'\)/],
     ['GIS infill',/if\(selectedMap\.city && nycGisMesh\?\.count\)\{\s*if\(!nycVisualProbeOmits\('gis'\)\)/],
     ['street mesh',/nycStreetMesh\?\.count && !nycVisualProbeOmits\('street'\)/],
-    ['road LOD chunks',/nycRoadChunkLevel && !nycVisualProbeOmits\('roadChunks'\)/],
+    ['road LOD chunks',/if\(selectedMap\.city && nycRoadChunkLevel\)\{\s*if\(!nycVisualProbeOmits\('roadChunks'\)\)\{/],
     ['hero scenery',/nycHeroScenery\?\.count && !nycVisualProbeOmits\('hero'\)/],
     ['park mesh',/nycParkMesh\?\.count && !nycVisualProbeOmits\('park'\)/],
     ['LED screens',/timesSquareScreens\?\.count && !nycVisualProbeOmits\('screens'\)/],
