@@ -37,6 +37,20 @@ function qaDocument(input,output){
     '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
     '    }else{','      flightStep=advanceFlight(dt);','    }'
   ].join(eol));
+  // TEST COPIES ONLY: set exactly the same GPU time on both A/B frames.
+  // Performance samples remain on real game time; static photographs use
+  // one deterministic phase so animated waves/clouds cannot masquerade
+  // as changed glacier photo scale or damp coastal rock.
+  for(const [original,replacement] of [
+    ['gl.uniform1f(uWorld.time, time);',
+      'gl.uniform1f(uWorld.time, window.__patrolMaterialFrozenTime ?? time);'],
+    ['gl.uniform1f(uMesh.sceneTime,sceneryTime);',
+      'gl.uniform1f(uMesh.sceneTime, window.__patrolMaterialFrozenTime ?? sceneryTime);']
+  ]){
+    if(html.split(original).length!==2)
+      throw Error('QA shader-time anchor nonunique: '+original+' in '+input);
+    html=html.replace(original,replacement);
+  }
   writeFileSync(output,html);
 }
 qaDocument('alaska-material-base.html','alaska-material-base-qa.html');
@@ -96,6 +110,7 @@ async function capture(label,file){
     const record={};
     for(const [name,mode,hour] of scenarios){
       await page.evaluate(({mode,hour})=>{
+        window.__patrolMaterialFrozenTime=null; // keep RAF performance samples live
         for(const [id,value] of [['skyTime',hour],['skyWeather','Clear'],['skySeason','1']]){
           const el=document.getElementById(id);
           el.value=value;
@@ -112,8 +127,15 @@ async function capture(label,file){
       });
       await page.addStyleTag({content:
         '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
+      // Freeze shader animation only AFTER collecting the live RAF intervals.
+      // Wait for two real browser redraws; water and sky then have exactly
+      // the same phase across the independently loaded baseline/PR pages.
+      await page.evaluate(async()=>{
+        window.__patrolMaterialFrozenTime=42;
+        await new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok)));
+      });
       await page.screenshot({path:'artifacts/alaska-material-'+label+'-'+name+'.png'});
-      record[name]={pose,timing,canvas};
+      record[name]={pose,timing,canvas,frozenShaderTime:42};
     }
     if(errors.length||failedAssets.length)throw Error(label+' errors: '+errors.join('; ')+failedAssets.join('; '));
     return record;
@@ -128,6 +150,8 @@ try{
     if(drift>.01||Math.abs(b.pose.yaw-n.pose.yaw)>.005)
       throw Error('Mismatch '+key+' camera: '+drift);
     if(b.canvas.lost||n.canvas.lost)throw Error('Lost WebGL2 context');
+    if(b.frozenShaderTime!==42||n.frozenShaderTime!==42)
+      throw Error('Missing identical time phase on '+key);
     result[key]={cameraDrift:drift,baselineFps:b.timing.observedFps,
       updatedFps:n.timing.observedFps,baselineCanvas:b.canvas,updatedCanvas:n.canvas};
   }
