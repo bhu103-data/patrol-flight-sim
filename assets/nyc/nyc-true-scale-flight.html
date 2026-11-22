@@ -24,14 +24,20 @@
 <h1>Times Square | 1:1 official-data flythrough</h1>
 <p id="status">Loading the repository's original NYC footprint subset…</p>
 <p class="muted" id="metadata"></p>
-<p class="warn">Experimental free-flight CAMERA, not the original aircraft physics. Real source footprints, heights and DCM street-centreline alignments; 11 central source-FID OTI 2022 roadway/intersection shapes (not all roads), illustrated facades and DCM-width fallback outside the core. This is NOT a 2026 curb, lane, pavement material, authentic storefront or complete NYC digital twin.</p>
+<p class="warn">Experimental free-flight CAMERA, not original aircraft physics. Uses official NYC building footprints/heights, DCM centreline alignment and live NYC OTI 2022 roadbed, plaza, sidewalk, curb and curb-cut geometry. These are 2022 planimetrics, NOT a 2026 as-built survey, traffic lanes/signals, surveyed elevations, realistic facade meshes or a complete NYC digital twin.</p>
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
 <p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button> <button id="c185Airborne" type="button" style="pointer-events:auto">C185 airborne cockpit (prototype)</button></p>
+<p style="margin:6px 0;pointer-events:auto">
+  <label style="display:inline-block;margin:3px 8px 3px 0;pointer-events:auto"><input id="otiRoadbed" type="checkbox" checked/> 2022 roadbed</label>
+  <label style="display:inline-block;margin:3px 8px 3px 0;pointer-events:auto"><input id="otiPedestrian" type="checkbox" checked/> sidewalks / plazas</label>
+  <label style="display:inline-block;margin:3px 8px 3px 0;pointer-events:auto"><input id="otiCurbs" type="checkbox" checked/> curb / curb-cut traces</label>
+</p>
 </aside>
-<footer id="flightModeStatus">NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
+<footer id="flightModeStatus">NYC OTI 2022 source surfaces · official DCM/footprints · true metres · illustrative facades</footer>
 <script type="module">
 import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
+import {fetchAndCompileOfficialOti2022Surfaces} from './nyc-oti-2022-surfaces.mjs';
 import {makeC185AirborneState,c185SourceAirborneStep,c185SceneCollision}
   from './nyc-c185-metre-airborne.mjs';
 const canvas=document.getElementById('scene'),
@@ -122,27 +128,47 @@ async function start(){
   const roadSource=await roadsResponse.json();
   const params=new URLSearchParams(location.search);
   const qualityLow=params.get('quality')==='low';
-  // Only the experimental NYC TRUE-SCALE free-flight loads this original
-  // 2022 OTI slice. ?roadbed=off retains the prior source-centreline bands
-  // for controlled screenshots. The normal PATROL aircraft map is untouched.
+  const [minE,minN,maxE,maxN]=massing.boundsMeters;
+  const center={east:(minE+maxE)*.5,north:(minN+maxN)*.5};
+  let fullSurfaces=null,fullSurfaceError=null;
+  if(params.get('surfaces')!=='off'){
+    try{
+      fullSurfaces=await fetchAndCompileOfficialOti2022Surfaces(massing,center);
+    }catch(error){
+      fullSurfaceError=error.message;
+      console.warn('Official NYC OTI 2022 live surface source unavailable; retain explicitly partial core preview',error);
+    }
+  }
+  // If the complete live source mesh is available, it replaces the 11-FID
+  // subset and suppresses all guessed DCM-width asphalt bands. Otherwise keep
+  // the old 11-FID subset plus clearly labelled illustrative centreline bands.
   const roadbedOff=params.get('roadbed')==='off';
-  const roadbedResponse=roadbedOff?null:
+  const roadbedResponse=roadbedOff||fullSurfaces?null:
     await fetch('./nyc-oti-roadbed-core-2022.json',{cache:'no-cache'});
   if(roadbedResponse&&!roadbedResponse.ok)
-    throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
+    throw Error('OTI core roadbed source HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
-  const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
-  const [minE,minN,maxE,maxN]=massing.boundsMeters,
-    span=Math.max(maxE-minE,maxN-minN);
-  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
-  gl.bufferData(gl.ARRAY_BUFFER,geometry.interleaved,gl.STATIC_DRAW);
+  const geometry=buildNeighborhoodMesh(massing,roadSource,{
+    detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed,
+    drawIllustrativeStreetBands:!fullSurfaces
+  });
+  const span=Math.max(maxE-minE,maxN-minN);
   const prg=program();gl.useProgram(prg);
-  const vao=gl.createVertexArray();gl.bindVertexArray(vao);
-  gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(1,3,gl.FLOAT,false,40,12);gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,24);gl.enableVertexAttribArray(2);
-  gl.vertexAttribPointer(3,1,gl.FLOAT,false,40,36);gl.enableVertexAttribArray(3);
+  function uploadInterleaved(data){
+    const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+    gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+    const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+    gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(1,3,gl.FLOAT,false,40,12);gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,24);gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(3,1,gl.FLOAT,false,40,36);gl.enableVertexAttribArray(3);
+    gl.bindVertexArray(null);
+    return {vao,buffer,count:data.length/10};
+  }
+  const sceneMesh=uploadInterleaved(geometry.interleaved);
+  const roadbedMesh=fullSurfaces?uploadInterleaved(fullSurfaces.roadbedInterleaved):null;
+  const pedestrianMesh=fullSurfaces?uploadInterleaved(fullSurfaces.pedestrianInterleaved):null;
+  const curbMesh=fullSurfaces?uploadInterleaved(fullSurfaces.curbInterleaved):null;
   gl.enable(gl.DEPTH_TEST);
   const uView=gl.getUniformLocation(prg,'uView'),uProj=gl.getUniformLocation(prg,'uProj'),uEye=gl.getUniformLocation(prg,'uEye');
   // Spawn from a REAL official Seventh Avenue DCM centreline, not an
@@ -245,23 +271,57 @@ async function start(){
     }
   });
   const stats=geometry.counts;
+  const fullCounts=fullSurfaces?.counts||null;
+  const roadbedToggle=document.getElementById('otiRoadbed');
+  const pedestrianToggle=document.getElementById('otiPedestrian');
+  const curbToggle=document.getElementById('otiCurbs');
+  const roadbedOff=params.get('roadbed')==='off';
+  const pedestrianOff=params.get('pedestrian')==='off';
+  const curbsOff=params.get('curbs')==='off';
+  for(const toggle of [roadbedToggle,pedestrianToggle,curbToggle])
+    toggle.disabled=!fullSurfaces;
+  roadbedToggle.checked=!!fullSurfaces&&!roadbedOff;
+  pedestrianToggle.checked=!!fullSurfaces&&!pedestrianOff;
+  curbToggle.checked=!!fullSurfaces&&!curbsOff;
+  const shownRoadbeds=fullCounts?.roadbedFeatures??stats.officialRoadbedPolygons;
+  const shownRoadbedTriangles=fullCounts?.roadbedTriangles??stats.officialRoadbedTriangles;
   status.textContent=stats.buildings+' source buildings · '+stats.streetFeatures+
     ' municipal streets / '+stats.streetSegments+' source line segments · '+
-    stats.officialRoadbedPolygons+' OTI 2022 true roadbed polygons · free flight camera';
+    (fullSurfaces?
+      shownRoadbeds+' official OTI roadbeds · '+fullCounts.sidewalkFeatures+
+      ' sidewalks · '+fullCounts.plazaFeatures+' plazas · '+fullCounts.curbFeatures+
+      ' curbs · '+fullCounts.curbCutFeatures+' curb cuts':
+      stats.officialRoadbedPolygons+' core OTI roadbeds only · full 2022 surface source unavailable')+
+    ' · free flight camera';
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
-    ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
+    ' authored, NOT surveyed windows · '+stats.triangles+' building/centreline triangles · '+
     massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' official source pavement triangles';
+    shownRoadbedTriangles+' OTI 2022 roadbed triangles · '+(fullSurfaces?'full source overlay live':'partial source fallback');
+  if(fullSurfaceError)metadata.textContent+=' · OTI fetch warning: '+fullSurfaceError;
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
     triangles:stats.triangles,metresPerWorldUnit:1,
     trueRoadbedVerified:false,coreRoadbedGeometryVerified:!!roadbed,trueFacadeVerified:false,
-    officialRoadbedPolygons:stats.officialRoadbedPolygons,
-    officialRoadbedIntersections:stats.officialRoadbedIntersections,
-    officialRoadbedTriangles:stats.officialRoadbedTriangles,
-    roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
+    fullOfficialSurfacesLoaded:!!fullSurfaces,
+    fullOfficialSurfacesSchema:fullSurfaces?.schema||null,
+    fullOfficialSurfaceCounts:fullCounts,
+    officialRoadbedPolygons:shownRoadbeds,
+    officialRoadbedIntersections:fullCounts?.roadbedIntersections??stats.officialRoadbedIntersections,
+    officialRoadbedTriangles:shownRoadbedTriangles,
+    roadbedReferenceYear:fullSurfaces?.imageryYear??geometry.provenance.roadbedImageryYear,
     roadbedFullNYCCoverage:false,
+    sidewalkFeatures:fullCounts?.sidewalkFeatures??0,
+    plazaFeatures:fullCounts?.plazaFeatures??0,
+    curbFeatures:fullCounts?.curbFeatures??0,
+    curbCutFeatures:fullCounts?.curbCutFeatures??0,
+    curbSegments:fullCounts?.curbSegments??0,
+    curbCutSegments:fullCounts?.curbCutSegments??0,
+    illustrativeStreetBandsEnabled:geometry.illustrativeStreetBands,
+    officialSourceBBox:fullSurfaces?.bboxWGS84||null,
+    sourceDataStoredInRepository:false,
+    noSurveyedVerticalDatum:fullSurfaces?.noSurveyedVerticalDatum??true,
+    fullSurfaceErrors:fullSurfaceError?[fullSurfaceError]:[],
     roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
     sourceRoads:geometry.provenance.streets,
     sourceBuildings:geometry.provenance.buildings,
@@ -364,7 +424,20 @@ async function start(){
     gl.uniformMatrix4fv(uView,false,lookAt(eye,target));
     gl.uniformMatrix4fv(uProj,false,perspective(Math.PI/3,w/Math.max(1,h),.25,2300));
     gl.uniform3fv(uEye,eye);
-    gl.drawArrays(gl.TRIANGLES,0,geometry.interleaved.length/10);
+    gl.bindVertexArray(sceneMesh.vao);
+    gl.drawArrays(gl.TRIANGLES,0,sceneMesh.count);
+    if(fullSurfaces&&roadbedToggle.checked){
+      gl.bindVertexArray(roadbedMesh.vao);
+      gl.drawArrays(gl.TRIANGLES,0,roadbedMesh.count);
+    }
+    if(fullSurfaces&&pedestrianToggle.checked){
+      gl.bindVertexArray(pedestrianMesh.vao);
+      gl.drawArrays(gl.TRIANGLES,0,pedestrianMesh.count);
+    }
+    if(fullSurfaces&&curbToggle.checked){
+      gl.bindVertexArray(curbMesh.vao);
+      gl.drawArrays(gl.LINES,0,curbMesh.count);
+    }
     qa.frames=++frames;
     qa.camera=[...camera.position];
     if(frames%45===1)qa.glError=gl.getError();
