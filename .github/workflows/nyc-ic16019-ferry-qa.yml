@@ -11,6 +11,12 @@ on:
       - 'tools/nyc/ic16019-static-native-ab.mjs'
       - '.github/workflows/nyc-ic16019-ferry-qa.yml'
       - 'docs/NYC_IC16019_FERRY_QA.md'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/nyc/ic16019-ferry-reference.json'
+      - 'tests/nyc-ic16019-twinhull.test.mjs'
+      - '.github/workflows/nyc-ic16019-ferry-qa.yml'
   workflow_dispatch:
 permissions:
   contents: read
