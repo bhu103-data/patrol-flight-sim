@@ -14,8 +14,9 @@ const end=html.indexOf('    for(const [i,b] of blocks.entries()){',start);
 assert.ok(start>0&&end>start);
 const blocks=new Function(html.slice(start,end)+';return blocks')();
 
-function simulate(){
-  const surfaces=new Map();let triangles=0,invalid=0,minArea=Infinity;
+function simulate(asset=data){
+  const surfaces=new Map(),glazingCenters=[];
+  let triangles=0,invalid=0,minArea=Infinity;
   const check=(a,b,c)=>{
     for(const p of [a,b,c]){
       if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite))invalid++;
@@ -31,9 +32,11 @@ function simulate(){
     assert.ok([6,7,8].includes(id),'all GIS faces have explicit material IDs');
     surfaces.set(id,(surfaces.get(id)||0)+1);
   };
-  const stats=buildTimesSquareGisInfill(data,{
+  const stats=buildTimesSquareGisInfill(asset,{
     addQuad:(a,b,c,d,color,id)=>{
       tag(id);assert.equal(color.length,3);check(a,b,c);check(a,c,d);
+      if(id===7)glazingCenters.push([Math.round((a[0]+c[0])*50)/100,
+        Math.round((a[1]+c[1])*50)/100,Math.round((a[2]+c[2])*50)/100]);
     },
     addTri:(a,b,c,color,id)=>{
       tag(id);assert.equal(color.length,3);check(a,b,c);
@@ -45,7 +48,7 @@ function simulate(){
     },
     ground:14.93,bounds:[-34,56,-52,68],protectedSites:blocks
   });
-  return {stats,surfaces,triangles,invalid,minArea};
+  return {stats,surfaces,triangles,invalid,minArea,glazingCenters};
 }
 
 test('official NYC GIS source preserves validated FIDs and coordinates',()=>{
@@ -88,4 +91,18 @@ test('main WebGL2 shader binds material IDs and keeps a rollback path',()=>{
   assert.match(html,/PATROL_NYC_UNIQUE_ADS_V6/);
   assert.match(html,/float waterReflectance/);
   assert.match(html,/function advanceFlight\(dt\)/);
+});
+
+test('GIS glazing coverage is independent of source FID sort order',()=>{
+  const normal=simulate(),reversed=simulate({...data,features:[...data.features].reverse()});
+  assert.ok(normal.stats.windowQuads<2200,
+    'bounded fair window distribution must not exhaust global count');
+  assert.equal(normal.stats.windowQuads,reversed.stats.windowQuads);
+  const key=point=>point.join(':');
+  assert.deepEqual(normal.glazingCenters.map(key).sort(),
+    reversed.glazingCenters.map(key).sort(),
+    'late FIDs must retain their windows even when record order changes');
+  const buckets=new Set(normal.glazingCenters.map(([x,y,z])=>
+    Math.floor(x/8)+':'+Math.floor(z/8)));
+  assert.ok(buckets.size>=12,'surveyed infill panes must cover the district');
 });

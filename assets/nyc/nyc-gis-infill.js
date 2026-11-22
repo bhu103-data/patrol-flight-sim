@@ -133,12 +133,19 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     ];
     const base=families[family];
     const wall=base.map(c=>c*.92),roofCol=base.map(c=>Math.min(.94,c*1.15));
+    // Municipal FID 1000156 projects onto the tall, blank west-side wall
+    // of the 44th Street fixed camera. No claim that window locations are
+    // surveyed: these are bounded, authored facade details on its real lot.
+    const showcaseFacade=rec.fid===1000156&&h>=45;
+    let showcaseRemaining=showcaseFacade?180:0;
     for(const part of parts){
       if(pieces>=MAX_PIECES)break;
       if(part.length<3||part.length>48||Math.abs(signed(part))<MIN_AREA)continue;
       // Downward x-z winding creates upward +Y roofs and outward wall normals.
       const ring=signed(part)>0?part.slice().reverse():part;
       const top=ground+h;
+      let pieceWindows=0;
+      const pieceBudget=showcaseFacade?Math.min(88,showcaseRemaining):26;
       for(let k=0;k<ring.length;k++){
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
@@ -199,17 +206,45 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
           floors=Math.min(12,Math.floor((h-2.2)/2.35));
-        for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
-          if(windows>=2200)break;
+        if(bays<1||floors<1)continue;
+        // PATROL_NYC_GIS_FAIR_WINDOW_COVERAGE_V1: the former unbounded
+        // row-major traversal exhausted all 2,200 windows halfway through
+        // the 76 distinct clipped source footprints. Later Times Square
+        // buildings then rendered as unbroken masonry slabs in the LED
+        // canyon even though their real polygon walls were present.
+        //
+        // Keep the same 2,200-glass-quad global cap and source coordinates.
+        // Most FIDs receive <=26 panes per clipped piece. The fixed-camera
+        // FID has a separate 180-pane *record-wide* limit, not an unlimited
+        // extra grid per chunk; building order remains immaterial.
+        const edgeQuota=Math.max(2,Math.floor(pieceBudget/Math.max(4,ring.length)));
+        const colBands=Math.min(bays,Math.max(1,Math.ceil(Math.sqrt(edgeQuota))));
+        const rowBands=Math.min(floors,Math.max(2,Math.floor(edgeQuota/colBands)));
+        for(let rr=0;rr<rowBands;rr++)for(let bb=0;bb<colBands;bb++){
+          if(windows>=2200||pieceWindows>=pieceBudget)break;
+          const row=Math.min(floors-1,Math.floor((rr+.5)*floors/rowBands));
+          const bay=Math.min(bays-1,Math.floor((bb+.5)*bays/colBands));
           const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
-          const q=(t,y)=>[a[0]+(b[0]-a[0])*t+nx*.045,y,
-            a[1]+(b[1]-a[1])*t+nz*.045];
+          const q=(t,y,depth=.045)=>[a[0]+(b[0]-a[0])*t+nx*depth,y,
+            a[1]+(b[1]-a[1])*t+nz*depth];
           const lower=ground+2.4+row*2.35,upper=lower+.99;
           if(upper>top-.5)continue;
           const shade=((rec.fid+row*17+bay*31)%11);
           const tint=shade<2?[.43,.51,.54]:shade<4?[.17,.26,.30]:[.12,.20,.25];
           addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint,7);
-          windows++;
+          // Frame returns and shallow sills give the upper wall actual depth
+          // rather than an endlessly repeating painted window texture. Only
+          // the inspected FID gets these extra mesh quads; source polygon,
+          // existing lit signs and collision volumes are unchanged.
+          if(showcaseFacade && (row+bay)%3!==1){
+            const stone=[.37,.39,.40],front=.075;
+            addQuad(q(v0,lower-.06,front),q(v1,lower-.06,front),
+              q(v1,lower+.045,front),q(v0,lower+.045,front),stone,6);
+            addQuad(q(v0,upper-.035,front),q(v1,upper-.035,front),
+              q(v1,upper+.065,front),q(v0,upper+.065,front),stone,6);
+          }
+          windows++;pieceWindows++;
+          if(showcaseFacade)showcaseRemaining--;
         }
       }
       // Finish transition: one slim horizontal cornice near the crown and
