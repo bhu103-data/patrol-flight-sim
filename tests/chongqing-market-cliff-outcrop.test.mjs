@@ -15,7 +15,7 @@ class Geometry{
 }
 class BufferAttr{constructor(array,itemSize){this.array=array;this.itemSize=itemSize}}
 class Mesh{constructor(geometry,material){this.geometry=geometry;this.material=material}}
-const THREE={BufferGeometry:Geometry,Float32BufferAttribute:BufferAttr,Mesh};
+const THREE={BufferGeometry:Geometry,Float32BufferAttribute:BufferAttr,Mesh,FrontSide:0};
 
 test('terrain-surface height uses the exact existing +Y 208x148 indexed triangles',()=>{
   for(const [ix,iz] of [[0,0],[22,40],[125,105],[132,112],[207,147]]){
@@ -56,6 +56,10 @@ test('one bounded rock skin stays glued ABOVE original terrain, adds no new geom
   assert.equal(result.mesh.material.bumpMap,oldAtlas);
   assert.equal(result.mesh.material.vertexColors,true);
   assert.equal(result.mesh.material.color.hex,0xe0ddd1);
+  assert.equal(result.mesh.material.transparent,true);
+  assert.equal(result.mesh.material.depthWrite,false);
+  assert.equal(result.mesh.material.side,THREE.FrontSide);
+  assert.equal(result.mesh.material.forceSinglePass,true);
   assert.equal(result.mesh.castShadow,false);
   assert.equal(result.mesh.receiveShadow,true);
   const geo=result.mesh.geometry;
@@ -65,17 +69,27 @@ test('one bounded rock skin stays glued ABOVE original terrain, adds no new geom
     colors=geo.attributes.color.array;
   assert.equal(positions.length,475*3);
   assert.equal(uv.length,475*2);
-  assert.equal(colors.length,475*3);
+  assert.equal(colors.length,475*4,'RGBA vertex colors fade straight patch edges');
+  assert.equal(geo.attributes.color.itemSize,4);
+  let centralOpacity=0,windowOpacity=1;
+  const cols=MARKET_ROCK_BOUNDS.nx+1;
   for(let n=0;n<475;n++){
     const x=positions[n*3],y=positions[n*3+1],z=positions[n*3+2];
     assert.ok(x>=MARKET_ROCK_BOUNDS.minX&&x<=MARKET_ROCK_BOUNDS.maxX);
     assert.ok(z>=MARKET_ROCK_BOUNDS.minZ&&z<=MARKET_ROCK_BOUNDS.maxZ);
+    const alpha=colors[n*4+3],ix=n%cols,iz=Math.floor(n/cols);
     assert.ok(Number.isFinite(y)&&Number.isFinite(uv[n*2])&&
-      Number.isFinite(colors[n*3]));
+      Number.isFinite(colors[n*4])&&alpha>=0&&alpha<=1);
+    if(ix===0||ix===MARKET_ROCK_BOUNDS.nx||iz===0||iz===MARKET_ROCK_BOUNDS.nz)
+      assert.equal(alpha,0,'all exterior patch edges must blend into old terrain');
+    if(x>274&&x<276&&z>342&&z<344)centralOpacity=Math.max(centralOpacity,alpha);
+    if(x>280&&z>355)windowOpacity=Math.min(windowOpacity,alpha);
     const clearance=y-sampleChongqingRenderedTerrain(x,z,soil);
     assert.ok(clearance>=.05&&clearance<.62,
       'rock relief must never clip under mesh or float above one meter');
   }
+  assert.ok(centralOpacity>.75,'interior relief must stay visible after fading');
+  assert.ok(windowOpacity<.12,'rock must retreat from already occluded window bay');
   for(let i=0;i<geo.index.length;i+=3){
     const a=geo.index[i]*3,b=geo.index[i+1]*3,c=geo.index[i+2]*3;
     const ax=positions[a],az=positions[a+2],
