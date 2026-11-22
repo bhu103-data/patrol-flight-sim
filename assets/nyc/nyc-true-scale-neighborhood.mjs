@@ -25,13 +25,17 @@ export function buildingContains(massing,east,north,eyeHeight){
   return null;
 }
 
-export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null}={}){
+export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null,sourceRoadbedOnly=false}={}){
   if(massing.units!=='metres'||massing.heightScale!==1||
      !Array.isArray(massing.buildings)||!massing.buildings.length)
     throw Error('A genuine metre-scale NYC source scene is required');
   if(streetSource.schema!=='patrol-nyc-dcm-centerline-segments-v1'||
      !Array.isArray(streetSource.roads)||!Array.isArray(streetSource.originWGS84))
     throw Error('NYC DCM official road data missing or invalid');
+  // Evidence view: never draw illustrative DCM-width asphalt without an
+  // actual official 2022 OTI polygon source. DCM traces remain measured lines.
+  if(sourceRoadbedOnly&&officialRoadbed===null)
+    throw Error('Source-only roadbed requires official NYC OTI polygons');
   const [minE,minN,maxE,maxN]=massing.boundsMeters;
   const centerE=(minE+maxE)*.5,centerN=(minN+maxN)*.5;
   const [roadOffsetE,roadOffsetN]=wgs84ToMeters(streetSource.originWGS84,massing.origin);
@@ -39,7 +43,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const point=([e,n],y=0)=>[e-centerE,y,centerN-n];
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
-    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0};
+    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
+    illustrativeRoadBandTriangles:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -159,7 +164,13 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       const sx=-dZ/len*visualWidth*.5,sz=dX/len*visualWidth*.5;
       const A=[a[0]+sx,-.135,a[2]+sz],B=[b[0]+sx,-.135,b[2]+sz],
             C=[b[0]-sx,-.135,b[2]-sz],D=[a[0]-sx,-.135,a[2]-sz];
-      quad(A,B,C,D,[.18,.205,.23],2);
+      // Optional unambiguous provenance camera: source polygons and genuine
+      // DCM centreline traces, with NO invented road-width asphalt anywhere.
+      // The default pilot remains visually unchanged for before/after QA.
+      if(!sourceRoadbedOnly){
+        quad(A,B,C,D,[.18,.205,.23],2);
+        counts.illustrativeRoadBandTriangles+=2;
+      }
       // Thin source-centreline audit trace only; NOT NYCDOT lane markings.
       const k=.11,tx=-dZ/len*k,tz=dX/len*k;
       quad([a[0]+tx,-.11,a[2]+tz],[b[0]+tx,-.11,b[2]+tz],
@@ -217,6 +228,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     provenance:{buildings:massing.source,streets:streetSource.source,
       streetSourceDate:streetSource.capturedAt,
       roadbed:officialRoadbed?.source||null,
-      roadbedImageryYear:officialRoadbed?.imagery||null},
+      roadbedImageryYear:officialRoadbed?.imagery||null,
+      sourceRoadbedOnly},
     caveat:'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
 }
