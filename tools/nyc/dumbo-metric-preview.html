@@ -32,16 +32,17 @@
  <div class="eyebrow">PATROL / NYC OTI / Geospatial staging</div>
  <h1>DUMBO — 1 meter = 1 scene unit</h1>
  <p class="strong" id="details">Loading official building rings…</p>
- <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead · R = Front/Dock road</p>
- <p class="warning">This is NOT a surveyed present-day street scene. 2022 paved roadbed shows only one Front/Dock corridor, NOT all streets or 2026 signals. Bridges, elevations, façades, and newer buildings remain missing.</p>
- <button id="reset">Reset camera</button> <button id="roadFocus">Show 2022 Front/Dock pavement</button>
+ <p>Drag to orbit · Mouse wheel to zoom · Arrow keys to orbit · T = overhead · R = 2022 pavement · C = source conflicts</p>
+ <p class="warning">2022 paved ROADBED covers only a short Front/Dock corridor; teal CSCL lines are later-retrieved official street CENTERLINES, not curbs or lane widths. Red lines flag unresolved municipal building/source overlaps. No surveyed bridges, elevations, façades or 2026 signal state.</p>
+ <button id="reset">Reset camera</button> <button id="roadFocus">2022 Front/Dock pavement</button> <button id="conflictFocus">CSCL / building conflicts</button>
 </div>
 <canvas id="map" width="460" height="420" aria-label="Official building footprints and limited 2022 Front/Dock pavement plan, north is up"></canvas>
-<div id="mapText">N ↑ · OTI footprints + 2022 pavement</div>
-<div id="footer">Official source: NYC OTI BUILDING_view (5zhs-2jue), archived 2026-11-22; heights in feet above ground converted to meters. 2022 paved-roadbed boundaries are from a separate official snapshot, not traffic lanes. Flat placeholder terrain; no impact on gameplay.</div>
+<div id="mapText">N ↑ · 2022 pavement / CSCL / roofs</div>
+<div id="footer">Official source: NYC OTI BUILDING_view (5zhs-2jue), archived 2026-11-22; heights in feet above ground converted to meters. 2022 pavement (gray) / CSCL official centerlines (teal) / 4 unresolved footprint crossings (red). CSCL lines are nonphysical 1.2m guides. Flat terrain; no gameplay changes.</div>
 <script type="module">
 import {prepareDistrict,DUMBO_ORIGIN,signedArea} from '../../assets/nyc/dumbo-oti-metric.mjs';
 import {prepareOfficialDumboRoadbed} from '../../assets/nyc/dumbo-roadbed-metric.mjs';
+import {reconcileMetricStreets,sourceLineRibbon} from '../../assets/nyc/dumbo-cscl-metric-reconcile.mjs';
 const src=await fetch('../../assets/nyc/dumbo-oti-metric-48.json').then(r=>{
  if(!r.ok)throw Error('NYC OTI source snapshot HTTP '+r.status);
  return r.json();
@@ -50,6 +51,11 @@ const roadSource=await fetch('../../assets/nyc/dumbo-front-dock-roadbed-2022.jso
  if(!r.ok)throw Error('NYC OTI 2022 roadbed snapshot HTTP '+r.status);
  return r.json();
 });
+const csclSource=await fetch('../../assets/nyc/dumbo-cscl-official-snapshot.json').then(r=>{
+ if(!r.ok)throw Error('NYC OTI CSCL snapshot HTTP '+r.status);
+ return r.json();
+});
+const network=reconcileMetricStreets(csclSource,src);
 const roads=prepareOfficialDumboRoadbed(roadSource);
 const buildings=prepareDistrict(src);
 const bounds={minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity,maxY:0};
@@ -68,7 +74,7 @@ const spanX=bounds.maxX-bounds.minX,spanZ=bounds.maxZ-bounds.minZ;
 document.getElementById('details').textContent=
  buildings.length+' verified exterior rings · '+
  Math.round(spanX)+' × '+Math.round(spanZ)+' m · max roof '+
- Math.round(bounds.maxY)+' m · '+roads.stats.renderedTriangles+' 2022 paved roadbed triangles';
+ Math.round(bounds.maxY)+' m · '+roads.stats.renderedTriangles+' 2022 pavement tris · '+network.segmentCount+' official CSCL segments · '+network.conflicts.length+' source conflicts';
 
 const canvas=document.getElementById('render'),gl=canvas.getContext('webgl2',{antialias:true,depth:true});
 if(!gl)throw Error('WebGL2 unavailable (preview cannot be certified)');
@@ -122,6 +128,22 @@ for(const b of buildings){
  for(const [a,bp,c] of b.roofTriangles)
   face([a[0],b.roofY,a[1]],[c[0],b.roofY,c[1]],[bp[0],b.roofY,bp[1]],roof);
 }
+// Source-exact official CSCL guide ribbons. 1.2m is a symbolic visualization width,
+// NOT an observed 2026 carriageway width. Conflict lines are red without relocation.
+let centerlineTriangles=0;
+for(const line of network.lines){
+ const color=line.conflictFids.length?[.96,.12,.12]:[.14,.76,.65];
+ for(const tri of sourceLineRibbon(line.points)){
+  const y=.09;
+  if(signedArea(tri)>0)
+    face([tri[0][0],y,tri[0][1]],[tri[2][0],y,tri[2][1]],
+      [tri[1][0],y,tri[1][1]],color);
+  else
+    face([tri[0][0],y,tri[0][1]],[tri[1][0],y,tri[1][1]],
+      [tri[2][0],y,tri[2][1]],color);
+  centerlineTriangles++;
+ }
+}
 // The 25 m lines are a scale gauge, NOT authored or claimed NYC streets.
 const gridVertices=[],gridSize=25;
 function gridLine(a,b){for(const p of [a,b])gridVertices.push(...p,0,1,0,.34,.47,.50)}
@@ -152,6 +174,9 @@ const roadX=roads.triangles.flatMap(t=>t.points.map(p=>p[0]));
 const roadZ=roads.triangles.flatMap(t=>t.points.map(p=>p[1]));
 const roadFocus=[(Math.min(...roadX)+Math.max(...roadX))*.5,
   0,(Math.min(...roadZ)+Math.max(...roadZ))*.5];
+const conflictLines=network.lines.filter(l=>l.conflictFids.length);
+const conflictFocus=[conflictLines.reduce((s,l)=>s+(l.points[0][0]+l.points[1][0])/2,0)/conflictLines.length,
+  0,conflictLines.reduce((s,l)=>s+(l.points[0][1]+l.points[1][1])/2,0)/conflictLines.length];
 let yaw=.55,pitch=.55,dist=Math.max(600,Math.max(spanX,spanZ)*1.1);
 function reset(){
  center[0]=districtCenter[0];center[1]=districtCenter[1];center[2]=districtCenter[2];
@@ -161,16 +186,22 @@ function focusRoad(){
  center[0]=roadFocus[0];center[1]=roadFocus[1];center[2]=roadFocus[2];
  yaw=.2;pitch=1.25;dist=240;
 }
+function focusConflicts(){
+ center[0]=conflictFocus[0];center[1]=conflictFocus[1];center[2]=conflictFocus[2];
+ yaw=.2;pitch=1.25;dist=175;
+}
 document.getElementById('reset').onclick=reset;
 document.getElementById('roadFocus').onclick=focusRoad;
-window.__metricCamera={reset,focusRoad,roadFocus};
+document.getElementById('conflictFocus').onclick=focusConflicts;
+window.__metricCamera={reset,focusRoad,roadFocus,focusConflicts,conflictFocus};
 let held=false,lastX=0,lastY=0;
 canvas.addEventListener('pointerdown',e=>{held=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(!held)return;yaw+=(e.clientX-lastX)*.006;
  pitch=Math.max(.12,Math.min(1.55,pitch+(e.clientY-lastY)*.006));lastX=e.clientX;lastY=e.clientY});
 canvas.addEventListener('pointerup',()=>held=false);
 canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(95,Math.min(1400,dist*Math.exp(e.deltaY*.001)))},{passive:false});
-document.addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R')focusRoad();
+document.addEventListener('keydown',e=>{if(e.key==='c'||e.key==='C')focusConflicts();
+ else if(e.key==='r'||e.key==='R')focusRoad();
  else if(e.key==='t'||e.key==='T')pitch=1.54;
  else if(e.key==='ArrowLeft')yaw-=.1;else if(e.key==='ArrowRight')yaw+=.1;
  else if(e.key==='ArrowUp')pitch=Math.min(1.55,pitch+.08);
@@ -190,6 +221,14 @@ for(const t of roads.triangles){
 for(const b of buildings){ctx.beginPath();const [x,y]=px(b.ring[0]);ctx.moveTo(x,y);
  for(const p of b.ring.slice(1)){const [a,c]=px(p);ctx.lineTo(a,c)}ctx.closePath();
  ctx.fillStyle='#b88d73';ctx.strokeStyle='#f4d8c7';ctx.lineWidth=1;ctx.fill();ctx.stroke()}
+// Streetlines appear AFTER building polygons so unresolved overlaps remain visible.
+ctx.lineWidth=1.6;
+for(const line of network.lines){
+ const [a,b]=line.points.map(px);
+ ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);
+ ctx.strokeStyle=line.conflictFids.length?'#ff3f4a':'#30d4c5';
+ ctx.stroke();
+}
 ctx.fillStyle='#dce5ee';ctx.font='19px system-ui';ctx.fillText('N ↑',15,25);
 const scaleLen=50*planScale;ctx.fillRect(20,plan.height-18,scaleLen,3);
 ctx.fillText('50 m',26+scaleLen,plan.height-9);
@@ -208,6 +247,10 @@ function draw(){
 draw();
 window.__metricQa={buildings:buildings.length,triangles:geometryTriangles,spanMeters:[spanX,spanZ],
  origin:DUMBO_ORIGIN,roadbed:{...roads.stats,year:roads.year},
- roadTriangles,buildingTriangles:geometryTriangles-roadTriangles,
+ roadTriangles,centerlineTriangles,buildingTriangles:geometryTriangles-roadTriangles-centerlineTriangles,
+ cscl:{sourceRecords:network.sourceCount,groundRecords:network.groundRecords,
+ excludedRecords:network.excludedRecords,segments:network.segmentCount,
+ streetNames:network.streetNames.length,conflicts:network.conflicts,
+ sourceBBox:network.sourceBBox,networkLengthMetres:network.networkLengthMetres},
  renderer:gl.getParameter(gl.RENDERER),webgl2:true};
 </script></body></html>
