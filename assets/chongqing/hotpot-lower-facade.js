@@ -11,7 +11,10 @@ export function buildChongqingHotpotLowerFacade({
   const minX=shopX-35.4,maxX=shopX+35.4;
   const frontZ=shopZ+26.30;
   const stoneParts=[],timberParts=[];
-  const paletteStone=[0xdbddd9,0xcacbc5,0xe2dfd8,0xd4d5cf,0xbfc6c4];
+  // Linear-light PBR albedo is already multiplied by material.color and
+  // setColorAt instance tint. Preserve believable limestone variation while
+  // avoiding the double-darkening that hid this plinth in the DAY screenshot.
+  const paletteStone=[0xe8e6e1,0xdadad5,0xf3f0ea,0xe3e2dd,0xd2d7d5];
   const paletteTimber=[0xeee6dd,0xe2dbd4,0xd5c7b9,0xf1e7db,0xcfc4bc,0xe6d3bf];
   // Three low, shallow coursed masonry bands. The existing stone forecourt
   // top is floor+0.78: begin ABOVE it, not inside its drain or collision plane.
@@ -34,7 +37,7 @@ export function buildChongqingHotpotLowerFacade({
   // the windows; it is wall relief, not a curb or walkable step.
   stoneParts.push({
     x:shopX,y:shopFloor+3.045,z:frontZ+.09,
-    w:70.8,h:.36,d:.34,tint:0xd3d6d2
+    w:70.8,h:.36,d:.34,tint:0xe7e6e0
   });
   // Six clearly articulated wood-batten bays, behind pre-existing massive
   // load-bearing posts at x = shopX-30..shopX+30. No intrusion into windows
@@ -91,8 +94,11 @@ export function buildChongqingHotpotLowerFacade({
     scene.add(mesh);
     return mesh;
   }
+  // Reuse the already licensed photographic Poly Haven concrete PBR set
+  // (diffuse, normal and packed roughness/ARM) instead of multiplying two
+  // procedural stone-atlas tints. The simple masonry relief stays unchanged.
   const masonry=batch(stoneParts,'hotpot-lower-coursed-masonry',
-    pbr.cutStone,0xb5b5ae);
+    pbr.stone??pbr.cutStone,0xf3f0e9);
   const timber=batch(timberParts,'hotpot-lower-timber-cladding',
     pbr.carvedWood,0x94715e);
   return {

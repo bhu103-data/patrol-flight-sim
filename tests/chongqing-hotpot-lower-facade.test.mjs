@@ -40,11 +40,14 @@ const THREE={
   Object3D,BoxGeometry,MeshStandardMaterial:Material,Color,InstancedMesh,StaticDrawUsage:1
 };
 const cutStone=new Material({map:'existing-cut-stone-PBR',bumpMap:'tile-bump'});
+// Photographic Poly Haven CC0 concrete already loaded by createChongqingPBR.
+const photographicStone=new Material({map:'CC0-concrete-diffuse',
+  normalMap:'CC0-concrete-normal',roughnessMap:'CC0-concrete-ARM'});
 const carvedWood=new Material({map:'existing-wood-PBR',normalMap:'wood-normal'});
 function create(){
   const rendered=[],scene={add(x){rendered.push(x)}};
   const output=buildChongqingHotpotLowerFacade({
-    THREE,scene,pbr:{cutStone,carvedWood},
+    THREE,scene,pbr:{stone:photographicStone,cutStone,carvedWood},
     shopX:285,shopZ:225,shopFloor:44.94
   });
   return {rendered,output};
@@ -64,7 +67,10 @@ test('batched stone plinth and wood panels reuse original physical PBR maps',()=
   assert.equal(output.timberCount,72);
   assert.equal(output.drawCalls,2);
   assert.equal(output.totalTriangles,1248);
-  assert.equal(output.masonry.material.map,cutStone.map);
+  assert.equal(output.masonry.material.map,photographicStone.map);
+  assert.equal(output.masonry.material.normalMap,photographicStone.normalMap);
+  assert.equal(output.masonry.material.roughnessMap,photographicStone.roughnessMap);
+  assert.equal(output.masonry.material.color.value,0xf3f0e9);
   assert.equal(output.timber.material.map,carvedWood.map);
   assert.equal(output.timber.material.normalMap,carvedWood.normalMap);
   assert.equal(output.masonry.count,32);
@@ -72,6 +78,29 @@ test('batched stone plinth and wood panels reuse original physical PBR maps',()=
   assert.ok(rendered.every(x=>x.instanceMatrix.needsUpdate&&x.instanceColor.needsUpdate));
   assert.ok(!rendered.some(x=>x.castShadow));
 });
+test('brighter limestone courses remain neutral and not flat or saturated',()=>{
+  const {output}=create();
+  // Per-instance color is multiplicative, so even apparently pale PBR stone
+  // can become nearly black when both base and tint are dark. This guard
+  // prevents reintroducing the previous double-albedo darkening.
+  const tones=output.masonry.colors;
+  const median=(a)=>[...a].sort((x,y)=>x-y)[Math.floor(a.length/2)];
+  const chan=(hex,k)=>(hex>>(8*k))&255;
+  for(const k of [0,1,2])
+    assert.ok(median(tones.map(c=>chan(c,k)))>=211);
+  for(const c of tones)
+    assert.ok(Math.max(chan(c,0),chan(c,1),chan(c,2))-
+      Math.min(chan(c,0),chan(c,1),chan(c,2))<=20,
+      'Weathered limestone cannot become a neon tinted accent');
+  assert.equal(new Set(tones).size,6,
+    '5 coursed stone tints and a separate continuous cap');
+  assert.ok(output.masonry.material.metalness===0);
+  assert.ok(output.masonry.material.roughness>=.90);
+  assert.equal(output.timber.material.map,carvedWood.map);
+  assert.ok(!Object.is(output.masonry.material,photographicStone),
+    'Do not alter shared Chongqing PBR materials');
+});
+
 test('original shop windows, timber posts, sidewalk and collision remain unobscured',()=>{
   const {output}=create();
   assert.ok(output.topY-44.94<8.55,'cladding below the original floor+9 window start');

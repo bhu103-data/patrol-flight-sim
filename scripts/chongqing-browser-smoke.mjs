@@ -62,6 +62,21 @@ async function capture(name){
   }
   const pixels={width:png.width,height:png.height,colorBins:colorBins.size,
     nearBlackFraction:nearBlack/Math.max(1,sampled)};
+  if(name==='00b-spawn-day'){
+    // A reproducible image-space daylight diagnostic of the lower shop
+    // frontage, captured at the same camera as main ca55c38.
+    // Keep results numeric instead of asserting a fragile global exposure
+    // value: building shadow and current daytime sun may change.
+    let sum=0,pixelsCount=0;
+    for(let y=252;y<328;y+=3)for(let x=770;x<1110;x+=3){
+      const i=(y*png.width+x)*4;
+      sum+=(png.data[i]+png.data[i+1]+png.data[i+2])/3;
+      pixelsCount++;
+    }
+    pixels.hotpotLowerFacadeDayLuma=sum/Math.max(1,pixelsCount);
+    check(Number.isFinite(pixels.hotpotLowerFacadeDayLuma),
+      'Unable to measure the same-camera daylight storefront');
+  }
   if(name==='00-spawn'){
     // The original oversized red sphere covered ~36% of this fixed ROI.
     // A real open hotpot should leave the restaurant storefront visible.
