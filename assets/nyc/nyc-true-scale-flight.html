@@ -28,10 +28,11 @@
 <p class="muted">Click scene for mouse look; WASD move, Q/E altitude, Shift speed, arrow keys look, Esc releases cursor. X = true east, -Z = true north, Y = metres. No fictional 0.32 timescale.</p>
 <p><a href="../../index.html" style="color:#8fe4ff;pointer-events:auto">Return to PATROL flight menu</a> · <button id="reset" type="button" style="pointer-events:auto">Street height (3.2m)</button> <button id="aerial" type="button" style="pointer-events:auto">Aerial</button> <button id="roadbedFocus" type="button" style="pointer-events:auto">OTI roadbed FID 24700</button></p>
 </aside>
-<footer>NYC OTI 2022 core roadbeds + official DCM/footprints · true metres · fictional facades</footer>
+<footer>NYC OTI 2022 roadbeds + DCM/footprints · 1:1 metres · opt-in procedural facade proxies, not surveyed</footer>
 <script type="module">
 import {buildMeteredMassing,wgs84ToMeters} from './times-square-metered-massing.mjs';
 import {buildNeighborhoodMesh,buildingContains} from './nyc-true-scale-neighborhood.mjs';
+import {NYC_MATERIAL_PREVIEW_GLSL} from './nyc-metric-material-shader.mjs';
 const canvas=document.getElementById('scene'),
       status=document.getElementById('status'),
       metadata=document.getElementById('metadata');
@@ -47,7 +48,7 @@ function shader(type,source){
     throw Error(gl.getShaderInfoLog(s));
   return s;
 }
-function program(){
+function program(materialPreview=false){
   const v=shader(gl.VERTEX_SHADER,[
     '#version 300 es',
     'precision highp float;',
@@ -81,6 +82,7 @@ function program(){
     'float fresnel=pow(1.-abs(dot(n,normalize(uEye-vPosition))),3.);',
     'base=mix(base,vec3(.55,.75,.86),fresnel*.45);}',
     'if(vMaterial>1.5)base=vColor*(.80+.20*lit);',
+    ...(materialPreview?NYC_MATERIAL_PREVIEW_GLSL:[]),
     'float fog=smoothstep(250.,1000.,distance(uEye,vPosition));',
     'color=vec4(mix(base,vec3(.48,.66,.76),fog*.52),1.);}'
   ].join('\n'));
@@ -120,6 +122,7 @@ async function start(){
   const roadSource=await roadsResponse.json();
   const params=new URLSearchParams(location.search);
   const qualityLow=params.get('quality')==='low';
+  const materialPreview=params.get('materials')==='preview';
   // Only the experimental NYC TRUE-SCALE free-flight loads this original
   // 2022 OTI slice. ?roadbed=off retains the prior source-centreline bands
   // for controlled screenshots. The normal PATROL aircraft map is untouched.
@@ -130,14 +133,21 @@ async function start(){
   if(roadbedResponse&&!roadbedResponse.ok)
     throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
+  // Explicit optional ARTISTIC facade material preview, never a surveyed
+  // surface or a remote third-party texture download.
+  const materialResponse=materialPreview?await fetch('./nyc-material-slots.json',
+    {cache:'no-cache'}):null;
+  if(materialResponse&&!materialResponse.ok)
+    throw Error('NYC FID material manifest HTTP '+materialResponse.status);
+  const materialCatalog=materialResponse?await materialResponse.json():null;
   const geometry=buildNeighborhoodMesh(massing,roadSource,
     {detail:!qualityLow,maxWindows:qualityLow?0:6200,
-      officialRoadbed:roadbed,sourceRoadbedOnly});
+      officialRoadbed:roadbed,sourceRoadbedOnly,materialCatalog});
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   gl.bufferData(gl.ARRAY_BUFFER,geometry.interleaved,gl.STATIC_DRAW);
-  const prg=program();gl.useProgram(prg);
+  const prg=program(materialPreview);gl.useProgram(prg);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(1,3,gl.FLOAT,false,40,12);gl.enableVertexAttribArray(1);
@@ -221,6 +231,7 @@ async function start(){
     ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
     massing.skipped.multiRing+' building courtyard records excluded · '+
     stats.officialRoadbedTriangles+' official source pavement triangles · '+
+    (materialPreview?'original procedural facade material PROXIES (not surveyed) · ':'')+
     (sourceRoadbedOnly?'source-only: guessed road widths hidden outside 2022 FIDs':'illustrative DCM road-width bands visible');
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
@@ -231,6 +242,11 @@ async function start(){
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
     sourceRoadbedOnly,illustrativeRoadBandTriangles:stats.illustrativeRoadBandTriangles,
+    materialPreview,materialManifestSchema:geometry.provenance.materialCatalogSchema,
+    materialEvidence:geometry.provenance.materialFidelity,
+    materialPreviewBuildings:stats.previewMaterialBuildings,
+    materialPreviewWallTriangles:stats.previewMaterialWallTriangles,
+    materialBrickModuleMeters:materialCatalog?.materials?.['brick-proxy']?.tileMeters||null,
     roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
     roadbedFullNYCCoverage:false,
     roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,

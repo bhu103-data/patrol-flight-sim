@@ -4,6 +4,7 @@
 // Wall palettes/windows/road widths/ground treatment are artist-authored
 // illustrative materials: this is NOT surveyed facade or roadbed geometry.
 import {wgs84ToMeters,signedAreaMeters,triangulateSimplePolygon} from './times-square-metered-massing.mjs';
+import {validateNycMaterialCatalog,materialForNycFID} from './nyc-metric-material-slots.mjs';
 
 export const MESH_STRIDE=10;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
@@ -25,7 +26,7 @@ export function buildingContains(massing,east,north,eyeHeight){
   return null;
 }
 
-export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null,sourceRoadbedOnly=false}={}){
+export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null,sourceRoadbedOnly=false,materialCatalog=null}={}){
   if(massing.units!=='metres'||massing.heightScale!==1||
      !Array.isArray(massing.buildings)||!massing.buildings.length)
     throw Error('A genuine metre-scale NYC source scene is required');
@@ -36,6 +37,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   // actual official 2022 OTI polygon source. DCM traces remain measured lines.
   if(sourceRoadbedOnly&&officialRoadbed===null)
     throw Error('Source-only roadbed requires official NYC OTI polygons');
+  if(materialCatalog!==null)validateNycMaterialCatalog(
+    materialCatalog,massing.buildings.map(b=>b.fid));
   const [minE,minN,maxE,maxN]=massing.boundsMeters;
   const centerE=(minE+maxE)*.5,centerN=(minN+maxN)*.5;
   const [roadOffsetE,roadOffsetN]=wgs84ToMeters(streetSource.originWGS84,massing.origin);
@@ -44,7 +47,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
     officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
-    illustrativeRoadBandTriangles:0};
+    illustrativeRoadBandTriangles:0,previewMaterialBuildings:0,
+    previewMaterialWallTriangles:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -78,6 +82,9 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     counts.buildings++;
     const roof=b.roofHeightMeters,poly=b.footprintMeters.map(q=>point(q)),
       signed=signedAreaMeters(b.footprintMeters);
+    const previewMaterial=materialCatalog===null?null:
+      materialForNycFID(b.fid,roof,materialCatalog);
+    if(previewMaterial)counts.previewMaterialBuildings++;
     const style=(Math.imul(b.fid,2654435761)>>>0)%palette.length;
     const high=roof>90,facade=high?
       tint([.39,.53,.64],.87+style*.022):palette[style],
@@ -96,8 +103,10 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
             side=length([a[0],a[2]],[b2[0],b2[2]]);
       const face=tint(facade,.88+.12*Math.abs(b2[2]-a[2])/(side||1));
       quad([a[0],0,a[2]],[b2[0],0,b2[2]],
-        [b2[0],roof,b2[2]],[a[0],roof,a[2]],face);
+        [b2[0],roof,b2[2]],[a[0],roof,a[2]],face,
+        previewMaterial?.shaderId||0);
       counts.wallTriangles+=2;
+      if(previewMaterial)counts.previewMaterialWallTriangles+=2;
       if(!detail||side<4.2||roof<8||counts.facadeWindows>=maxWindows)
         continue;
       // Outward vector for CCW source east/north ring; Z is flipped north.
@@ -229,6 +238,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       streetSourceDate:streetSource.capturedAt,
       roadbed:officialRoadbed?.source||null,
       roadbedImageryYear:officialRoadbed?.imagery||null,
-      sourceRoadbedOnly},
+      sourceRoadbedOnly,materialCatalogSchema:materialCatalog?.schema||null,
+      materialFidelity:materialCatalog?.fidelity||null},
     caveat:'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
 }

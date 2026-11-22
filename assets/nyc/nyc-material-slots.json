@@ -1,0 +1,56 @@
+{
+  "schema": "patrol-nyc-fid-material-slots-v1",
+  "scene": "NYC TRUE-SCALE Times Square, 1 metre per world unit",
+  "geometry": "assets/nyc/times-square-footprints.json",
+  "fidelity": "visual-proxy-only-not-as-built",
+  "fallback": {
+    "below90m": "brick-proxy",
+    "atOrAbove90m": "glass-proxy",
+    "thresholdMeters": 90
+  },
+  "materials": {
+    "brick-proxy": {
+      "shaderId": 3,
+      "source": "original-procedural",
+      "license": "project-authored",
+      "tileMeters": [
+        0.2032,
+        0.06773333333333333
+      ],
+      "externalTextures": null
+    },
+    "glass-proxy": {
+      "shaderId": 4,
+      "source": "original-procedural",
+      "license": "project-authored",
+      "tileMeters": [
+        1.5,
+        3.6
+      ],
+      "externalTextures": null
+    },
+    "stone-proxy": {
+      "shaderId": 5,
+      "source": "original-procedural",
+      "license": "project-authored",
+      "tileMeters": [
+        1,
+        0.5
+      ],
+      "externalTextures": null
+    }
+  },
+  "fidOverrides": {
+    "22922": {
+      "wall": "stone-proxy",
+      "materialEvidence": "not-surveyed-art-direction",
+      "licenseEvidence": null
+    },
+    "212747": {
+      "wall": "glass-proxy",
+      "materialEvidence": "not-surveyed-art-direction",
+      "licenseEvidence": null
+    }
+  },
+  "nextAssetsPolicy": "Before substituting PBR image maps, record original source URL, author, exact license, attribution, local path, resolution and bytes; do not infer facade authenticity from FID/HEIGHTROOF."
+}

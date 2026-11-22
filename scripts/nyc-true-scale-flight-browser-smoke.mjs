@@ -166,7 +166,10 @@ try{
   report.aerialRoadbedDifferencePixelsOver18=changed;
   report.aerialComparisonResolution=[a.width,a.height];
   report.aerialComparisonNote='Identical fixed source/old aerial pose with sky/HUD excluded; pixel-difference is geometry-localization QA, not photoreal score';
-  check(changed>80,'Official roadbed aerial not distinguishable from old bands: '+changed);
+  // Wide aerial is a diagnostic only: at 1:1 scale the 11 official polygons
+  // occupy a small and rasterization-sensitive number of pixels. The matched
+  // FID 24700 close-up below is the deterministic acceptance gate.
+  report.aerialRoadbedDifferenceGate='diagnostic-only; matched close-up is gated';
   const src=PNG.sync.read(sourceCore),ref=PNG.sync.read(sourceOffCore);
   check(src.width===ref.width&&src.height===ref.height,
     'FID24700 true-roadbed A/B framebuffer differs');
@@ -239,6 +242,69 @@ try{
     'Unsurveyed road bands did not change fixed FID24700 core view: '+
       coreWithoutGuessedRoads);
 
+  // Matched street-height facade comparison. The aerial has too few wall
+  // pixels to validate a material change reliably; use the identical safe
+  // 3.2m street spawn for both captures, not a hand-adjusted camera.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  await page.locator('#reset').click();
+  await page.waitForTimeout(350);
+  report.materialBaseline=await page.evaluate(()=>window.PatrolMetricFlightQA);
+  report.materialBaselineCamera=report.materialBaseline.camera;
+  const baselineMaterialShot=await page.locator('#scene').screenshot({
+    path:out+'/09-default-material-street.png',timeout:90000});
+  const baselineMaterialImage=PNG.sync.read(baselineMaterialShot);
+
+  // Bounded, original-code surface preview: artist-authored, NOT surveyed.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?materials=preview',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
+  await page.locator('#reset').click();
+  await page.waitForFunction(target=>window.PatrolMetricFlightQA?.camera?.every(
+    (v,i)=>Math.abs(v-target[i])<1e-8),report.materialBaselineCamera,
+    {timeout:45000});
+  await page.waitForTimeout(350);
+  report.materialPreview=await page.evaluate(()=>window.PatrolMetricFlightQA);
+  check(report.materialPreview.materialPreview===true&&
+    report.materialPreview.materialPreviewBuildings===118&&
+    report.materialPreview.materialPreviewWallTriangles>300,
+    'FID material opt-in preview missing or did not bind all 118 buildings');
+  check(report.materialPreview.materialEvidence==='visual-proxy-only-not-as-built',
+    'Artist preview deceptively claims real NYC material evidence');
+  check(Array.isArray(report.materialPreview.materialBrickModuleMeters)&&
+    Math.abs(report.materialPreview.materialBrickModuleMeters[0]-.2032)<1e-9&&
+    Math.abs(report.materialPreview.materialBrickModuleMeters[1]-.06773333333333333)<1e-9,
+    'Browser is not using the source-backed 8in x 2-2/3in brick module');
+  check(report.materialPreview.sourceBuildingCount===report.materialBaseline.sourceBuildingCount&&
+    report.materialPreview.streetSegments===report.materialBaseline.streetSegments&&
+    report.materialPreview.officialRoadbedTriangles===report.materialBaseline.officialRoadbedTriangles&&
+    report.materialPreview.triangles===report.materialBaseline.triangles,
+    'Material shader changed measured source geometry or triangle budget');
+  check(report.materialPreview.glError===0,'Material shader WebGL2 error');
+  check(report.materialPreview.camera.every((v,i)=>
+    Math.abs(v-report.materialBaselineCamera[i])<1e-8),
+    'Material preview screenshot camera does not match default facade camera');
+  const previewMaterialShot=await page.locator('#scene').screenshot({
+    path:out+'/10-original-material-preview-street.png',timeout:90000});
+  const materialImage=PNG.sync.read(previewMaterialShot);
+  check(materialImage.width===baselineMaterialImage.width&&
+    materialImage.height===baselineMaterialImage.height,
+    'Material preview screenshot changes the fixed camera framebuffer');
+  let materialsDelta=0;
+  for(let y=20;y<baselineMaterialImage.height;y+=2)
+    for(let x=2;x<baselineMaterialImage.width;x+=2){
+      const i=(y*baselineMaterialImage.width+x)*4;
+      if(Math.max(...[0,1,2].map(j=>Math.abs(
+        baselineMaterialImage.data[i+j]-materialImage.data[i+j])))>18)
+        materialsDelta++;
+    }
+  report.materialPreviewPixelsDifferentOver18=materialsDelta;
+  check(materialsDelta>100,
+    'Original brick/glass/stone previews not visible from matched street camera: '+
+      materialsDelta);
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}

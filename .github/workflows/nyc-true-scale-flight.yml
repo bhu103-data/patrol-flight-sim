@@ -8,9 +8,12 @@ on:
       - "assets/nyc/nyc-oti-roadbed-core-2022.json"
       - "assets/nyc/nyc-true-scale-*.mjs"
       - "assets/nyc/nyc-true-scale-flight.html"
+      - "assets/nyc/nyc-material-slots.json"
+      - "assets/nyc/nyc-metric-material-*.mjs"
       - "assets/nyc/times-square-metered-massing.mjs"
       - "assets/nyc/times-square-footprints.json"
       - "tests/nyc-true-scale-flythrough.test.mjs"
+      - "tests/nyc-metric-material-slots.test.mjs"
       - "scripts/nyc-true-scale-flight-browser-smoke.mjs"
       - "index.html"
       - ".github/workflows/nyc-true-scale-flight.yml"
@@ -30,11 +33,14 @@ jobs:
       - name: Syntax and source-coordinate/geometry QA
         run: |
           node --check assets/nyc/nyc-true-scale-neighborhood.mjs
+          node --check assets/nyc/nyc-metric-material-slots.mjs
+          node --check assets/nyc/nyc-metric-material-shader.mjs
           node -e "const fs=require('node:fs');const h=fs.readFileSync('assets/nyc/nyc-true-scale-flight.html','utf8');const m=h.match(/<script type=\"module\">([\\s\\S]*?)<\\/script>/);if(!m)throw Error('NYC inline module not found');fs.writeFileSync('/tmp/nyc-true-scale-inline.mjs',m[1]);"
           node --check /tmp/nyc-true-scale-inline.mjs
           node --check scripts/nyc-true-scale-flight-browser-smoke.mjs
           node --check tests/nyc-true-scale-flythrough.test.mjs
-          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs
+          node --check tests/nyc-metric-material-slots.test.mjs
+          node --test tests/nyc-times-square-metered-massing.test.mjs tests/nyc-true-scale-flythrough.test.mjs tests/nyc-metric-material-slots.test.mjs
       - name: Install free WebGL test browser
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
