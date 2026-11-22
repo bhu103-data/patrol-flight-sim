@@ -15,7 +15,7 @@ jobs:
   extract-real-usgs-elevation:
     if: github.head_ref == 'feat/alaska-true-scale-terrain-flight-pilot-20261122-chat'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,6 +25,29 @@ jobs:
         run: python -m pip install --disable-pip-version-check 'numpy>=2,<3' 'tifffile>=2025.3'
       - name: Fetch 256 square at measured ~5m spacing from official source
         run: python tools/alaska/build_usgs5m_tracyarm_pilot.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source tile decoder contracts
+        run: node --test tests/alaska-true-scale-flight-pilot.test.mjs tests/alaska-wgs84-metre-frame.test.mjs
+      - name: Install pinned software WebGL2 test browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Stage extracted 5m pilot tile only in this disposable QA checkout
+        run: cp artifacts/alaska-tracyarm-five-metre-tile.json assets/alaska/tracy-arm-five-metre-tile.json
+      - name: Serve USGS source and both terrain profiles locally
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-5m-fine-qa.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/tracy-arm-true-scale.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Screenshot original 30m full Tracy Arm scene
+        run: node tools/alaska/smoke_true_scale_flight.mjs
+      - name: Screenshot source-extracted ~5m local terrain plus moving camera
+        run: PATROL_ALASKA_5M=1 node tools/alaska/smoke_true_scale_flight.mjs
       - name: Preserve exact GeoTIFF SHA, project vertical datum and tile
         if: always()
         uses: actions/upload-artifact@v4
@@ -33,5 +56,7 @@ jobs:
           path: |
             artifacts/alaska-tracyarm-five-metre-tile.json
             artifacts/alaska-tracyarm-five-metre-report.json
+            artifacts/alaska-true-scale-five-metre-*
+            artifacts/alaska-true-scale-source-flight-*
           if-no-files-found: ignore
           retention-days: 14
