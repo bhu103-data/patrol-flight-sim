@@ -47,6 +47,11 @@ test('normal, footprint and production budget: no fictional rectangular roof',()
   // First 577 triangles use original licensed geo-poly vertices, no XY
   // rectangle generator, with upward normals after East/North -> X/-Z map.
   const sourceFaces=faces.slice(0,out.officialTriangles);
+  // Exact-height seam invariant: original NYC street painter emits asphalt
+  // at streetY+.086, so 2022 polygons may not float 0.064 higher.
+  const sourceY=14.86+.086;
+  assert(sourceFaces.every(f=>f.v.every(p=>Math.abs(p[1]-sourceY)<1e-9)),
+    'Official pavement must be flush with legacy NYC asphalt plane');
   assert(sourceFaces.every(f=>f.kind==='tri'));
   assert(sourceFaces.every(f=>{
     const [a,b,c]=f.v,u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
