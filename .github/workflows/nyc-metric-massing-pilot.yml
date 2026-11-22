@@ -1,0 +1,54 @@
+name: NYC official metre-massing pilot WebGL2 QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "nyc-metric-pilot.html"
+      - "assets/nyc/times-square-metric-massing.js"
+      - "assets/nyc/times-square-footprints.json"
+      - "tests/nyc-times-square-metric-massing.test.mjs"
+      - "scripts/nyc-metric-pilot-smoke.mjs"
+      - ".github/workflows/nyc-metric-massing-pilot.yml"
+
+concurrency:
+  group: nyc-metric-source-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  metric-source-webgl2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate official metres, footprints, heights and no surrogate placement
+        run: node --test tests/nyc-times-square-metric-massing.test.mjs
+      - name: Preflight actual browser smoke script
+        run: node --check scripts/nyc-metric-pilot-smoke.mjs
+      - name: Install Chromium for WebGL2 screenshots
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start isolated pilot page
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/patrol-nyc-metric-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8766/nyc-metric-pilot.html >/dev/null
+      - name: Three fixed-source-scale actual WebGL2 captures
+        env:
+          METRIC_BASE_URL: http://127.0.0.1:8766
+        run: node scripts/nyc-metric-pilot-smoke.mjs
+      - name: Upload three real WebGL2 screenshots and measured source report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-metric-massing-pilot-webgl2
+          path: artifacts/nyc-metric-pilot/
+          retention-days: 7
+          if-no-files-found: ignore
