@@ -1,0 +1,55 @@
+name: NYC Liberty CC0 opt-in live-game WebGL QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "assets/nyc/nyc-realism.js"
+      - "assets/nyc/scenario/liberty.glb"
+      - "assets/nyc/scenario-manifest.json"
+      - "tests/nyc-liberty-runtime-optin.test.mjs"
+      - "scripts/nyc-liberty-runtime-optin-browser.mjs"
+      - ".github/workflows/nyc-liberty-runtime-optin.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  licensed-liberty-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify exact source mesh and runtime opt-in
+        run: |
+          node --check assets/nyc/nyc-realism.js
+          node --check scripts/nyc-liberty-runtime-optin-browser.mjs
+          node --test tests/nyc-liberty-runtime-optin.test.mjs tests/nyc-liberty-actual-collider.test.mjs
+          node tools/nyc/check-liberty-glb.mjs assets/nyc/scenario/liberty.glb
+          node tools/nyc/check-liberty-harbor-placement.mjs assets/nyc/scenario/liberty.glb
+      - name: Install free Chromium WebGL2 test dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve original PATROL with unchanged disabled manifest
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-liberty-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/assets/nyc/scenario/liberty.glb >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+          node -e "const m=require('./assets/nyc/scenario-manifest.json');if(m.landmarks.liberty.enabled!==false)process.exit(1)"
+      - name: Test real Manhattan flight GLB fallback / CC0 A-B
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-liberty-runtime-optin-browser.mjs
+      - name: Upload same-camera real WebGL screenshots, model hashes and frame timing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-liberty-cc0-runtime-optin-qa
+          path: artifacts/nyc-liberty-cc0-live/
+          retention-days: 7
+          if-no-files-found: ignore
