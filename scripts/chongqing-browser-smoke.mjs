@@ -184,15 +184,17 @@ try{
     closeState.marketOpenFacadeTriangles===1872,
     'Open window jambs not present when filming the actual close-up');
   await capture('03f-marketfront-open-bays-close-high');
-  // Same real mesh, day and high-detail shader as 03f. Capture two
-  // oblique sides of the CENTER shop to expose seam/side-wall silhouettes.
-  // No teleporting player or adding production camera shortcuts.
+  // #200's first left oblique of stone-stair was occluded by a higher
+  // hillside. Inspect the actual lower river-market LEFT seam instead,
+  // while retaining stone-stair RIGHT seam and our NEW footing close-up.
   check(qaCameraInjected,'Browser-only market camera hook was not installed');
-  for(const [side,name] of [[1,'03g-market-right-seam-oblique'],
-                            [-1,'03h-market-left-seam-oblique']]){
-    const pose=await page.evaluate(side=>
-      window.__patrolQaOblique?.('stone-stair',side),side);
-    check(pose?.siteId==='stone-stair'&&pose.side===side&&
+  for(const [siteId,side,name] of [
+    ['stone-stair',1,'03g-stone-stair-right-seam-oblique'],
+    ['river-market',-1,'03h-river-market-left-seam-oblique']
+  ]){
+    const pose=await page.evaluate(({siteId,side})=>
+      window.__patrolQaOblique?.(siteId,side),{siteId,side});
+    check(pose?.siteId===siteId&&pose.side===side&&
       pose.eye.every(Number.isFinite)&&pose.aim.every(Number.isFinite)&&
       pose.groundClearance>=4.9,
       'Invalid actual-world oblique inspection camera '+JSON.stringify(pose));
