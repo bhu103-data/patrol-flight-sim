@@ -47,6 +47,9 @@ const inject=html=>html.replace(camera,`
 const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
 const bandFilterAB=process.env.PATROL_COMPARE_MODE==='band-filter';
 const footprintAB=process.env.PATROL_COMPARE_MODE==='footprint';
+const crosswindAB=process.env.PATROL_COMPARE_MODE==='crosswind';
+// The identical-source pair measures baseline variance between scene loads.
+const repeatAB=process.env.PATROL_COMPARE_MODE==='repeat-baseline';
 const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
 const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
 if(seaDetailAB&&src.split(detailEnabled).length!==2)
@@ -59,14 +62,19 @@ const earlyEnabled='const bool NYC_HORIZON_FOOTPRINT_EARLY = true;';
 const earlyDisabled='const bool NYC_HORIZON_FOOTPRINT_EARLY = false;';
 if(footprintAB&&src.split(earlyEnabled).length!==2)
   throw Error('Missing reversible NYC earlier horizon footprint switch');
-const sourceBefore=inject(footprintAB
-  ?src.replace(earlyEnabled,earlyDisabled)
+const crosswindEnabled='const bool NYC_CROSSWIND_SHADING = true;';
+const crosswindDisabled='const bool NYC_CROSSWIND_SHADING = false;';
+if(crosswindAB&&src.split(crosswindEnabled).length!==2)
+  throw Error('Missing reversible NYC optical crosswind switch');
+const sourceBefore=inject(repeatAB?src
+  :crosswindAB?src.replace(crosswindEnabled,crosswindDisabled)
+  :footprintAB?src.replace(earlyEnabled,earlyDisabled)
   :bandFilterAB?src.replace(bandEnabled,bandDisabled)
   :seaDetailAB?src.replace(detailEnabled,detailDisabled)
   :src.replace(modern,old));
 const sourceAfter=inject(src);
 const origin=new URL(url).origin,report={
-  mode:footprintAB?'footprint':bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
+  mode:repeatAB?'repeat-baseline':crosswindAB?'crosswind':footprintAB?'footprint':bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
   note:'Test-only fixed shader time, not a runtime setting'};
 const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';

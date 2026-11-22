@@ -55,7 +55,7 @@ test('NYC far-water long-wave optical filter preserves original physical wave',(
   assert.match(shader,/smoothstep\(0\.80,4\.40,pixel\)/);
   assert.match(shader,/NYC_HORIZON_FOOTPRINT_EARLY\?0\.90:0\.72/);
   assert.match(shader,/nycLongSlopeVisibility=1\.0-strength\*footprint/);
-  assert.match(shader,/swell\.yz\*nycLongSlopeVisibility\+chop\.yz/);
+  assert.match(shader,/opticalSwell\*nycLongSlopeVisibility\+opticalChop/);
   assert.match(shader,/swell\.x \* 0\.045 \*/);
   assert.match(shader,/nycLongSlopeVisibility \+ chop\.x \* 0\.19/);
   assert.match(html,/function floatOceanHeight\(x,z,t,depth,map\)/);
@@ -110,4 +110,26 @@ test('early NYC horizon footprint can be A/B reverted without modifying physical
   assert.match(qa,/src\.replace\(earlyEnabled,earlyDisabled\)/);
   assert.match(shader,/if\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL &&/);
   assert.doesNotMatch(html,/NYC_CREST_BEND/);
+});
+
+test('NYC crosswind optical slope is reversible and never changes C185 wave heights',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(shader,/const bool NYC_CROSSWIND_SHADING = true;/);
+  assert.match(shader,/if\(uManhattan && uNYCSeaDetail && NYC_TIDEWATER_DETAIL &&\s+NYC_CROSSWIND_SHADING\)/);
+  assert.match(shader,/turn=clamp\(\(gust-1\.0\)\*0\.70,-0\.13,0\.13\)/);
+  assert.match(shader,/1\.0-smoothstep\(0\.48,2\.50,pixel\)/);
+  assert.match(shader,/opticalSwell\+=turn\*vec2\(-swell\.z,swell\.y\)/);
+  assert.match(shader,/opticalChop\+=turn\*0\.45\*vec2\(-chop\.z,chop\.y\)/);
+  assert.match(qa,/PATROL_COMPARE_MODE==='crosswind'/);
+  assert.match(qa,/const bool NYC_CROSSWIND_SHADING = false;/);
+  assert.match(qa,/src\.replace\(crosswindEnabled,crosswindDisabled\)/);
+  assert.doesNotMatch(html,/NYC_CREST_BEND/);
+});
+
+test('repeat-baseline QA compares identical production HTML on independent scene loads',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(qa,/PATROL_COMPARE_MODE==='repeat-baseline'/);
+  assert.match(qa,/sourceBefore=inject\(repeatAB\?src/);
+  assert.match(qa,/sourceAfter=inject\(src\)/);
+  assert.match(qa,/repeatAB\?'repeat-baseline'/);
 });
