@@ -182,6 +182,75 @@ try{
     referenceCamera:report.sourceOffCoreCamera,
     sampledStepPixels:2,excludedHUDTopPixels:210};
   check(changedCore>300,'Source roadbed FID24700 geometry invisible from the identical focused camera: '+changedCore);
+  // Finally enter the exact same official metre-tile world in the optional
+  // source-parameter C185 cockpit. This tests the actual PATROL-derived
+  // airborne-only kinematics, NOT water, wheels or native engine flight.
+  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?flight=patrol-c185',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
+    window.PatrolMetricFlightQA.airborneMode===true&&
+    window.PatrolMetricFlightQA.airborneSteps>=4,
+    null,{timeout:65000});
+  report.c185Before=await page.evaluate(()=>({
+    pos:window.PatrolMetricFlightQA.airbornePos,
+    yaw:window.PatrolMetricFlightQA.airborneYaw,
+    pitch:window.PatrolMetricFlightQA.airbornePitch,
+    speed:window.PatrolMetricFlightQA.airborneSpeed,
+    steps:window.PatrolMetricFlightQA.airborneSteps,
+    nativePhysics:window.PatrolMetricFlightQA.usesOriginalAircraftPhysics,
+    airborneSubset:window.PatrolMetricFlightQA.usesPatrolAirborneEquations,
+    completePhysics:window.PatrolMetricFlightQA.airborneFullPhysics,
+    sourceRoadbed:window.PatrolMetricFlightQA.officialRoadbedPolygons
+  }));
+  check(report.c185Before.airborneSubset===true&&
+    report.c185Before.completePhysics===false&&
+    report.c185Before.nativePhysics===false&&
+    report.c185Before.sourceRoadbed===11,
+    'Do not claim full native aircraft physics or lose exact OTI source geometry');
+  const cockpitBefore=await page.locator('#scene').screenshot({
+    path:out+'/07-c185-source-airborne-cockpit-before.png',timeout:90000
+  });
+  await page.keyboard.down('w');
+  await page.keyboard.down('d');
+  await page.keyboard.down('Space');
+  await page.waitForFunction(n=>
+    window.PatrolMetricFlightQA?.airborneSteps>=n+6,
+    report.c185Before.steps,{timeout:65000});
+  await page.keyboard.up('Space');
+  await page.keyboard.up('d');
+  await page.keyboard.up('w');
+  report.c185After=await page.evaluate(()=>({
+    pos:window.PatrolMetricFlightQA.airbornePos,
+    yaw:window.PatrolMetricFlightQA.airborneYaw,
+    pitch:window.PatrolMetricFlightQA.airbornePitch,
+    speed:window.PatrolMetricFlightQA.airborneSpeed,
+    bank:window.PatrolMetricFlightQA.airborneBank,
+    gForce:window.PatrolMetricFlightQA.airborneGForce,
+    collision:window.PatrolMetricFlightQA.airborneCollision,
+    steps:window.PatrolMetricFlightQA.airborneSteps,
+    glError:window.PatrolMetricFlightQA.glError,
+    errors:window.PatrolMetricFlightQA.errors
+  }));
+  report.c185AirborneMovedMeters=Math.hypot(
+    ...report.c185Before.pos.map((v,i)=>report.c185After.pos[i]-v)
+  );
+  check(report.c185AirborneMovedMeters>.4&&
+    report.c185AirborneMovedMeters<50,
+    'Source C185 airborne camera failed real metric movement: '+
+    report.c185AirborneMovedMeters);
+  check(Math.abs(report.c185After.yaw-report.c185Before.yaw)>.0005&&
+    report.c185After.pitch>report.c185Before.pitch+.0005&&
+    report.c185After.speed>19.2&&
+    report.c185After.gForce>=.3&&report.c185After.gForce<=7.5,
+    'PATROL-derived C185 pitch/turn/boost equations did not affect real scene');
+  check(report.c185After.glError===0&&report.c185After.errors.length===0,
+    'C185 source-airborne mode has browser/GL fault');
+  const cockpitAfter=await page.locator('#scene').screenshot({
+    path:out+'/08-c185-source-airborne-cockpit-after.png',timeout:90000
+  });
+  report.c185Screenshots={beforeBytes:cockpitBefore.length,afterBytes:cockpitAfter.length};
+  check(cockpitBefore.length>5000&&cockpitAfter.length>5000,
+    'C185 source-geometry camera screenshots are blank');
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
