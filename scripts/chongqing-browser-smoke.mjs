@@ -39,7 +39,7 @@ window.__patrolQaOblique=(siteId,side)=>{
 };
 `;
   await route.fulfill({response,body:runtime.replace(
-    qaCameraMarker,qaCameraMarker+'\\n'+hook)});
+    qaCameraMarker,qaCameraMarker+'\n'+hook)});
   qaCameraInjected=true;
 });
 
