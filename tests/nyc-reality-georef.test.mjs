@@ -61,7 +61,8 @@ test('viewer consumes meter-true projection and explicitly disclaims absent road
   assert.match(html,/times-square-footprints\.json/);
   assert.match(html,/THREE\.ExtrudeGeometry/);
   assert.match(html,/1 unit = 1 meter/);
-  assert.match(html,/no LION streets/);
+  assert.match(html,/street centerlines only/);
+  assert.match(html,/nyc-reality-street-centerlines\.mjs/);
   assert.match(html,/not a photorealistic Manhattan release/);
   assert.doesNotMatch(html,/buildTimesSquareDistrict\(/);
 });

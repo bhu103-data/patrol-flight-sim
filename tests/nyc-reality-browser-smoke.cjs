@@ -48,15 +48,27 @@ function pixels(buf){
     await page.waitForFunction(()=>
       document.querySelector('#metrics')?.textContent?.includes('118 / 120 municipal footprints shown'),
       null,{timeout:90000});
+    await page.waitForFunction(()=>window.PatrolRealityStreetStatus?.status==='loaded',
+      null,{timeout:90000});
     const state=await page.evaluate(()=>{
       const canvas=document.querySelector('#stage'),gl=canvas.getContext('webgl2');
       return {webgl2:!!gl,contextLost:gl?.isContextLost()||false,
         width:canvas.width,height:canvas.height,
         limits:document.querySelector('#limits')?.textContent||'',
+        roads:window.PatrolRealityStreetStatus,
+        roadStatus:document.querySelector('#roadStatus')?.textContent||'',
         error:document.querySelector('#error')?.textContent||''};
     });
     assert.ok(state.webgl2&&!state.contextLost&&state.width>=600);
-    assert.match(state.limits,/no LION streets/);
+    assert.match(state.limits,/street centerlines only/);
+    assert.ok(state.roads.count>=30&&state.roads.lines>=40,
+      'Too few verified official DCM street centerlines');
+    assert.ok(state.roads.built>0&&state.roads.built<state.roads.count,
+      'Built vs recorded source status disappeared');
+    assert.match(state.roadStatus,/not lanes or curbs/);
+    assert.equal(state.roads.streetCamera.streetName,'7 Avenue');
+    assert.ok(state.roads.streetCamera.objectId>0);
+    assert.equal(state.roads.streetCamera.eye[1],2.3);
     assert.equal(state.error,'');
     report.state=state;
     await page.addStyleTag({content:'#panel,#status{visibility:hidden!important}'});
