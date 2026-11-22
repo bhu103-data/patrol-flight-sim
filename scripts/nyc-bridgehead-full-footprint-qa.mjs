@@ -31,6 +31,15 @@ const injection=String.raw`
     window.__patrolBridgeheadQaCloseCamera=!!enabled;
     camInitialized=false;
   };
+  window.__patrolBridgeheadQaSetDumboCamera = mode => {
+    const views={
+      street:{eye:[303,17.8,-367],look:[303,21.2,-347],up:worldUp,fov:64},
+      lowflight:{eye:[285,29,-403],look:[294,22,-349],up:worldUp,fov:56}
+    };
+    if(mode!==null&&!views[mode])throw Error('Unknown DUMBO test camera');
+    window.__patrolBridgeheadQaDumboCamera=mode?views[mode]:null;
+    camInitialized=false;
+  };
   window.__patrolBridgeheadQaSignal = () => ({
     time:sceneryTime,state:bridgeheadSignalState(sceneryTime),
     green:bridgeheadSignalGreen(sceneryTime)
@@ -189,6 +198,8 @@ try{
     // This near-pole camera exists ONLY in the intercepted browser document.
     // Face the physical eastbound lens, not the distant bridge deck.
     const closeCamera=cameraEntry+'\n'+
+      '    if(window.__patrolBridgeheadQaDumboCamera)'+
+      'return window.__patrolBridgeheadQaDumboCamera;'+
       '    if(window.__patrolBridgeheadQaCloseCamera) return {'+
       'eye:[247.5,19.55,-347.4],look:[252.798,18.69,-345.51],'+
       'up:worldUp,fov:35};';
@@ -226,6 +237,7 @@ try{
   assert(await page.evaluate(()=>
     typeof window.__patrolBridgeheadQaSetHold==='function'&&
     typeof window.__patrolBridgeheadQaSetCloseCamera==='function'&&
+    typeof window.__patrolBridgeheadQaSetDumboCamera==='function'&&
     typeof window.__patrolBridgeheadQaSignal==='function'),
   'Test-only signal controls not installed');
   result.renderer='ANGLE SwiftShader / software WebGL2';
@@ -346,6 +358,44 @@ try{
   }
   assert(result.signalFrames.length===3,
     'Missing same-camera RGB signal-phase evidence');
+  // Extra A/B-ready street and low-flight evidence for the newly exposed,
+  // NON-OTI infill. These override only the intercepted HTTP response.
+  // The game runtime itself never publishes these camera positions.
+  result.infillFrames=[];
+  try{
+    await page.evaluate(()=>window.__patrolBridgeheadQaSetHold(18));
+    for(const [mode,name] of [
+      ['street','06-dumbo-infill-street-level.png'],
+      ['lowflight','07-dumbo-infill-low-flight.png']
+    ]){
+      await page.evaluate(x=>window.__patrolBridgeheadQaSetDumboCamera(x),mode);
+      await page.evaluate(()=>new Promise(resolve=>
+        requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      const state=await page.evaluate(()=>{
+        const canvas=document.getElementById('glCanvas');
+        const gl=canvas?.getContext('webgl2');
+        return {webgl2:!!gl&&!gl.isContextLost(),error:gl?.getError(),
+          camera:window.__patrolBridgeheadQaDumboCamera,
+          sceneTime:sceneryTime,city:!!selectedMap.city};
+      });
+      assert(state.city&&state.webgl2&&state.error===0&&
+        Math.abs(state.sceneTime-18)<1e-6&&state.camera,
+        'Actual DUMBO WebGL2 infill view invalid: '+JSON.stringify(state));
+      const png=await page.locator('#glCanvas').screenshot({
+        path:out+'/'+name,timeout:90000,animations:'allow'
+      });
+      assert(png.length>5000,'Infill PNG is empty or incomplete: '+name);
+      result.infillFrames.push({mode,name,bytes:png.length,state});
+      screenshots.push({name,label:'DUMBO infill / '+mode,view:state});
+    }
+  }finally{
+    await page.evaluate(()=>{
+      window.__patrolBridgeheadQaSetDumboCamera(null);
+      window.__patrolBridgeheadQaSetHold(null);
+    });
+  }
+  assert(result.infillFrames.length===2,
+    'Missing street-level/low-flight real WebGL2 evidence');
   assert(errors.length===0,'Browser exceptions/assets: '+errors.join('; '));
   result.passed=true;
 }catch(error){
