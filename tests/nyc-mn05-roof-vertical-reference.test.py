@@ -90,7 +90,7 @@ class RoofVerticalReferenceAuditTests(unittest.TestCase):
             "FID": 1001, "BIN": 123, "DOITT_ID": 456,
             "GROUNDELEV": 20, "HEIGHTROOF": 80,
             "GEOMSOURCE": "Photogrammetric", "CNSTRCT_YR": 2000,
-            "LSTMODDATE": modified, "LSTSTATTYPE": "Initialization", "FEAT_CODE": 2100,
+            "LSTMODDATE": modified, "LSTSTATYPE": "Initialization", "FEAT_CODE": 2100,
         }}
         report = audit.build_audit(mesh, probe, footprints, {}, current)
         self.assertEqual(report["verticalDatumStatus"], "NOT_CERTIFIED")
