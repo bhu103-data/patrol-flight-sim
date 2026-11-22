@@ -118,3 +118,65 @@ test('actual road positions share the official DUMBO building WGS84 metre frame'
   assert.match(source,/assets\/nyc\/dumbo-cscl-official-snapshot\.json/);
   assert.doesNotMatch(source,/streetWidthSourceFeet\s*\*\s*0\.3048/);
 });
+
+test('all three official source buildings remain clear of verified street centerlines',()=>{
+  // Horizontal plan geometry only; this is NOT a survey of curb/building
+  // clearance and does not establish physical bridge elevations.
+  const toPoint=p=>{const q=frame.project(p[0],p[1],0);return [q[0],q[2]];};
+  const orient=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-
+    (b[1]-a[1])*(c[0]-a[0]);
+  const pointOn=(p,a,b)=>{
+    const d=orient(a,b,p);
+    return Math.abs(d)<1e-6 &&
+      p[0]>=Math.min(a[0],b[0])-1e-6 &&
+      p[0]<=Math.max(a[0],b[0])+1e-6 &&
+      p[1]>=Math.min(a[1],b[1])-1e-6 &&
+      p[1]<=Math.max(a[1],b[1])+1e-6;
+  };
+  const intersects=(a,b,c,d)=>{
+    const t1=orient(a,b,c),t2=orient(a,b,d),
+      t3=orient(c,d,a),t4=orient(c,d,b);
+    return t1*t2<0&&t3*t4<0 ||
+      pointOn(c,a,b)||pointOn(d,a,b)||pointOn(a,c,d)||pointOn(b,c,d);
+  };
+  const inside=(p,poly)=>{
+    let yes=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const a=poly[i],b=poly[j];
+      if(pointOn(p,a,b))return true;
+      if((a[1]>p[1])!==(b[1]>p[1]) &&
+        p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])yes=!yes;
+    }
+    return yes;
+  };
+  const distPointToSegment=(p,a,b)=>{
+    const vx=b[0]-a[0],vy=b[1]-a[1],len2=vx*vx+vy*vy;
+    const t=len2?Math.max(0,Math.min(1,
+      ((p[0]-a[0])*vx+(p[1]-a[1])*vy)/len2)):0;
+    return Math.hypot(p[0]-a[0]-t*vx,p[1]-a[1]-t*vy);
+  };
+  const actualNearest=[];
+  for(const rec of buildings.buildings){
+    const poly=rec.ring.map(toPoint);
+    const edges=poly.map((p,i)=>[p,poly[(i+1)%poly.length]]);
+    let nearest=Infinity,nearId=null;
+    for(const road of roads.groundCenterlines){
+      const [a,b]=road.metres.map(q=>[q[0],q[2]]);
+      assert.ok(!inside(a,poly)&&!inside(b,poly),
+        'road source physicalid '+road.physicalid+' crosses building '+rec.fid);
+      for(const [c,d] of edges){
+        assert.ok(!intersects(a,b,c,d),
+          'road source physicalid '+road.physicalid+' crosses building edge '+rec.fid);
+        const distance=Math.min(distPointToSegment(a,c,d),
+          distPointToSegment(b,c,d),distPointToSegment(c,a,b),
+          distPointToSegment(d,a,b));
+        if(distance<nearest){nearest=distance;nearId=road.physicalid;}
+      }
+    }
+    assert.ok(nearest>1.4&&nearest<12,
+      '1.8m visual guide should not clip real footprint; nearby road centreline expected');
+    actualNearest.push([rec.fid,nearId,nearest]);
+  }
+  assert.deepEqual(actualNearest.map(v=>v[1]),[102014,129762,90677],
+    'original official road physicalids nearest to source buildings must be stable');
+});
