@@ -87,10 +87,15 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
       (waterY-.23)+(Math.min(topL,topR)-(waterY-.23))*rise,
       cutBack?Math.max(zL,zR)+depth:Math.min(zL,zR)-depth
     ];
-    iceTri(a,b,knot,undercut);
+    // Let the actual 3-D ice normals and existing CC0 surface carry the
+    // relief. Huge per-triangle paint contrast reads as repeated X tiles.
+    const shaded=muted.map(v=>v*(.88+.04*q));
+    const topFace=muted.map((v,k)=>v*.82+light[k]*.18);
+    const fissure=undercut.map((v,k)=>v*.22+muted[k]*.78);
+    iceTri(a,b,knot,shaded);
     iceTri(b,c,knot,muted);
-    iceTri(c,d,knot,light);
-    iceTri(d,a,knot,deepFracture?undercut:muted);
+    iceTri(c,d,knot,topFace);
+    iceTri(d,a,knot,deepFracture?fissure:muted);
     stats.glacierFacets+=4;
     // Not every section has a rooftop. Rare undercut, broad sloping crowns
     // create realistic ice mass shapes instead of same-height vertical teeth.
