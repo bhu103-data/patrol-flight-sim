@@ -503,7 +503,7 @@ try{
   });
   check(flatironView.label==='Flatiron Building'&&flatironView.webgl&&flatironView.error===0,
    'Imported Flatiron camera failed: '+JSON.stringify(flatironView));
-  await capture('11-flatiron-dcp-import.png');
+  await capture('10-flatiron-dcp-import.png');
  }
 
  // Matched diagnostic control: use the engine's existing GIS-off switch
