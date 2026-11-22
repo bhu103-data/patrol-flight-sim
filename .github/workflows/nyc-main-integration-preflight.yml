@@ -5,6 +5,7 @@ on:
     branches:
       - qa/nyc-main-integration-preflight-20261122-chat
   pull_request:
+    types: [opened, synchronize, reopened, edited]
     paths:
       - .github/workflows/nyc-main-integration-preflight.yml
   workflow_dispatch:
