@@ -40,6 +40,9 @@ const injection=String.raw`
     window.__patrolBridgeheadQaDumboCamera=mode?views[mode]:null;
     camInitialized=false;
   };
+  window.__patrolBridgeheadQaScene = () => ({
+    time:sceneryTime,city:!!selectedMap.city
+  });
   window.__patrolBridgeheadQaSignal = () => ({
     time:sceneryTime,state:bridgeheadSignalState(sceneryTime),
     green:bridgeheadSignalGreen(sceneryTime)
@@ -238,6 +241,7 @@ try{
     typeof window.__patrolBridgeheadQaSetHold==='function'&&
     typeof window.__patrolBridgeheadQaSetCloseCamera==='function'&&
     typeof window.__patrolBridgeheadQaSetDumboCamera==='function'&&
+    typeof window.__patrolBridgeheadQaScene==='function'&&
     typeof window.__patrolBridgeheadQaSignal==='function'),
   'Test-only signal controls not installed');
   result.renderer='ANGLE SwiftShader / software WebGL2';
@@ -374,16 +378,23 @@ try{
       const state=await page.evaluate(()=>{
         const canvas=document.getElementById('glCanvas');
         const gl=canvas?.getContext('webgl2');
+        const scene=window.__patrolBridgeheadQaScene();
         return {webgl2:!!gl&&!gl.isContextLost(),error:gl?.getError(),
           camera:window.__patrolBridgeheadQaDumboCamera,
-          sceneTime:sceneryTime,city:!!selectedMap.city};
+          sceneTime:scene.time,city:scene.city};
       });
       assert(state.city&&state.webgl2&&state.error===0&&
         Math.abs(state.sceneTime-18)<1e-6&&state.camera,
         'Actual DUMBO WebGL2 infill view invalid: '+JSON.stringify(state));
-      const png=await page.locator('#glCanvas').screenshot({
-        path:out+'/'+name,timeout:90000,animations:'allow'
-      });
+      await page.evaluate(()=>document.body.classList.add('patrol-bridge-qa'));
+      let png;
+      try{
+        png=await page.locator('#glCanvas').screenshot({
+          path:out+'/'+name,timeout:90000,animations:'allow'
+        });
+      }finally{
+        await page.evaluate(()=>document.body.classList.remove('patrol-bridge-qa'));
+      }
       assert(png.length>5000,'Infill PNG is empty or incomplete: '+name);
       result.infillFrames.push({mode,name,bytes:png.length,state});
       screenshots.push({name,label:'DUMBO infill / '+mode,view:state});
