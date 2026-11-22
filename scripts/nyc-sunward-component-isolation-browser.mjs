@@ -13,6 +13,12 @@ const report={passed:false,errors:[],scenes:[],
   note:'Same scene height/exposure/time controls. SwiftShader RAF != native GPU time. Source-verified geometry and controls, NOT city photogrammetry.'};
 const ensure=(ok,msg)=>{if(!ok)throw Error(msg)};
 const prod=await readFile('index.html','utf8');
+const nycGuardedCrest='if(!uManhattan)\\n              waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
+const oldUnconditionalCrest='waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;';
+if(prod.split(nycGuardedCrest).length!==2)
+  throw Error('Cannot reconstruct the exact legacy view-sun radiance for causal QA');
+const legacySource=prod.replace(nycGuardedCrest,oldUnconditionalCrest);
+
 const newRay='reflDir.y = uManhattan ? max(reflDir.y, 0.002) : abs(reflDir.y);';
 const oldRay='reflDir.y = abs(reflDir.y);';
 const newMoon='float moonAngularRadius=uManhattan?0.00455:0.026;\n      float moonMinDot=uManhattan?0.9999895:0.99958;';
@@ -122,7 +128,10 @@ async function launch(mode,map='manhattan'){
                 'vec3 wn = vec3(0.0,1.0,0.0);']]
  };
  if(!(mode in variants))throw Error('Unknown component probe '+mode);
- let src=prod;
+ // Every diagnostic variant must use the SAME original pre-fix water path.
+ // Otherwise the current NYC-only production guard masks the very effect
+ // this instrument is meant to isolate and produces a false green CI result.
+ let src=legacySource;
  for(const [from,to] of variants[mode]){
    if(src.split(from).length!==2)throw Error('Missing unique optical probe: '+from);
    src=src.replace(from,to);
