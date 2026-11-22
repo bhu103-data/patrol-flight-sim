@@ -20,7 +20,7 @@ test('flight pilot is reachable but does not replace shipping map or its control
   assert.match(src,/aria-label="Flightable real-coordinate Tracy Arm USGS terrain"/);
   assert.match(src,/W\/S forward\/back/);
   assert.match(src,/window\.PatrolTrueScaleQA/);
-  assert.match(src,/original mountain relative relief/);
+  assert.match(src,/original mountain relief/);
   assert.match(src,/source height datum unverified/);
   assert.match(src,/Experimental separate flight camera, not the integrated PATROL flight physics/);
 });
