@@ -9563,9 +9563,37 @@ const CENTRAL_PARK_SITES=[
         const dial=(t,r)=>clock(Math.cos(t)*r,Math.sin(t)*r);
         addQuad(clock(0,0),dial(a,0.69),dial(b,0.69),dial(b,0.2),cream);
       }
-      box(-11+side*1.976,ground+12.25,8,0.034,0.46,0.071,iron);
-      box(-11+side*1.976,ground+12.04,8+side*0.15,0.034,0.07,0.32,iron);
+      // PATROL_VEGAS_CAMPANILE_CLOCK_DETAIL_V1
+      // Model-only clock detail: two stylized hands and twelve real ticks.
+      // These are dark, batched mesh quads above the original ivory dial,
+      // not textured graphics or measured instrument/clockwork dimensions.
+      const darkClock=[.20,.19,.17];
+      const dialFace=(u,v)=>[-11+side*2.022,ground+12.04+v,8+u];
+      const clockStroke=(angle,inner,outer,width,color)=>{
+        const polar=(rad,tangent)=>dialFace(Math.cos(angle)*rad-Math.sin(angle)*tangent,
+          Math.sin(angle)*rad+Math.cos(angle)*tangent);
+        const quad=[polar(inner,-width),polar(outer,-width),
+          polar(outer,width),polar(inner,width)];
+        if(side<0)quad.reverse();
+        addQuad(...quad,color);
+      };
+      for(let tick=0;tick<12;tick++)
+        clockStroke(tick*Math.PI/6,tick%3===0?.48:.54,.64,
+          tick%3===0?.028:.018,darkClock);
+      clockStroke(5*Math.PI/6,.05,.38,.039,darkClock);
+      clockStroke(Math.PI/3,.05,.53,.026,darkClock);
+      box(-11+side*2.032,ground+12.04,8,.035,.083,.083,iron);
     }
+    // PATROL_VEGAS_CAMPANILE_BELL_V1: a small suspended bronze bell inside
+    // the new open arcade, not an opaque replacement of its openings.
+    // No physical bell collision: retain the conservative existing building.
+    const bellBronze=[.57,.39,.22],bellDark=[.35,.25,.19];
+    box(-11,ground+15.59,8,1.68,.10,.12,iron);
+    cylinder(-11,8,[[ground+14.73,.43],[ground+14.85,.51],
+      [ground+15.16,.34],[ground+15.39,.15],[ground+15.48,.10]],
+      bellBronze,10);
+    cylinder(-11,8,[[ground+14.58,.11],[ground+14.79,.11]],
+      bellDark,8);
     cylinder(-11,8,[[ground+16.4,3.05],[ground+20.75,0.12]],[0.29,0.46,0.41],4,Math.PI/4);
     solidAt('Venetian Campanile spire',-11,8,ground+16.4,ground+20.75,0.6,0.6);
     const canalX=-12,canalZ=31,canalY=ground+0.27;
