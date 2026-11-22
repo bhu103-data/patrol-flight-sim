@@ -10827,11 +10827,13 @@ const CENTRAL_PARK_SITES=[
       if(!nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
     }
     if(selectedMap.city && nycStreetMesh?.count && !nycVisualProbeOmits('street'))drawMesh(nycStreetMesh,identity);
-    if(selectedMap.city && nycRoadChunkLevel && !nycVisualProbeOmits('roadChunks')){
-      for(const chunk of nycRoadDetailChunks){
-        const level=nycRoadChunkLevel(chunk.bounds,camPos);
-        if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
-        if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+    if(selectedMap.city && nycRoadChunkLevel){
+      if(!nycVisualProbeOmits('roadChunks')){
+        for(const chunk of nycRoadDetailChunks){
+          const level=nycRoadChunkLevel(chunk.bounds,camPos);
+          if(level>=1 && chunk.mid.count)drawMesh(chunk.mid,identity);
+          if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
+        }
       }
     }
     if(selectedMap.city && nycHeroScenery?.count && !nycVisualProbeOmits('hero'))drawMesh(nycHeroScenery,identity);
