@@ -1,0 +1,36 @@
+name: NYC DUMBO official CSCL streetline source snapshot
+
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/collect_dumbo_cscl.mjs'
+      - 'assets/nyc/dumbo-cscl-official-snapshot.json'
+      - 'assets/nyc/dumbo-true-scale-geodesy.js'
+      - 'nyc-dumbo-true-scale.html'
+      - 'tests/nyc-dumbo-cscl-meter-streets.test.mjs'
+      - '.github/workflows/nyc-dumbo-cscl-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve-official-centerlines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch and validate modern NYC OTI CSCL WGS84 roads in DUMBO
+        run: node tools/nyc/collect_dumbo_cscl.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nyc-dumbo-official-cscl-bounded-source
+          path: artifacts/nyc-dumbo-cscl-*
+          retention-days: 7
+          if-no-files-found: ignore
