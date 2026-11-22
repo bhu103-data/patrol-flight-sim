@@ -3,7 +3,7 @@
 // ONLY a geometry identity, not evidence of a specific surface finish.
 export const MATERIAL_SCHEMA='patrol-nyc-fid-material-slots-v1';
 const PERMITTED=Object.freeze({
-  'brick-proxy':Object.freeze({shaderId:3,tileMeters:Object.freeze([.62,.21])}),
+  'brick-proxy':Object.freeze({shaderId:3,tileMeters:Object.freeze([.2032,.06773333333333333])}),
   'glass-proxy':Object.freeze({shaderId:4,tileMeters:Object.freeze([1.5,3.6])}),
   'stone-proxy':Object.freeze({shaderId:5,tileMeters:Object.freeze([1,.5])})
 });
