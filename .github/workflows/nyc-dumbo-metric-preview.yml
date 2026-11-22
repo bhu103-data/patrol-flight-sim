@@ -1,0 +1,45 @@
+name: NYC DUMBO OTI true metric WebGL2 preview QA
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'assets/nyc/dumbo-oti-metric.mjs'
+      - 'assets/nyc/dumbo-oti-metric-48.json'
+      - 'tools/nyc/dumbo-metric-preview.html'
+      - 'tools/nyc/dumbo-metric-browser-smoke.mjs'
+      - 'tests/nyc-dumbo-metric-preview.test.mjs'
+      - '.github/workflows/nyc-dumbo-metric-preview.yml'
+permissions:
+  contents: read
+jobs:
+  metric-dumbo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate projection, roof triangulation and fallback isolation
+        run: node --test tests/nyc-dumbo-metric-preview.test.mjs
+      - name: Install pinned Chromium browser harness
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve actual georeferenced preview files
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-oti-metric.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/tools/nyc/dumbo-metric-preview.html >/dev/null
+      - name: Render exact-source DUMBO oblique and overhead WebGL2
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node tools/nyc/dumbo-metric-browser-smoke.mjs
+      - name: Preserve browser screenshot and report evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-oti-metric-webgl
+          path: artifacts/nyc-dumbo-metric/
+          retention-days: 7
+          if-no-files-found: ignore
