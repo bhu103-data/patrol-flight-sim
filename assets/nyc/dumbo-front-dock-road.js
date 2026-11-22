@@ -64,7 +64,11 @@ export function buildDumboFrontDockRoad(data,{
 }){
   if(!data)return {enabled:false,officialTriangles:0,reason:'opt-in disabled'};
   const verified=validateFrontDockOfficialSource(data);
-  const roadY=streetY+.150,paintY=streetY+.188;
+  // Keep the official 2022 planimetric road surface in the SAME existing
+  // PATROL ground plane as procedural asphalt, not a raised floating patch.
+  // Only (flat) XY pavement shape is sourced; vertical road grade remains
+  // the existing game streetY. Paint is just above, like original markings.
+  const roadY=streetY+.086,paintY=streetY+.121;
   const isSafe=([e,n],y=roadY)=>{
     const [x,,z]=world([e,n],y);
     return terrainAt(x,z)>=waterY+1.58&&isClear(x,z,.12);
