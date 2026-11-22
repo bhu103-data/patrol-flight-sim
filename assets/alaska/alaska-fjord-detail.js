@@ -177,8 +177,9 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     // inward snow shoulder. The OUTER footprint and submerged waterline
     // stay byte-for-byte untouched: all new vertices lie INSIDE the original
     // shore-tested polygon, with one scale per floe to avoid folding edges.
-    // NOAA sea-ice observations show raised, uneven rubble/snow ridges;
-    // this is a lightweight authored approximation, NOT survey/scan data.
+    // Tracy Arm contains ice calved from tidewater glaciers, not Arctic
+    // pack-ice pressure ridges. This snow lip is only a small authored
+    // visual abstraction, NOT a measured/photogrammetric glacier chunk.
     const shoulderScale=.73+.09*hash(i*43+57);
     const shoulder=ring.map((point,k)=>[
       center[0]+(point[0]-center[0])*shoulderScale,
