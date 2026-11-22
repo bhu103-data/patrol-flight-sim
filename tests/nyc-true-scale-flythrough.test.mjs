@@ -46,7 +46,8 @@ test('new runtime scene renders 118 source buildings plus 89 official street seg
   const y=[];
   for(let i=1;i<g.interleaved.length;i+=MESH_STRIDE)y.push(g.interleaved[i]);
   assert.ok(Math.max(...y)>260,'actual official roof height not compressed');
-  assert.ok(y.includes(-.135),'centerline-derived road deck is present');
+  assert.ok(y.some(height=>Math.abs(height+.135)<1e-6),
+    'Float32 roundoff must not hide centerline-derived road deck');
 });
 
 test('road source is not silently invented if absent',()=>{
