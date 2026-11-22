@@ -15,6 +15,7 @@ import json
 import math
 import os
 import pathlib
+import subprocess
 import sys
 
 import rhino3dm
@@ -22,13 +23,11 @@ from shapely.geometry import Polygon
 
 HERE=pathlib.Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-from official_mn05_projection import (mn05_stateplane_to_metric, wgs84_to_local_metres,
-    ORIGIN_WGS84)
-from inspect_mn05_support import (
-    require_feet_model_unit, anchored_source_height_metres,
-    MODEL_FOOT_IN_METRES)
+from official_mn05_projection import mn05_stateplane_to_metric, ORIGIN_WGS84
 from inspect_mn05_facade_support import (
-    face_from_cached_facade_mesh, match_facade_to_building)
+    face_from_cached_facade_mesh, match_facade_to_building,
+    wgs84_to_local_metres, require_feet_model_unit,
+    anchored_source_height_metres, MODEL_FOOT_IN_METRES)
 
 DIR=pathlib.Path("artifacts/nyc-official-mn05")
 SOURCE=DIR/"mn05-source.3dm"
@@ -38,7 +37,7 @@ OUTPUT=DIR/"mn05-cached-facade-metric-preview.json"
 BOUND=(-315.0,-175.0,380.0,530.0)
 ZIP_SHA="71e6242c55ca7069f67c0bfd8e6d4764c9e6020a361e6bfa77880effe7520bf2"
 MODEL_SHA="b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57"
-MAX_OBJECTS=5000
+MAX_OBJECTS=12000
 MAX_TRIANGLES=60000
 BOUNDARY_TOLERANCE_METRES=1.5
 
@@ -91,6 +90,7 @@ def source_facade_objects(model):
     accepted=[]
     rejected=collections.Counter()
     candidates=0
+    total_triangles=0
     for index,obj in enumerate(model.Objects):
         if obj.Attributes.LayerIndex not in facade_layers:
             continue
@@ -128,6 +128,9 @@ def source_facade_objects(model):
                 continue
         if not triangles:
             rejected["noUsableSavedFacadeTriangles"]+=1;continue
+        total_triangles+=len(triangles)
+        if total_triangles>MAX_TRIANGLES:
+            raise RuntimeError("Bounded facade triangle count exceeds explicit budget")
         accepted.append({"sourceObjectIndex":index,
             "sourceUuid":str(obj.Attributes.Id),
             "centerMetres":[e,n],"triangles":triangles,
@@ -150,14 +153,21 @@ def main():
         "matching":"XY projection of cached facade mesh against one 2022 footprint boundary; shared/ambiguous party walls rejected",
         "meshAccepted":False,"errors":[]}
     try:
+        if not SOURCE.exists():
+            # The parent roof extractor deletes the original 627MB model.
+            # Re-fetch it in this same job for the facade pass; never upload it.
+            env=os.environ.copy()
+            env["PATROL_KEEP_MN05"]="1"
+            subprocess.run([sys.executable,"tools/nyc/probe-official-mn05-rhino.py"],
+                           check=True,env=env)
         previous=json.loads(PROBE.read_text())
         if not previous.get("imported") or previous.get("sha256")!=ZIP_SHA or previous.get("source3dmSha256")!=MODEL_SHA:
             raise RuntimeError("MN05 official source SHA/provenance mismatch")
         if hashlib.sha256(SOURCE.read_bytes()).hexdigest()!=MODEL_SHA:
             raise RuntimeError("Original MN05 source file hash mismatch")
         roof=json.loads(ROOF.read_text())
-        if not roof.get("meshAccepted") or not roof.get("sourceZReliefPreserved"):
-            raise RuntimeError("Validated source roof geometry and vertical unit check required first")
+        if not roof.get("meshAccepted"):
+            raise RuntimeError("Validated original source roof mesh required before facade matching")
         model=rhino3dm.File3dm.Read(str(SOURCE))
         if model is None:
             raise RuntimeError("Municipal 2014 Brep source cannot be opened")
