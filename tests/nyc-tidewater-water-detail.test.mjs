@@ -40,34 +40,29 @@ test('existing same-camera A/B harness covers crest and sea-detail independently
   assert.match(testTool,/nyc-water-'\+report\.mode/);
   assert.match(testTool,/gpuFrameMs:null/);
 });
-test('compat and both Balanced/Off skip optional ocean noise without touching physics',()=>{
+test('graphics compat and NYC Basic bypass extra visual noise without touching water physics',()=>{
   assert.match(shader,/uniform bool uNYCSeaDetail;/);
   assert.match(html,/nycSeaDetail:gl\.getUniformLocation\(worldProg,'uNYCSeaDetail'\)/);
   assert.match(html,/gl\.uniform1i\(uWorld\.nycSeaDetail,/);
   assert.match(html,/selectedMap\.city && !graphicsCompat &&/);
   assert.match(html,/Number\(nyStreetQuality\.value\) >= 2/);
 });
-test('NYC long-crest bend uses exactly the same phase and gradient as shader',()=>{
-  assert.match(html,/const NYC_CREST_BEND = 0\.70;/);
-  assert.match(shader,/const float NYC_CREST_BEND = \$\{NYC_CREST_BEND\.toFixed\(2\)\};/);
-  assert.match(shader,/vec3 nycCrestBend\(vec2 xz,float t\)/);
-  assert.match(shader,/0\.027\*ca\*sb\+0\.009\*sa\*cb/);
-  assert.match(shader,/0\.018\*ca\*sb-0\.013\*sa\*cb/);
-  assert.match(shader,/cos\(phase\)\*\(p\.xy\+bent\.yz\)/);
-  assert.match(shader,/mode<6\?bend:0\.0/);
-  assert.match(html,/i<6\?bend:0/);
+test('NYC far-water long-wave optical filter preserves original physical wave',()=>{
+  assert.match(shader,/const bool NYC_HORIZON_SLOPE_FILTER = true;/);
+  assert.match(shader,/nycLongSlopeVisibility/);
+  assert.match(shader,/1\.0-0\.72\*smoothstep\(0\.80,4\.40,pixel\)/);
+  assert.match(shader,/swell\.yz\*nycLongSlopeVisibility\+chop\.yz/);
+  assert.match(shader,/swell\.x \* 0\.045 \*/);
+  assert.match(shader,/nycLongSlopeVisibility \+ chop\.x \* 0\.19/);
+  assert.match(html,/function floatOceanHeight\(x,z,t,depth,map\)/);
+  assert.match(html,/height\+=Math\.sin\(kx\*x\+kz\*z-omega\*t\+phase\)\*amp/);
+  assert.doesNotMatch(html,/NYC_CREST_BEND/);
 });
-test('long-crest A/B disables CPU and GLSL together rather than changing only shader',()=>{
-  const tool=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
-  assert.match(tool,/PATROL_COMPARE_MODE==='crest-warp'/);
-  assert.match(tool,/const NYC_CREST_BEND = 0\.00;/);
-  assert.match(tool,/src\.replace\(warpEnabled,warpDisabled\)/);
-});
-test('browser water A/B asserts actual form values before starting flight',()=>{
-  const script=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
-  assert.match(script,/v=new FormData\(document\.getElementById\('flightSetup'\)\)/);
-  assert.match(script,/v\.get\('flightMap'\)/);
-  assert.match(script,/v\.get\('aircraft'\)/);
-  assert.match(script,/v\.has\('waterStart'\)/);
-  assert.match(script,/Water QA form selection not stable/);
+test('band-filter A/B toggles only shader optical filter and validates flight form',()=>{
+  const qa=readFileSync(new URL('../tools/aircraft/nyc-water-crest-compare.mjs',import.meta.url),'utf8');
+  assert.match(qa,/PATROL_COMPARE_MODE==='band-filter'/);
+  assert.match(qa,/const bool NYC_HORIZON_SLOPE_FILTER = false;/);
+  assert.match(qa,/src\.replace\(bandEnabled,bandDisabled\)/);
+  assert.match(qa,/new FormData\(document\.getElementById\('flightSetup'\)\)/);
+  assert.match(qa,/Water QA form selection not stable/);
 });

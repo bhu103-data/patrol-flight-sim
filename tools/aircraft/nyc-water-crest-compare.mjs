@@ -45,22 +45,22 @@ const inject=html=>html.replace(camera,`
 `+bridge).replace(clock,'gl.uniform1f(uWorld.time, 20.0);')
     .replace(aircraftClock,'plane.yaw,20.0,');
 const seaDetailAB=process.env.PATROL_COMPARE_MODE==='sea-detail';
-const crestWarpAB=process.env.PATROL_COMPARE_MODE==='crest-warp';
+const bandFilterAB=process.env.PATROL_COMPARE_MODE==='band-filter';
 const detailEnabled='const bool NYC_TIDEWATER_DETAIL = true;';
 const detailDisabled='const bool NYC_TIDEWATER_DETAIL = false;';
 if(seaDetailAB&&src.split(detailEnabled).length!==2)
   throw Error('Missing reversible NYC sea detail marker');
-const warpEnabled='const NYC_CREST_BEND = 0.70;';
-const warpDisabled='const NYC_CREST_BEND = 0.00;';
-if(crestWarpAB&&src.split(warpEnabled).length!==2)
-  throw Error('Missing shared NYC physical/render crest bend parameter');
-const sourceBefore=inject(crestWarpAB
-  ?src.replace(warpEnabled,warpDisabled)
+const bandEnabled='const bool NYC_HORIZON_SLOPE_FILTER = true;';
+const bandDisabled='const bool NYC_HORIZON_SLOPE_FILTER = false;';
+if(bandFilterAB&&src.split(bandEnabled).length!==2)
+  throw Error('Missing reversible NYC horizon shading filter');
+const sourceBefore=inject(bandFilterAB
+  ?src.replace(bandEnabled,bandDisabled)
   :seaDetailAB?src.replace(detailEnabled,detailDisabled)
   :src.replace(modern,old));
 const sourceAfter=inject(src);
 const origin=new URL(url).origin,report={
-  mode:crestWarpAB?'crest-warp':seaDetailAB?'sea-detail':'crest',
+  mode:bandFilterAB?'band-filter':seaDetailAB?'sea-detail':'crest',
   cameraTime:20,frames:[],errors:[],
   note:'Test-only fixed shader time, not a runtime setting'};
 const chrome=process.env.PATROL_BROWSER_CHANNEL==='chrome';
