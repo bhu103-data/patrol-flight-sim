@@ -147,6 +147,12 @@ try{
   await page.locator('#qualityBtn').click(); // high -> low
   await page.locator('#cqTime').selectOption('night');
   await page.keyboard.press('2');
+  // Check *before* waiting for a render frame: SwiftShader may run at only
+  // a few FPS, so a delayed avatar restoration can otherwise flake.
+  const immediateReset=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
+  check(!immediateReset.marketDetailCameraActive &&
+    !immediateReset.marketDetailAvatarHidden,
+    'Digit2 must immediately restore pilot visibility without a new frame');
   await page.waitForTimeout(250);
   const starting=await page.evaluate(()=>window.PatrolSpaceBridge.getState());
   check(starting.avatarFlying,'Scenic shortcut 2 must enable flying');
