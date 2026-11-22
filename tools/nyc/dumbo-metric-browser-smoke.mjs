@@ -163,6 +163,7 @@ try{
  }
  assert.ok(sourceModelChanged>100,'2014 GLB toggle did not change rendered WebGL pixels: '+sourceModelChanged);
  const source2014=await page.evaluate(()=>({...window.__metricQa.source2014}));
+ stats.source2014=source2014;
  assert.equal(source2014.ready,true);assert.equal(source2014.enabled,true);
  assert.equal(source2014.triangles,8541);assert.equal(source2014.visibleTriangles,7475);
  assert.equal(source2014.facadePatches,2093);assert.equal(source2014.roofPatches,314);
@@ -172,6 +173,7 @@ try{
  assert.equal(await page.evaluate(()=>window.__metricFly.safety.buildingCount),48);
  await page.keyboard.press('m');
  await page.waitForFunction('window.__metricQa?.source2014?.enabled===false');
+ const source2014AfterToggleOff=await page.evaluate(()=>({...window.__metricQa.source2014}));
 
  const flight={spawn:spawnState,afterLift,afterMovement:movedState,fixture:flyFixture,
    liveVerticalEAndForwardWKeysVerified:true,
@@ -184,7 +186,7 @@ try{
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
   images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png','06-dumbo-2014-source-glb-overlay.png'],
-  source2014,sourceModelChangedSamples:sourceModelChanged,
+  source2014,source2014AfterToggleOff,sourceModelChangedSamples:sourceModelChanged,
   lowFlight:flight,
   roadFocus,roadCameraChangedSamples:changed,conflictFocus,
   conflictCameraChangedSamples:conflictChanged,
