@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  coveredLength,pointInPolygons,classifyCenterlines
+  coveredLength,outsideSourceIntervals,pointInPolygons,classifyCenterlines
 } from '../scripts/nyc-times-pedestrian-topology-audit.mjs';
 const ring=(x0,y0,x1,y1)=>[
   [x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]
@@ -52,4 +52,42 @@ test('unbounded, nonfinite or missing source centerlines fail closed',()=>{
   assert.throws(()=>classifyCenterlines({
     projection:f,roads:[]},{projection:f,roadbeds:[]},
     {projection:f,plaza:[],sidewalk:[]}),/missing/);
+});
+
+test('identifies precise source-derived centerline gaps, not false road drivable rights',()=>{
+  const frame={originLonLat:[-73.9864883,40.756421]};
+  const road={projection:frame,roadbeds:[feature(ring(0,-5,300,5))]};
+  const plaza={projection:frame,
+    plaza:[feature(ring(350,-5,500,5))],
+    sidewalk:[feature(ring(500,-5,550,5))]};
+  const source={projection:frame,roads:[{objectId:459,streetName:'Broadway',
+    lines:[[[0,0],[600,0]]]}]};
+  const result=classifyCenterlines(source,road,plaza);
+  assert.equal(result.total.segmentCount,1);
+  assert.equal(result.broadwayUncovered.portions.length,2);
+  assert.ok(Math.abs(result.broadwayUncovered.lengthMeters-150)<1e-7);
+  assert.equal(result.broadwayUncovered.portions[0].objectId,459);
+  assert.equal(result.broadwayUncovered.portions[0].lengthMeters,100);
+  assert.equal(result.broadwayUncovered.portions[0].sidewalkCoveredMeters,50);
+  assert.deepEqual(result.broadwayUncovered.portions[0].startMeters,[500,0]);
+  assert.deepEqual(result.broadwayUncovered.portions[0].endMeters,[600,0]);
+  assert.equal(result.broadwayUncovered.portions[1].lengthMeters,50);
+  assert.deepEqual(result.broadwayUncovered.portions[1].startMeters,[300,0]);
+  assert.deepEqual(result.broadwayUncovered.portions[1].endMeters,[350,0]);
+  assert.match(result.broadwayUncovered.access,/UNKNOWN/);
+  assert.ok(result.broadwayUncovered.portions[0].startApproxWGS84
+    .every(Number.isFinite));
+  assert.ok(Math.abs(result.broadwayUncovered.lengthMeters-
+    (result.total.centrelineMetres-result.total.roadbedOrPlazaMetres))<1e-8);
+});
+test('uncovered source intervals respect courtyard holes and split crossings',()=>{
+  const street=feature(ring(0,0,10,10),[ring(3,3,7,7)]);
+  const gaps=outsideSourceIntervals([-1,5],[11,5],[street]);
+  assert.equal(gaps.length,3);
+  assert.deepEqual(gaps.map(x=>x.lengthMeters),[1,4,1]);
+  assert.deepEqual(gaps[1].startMeters,[3,5]);
+  assert.deepEqual(gaps[1].endMeters,[7,5]);
+  assert.equal(outsideSourceIntervals([1,5],[2,5],[street]).length,0);
+  assert.throws(()=>outsideSourceIntervals([Infinity,0],[1,1],[street]),
+    /Nonfinite/);
 });
