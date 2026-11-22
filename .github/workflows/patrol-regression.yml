@@ -28,20 +28,7 @@ jobs:
         run: |
           npm install --global @gltf-transform/cli
           python3 -m pip install --disable-pip-version-check pillow
-          # KhronosGroup official pinned KTX-Software release. Required for
-          # KTX2 -> PNG; do not use a third-party codec binary.
-          curl --fail --location --retry 2 --max-time 100 \
-            'https://github.com/KhronosGroup/KTX-Software/releases/download/v4.4.2/KTX-Software-4.4.2-Linux-x86_64.tar.bz2' \
-            -o /tmp/ktx-4.4.2-linux.tar.bz2
-          sha256sum /tmp/ktx-4.4.2-linux.tar.bz2
-          mkdir -p /tmp/ktx-tools
-          tar -xjf /tmp/ktx-4.4.2-linux.tar.bz2 -C /tmp/ktx-tools
-          KTX_BIN="$(find /tmp/ktx-tools -type f -name ktx | head -n 1)"
-          test -n "$KTX_BIN"
-          chmod +x "$KTX_BIN"
-          export PATH="$(dirname "$KTX_BIN"):$PATH"
-          export LD_LIBRARY_PATH="$(find /tmp/ktx-tools -type f -name 'libktx.so*' -printf '%h\n' | head -n 1):${LD_LIBRARY_PATH:-}"
-          ktx --version
+          source tools/nyc/install_ktx.sh
           bash tools/nyc/build_cc0_ferry_lods.sh
       - name: Preserve CC0 publisher source and model metrics (NYC ferry PR only)
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122'
@@ -51,3 +38,50 @@ jobs:
           path: nyc-harbor-audit/
           if-no-files-found: warn
           retention-days: 7
+
+  stage-nyc-harbor-cc0-ferry:
+    # Internal, exact scoped branch only. This is the sole write-token job.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 258 && github.event.pull_request.head.ref == 'codex/nyc-harbor-ferry-cc0-lod-20261122' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: node-regressions
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download and verify official CC0 source; convert all LODs
+        run: |
+          npm install --global @gltf-transform/cli
+          python3 -m pip install --disable-pip-version-check pillow
+          python3 tools/nyc/audit_cc0_ferry_lods.py
+          source tools/nyc/install_ktx.sh
+          bash tools/nyc/build_cc0_ferry_lods.sh
+      - name: Stage verified local same-origin GLBs in this draft branch only
+        run: |
+          set -euo pipefail
+          mkdir -p assets/nyc/harbor
+          for lod in 0 1 2; do
+            src="nyc-harbor-audit/staged/tevy-ro-ro-lod$lod.glb"
+            dst="assets/nyc/harbor/tevy-ro-ro-lod$lod.glb"
+            if [ -e "$dst" ]; then
+              cmp "$src" "$dst" || { echo "Existing GLB differs. Stop without overwrite."; exit 2; }
+            else
+              cp "$src" "$dst"
+            fi
+          done
+          cp nyc-harbor-audit/staged/webgl2-lod-audit.json assets/nyc/harbor/webgl2-lod-audit.json
+          cp nyc-harbor-audit/official-tevy/license-binary-audit.json assets/nyc/harbor/official-source-audit.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/nyc/harbor/
+          if git diff --cached --quiet; then
+            echo 'Pinned CC0 LOD assets already staged. No commit.'
+          else
+            git commit -m 'assets(nyc): stage verified CC0 ferry WebGL2 near mid far GLBs'
+            git push origin HEAD:refs/heads/codex/nyc-harbor-ferry-cc0-lod-20261122
+          fi
