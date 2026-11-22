@@ -43,6 +43,9 @@ try{
    '      canvas:[glCanvas.width,glCanvas.height],',
    '      phase:lamp,vehicleCount:group.length,',
    '      variants:Object.keys(nycTimesSignalMeshes||{}),',
+   '      sites:[[12,6],[12,1],[7.05,6.45]].map(([x,z])=>({x,z,terrain:sampleTerrainHeight(x,z),',
+   '        required:WATER_H+1.58,occupied:!!cityLotAt(x,z)})),',
+   '      graphicsCompat, meshBuilt:!!nycTimesSignalMeshes,',
    '      activeSignalTriangles:mesh?.count||0,',
    '      proofDistance:probe?timesSeventhControlledDistance(probe,sceneryTime):null,',
    '      carSamples:group.slice(0,3).map(x=>trafficPose(x,sceneryTime))};',
@@ -65,8 +68,16 @@ try{
   const load=document.getElementById('loadOverlay');
   return title?.hidden&&load?.classList.contains('done');
  },null,{timeout:150000});
- await page.waitForFunction(()=>window.__patrolTimesQaState?.().variants.length===5,
-   null,{timeout:120000});
+ await page.waitForTimeout(4500);
+ const diagnostic=await page.evaluate(()=>{
+   const method=window.__patrolTimesQaState;
+   return typeof method==='function'?method():{installed:typeof method};
+ });
+ result.initialDiagnostic=diagnostic;
+ console.log('[PATROL TIMES 7AV INIT DIAGNOSTIC]',JSON.stringify(diagnostic));
+ check(diagnostic.variants?.length===5,
+   'Signal meshes not allocated; inspect actual land/footprint diagnostics');
+
  await page.evaluate(()=>{
   for(const [id,value] of [['skyTime','12'],['skySeason','1'],['skyWeather','Clear']]){
    const el=document.getElementById(id);
