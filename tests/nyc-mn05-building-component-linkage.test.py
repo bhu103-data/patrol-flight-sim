@@ -82,6 +82,12 @@ class BuildingComponentLinkageUnitTests(unittest.TestCase):
         for layer in report["layers"].values():
             self.assertGreater(layer["roiObjects"], 100)
         self.assertIn("groupsWithAllThreeComponents", report["groupLinkage"])
+        footprint_path = pathlib.Path("artifacts/nyc-official-mn05/times-square-original-footprint-mesh.json")
+        self.assertTrue(footprint_path.is_file(), "2014 footprint mesh output was not generated")
+        footprint = json.loads(footprint_path.read_text())
+        self.assertEqual(footprint["source3dmSha256"], report["source3dmSha256"])
+        self.assertGreater(footprint["counts"]["sourceFootprintMeshPatches"], 100)
+        self.assertGreater(footprint["counts"]["sourceFootprintTriangles"], 100)
 
 
 if __name__ == "__main__":
