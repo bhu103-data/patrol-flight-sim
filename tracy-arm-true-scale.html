@@ -374,6 +374,9 @@ async function boot(){
         sourceVerticalCrs:nativeSource.sourceVerticalCrs,
         sourceProject:nativeSource.sourceProject,
         workunit:nativeSource.workunit,
+        sourceCollectionStart:nativeSource.collectionStart,
+        sourceCollectionEnd:nativeSource.collectionEnd,
+        sourceVerticalDatumEvidence:nativeSource.verticalDatumEvidence,
         sourceTileSha256:[...nativeSource.sourceTileSha256],
         sourceCoverageValidFraction:nativeSource.coverageValidFraction,
         tileSeamP95Metres:nativeSource.tileSeamP95Metres,
@@ -468,7 +471,7 @@ async function boot(){
     +' · '+detailMode+
     (sourceAudit?'\nUSGS IfSAR source: '+sourceAudit.sourceCellCount.toLocaleString()+
       ' cells at '+sourceAudit.sourceResolutionMeters.map(x=>x.toFixed(1)).join('×')+
-      'm · rendered at '+dem.sampleSpacingApproxMeters.map(x=>x.toFixed(1)).join('×')+'m LOD':'')+
+      'm · rendered at '+dem.sampleSpacingApproxMeters.map(x=>x.toFixed(1)).join('×')+'m LOD · NAVD88/GEOID09 (USGS index) · 2010–2012 collection':'')+
     (detailWarning?'\n'+detailWarning:'');
   requestAnimationFrame(draw);
 }
@@ -492,6 +495,9 @@ window.PatrolTrueScaleQA=()=>({
   sourceVerticalCrs:sourceAudit?.sourceVerticalCrs||null,
   sourceProject:sourceAudit?.sourceProject||null,
   workunit:sourceAudit?.workunit||null,
+  sourceCollectionStart:sourceAudit?.sourceCollectionStart||null,
+  sourceCollectionEnd:sourceAudit?.sourceCollectionEnd||null,
+  sourceVerticalDatumEvidence:sourceAudit?.sourceVerticalDatumEvidence||null,
   sourceTileSha256:sourceAudit?[...sourceAudit.sourceTileSha256]:null,
   sourceCoverageValidFraction:sourceAudit?.sourceCoverageValidFraction??null,
   meshLodStride:dem?.meshLodStride||1,
