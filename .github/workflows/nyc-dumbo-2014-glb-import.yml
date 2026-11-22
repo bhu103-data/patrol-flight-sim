@@ -5,11 +5,6 @@ on:
       - feat/nyc-dumbo-2014-glb-runtime-import-20261122-chat
     paths:
       - 'tools/nyc/export-bk02-source-glb.py'
-      - 'assets/nyc/dumbo-bk02-glb-loader.mjs'
-      - 'tools/nyc/dumbo-metric-preview.html'
-      - 'tools/nyc/dumbo-metric-browser-smoke.mjs'
-      - 'tests/nyc-dumbo-2014-glb.test.mjs'
-      - '.github/workflows/nyc-dumbo-2014-glb-import.yml'
   workflow_dispatch:
 permissions:
   contents: write
