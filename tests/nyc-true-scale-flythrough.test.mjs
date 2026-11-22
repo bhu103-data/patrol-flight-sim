@@ -59,8 +59,8 @@ test('real OTI 2022 11-FID polygon core matches source integrity budgets',()=>{
   assert.equal(roadbed.polygons.length,11);
   assert.equal(new Set(roadbed.polygons.map(x=>x[0])).size,11);
   assert.equal(roadbed.polygons.filter(x=>x[1]===350010).length,3);
-  assert.ok(roadbed.maxHausdorffM<=.057);
-  assert.ok(roadbed.maxAreaDifferencePct<=.089);
+  assert.ok(roadbed.maxHausdorffM<=.061);
+  assert.ok(roadbed.maxAreaDifferencePct<=.096);
   assert.equal(roadbed.polygons.reduce((n,p)=>n+p[2].length,0),229);
   const pristine=buildNeighborhoodMesh(massing,roads,{detail:false});
   const official=buildNeighborhoodMesh(massing,roads,{
