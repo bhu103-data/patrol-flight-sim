@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'assets/nyc/truegeo-times-square.mjs'
+      - 'assets/nyc/truegeo-cscl.mjs'
       - 'assets/nyc/times-square-footprints.json'
       - 'truegeo-times-square-preview.html'
       - 'tests/nyc-truegeo-times-square.test.mjs'
