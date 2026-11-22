@@ -9058,8 +9058,8 @@ const CENTRAL_PARK_SITES=[
     // overlays create no new blocking collider or new vehicle route.
     const asphalt=[.19,.20,.21],joint=[.34,.33,.32];
     for(let z=-210;z<=-122;z+=11){
-      // The original asphalt/lane/collision remains unchanged. Only short
-      // flush repair joints track the measured Census TIGER curvature.
+      // Measured TIGER curvature stays well within original asphalt. The
+      // joints are surface-only; road geometry, traffic and collisions stay.
       const roadX=vegasMeasuredStripX(z);
       const y=sampleTerrainHeight(roadX,z)+.332;
       const dark=(z%3===0)?joint:asphalt;
@@ -9067,7 +9067,27 @@ const CENTRAL_PARK_SITES=[
         [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
       triangles+=2;
     }
-    return {mountainTriangles:triangles-18,roadTriangles:18,triangles};
+    // Continuous fine pavement patch seams follow TIGER-derived road
+    // curvature. Both ±7.2-unit strips are entirely inside the original
+    // asphalt half-width of 8.575, leaving traffic and lane markings intact.
+    // These are original graphical surface details, NOT claimed surveyed
+    // expansion-joint positions or new physical curbs.
+    for(let i=0;i<24;i++){
+      const za=-210+i*88/24,zb=-210+(i+1)*88/24;
+      const xa=vegasMeasuredStripX(za),xb=vegasMeasuredStripX(zb);
+      for(const side of [-1,1]){
+        const inner=side*7.14,outer=side*7.22;
+        const point=(center,offset,z)=> {
+          const x=center+offset;
+          return [x,sampleTerrainHeight(x,z)+.333,z];
+        };
+        addQuad(point(xa,inner,za),point(xa,outer,za),
+          point(xb,outer,zb),point(xb,inner,zb),
+          i%6===0?joint:asphalt);
+        triangles+=2;
+      }
+    }
+    return {mountainTriangles:triangles-114,roadTriangles:114,triangles};
   }
 
   function buildVegasStrip(geometry) {
