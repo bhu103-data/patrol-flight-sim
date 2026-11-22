@@ -112,7 +112,8 @@ export async function loadAlaskaIfsar5m(manifestUrl='./assets/alaska/tracy-arm-i
   bbox:manifest.bboxWgs84,width:manifest.width,height:manifest.height,
   heights,highRes:true,metresPerInteger:1,noDataInt16:manifest.noDataInt16,
   verticalDatum:'NAVD88 / GEOID09',verticalCrs:manifest.sourceVerticalCrs,
-  sourceVerticalCrs:manifest.sourceVerticalCrs,
+  sourceHorizontalCrs:manifest.sourceHorizontalCrs,
+  sourceVerticalCrs:manifest.sourceVerticalCrs,geoid:manifest.geoid,
   sampleSpacingApproxMeters:[
    (east-west)*111320*Math.cos(mid)/manifest.width,
    (north-south)*111320/manifest.height
