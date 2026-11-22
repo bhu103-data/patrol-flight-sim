@@ -6,7 +6,7 @@ from shapely.geometry import Polygon
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "nyc"))
 from mn05_facade_source_support import (
     cached_mesh_triangles, match_facade_patch, match_roof_triangles,
-    relative_height_metres,
+    relative_height_metres, plausible_height_ratio,
 )
 
 
@@ -72,6 +72,15 @@ class Mn05FacadeSourceTests(unittest.TestCase):
         self.assertAlmostEqual(result["coverage"], 1.0)
         self.assertIsNone(match_roof_triangles(
             [[(20, 20, 100), (30, 20, 100), (20, 30, 100)]], [a]))
+
+
+    def test_height_ratio_gate_rejects_grossly_mismatched_source_facades(self):
+        self.assertTrue(plausible_height_ratio(100, 100))
+        self.assertTrue(plausible_height_ratio(50, 100))
+        self.assertTrue(plausible_height_ratio(175, 100))
+        self.assertFalse(plausible_height_ratio(20, 100))
+        self.assertFalse(plausible_height_ratio(300, 100))
+        self.assertFalse(plausible_height_ratio(float("nan"), 100))
 
     def test_relative_z_uses_modern_height_anchor_not_unknown_absolute_datum(self):
         self.assertEqual(relative_height_metres(100, 100, 200, 30), 0)
