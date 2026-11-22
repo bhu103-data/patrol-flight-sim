@@ -4147,7 +4147,7 @@ const CENTRAL_PARK_SITES=[
       // Active flight-map landmark mesh, NOT a detached WebGL preview.
       // Query ?nycSkywalk=on enables an isolated, source-informed 2026
       // observation deck in the real One Times Square scenic/flyby views.
-      const skywalkEnabled=!graphicsCompat &&
+      const skywalkEnabled=selectedMap.city && !graphicsCompat &&
         new URLSearchParams(location.search).get('nycSkywalk')==='on';
       window.PatrolNycSkywalkQA=skywalkEnabled
         ?buildOneTimesSkywalk(addTri,addQuad)
