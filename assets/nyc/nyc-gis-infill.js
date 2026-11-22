@@ -376,6 +376,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
     maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
     skippedMisregistered1540,skippedMisregistered1515,
+    sourceFids:[...sourceFids],
     recessedPilot:{active:typeof recessedFacade==='function',
       facades:pilotFacades,windows:pilotWindows,quads:pilotQuads,
       sourceFids:[...pilotFids],maximumFacades:28,maximumWindows:280,
