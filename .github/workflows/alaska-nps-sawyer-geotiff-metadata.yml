@@ -8,6 +8,11 @@ on:
       - tests/test_alaska_nps_raster_metadata.py
       - .github/workflows/alaska-nps-sawyer-geotiff-metadata.yml
 
+concurrency:
+  # One active full ~480MB archive audit per PR, not one for every commit.
+  group: alaska-nps-sawyer-metadata-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
