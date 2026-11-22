@@ -7,6 +7,7 @@ on:
       - 'tools/nyc/true-scale-street-envelope.mjs'
       - 'tests/nyc-times-true-scale-street-envelope.test.mjs'
       - 'tools/nyc/true-scale-flight-browser-smoke.mjs'
+      - 'tools/nyc/official-street-topology-audit.py'
       - 'tests/nyc-times-true-scale-flight.test.mjs'
       - '.github/workflows/nyc-times-true-scale-flight.yml'
       - 'scripts/nyc-times-true-scale-pilot.mjs'
@@ -61,6 +62,26 @@ jobs:
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Independently audit measured roadbed, sidewalk, curb and building topology
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 -m py_compile tools/nyc/official-street-topology-audit.py
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
+          test -s artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("artifacts/nyc-curb-sidewalk-source")
+          audit = json.loads((root / "topology-audit.json").read_text())
+          geo = json.loads((root / "topology-conflicts.geojson").read_text())
+          records = audit["allSidewalkBuildingSourceConflicts"]
+          assert records and len(records) == audit["counts"]["sidewalkBuildingFeaturePairs"]
+          assert len(geo["features"]) == len(records)
+          assert all("centroidLonLat" in r and "componentSpansMetres" in r for r in records)
+          print("NYC overlap detail QA", len(records), "feature pairs;",
+                len(geo["features"]), "WGS84 conflict geometries")
+          PY
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -82,6 +103,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nyc-official-metre-lowflight-evidence
-          path: artifacts/nyc-true-scale/
+          path: |
+            artifacts/nyc-true-scale/
+            artifacts/nyc-curb-sidewalk-source/topology-audit.json
+            artifacts/nyc-curb-sidewalk-source/topology-conflicts.geojson
+            artifacts/nyc-curb-sidewalk-source/edges.json
+            artifacts/nyc-roadbed-source/roadbed.json
           retention-days: 7
           if-no-files-found: ignore
