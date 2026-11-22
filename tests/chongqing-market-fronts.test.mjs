@@ -228,7 +228,7 @@ test('invalid flooded or unbuildable pads must render no gallery or collider',()
 test('market viewpoint 7 has a real unoccluded line above the existing cliff',async()=>{
   const game=await readFile(new URL('../assets/chongqing/chongqing.js',import.meta.url),'utf8');
   assert.match(game,/eyeX=site\.x\+31,eyeZ=site\.z\+35/);
-  assert.match(game,/viewPitch=key==='Digit7'\?-.28/);
+  assert.match(game,/viewPitch=key==='Digit8'\?-.22:key==='Digit7'\?-.28/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
   const {ground:terrainY}=new Function('clamp',
