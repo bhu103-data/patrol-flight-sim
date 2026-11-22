@@ -481,6 +481,10 @@ try{
       roi:{upperRed:[633,344,648,361],middleAmber:[633,362,648,375],
         lowerGreen:[633,380,648,393]},
       colorContrast:null};
+    // Two calibrated lamp positions: the #161 BQE relocation removes the
+    // elevated exit beneath this camera, shifting its red lens 16px up.
+    // Both tight ROIs cover ONLY the real physical signal housing.
+    const redLampPngByPhase={};
     for(const [phase,time,name] of [
       ['red',1,'03-bridge-signal-close-red.png'],
       ['green',18,'04-bridge-signal-close-green.png'],
@@ -515,6 +519,7 @@ try{
           topRedRgb:lampMeanRgb(pngBytes,[633,344,648,361]),
           midAmberRgb:lampMeanRgb(pngBytes,[633,362,648,375]),
           bottomGreenRgb:lampMeanRgb(pngBytes,[633,380,648,393])};
+        redLampPngByPhase[phase]=pngBytes;
         if(after?.phase===phase)break;
       }
       assert(snapshot?.after?.phase===phase,
@@ -529,6 +534,21 @@ try{
     const red=result.signalVisual.captures[0],
       green=result.signalVisual.captures[1],
       amber=result.signalVisual.captures[2];
+    // Choose between two *fixed and physically bounded* close-camera ROIs.
+    // The red-on/green-off contrast must pass the same original >=25 gate;
+    // do not fall back to the brightest red anywhere in the scene.
+    const redRoiCandidates=[[633,344,648,361],[633,325,648,342]];
+    const candidates=redRoiCandidates.map(roi=>({roi,
+      redRgb:lampMeanRgb(redLampPngByPhase.red,roi),
+      greenRgb:lampMeanRgb(redLampPngByPhase.green,roi)}));
+    const selected=candidates.reduce((best,item)=>
+      item.redRgb[0]-item.greenRgb[0]>
+        best.redRgb[0]-best.greenRgb[0]?item:best);
+    result.signalVisual.roi.upperRed=selected.roi;
+    result.signalVisual.upperRedRoiCandidates=candidates.map(item=>({
+      roi:item.roi,redGain:Number((item.redRgb[0]-item.greenRgb[0]).toFixed(1))}));
+    for(const capture of result.signalVisual.captures)
+      capture.topRedRgb=lampMeanRgb(redLampPngByPhase[capture.phase],selected.roi);
     const upperRedGain=Number((red.topRedRgb[0]-green.topRedRgb[0]).toFixed(1));
     const lowerGreenGain=Number((green.bottomGreenRgb[1]-red.bottomGreenRgb[1]).toFixed(1));
     const amberMiddleGain=Number((amber.midAmberRgb[0]-
