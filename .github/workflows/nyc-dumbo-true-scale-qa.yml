@@ -1,0 +1,53 @@
+name: NYC DUMBO true-metre WebGL2 geodesy pilot
+
+on:
+  pull_request:
+    paths:
+      - 'assets/nyc/dumbo-oti-true-scale-source.json'
+      - 'assets/nyc/dumbo-true-scale-geodesy.js'
+      - 'nyc-dumbo-true-scale.html'
+      - 'tests/nyc-dumbo-true-scale-geodesy.test.mjs'
+      - 'tools/nyc/smoke_dumbo_true_scale.mjs'
+      - '.github/workflows/nyc-dumbo-true-scale-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-dumbo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify true metre WGS84 fidelity without fictional PATROL lots
+        run: node --test tests/nyc-dumbo-true-scale-geodesy.test.mjs
+      - name: Install browser for real PATROL source-space WebGL2
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve local standalone diagnostic
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-true-dumbo.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/nyc-dumbo-true-scale.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture 3 fixed true-metre WebGL2 camera views and spatial metrics
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/nyc/smoke_dumbo_true_scale.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nyc-dumbo-true-metre-webgl2
+          path: artifacts/nyc-true-dumbo-*
+          retention-days: 7
+          if-no-files-found: ignore

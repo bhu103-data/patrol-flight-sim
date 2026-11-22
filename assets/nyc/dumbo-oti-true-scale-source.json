@@ -1,0 +1,193 @@
+{
+  "description": "Three source-authenticated Brooklyn DUMBO building exterior polygons in original WGS84 coordinates. Isolated metre-scale prototype, NOT placed in PATROL's compressed city.",
+  "source": {
+    "owner": "City of New York, Office of Technology and Innovation (OTI)",
+    "dataset": "BUILDING_view",
+    "datasetUrl": "https://data.cityofnewyork.us/City-Government/BUILDING/5zhs-2jue",
+    "serviceUrl": "https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/BUILDING_view/FeatureServer/0",
+    "sourceSnapshotWorkflow": "https://github.com/bhu103-data/patrol-flight-sim/actions/runs/44987962280",
+    "originalRepoCommit": "0eff65fdd133c8c3bd2a762e407e967bc024e299",
+    "recordFields": [
+      "OBJECTID",
+      "BIN",
+      "HEIGHT_ROOF",
+      "exterior polygon ring"
+    ],
+    "dataTerms": "https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje",
+    "timestamp": "2026-11-22"
+  },
+  "crs": "EPSG:4326",
+  "units": {
+    "horizontal": "WGS84/ECEF/ENU metres",
+    "sourceHeight": "feet above individual building ground",
+    "modelHeight": "metres above a locally flat y=0 diagnostic ground, NOT surveyed roof elevation"
+  },
+  "origin": {
+    "longitude": -73.9885,
+    "latitude": 40.7029,
+    "ellipsoidHeightMetres": 0
+  },
+  "buildings": [
+    {
+      "fid": 1080628,
+      "bin": 3389054,
+      "heightAboveGroundFeet": 121,
+      "ring": [
+        [
+          -73.9893464,
+          40.7022776
+        ],
+        [
+          -73.9893399,
+          40.702386
+        ],
+        [
+          -73.9893364,
+          40.7024432
+        ],
+        [
+          -73.988964,
+          40.7024303
+        ],
+        [
+          -73.9889665,
+          40.7023891
+        ],
+        [
+          -73.9889738,
+          40.7022675
+        ],
+        [
+          -73.9889739,
+          40.7022648
+        ],
+        [
+          -73.9889734,
+          40.7022646
+        ],
+        [
+          -73.9889792,
+          40.7021668
+        ],
+        [
+          -73.9891526,
+          40.7021728
+        ],
+        [
+          -73.9892997,
+          40.7021779
+        ],
+        [
+          -73.9893522,
+          40.7021798
+        ]
+      ]
+    },
+    {
+      "fid": 1031082,
+      "bin": 3000135,
+      "heightAboveGroundFeet": 83.41,
+      "ring": [
+        [
+          -73.9872874,
+          40.7021037
+        ],
+        [
+          -73.9872875,
+          40.702103
+        ],
+        [
+          -73.9872918,
+          40.7021032
+        ],
+        [
+          -73.9874341,
+          40.702108
+        ],
+        [
+          -73.9874708,
+          40.7021713
+        ],
+        [
+          -73.9875086,
+          40.7022365
+        ],
+        [
+          -73.9875489,
+          40.7023059
+        ],
+        [
+          -73.9875534,
+          40.7023136
+        ],
+        [
+          -73.9875494,
+          40.7023824
+        ],
+        [
+          -73.9872716,
+          40.702373
+        ],
+        [
+          -73.9872716,
+          40.7023729
+        ],
+        [
+          -73.9872778,
+          40.7022679
+        ],
+        [
+          -73.9872821,
+          40.7021937
+        ]
+      ]
+    },
+    {
+      "fid": 1051309,
+      "bin": 3344163,
+      "heightAboveGroundFeet": 86.5,
+      "ring": [
+        [
+          -73.9896642,
+          40.7036985
+        ],
+        [
+          -73.9896741,
+          40.7034704
+        ],
+        [
+          -73.9896827,
+          40.7032695
+        ],
+        [
+          -73.9897988,
+          40.7032724
+        ],
+        [
+          -73.9899908,
+          40.7032772
+        ],
+        [
+          -73.9899856,
+          40.7033972
+        ],
+        [
+          -73.9899464,
+          40.7033962
+        ],
+        [
+          -73.9899337,
+          40.7036921
+        ],
+        [
+          -73.9899331,
+          40.7037052
+        ],
+        [
+          -73.9899261,
+          40.703705
+        ]
+      ]
+    }
+  ]
+}

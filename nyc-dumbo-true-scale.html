@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL — DUMBO WGS84 true-metre geometry inspection</title>
+<style>
+:root{color-scheme:dark;font:14px/1.45 system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#101a22;color:#e7eeed;overflow:hidden}
+#view{width:100vw;height:100vh;display:block}
+#hud{position:fixed;top:16px;left:16px;width:min(450px,calc(100vw - 32px));
+padding:17px 20px;border:1px solid #4c636d;border-radius:12px;
+background:#10202bdf;backdrop-filter:blur(8px);box-shadow:0 10px 45px #0006}
+h1{font-size:17px;margin:0 0 7px}p{margin:5px 0;color:#bbd0d5}
+code{color:#addbe2}small{color:#adc0c5}
+#legend{margin-top:8px;line-height:1.7}#error{color:#ffac9d}
+a{color:#8ed7e9}#footer{position:fixed;bottom:14px;left:16px;right:16px;
+color:#c8d9dd;text-shadow:0 1px 6px black;font-size:13px}
+@media(max-width:560px){#hud{font-size:12px;padding:12px}h1{font-size:15px}}
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="WebGL2 true-geographic-coordinate building inspection"></canvas>
+<div id="hud">
+<h1>DUMBO · real geographic metre-space pilot</h1>
+<p>Three independently verified NYC OTI polygons; <b>original WGS84
+positions</b>, uncompressed horizontal metres, source HEIGHT_ROOF converted
+from feet to metres above a diagnostic flat ground.</p>
+<div id="legend">Loading municipal geometry…</div>
+<p><small>Grid = 50 metres. Solid shapes are municipal <em>footprints/roof
+massing only</em>: no sourced street geometry, windows, street textures,
+surrounding buildings or ground elevation. NOT the shipping PATROL NYC world.</small></p>
+<p><small>Source: <a target="_blank" rel="noopener" href="https://data.cityofnewyork.us/City-Government/BUILDING/5zhs-2jue">NYC OTI Building Footprints</a>
+· <a href="./index.html">Return to PATROL</a></small></p>
+<p id="error"></p>
+</div>
+<div id="footer">Drag: orbit · Scroll: zoom · R: reset · meters, not scaled lots</div>
+<script type="module">
+import {prepareDumboBuildings} from './assets/nyc/dumbo-true-scale-geodesy.js';
+
+const canvas=document.querySelector('#view'),label=document.querySelector('#legend'),
+  error=document.querySelector('#error');
+const data=await fetch('./assets/nyc/dumbo-oti-true-scale-source.json',
+  {cache:'no-cache'}).then(r=>{if(!r.ok)throw Error('Source HTTP '+r.status);return r.json();});
+const scene=prepareDumboBuildings(data);
+const gl=canvas.getContext('webgl2',{alpha:false,antialias:true});
+if(!gl)throw Error('This diagnostic requires WebGL2.');
+const vert=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec3 aColor;
+uniform mat4 uCamera;
+out vec3 vNormal;
+out vec3 vColor;
+void main(){vNormal=aNormal;vColor=aColor;gl_Position=uCamera*vec4(aPosition,1.0);}`;
+const frag=`#version 300 es
+precision highp float;
+in vec3 vNormal;
+in vec3 vColor;
+out vec4 outColor;
+void main(){
+float light=.32+.68*max(dot(normalize(vNormal),normalize(vec3(.48,.86,.35))),0.0);
+outColor=vec4(vColor*light,1.0);
+}`;
+function shader(type,source){
+  const sh=gl.createShader(type);gl.shaderSource(sh,source);gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))
+    throw Error('WebGL shader: '+gl.getShaderInfoLog(sh));
+  return sh;
+}
+const program=gl.createProgram();
+gl.attachShader(program,shader(gl.VERTEX_SHADER,vert));
+gl.attachShader(program,shader(gl.FRAGMENT_SHADER,frag));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+  throw Error('WebGL link: '+gl.getProgramInfoLog(program));
+const uCamera=gl.getUniformLocation(program,'uCamera');
+const vertex=[],grid=[];
+const palettes=[[.62,.38,.29],[.48,.53,.58],[.64,.55,.43]];
+const normal=(a,b,c)=>{
+  const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
+  const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+  const l=Math.hypot(...n)||1;return n.map(x=>x/l);
+};
+function tri(buffer,a,b,c,color){
+  const n=normal(a,b,c);
+  for(const p of [a,b,c])buffer.push(...p,...n,...color);
+}
+for(let index=0;index<scene.buildings.length;index++){
+  const b=scene.buildings[index],wall=palettes[index],h=b.heightMetres,
+    sourceRing=b.ring;
+  for(let k=0;k<sourceRing.length;k++){
+    const a=sourceRing[k],next=sourceRing[(k+1)%sourceRing.length];
+    const lowA=[a[0],0,a[2]],lowB=[next[0],0,next[2]],
+      topA=[a[0],h,a[2]],topB=[next[0],h,next[2]];
+    // Source ring is CCW x/z; outward-normal vertical walls.
+    tri(vertex,lowA,topA,topB,wall);
+    tri(vertex,lowA,topB,lowB,wall);
+  }
+  for(const [a,c,bb] of b.roof.triangles)
+    tri(vertex,[a[0],h,a[2]],[c[0],h,c[2]],[bb[0],h,bb[2]],
+      wall.map(x=>Math.min(.9,x+.13)));
+}
+for(let v=-250;v<=250;v+=50){
+  const tone=v===0?[.27,.66,.72]:[.17,.34,.41],y=-.30;
+  for(const [a,b] of [
+    [[v,y,-250],[v,y,250]], [[-250,y,v],[250,y,v]]
+  ])for(const p of [a,b])grid.push(...p,0,1,0,...tone);
+}
+function vao(values){
+  const v=gl.createVertexArray(),buffer=gl.createBuffer();
+  gl.bindVertexArray(v);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(values),gl.STATIC_DRAW);
+  for(let i=0;i<3;i++){
+    gl.enableVertexAttribArray(i);
+    gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);
+  }
+  gl.bindVertexArray(null);
+  return {vao:v,count:values.length/9};
+}
+const mesh=vao(vertex),gridMesh=vao(grid);
+const vecSub=(a,b)=>a.map((x,i)=>x-b[i]),dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+const unit=v=>{const l=Math.hypot(...v)||1;return v.map(x=>x/l);};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],
+  a[0]*b[1]-a[1]*b[0]];
+function multiply(a,b){
+  const m=Array(16).fill(0);
+  for(let c=0;c<4;c++)for(let r=0;r<4;r++)
+    for(let k=0;k<4;k++)m[c*4+r]+=a[k*4+r]*b[c*4+k];
+  return m;
+}
+function cameraMatrix(eye,target,aspect){
+  const f=unit(vecSub(target,eye)),right=unit(cross(f,[0,1,0])),
+    up=cross(right,f);
+  const view=[
+    right[0],up[0],-f[0],0,
+    right[1],up[1],-f[1],0,
+    right[2],up[2],-f[2],0,
+    -dot(right,eye),-dot(up,eye),dot(f,eye),1
+  ];
+  const near=1,far=1500,k=1/Math.tan(52*Math.PI/360);
+  const proj=[k/aspect,0,0,0,0,k,0,0,0,0,(far+near)/(near-far),-1,
+    0,0,2*far*near/(near-far),0];
+  return multiply(proj,view);
+}
+let azimuth=.55,elevation=.40,distance=445,drag=null,frames=0,renderError=null;
+const center=[0,20,0];
+function paint(){
+  const w=Math.min(1600,Math.floor(canvas.clientWidth*devicePixelRatio)),
+        h=Math.min(950,Math.floor(canvas.clientHeight*devicePixelRatio));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  gl.viewport(0,0,w,h);gl.clearColor(.075,.12,.16,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LESS);gl.disable(gl.CULL_FACE);
+  const eye=[center[0]+Math.sin(azimuth)*Math.cos(elevation)*distance,
+    center[1]+Math.sin(elevation)*distance,
+    center[2]+Math.cos(azimuth)*Math.cos(elevation)*distance];
+  gl.useProgram(program);
+  gl.uniformMatrix4fv(uCamera,false,new Float32Array(cameraMatrix(eye,center,w/h)));
+  gl.bindVertexArray(mesh.vao);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+  gl.bindVertexArray(gridMesh.vao);gl.drawArrays(gl.LINES,0,gridMesh.count);
+  gl.bindVertexArray(null);
+  frames++;
+  renderError=gl.getError();
+}
+function refresh(){paint();}
+canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  azimuth+=(e.clientX-drag[0])*.006;
+  elevation=Math.max(.12,Math.min(1.35,elevation+(e.clientY-drag[1])*.005));
+  drag=[e.clientX,e.clientY];refresh();
+});
+canvas.addEventListener('pointerup',()=>{drag=null;});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();distance=Math.max(120,Math.min(900,distance*Math.exp(e.deltaY*.001)));refresh();
+},{passive:false});
+window.addEventListener('keydown',e=>{
+  if(e.code==='KeyR'){azimuth=.55;elevation=.40;distance=445;refresh();}
+});
+window.addEventListener('resize',refresh);
+const display=scene.buildings.map(b=>
+  `FID ${b.fid}: ${b.heightMetres.toFixed(2)}m roof AGL · ${b.roof.areaSquareMetres.toFixed(0)}m² footprint`);
+label.textContent=display.join(' | ');
+window.PatrolDumboTrueScaleQA={
+  ready:true,crs:data.crs,sourceCommit:data.source.originalRepoCommit,
+  sourceFids:scene.buildings.map(b=>b.fid),
+  buildings:scene.buildings.map(b=>({
+    fid:b.fid,heightMetres:b.heightMetres,
+    eastNorth:b.centerEastNorthMetres,
+    roofAreaSquareMetres:b.roof.areaSquareMetres,
+    sourceVertexCount:b.sourceWgs84Ring.length,
+    faceCount:b.roof.triangles.length})),
+  worldUnits:'metres',sourceSpaceUncompressed:true,
+  getState:()=>({ready:true,frames,meshTriangles:mesh.count/3,gridSegments:gridMesh.count/2,
+    glError:renderError,contextLost:gl.isContextLost(),viewport:[canvas.width,canvas.height],
+    camera:{azimuth,elevation,distance}}),
+  setCamera:(a,e,d)=>{
+    if(![a,e,d].every(Number.isFinite))throw new Error('Invalid QA camera');
+    azimuth=a;elevation=e;distance=d;refresh();
+  }
+};
+try{paint();}catch(e){error.textContent=e.message;throw e;}
+</script>
+</body></html>
