@@ -76,7 +76,12 @@ test('3 batches, 7 glass windows, varied joinery and small triangle budget',()=>
   assert.ok(objects.every(m=>m.instanceMatrix.needsUpdate&&
     m.instanceColor.needsUpdate&&!m.castShadow));
   assert.equal(result.frameMesh.material.map,carvedWood.map);
-  assert.equal(result.glassMesh.material.metalness,glassPane.metalness);
+  assert.equal(result.glassMesh.material.metalness,.08);
+  assert.equal(result.glassMesh.material.roughness,.64);
+  assert.equal(result.glassMesh.material.color.value,0xb9c8cd);
+  assert.notEqual(result.glassMesh.material,glassPane);
+  assert.equal(glassPane.metalness,.39,'shared window PBR remains unchanged');
+  assert.equal(glassPane.roughness,.26,'shared window roughness remains unchanged');
   assert.notEqual(result.frameMesh.material,carvedWood);
   assert.equal(result.maxY<16,true);
 });
