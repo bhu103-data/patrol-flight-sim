@@ -11,6 +11,7 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
   const stats={crevasses:0,iceFloes:0,rockBands:0};
   // All geometry is cosmetic, measured heights still come from terrainAt.
   stats.seracs=0;stats.iceStrata=0;stats.branchlets=0;stats.talus=0;
+  stats.glacierFacets=0;
   // Append instrumentation after the five canonical glacier log fields.
   stats.iceFloesRejectedShore=0;
   const hash=(n)=>{const s=Math.sin(n*127.1+78.233)*43758.5453;return s-Math.floor(s);};
@@ -70,7 +71,32 @@ export function buildAlaskaFjordDetail({addTri, addQuad, terrainAt, waterY}) {
     const undercut=[.14+.06*j,.31+.05*j,.39+.05*j];
     const a=[L[0],waterY-.23,zL],b=[R[0],waterY-.23,zR],
           c=[R[0],topR,zR],d=[L[0],topL,zL];
-    iceQuad(a,b,c,d,muted);
+    // Subdivide the previously planar vertical face into four *actual*
+    // shallow 3-D facets. Shared outer corners retain the old shoreline
+    // footprint and top silhouette; a restrained outboard knot catches
+    // low-angle light without moving the DEM, water or collision surface.
+    // Vary the middle height and lateral offset to avoid a repeated "tile".
+    // Alternating low/high, left/right and recessed/protruding planes
+    // prevent a symmetric diamond/X lattice along the calving front.
+    const lateral=[.19,.76,.36,.63,.48][i%5]+(j-.5)*.12;
+    const rise=[.33,.71,.53,.22,.64][i%5]+(q-.5)*.09;
+    const depth=.28+.57*hash(i*43+5);
+    const cutBack=deepFracture || i%7===5;
+    const knot=[
+      L[0]+(R[0]-L[0])*lateral,
+      (waterY-.23)+(Math.min(topL,topR)-(waterY-.23))*rise,
+      cutBack?Math.max(zL,zR)+depth:Math.min(zL,zR)-depth
+    ];
+    // Let the actual 3-D ice normals and existing CC0 surface carry the
+    // relief. Huge per-triangle paint contrast reads as repeated X tiles.
+    const shaded=muted.map(v=>v*(.88+.04*q));
+    const topFace=muted.map((v,k)=>v*.82+light[k]*.18);
+    const fissure=undercut.map((v,k)=>v*.22+muted[k]*.78);
+    iceTri(a,b,knot,shaded);
+    iceTri(b,c,knot,muted);
+    iceTri(c,d,knot,topFace);
+    iceTri(d,a,knot,deepFracture?fissure:muted);
+    stats.glacierFacets+=4;
     // Not every section has a rooftop. Rare undercut, broad sloping crowns
     // create realistic ice mass shapes instead of same-height vertical teeth.
     if(i%4===1 || i%9===7){

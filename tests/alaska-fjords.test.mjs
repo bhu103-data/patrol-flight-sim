@@ -93,3 +93,36 @@ test('ice floes avoid diagonal coastline protrusions, not just four compass poin
   assert.equal(diagonalShore,allWater-1,
     'a diagonal land intrusion must prevent ice from intersecting its shore');
 });
+
+test('calving-wall facets use real depth without moving measured ground',()=>{
+  const waterY=12.2,wallTriangles=[];
+  const addTri=(a,b,c,color,surface=0)=>{
+    if(surface===12)wallTriangles.push([a,b,c]);
+  };
+  const addQuad=(a,b,c,d,color,surface=0)=>{
+    addTri(a,b,c,color,surface);
+    addTri(a,c,d,color,surface);
+  };
+  // Stable synthetic high ground; the authored ice facade must not mutate
+  // this collision sampler or introduce a shoreline height replacement.
+  const terrainAt=(x,z)=>z>410?21:waterY;
+  const stats=buildAlaskaFjordDetail({addTri,addQuad,terrainAt,waterY});
+  assert.equal(stats.seracs,28);
+  assert.equal(stats.glacierFacets,112,
+    'each existing calving wall panel has four noncoplanar triangles');
+  const face=wallTriangles.filter(tri=>
+    tri.some(p=>Math.abs(p[1]-(waterY-.23))<1e-6) &&
+    tri.every(p=>p[2]>415&&p[2]<463));
+  assert.ok(face.length>=84,'all 28 panels have real lower-face geometry');
+  const depths=face.map(tri=>
+    Math.max(...tri.map(p=>p[2]))-Math.min(...tri.map(p=>p[2])));
+  assert.ok(depths.filter(d=>d>.20).length>=50,
+    'most wall facets have visible out-of-plane depth, not flat color strips');
+  for(const tri of face)for(const p of tri){
+    assert.ok(Number.isFinite(p[0])&&Number.isFinite(p[1])&&Number.isFinite(p[2]));
+    assert.ok(p[1]>=waterY-.23);
+    assert.ok(p[2]>415&&p[2]<463);
+  }
+  assert.equal(terrainAt(100,450),21,'terrain remains the original ground');
+  assert.equal(terrainAt(100,400),waterY,'waterline terrain stays unchanged');
+});

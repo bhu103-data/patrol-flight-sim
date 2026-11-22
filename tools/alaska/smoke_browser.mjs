@@ -6,7 +6,7 @@
 import {chromium} from 'playwright';
 import {mkdirSync} from 'node:fs';
 const url=process.env.PATROL_TEST_URL || 'http://127.0.0.1:8765/';
-const errors=[],requests=[],glacierDetailLogs=[],villageLogs=[];
+const errors=[],requests=[],glacierDetailLogs=[],glacierDetailHandles=[],villageLogs=[];
 const browser=await chromium.launch({
   headless:true,
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
@@ -18,7 +18,10 @@ try{
   page.on('console',message=>{
     const m=message.text();
     if(message.type()==='error')errors.push('Console: '+m);
-    if(m.includes('[PATROL] Alaska fjord detail'))glacierDetailLogs.push(m);
+    if(m.includes('[PATROL] Alaska fjord detail')){
+      glacierDetailLogs.push(m);
+      glacierDetailHandles.push(message.args().at(-1));
+    }
     if(m.includes('[PATROL] Alaska surveyed village'))villageLogs.push(m);
     if(/Alaska|WebGL|photo|GPU/i.test(m))console.log('[BROWSER]',m.slice(0,300));
   });
@@ -65,9 +68,13 @@ try{
   }
   mkdirSync('artifacts',{recursive:true});
   await page.screenshot({path:'artifacts/alaska-live-webgl.png'});
-  if(!glacierDetailLogs.some(m=>/seracs:\s*28/.test(m) && /iceStrata:\s*62/.test(m))){
-    throw new Error('Glacier serac and strata geometry not confirmed in live WebGL pass: '+
-      glacierDetailLogs.join(' | '));
+  // Playwright truncates console object text after a few properties; read
+  // the original structured JSHandle to confirm the *actual* mesh stats.
+  const glacierDetailStats=await Promise.all(glacierDetailHandles.map(h=>h.jsonValue()));
+  if(!glacierDetailStats.some(s=>s?.seracs===28 && s?.iceStrata===62 &&
+                              s?.glacierFacets===112)){
+    throw new Error('Glacier wall facets not confirmed in live WebGL: '+
+      JSON.stringify({glacierDetailStats,glacierDetailLogs}));
   }
   const villageLine=villageLogs.find(m=>m.includes('[PATROL] Alaska surveyed village'));
   const audit=villageLine && JSON.parse(villageLine.slice(
