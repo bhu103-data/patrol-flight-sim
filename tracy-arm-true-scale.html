@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATROL · Tracy Arm source-scale terrain flight pilot</title>
+<style>
+  :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+  *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#172a39;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}
+  .hud{position:fixed;top:15px;left:15px;max-width:min(480px,calc(100vw - 30px));background:#0d1b26dd;
+    backdrop-filter:blur(8px);border:1px solid #9ab3bb55;border-radius:12px;padding:14px 16px;color:#f1f8fa}
+  h1{font-size:18px;margin:0 0 7px;letter-spacing:.02em}
+  p{margin:7px 0;line-height:1.4;font-size:13px}
+  .hint{color:#c6e1e8}.small{font-size:11px;color:#a8c1ca}
+  #status{font-variant-numeric:tabular-nums;white-space:pre-wrap}
+  .action{color:#b8f0e6}
+  a{color:#aee5e6}
+  .footer{position:fixed;right:16px;bottom:12px;color:#eaf2f4;background:#0d1b26d6;border-radius:7px;
+    font-size:11px;padding:8px 10px;max-width:min(570px,calc(100vw - 32px))}
+  @media(max-width:700px){.hud{padding:10px;top:8px;left:8px}.footer{right:8px;bottom:8px}h1{font-size:15px}}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Flightable real-coordinate Tracy Arm USGS terrain"></canvas>
+<div class="hud">
+  <h1>TRACY ARM · real-coordinate terrain pilot</h1>
+  <p class="hint">256² USGS 3DEP source elevation · true east/north metres · original mountain relative relief</p>
+  <p id="status" role="status">Loading the original source DEM and building terrain…</p>
+  <p class="small">W/S forward/back · A/D strafe · Q/E descend/climb · arrows or drag to look · Shift fast · R reset</p>
+  <p><a href="./index.html">Return to PATROL</a></p>
+</div>
+<div class="footer">Experimental separate flight camera, not the integrated PATROL flight physics. No surveyed coastline, orthoimagery, verified vertical datum or post-2025 glacier reconstruction.</div>
+<script type="module">
+import {decodeAlaskaDEM} from './assets/alaska/usgs-dem.js';
+import {rasterCellToLocalEnu,sourceTileOrigin,wgs84ToLocalEnu,
+  localEnuToWgs84,sampleSourceElevationMetres,oldPatrolGamePointToWgs84,
+  validateTracyArmRaster} from './assets/alaska/tracy-arm-geodesy.js';
+
+const canvas=document.getElementById('scene'),status=document.getElementById('status');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false,depth:true,powerPreference:'high-performance'});
+if(!gl){status.textContent='WebGL2 is required for the source-coordinate terrain pilot.';throw Error('WebGL2 unavailable')}
+const VERT=`#version 300 es
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in float aWater;
+uniform mat4 uViewProj;
+out vec3 vPos;
+out vec3 vNormal;
+out float vWater;
+void main(){
+  vPos=aPosition;vNormal=aNormal;vWater=aWater;
+  gl_Position=uViewProj*vec4(aPosition,1.0);
+}
+`;
+const FRAG=`#version 300 es
+precision highp float;
+in vec3 vPos;
+in vec3 vNormal;
+in float vWater;
+uniform vec3 uCamera;
+uniform float uTime;
+out vec4 fragColor;
+void main(){
+  vec3 n=normalize(vNormal);
+  vec3 sun=normalize(vec3(0.43,0.82,-0.39));
+  float brightness=0.28+0.72*max(dot(n,sun),0.0);
+  vec3 color;
+  if(vWater>0.5){
+    float wave=sin(vPos.x*.027+vPos.z*.042+uTime*.58)*.5+
+               sin(vPos.z*.036-vPos.x*.018-uTime*.43)*.5;
+    color=mix(vec3(.024,.14,.19),vec3(.062,.28,.32),.46+wave*.17);
+    brightness=.85;
+  }else{
+    float cliff=1.0-clamp(n.y,0.0,1.0);
+    float treeline=1.0-smoothstep(390.0,710.0,vPos.y);
+    vec3 vegetation=mix(vec3(.14,.27,.18),vec3(.25,.36,.26),smoothstep(80.0,390.0,vPos.y));
+    vec3 stone=mix(vec3(.31,.32,.31),vec3(.46,.45,.44),smoothstep(180.0,1400.0,vPos.y));
+    color=mix(stone,vegetation,treeline*(1.0-smoothstep(.13,.46,cliff)));
+    float snow=smoothstep(650.0,1000.0,vPos.y)*(.90-.28*cliff);
+    color=mix(color,vec3(.79,.86,.91),snow);
+  }
+  color*=brightness;
+  float distanceToCamera=length(vPos-uCamera);
+  float haze=clamp((distanceToCamera-1700.0)/7800.0,0.0,.72);
+  color=mix(color,vec3(.57,.69,.76),haze);
+  color=pow(max(color,vec3(0.0)),vec3(.94));
+  fragColor=vec4(color,1.0);
+}
+`;
+function compile(type,src){
+  const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))
+    throw Error(gl.getShaderInfoLog(s)||'Shader compilation failed');
+  return s;
+}
+const program=gl.createProgram();
+gl.attachShader(program,compile(gl.VERTEX_SHADER,VERT));
+gl.attachShader(program,compile(gl.FRAGMENT_SHADER,FRAG));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+  throw Error(gl.getProgramInfoLog(program)||'GPU program link failed');
+const uViewProj=gl.getUniformLocation(program,'uViewProj');
+const uCamera=gl.getUniformLocation(program,'uCamera');
+const uTime=gl.getUniformLocation(program,'uTime');
+gl.enable(gl.DEPTH_TEST);
+gl.disable(gl.CULL_FACE);
+
+function mesh(vertexArray,indexArray){
+  const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+  const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertexArray),gl.STATIC_DRAW);
+  const ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(indexArray),gl.STATIC_DRAW);
+  for(const [location,size,offset] of [[0,3,0],[1,3,12],[2,1,24]]){
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location,size,gl.FLOAT,false,28,offset);
+  }
+  gl.bindVertexArray(null);
+  return {vao,count:indexArray.length};
+}
+function normalize(v){
+  const d=Math.hypot(...v)||1;
+  return v.map(x=>x/d);
+}
+function cross(a,b){
+  return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function perspective(fov,aspect,near,far){
+  const f=1/Math.tan(fov/2),nf=1/(near-far);
+  return [f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0];
+}
+function lookAt(eye,target,up){
+  const f=normalize(target.map((v,i)=>v-eye[i]));
+  const s=normalize(cross(f,up)),u=cross(s,f);
+  return [s[0],u[0],-f[0],0,s[1],u[1],-f[1],0,s[2],u[2],-f[2],0,
+    -dot(s,eye),-dot(u,eye),dot(f,eye),1];
+}
+function multiply(a,b){
+  const o=new Array(16).fill(0);
+  for(let col=0;col<4;col++)for(let row=0;row<4;row++)
+    for(let k=0;k<4;k++)o[col*4+row]+=a[k*4+row]*b[col*4+k];
+  return o;
+}
+const keys=new Set(),pose={xyz:[0,240,0],yaw:0,pitch:-.12};
+let bounds,dem,land,sea,origin,frameCount=0,previous=0,elapsed=0,active=false;
+let lastFrameSeconds=0,glErrors=[];
+const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=0;pose.pitch=-.08};
+let spawn=[0,240,0];
+document.addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))
+    e.preventDefault();
+  keys.add(e.code);
+  if(e.code==='KeyR'&&active)initial();
+});
+document.addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('blur',()=>keys.clear());
+let dragging=false,lastMouse=[0,0];
+canvas.addEventListener('pointerdown',e=>{dragging=true;lastMouse=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointerup',()=>dragging=false);
+canvas.addEventListener('pointercancel',()=>dragging=false);
+canvas.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  pose.yaw+=(e.clientX-lastMouse[0])*.003;
+  pose.pitch=Math.max(-1.36,Math.min(1.36,pose.pitch-(e.clientY-lastMouse[1])*.003));
+  lastMouse=[e.clientX,e.clientY];
+});
+function update(dt){
+  const turn=1.13*dt;
+  if(keys.has('ArrowLeft'))pose.yaw+=turn;
+  if(keys.has('ArrowRight'))pose.yaw-=turn;
+  if(keys.has('ArrowUp'))pose.pitch=Math.min(1.25,pose.pitch+turn*.6);
+  if(keys.has('ArrowDown'))pose.pitch=Math.max(-1.25,pose.pitch-turn*.6);
+  const speed=(keys.has('ShiftLeft')||keys.has('ShiftRight')?270:82)*dt;
+  const forward=[Math.cos(pose.yaw),Math.sin(pose.yaw)];
+  const side=[-forward[1],forward[0]];
+  if(keys.has('KeyW')){pose.xyz[0]+=forward[0]*speed;pose.xyz[2]+=forward[1]*speed}
+  if(keys.has('KeyS')){pose.xyz[0]-=forward[0]*speed;pose.xyz[2]-=forward[1]*speed}
+  if(keys.has('KeyA')){pose.xyz[0]-=side[0]*speed;pose.xyz[2]-=side[1]*speed}
+  if(keys.has('KeyD')){pose.xyz[0]+=side[0]*speed;pose.xyz[2]+=side[1]*speed}
+  if(keys.has('KeyE'))pose.xyz[1]+=speed;
+  if(keys.has('KeyQ'))pose.xyz[1]-=speed;
+  pose.xyz[0]=Math.max(bounds.minE+60,Math.min(bounds.maxE-60,pose.xyz[0]));
+  pose.xyz[2]=Math.max(bounds.minN+60,Math.min(bounds.maxN-60,pose.xyz[2]));
+  let surface=0;
+  try{
+    const [lon,lat]=localEnuToWgs84(pose.xyz[0],pose.xyz[2],0,...origin);
+    surface=sampleSourceElevationMetres(dem,lon,lat);
+  }catch{surface=0;}
+  pose.xyz[1]=Math.max(Math.max(0,surface)+18,Math.min(3800,pose.xyz[1]));
+}
+function draw(frameTime){
+  if(!active)return;
+  const dt=Math.min(.05,(frameTime-previous)/1000||0);
+  previous=frameTime;elapsed+=dt;frameCount++;lastFrameSeconds=dt;
+  update(dt);
+  const dpr=Math.min(window.devicePixelRatio||1,1.5);
+  const w=Math.max(1,Math.floor(canvas.clientWidth*dpr));
+  const h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+  gl.viewport(0,0,w,h);
+  gl.clearColor(.57,.69,.76,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const f=[Math.cos(pose.pitch)*Math.cos(pose.yaw),Math.sin(pose.pitch),
+    Math.cos(pose.pitch)*Math.sin(pose.yaw)];
+  const target=pose.xyz.map((v,i)=>v+f[i]*100);
+  const vp=multiply(perspective(77*Math.PI/180,w/h,.5,14500),
+    lookAt(pose.xyz,target,[0,1,0]));
+  gl.useProgram(program);
+  gl.uniformMatrix4fv(uViewProj,false,new Float32Array(vp));
+  gl.uniform3fv(uCamera,new Float32Array(pose.xyz));
+  gl.uniform1f(uTime,elapsed);
+  for(const m of [land,sea]){
+    gl.bindVertexArray(m.vao);
+    gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
+  }
+  gl.bindVertexArray(null);
+  if(frameCount%25===0){
+    const err=gl.getError();if(err!==gl.NO_ERROR)glErrors.push(err);
+    const [lon,lat]=localEnuToWgs84(pose.xyz[0],pose.xyz[2],0,...origin);
+    status.textContent='LAT '+lat.toFixed(5)+'° N · LON '+Math.abs(lon).toFixed(5)+'° W\n'
+      +'X east '+pose.xyz[0].toFixed(0)+' m · Z north '+pose.xyz[2].toFixed(0)+' m\n'
+      +'Altitude '+pose.xyz[1].toFixed(0)+' m (source height datum unverified)\n'
+      +'True DEM extent '+(bounds.maxE-bounds.minE).toFixed(0)+' × '
+      +(bounds.maxN-bounds.minN).toFixed(0)+' m · '+frameCount+' frames';
+  }
+  requestAnimationFrame(draw);
+}
+async function boot(){
+  const response=await fetch('./assets/alaska/tracy-arm-3dep.json',{cache:'force-cache'});
+  if(!response.ok)throw Error('Bundled USGS DEM unavailable: HTTP '+response.status);
+  const payload=await response.json();
+  validateTracyArmRaster(payload);
+  dem={...payload,...decodeAlaskaDEM(payload)};
+  origin=sourceTileOrigin(dem);
+  const count=dem.width*dem.height,n=dem.width,m=dem.height;
+  const points=new Float32Array(count*3);
+  let minE=Infinity,maxE=-Infinity,minN=Infinity,maxN=-Infinity,highest=0;
+  for(let row=0;row<m;row++)for(let col=0;col<n;col++){
+    const i=row*n+col;
+    const [east,north]=rasterCellToLocalEnu(dem,col,row,0);
+    const elev=dem.heights[i];
+    points[i*3]=east;points[i*3+1]=elev<=1?-4:elev;points[i*3+2]=north;
+    minE=Math.min(minE,east);maxE=Math.max(maxE,east);
+    minN=Math.min(minN,north);maxN=Math.max(maxN,north);
+    highest=Math.max(highest,elev);
+  }
+  bounds={minE,maxE,minN,maxN};
+  const vertices=new Float32Array(count*7),indices=[];
+  for(let row=0;row<m;row++)for(let col=0;col<n;col++){
+    const i=row*n+col,left=row*n+Math.max(0,col-1),right=row*n+Math.min(n-1,col+1),
+      south=Math.max(0,row-1)*n+col,north=Math.min(m-1,row+1)*n+col;
+    const dx=(points[right*3+1]-points[left*3+1])/
+      Math.max(1,points[right*3]-points[left*3]);
+    const dz=(points[north*3+1]-points[south*3+1])/
+      Math.max(1,points[north*3+2]-points[south*3+2]);
+    const normal=normalize([-dx,1,-dz]);
+    vertices.set([points[i*3],points[i*3+1],points[i*3+2],
+      ...normal,0],i*7);
+  }
+  for(let row=0;row<m-1;row++)for(let col=0;col<n-1;col++){
+    const a=row*n+col,b=a+1,c=a+n,d=c+1;
+    indices.push(a,c,b,b,c,d);
+  }
+  land=mesh(vertices,indices);
+  const waterY=.15,sx=minE-4,ex=maxE+4,sz=minN-4,nz=maxN+4;
+  sea=mesh([
+    sx,waterY,sz, 0,1,0, 1,
+    ex,waterY,sz, 0,1,0, 1,
+    sx,waterY,nz, 0,1,0, 1,
+    ex,waterY,nz, 0,1,0, 1
+  ],[0,2,1,1,2,3]);
+  const [spawnLon,spawnLat]=oldPatrolGamePointToWgs84(dem,-19,-667);
+  const [e,north]=wgs84ToLocalEnu(spawnLon,spawnLat,0,...origin);
+  // GPS anchor taken from the existing safe-water DEM source sample.
+  spawn=[e,225,north];
+  initial();
+  active=true;
+  status.textContent='Source terrain loaded: '+count.toLocaleString()+
+    ' original geographic cells · '+indices.length/3+' terrain triangles · peak '+highest+' m';
+  requestAnimationFrame(draw);
+}
+window.PatrolTrueScaleQA=()=>({
+  active,frames:frameCount,webgl2:true,contextLost:gl.isContextLost(),
+  size:[canvas.width,canvas.height],
+  cells:dem?.width*dem?.height||0,triangles:land?.count/3||0,
+  terrainPeak:dem?.heights.reduce((h,y)=>Math.max(h,y),0)||0,
+  bounds:bounds?{...bounds}:null,origin:origin?[...origin]:null,
+  camera:[...pose.xyz],yaw:pose.yaw,pitch:pose.pitch,
+  gpuErrors:[...glErrors],lastFrameSeconds
+});
+boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
+</script>
+</body>
+</html>
