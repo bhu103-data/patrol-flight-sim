@@ -10,7 +10,7 @@ export function classifyHardwareRenderer(rendererInfo){
   const identity=renderer+' '+provider;
   if(software.test(identity))
     return {accepted:false,reason:'Software or virtual renderer: '+identity};
-  if(!vendor.test(identity))
+  if(!vendor.test(renderer))
     return {accepted:false,reason:'Unrecognized hardware renderer (fail closed): '+identity};
   return {accepted:true,reason:'Identified hardware GPU: '+identity};
 }
@@ -41,7 +41,8 @@ export function assessNativeGpuRuns(runs,{maxP95Ms,maxFirstPlayableMs,maxRegress
        r.intervals.some(v=>!Number.isFinite(v)||v<=0))
       throw new Error('Insufficient or invalid native frame samples in '+r.label);
     if(!Number.isFinite(r.firstPlayableMs)||r.firstPlayableMs<=0||
-       r.pageErrors?.length||r.contextLost||r.map!=='alaska'||r.pose!==79)
+       !Array.isArray(r.pageErrors)||r.pageErrors.length||
+       r.contextLost!==false||r.map!=='alaska'||r.pose!==79)
       throw new Error('Invalid first-load, WebGL state, or fixed floe pose in '+r.label);
   }
   // A change from integrated Intel graphics to a discrete NVIDIA GPU
