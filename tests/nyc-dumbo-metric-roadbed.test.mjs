@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {toLocalMeters} from '../assets/nyc/dumbo-oti-metric.mjs';
+import {toLocalMeters,prepareDistrict} from '../assets/nyc/dumbo-oti-metric.mjs';
 import {prepareOfficialDumboRoadbed,sourceRoadToWgs84,
   sourceRoadToDistrictMeters,ROADBED_SOURCE} from '../assets/nyc/dumbo-roadbed-metric.mjs';
 
@@ -70,4 +70,49 @@ test('roadbed is 2022 paved footprint and only appears in opt-in staging',()=>{
   assert.doesNotMatch(preview,/advanceFlight\(|PatrolSpaceBridge/);
   const original=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   assert.doesNotMatch(original,/dumbo-front-dock-roadbed-2022\.json/);
+});
+
+const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+const bounds=pts=>[Math.min(...pts.map(p=>p[0])),Math.min(...pts.map(p=>p[1])),
+  Math.max(...pts.map(p=>p[0])),Math.max(...pts.map(p=>p[1]))];
+const bboxOverlaps=(a,b)=>a[0]<=b[2]&&b[0]<=a[2]&&a[1]<=b[3]&&b[1]<=a[3];
+function inPoly(p,ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const a=ring[i],b=ring[j];
+    if((a[1]>p[1])!==(b[1]>p[1])&&
+       p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])
+      inside=!inside;
+  }
+  return inside;
+}
+const pointInTriangle=(p,[a,b,c])=>{
+  const signs=[cross(a,b,p),cross(b,c,p),cross(c,a,p)];
+  return !(signs.some(x=>x>1e-9)&&signs.some(x=>x< -1e-9));
+};
+const segmentsProperlyCross=(a,b,c,d)=>{
+  const u=cross(a,b,c),v=cross(a,b,d),w=cross(c,d,a),x=cross(c,d,b);
+  return (u>1e-9&&v< -1e-9||u< -1e-9&&v>1e-9)&&
+    (w>1e-9&&x< -1e-9||w< -1e-9&&x>1e-9);
+};
+function roadCutsBuilding(tri,ring){
+  if(!bboxOverlaps(bounds(tri),bounds(ring)))return false;
+  if(tri.some(p=>inPoly(p,ring))||ring.some(p=>pointInTriangle(p,tri)))return true;
+  for(let i=0;i<3;i++)for(let j=0;j<ring.length;j++)
+    if(segmentsProperlyCross(tri[i],tri[(i+1)%3],ring[j],ring[(j+1)%ring.length]))
+      return true;
+  return false;
+}
+
+test('official 2022 street polygon triangles do not cut through any of the 48 source building footprints',()=>{
+  const district=prepareDistrict(buildings),conflicts=[];
+  for(const segment of pilot.triangles){
+    for(const b of district)
+      if(roadCutsBuilding(segment.points,b.ring)){
+        conflicts.push({roadObjectId:segment.id,buildingFid:b.fid});
+        break;
+      }
+  }
+  assert.deepEqual(conflicts,[],
+    'a georeferenced road footprint overlapping an official building requires source/year review, never artistic repositioning');
 });
