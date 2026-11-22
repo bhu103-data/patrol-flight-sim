@@ -1,3 +1,4 @@
+# Re-run source/coordinate audit after the local-metre scale regression fix.
 name: NYC MN05 roof vertical reference audit
 on:
   pull_request:
