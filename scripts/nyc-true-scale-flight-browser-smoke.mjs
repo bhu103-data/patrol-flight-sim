@@ -82,6 +82,23 @@ try{
     window.PatrolMetricFlightQA.frames>12,null,{timeout:60000});
   const historicalOff=await historicalOffPage.locator('#scene').screenshot({
     path:out+'/02-true-scale-without-2014-mesh.png',timeout:90000});
+  const offCamera=await historicalOffPage.evaluate(()=>{
+    const c=window.PatrolMetricFlightQA.cameraRegistration;
+    return {eyeENUmeters:c.eyeENUmeters,eyeWGS84LonLat:c.eyeWGS84LonLat,
+      yawRadians:c.yawRadians,pitchRadians:c.pitchRadians,
+      viewportPixels:c.viewportPixels};
+  });
+  const onCamera=report.initial.cameraRegistration;
+  const cameraPositionError=Math.hypot(...onCamera.eyeENUmeters.map(
+    (v,i)=>v-offCamera.eyeENUmeters[i]));
+  const cameraAngleError=Math.max(
+    Math.abs(onCamera.yawRadians-offCamera.yawRadians),
+    Math.abs(onCamera.pitchRadians-offCamera.pitchRadians));
+  report.historical2014VisualAB={sameViewport:true,cameraPositionErrorMetres:cameraPositionError,
+    cameraAngleErrorRadians:cameraAngleError};
+  check(cameraPositionError<1e-6&&cameraAngleError<1e-9&&
+    onCamera.viewportPixels.join(',')===offCamera.viewportPixels.join(','),
+    'Historical model ON/OFF captures did not use the exact same camera pose');
   const meshOnPng=PNG.sync.read(initial),meshOffPng=PNG.sync.read(historicalOff);
   check(meshOnPng.width===meshOffPng.width&&meshOnPng.height===meshOffPng.height,
     '2014 mesh A/B frames do not share the same viewport');
