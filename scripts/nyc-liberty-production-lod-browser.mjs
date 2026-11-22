@@ -97,7 +97,11 @@ async function run(label,query,{rejectCandidate=false,tamperCandidate=false}={})
         document.getElementById('glCanvas')?.width>=500);
     },null,{timeout:180000});
     loadTimes.flightSceneMs=Date.now()-first;
-    await page.waitForFunction(()=>window.__libertyIntegrityQA?.().triangles>0,
+    // The explicit legacy rollback intentionally loads NO GLB at all:
+    // its procedural built-in source is the requested success condition.
+    // Only default/opt-in/tampered/network-fallback need a 292/15.9k mesh.
+    if(label!=='rollback')await page.waitForFunction(()=>
+      window.__libertyIntegrityQA?.().triangles>0,
       null,{timeout:60000});
     if(tamperCandidate)await page.waitForFunction(()=>
       window.__libertyIntegrityQA?.().failures.some(
