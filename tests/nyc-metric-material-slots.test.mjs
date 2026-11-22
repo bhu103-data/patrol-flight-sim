@@ -19,7 +19,8 @@ const massing=buildMeteredMassing(buildings);
 
 test('registry labels ALL surface choices as artist-authored proxies; no unlicensed photos',()=>{
   assert.equal(catalog.schema,MATERIAL_SCHEMA);
-  assert.equal(validateNycMaterialCatalog(catalog),true);
+  assert.equal(validateNycMaterialCatalog(catalog,
+    massing.buildings.map(b=>b.fid)),true);
   assert.equal(catalog.fidelity,'visual-proxy-only-not-as-built');
   for(const m of Object.values(catalog.materials)){
     assert.equal(m.externalTextures,null);
@@ -45,6 +46,12 @@ test('material registry rejects fabricated verification, wrong FID and remote te
     {baseColor:'https://unknown.example/photo.jpg'};
   assert.throws(()=>validateNycMaterialCatalog(unsafe),
     /Unverified external image/);
+  const wrongScale=clone();
+  wrongScale.materials['brick-proxy'].tileMeters=[1,1];
+  assert.throws(()=>validateNycMaterialCatalog(wrongScale),/tile scale/);
+  const missingSourceFid=massing.buildings.map(b=>b.fid).filter(fid=>fid!==212747);
+  assert.throws(()=>validateNycMaterialCatalog(catalog,missingSourceFid),
+    /absent source FID/);
   const fudged=clone();
   fudged.fidOverrides['22922'].materialEvidence='surveyed-photogrammetry';
   assert.throws(()=>validateNycMaterialCatalog(fudged),/not approved/);
