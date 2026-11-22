@@ -5095,9 +5095,14 @@ const CENTRAL_PARK_SITES=[
     const desired=bridgeheadSignalTravel(actor,time);
     if(!actor.bridgeheadLeader)return desired;
     const leader=bridgeheadSignalTravel(actor.bridgeheadLeader,time);
-    // Keep 9 route units behind the designated lead vehicle, even after
-    // thousands of seconds of faster sedan progress around this loop.
-    return Math.min(desired,leader-9.0);
+    // The two monotone progress curves are blended before the sedan
+    // reaches its 9-unit hard limit. This C1 smooth minimum removes the
+    // instantaneous 5.6 -> 5.0 speed change from a plain Math.min while
+    // staying <= BOTH desired travel and the leader's safety cap.
+    // Only this one leader-linked NYC connector car uses the extra math.
+    const cap=leader-9.0,blendWidth=2.5;
+    const h=Math.max(0,blendWidth-Math.abs(desired-cap))/blendWidth;
+    return Math.min(desired,cap)-blendWidth*h*h*.25;
   }
 
   function bridgeheadTrafficPose(actor,time){
