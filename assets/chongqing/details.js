@@ -427,14 +427,32 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const x=212+(i%7)*24,z=303+Math.floor(i/7)*42;
     const y=ground(x,z);
     const facade=(i%4===0?'terra':'timber');
+    // Three second-row gallery sites have a separate seven-aperture front
+    // in market-fronts.js. Keep the back and two side walls, NOT the former
+    // closed front box or 16-wide fake glazing card behind its cutouts.
+    // The original unchanged occupied volume still protects pilot/vehicles.
+    const openMarket=(z===345&&(x===236||x===284||x===332));
     obstacles.push({x,z:z-6,w:20,d:16,base:y,top:y+16.1});
     put('stone',x,y+.65,z,21,1.3,25);
-    put(facade,x,y+7.9,z-6,20,15.7,16);
+    if(openMarket){
+      put(facade,x-9.86,y+7.9,z-6,.28,15.7,16);
+      put(facade,x+9.86,y+7.9,z-6,.28,15.7,16);
+      put(facade,x,y+7.9,z-13.84,19.75,15.7,.32);
+    }else{
+      put(facade,x,y+7.9,z-6,20,15.7,16);
+    }
     put('terra',x,y+16.4,z-6,23,1.5,22);
-    put('window',x,y+7,z+2.15,16,6,.15);
-    put('timber',x,y+7.1,z+2.35,.6,9,.4);
-    put('carved',x,y+12,z+3,21,1.0,1.2);
-    sign(names[i],x,y+15.1,z+3.6,17,4.5,'#ffd09a',i%3===0?'#712e35':'#493244');
+    if(!openMarket){
+      put('window',x,y+7,z+2.15,16,6,.15);
+      put('timber',x,y+7.1,z+2.35,.6,9,.4);
+      put('carved',x,y+12,z+3,21,1.0,1.2);
+      sign(names[i],x,y+15.1,z+3.6,17,4.5,'#ffd09a',i%3===0?'#712e35':'#493244');
+    }else{
+      // Small individual shop-name plaque above the true upper apertures;
+      // the old giant board crossed the upstairs glass by ~2 units.
+      sign(names[i],x+(i%2?-2.5:2.5),y+15.84,z+5.8,9,1.35,
+        '#e1d2b6',i%3===0?'#563636':'#55443c');
+    }
     for(let t=0;t<3;t++)put('paving',x-7+t*7,y+.22,z+13,6,.15,13);
     if(i%3===0){
       lantern(x-10,y+12,z+6,1.3);
