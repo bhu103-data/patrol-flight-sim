@@ -1,0 +1,81 @@
+name: NYC measured sidewalks in latest true-metre lowflight
+
+on:
+  pull_request:
+    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat]
+    paths:
+      - 'tools/nyc/true-scale-preview.html'
+      - 'tools/nyc/true-scale-edge-layer.mjs'
+      - 'tools/nyc/true-scale-edge-lowflight-browser-smoke.mjs'
+      - 'scripts/nyc-times-sidewalk-curb-source.mjs'
+      - 'scripts/nyc-sidewalk-curb-lowflight-mesh.mjs'
+      - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
+      - 'tests/nyc-sidewalk-curb-lowflight-port.test.mjs'
+      - 'tools/nyc/official-street-topology-audit.py'
+      - '.github/workflows/nyc-measured-sidewalk-lowflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measured-sidewalk-lowflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned source-only triangulation and WebGL acceptance tools
+        run: |
+          npm install --no-save --no-audit --no-fund earcut@3.0.2 playwright@1.56.1 pngjs@7.0.0
+      - name: Test source identity, metre geometry, holes and existing flight controls
+        run: |
+          node --check scripts/nyc-times-sidewalk-curb-source.mjs
+          node --check scripts/nyc-sidewalk-curb-lowflight-mesh.mjs
+          node --check tools/nyc/true-scale-edge-layer.mjs
+          node --check tools/nyc/true-scale-edge-lowflight-browser-smoke.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs tests/nyc-times-true-scale-flight.test.mjs tests/nyc-times-roadbed-polygon-source.test.mjs tests/nyc-official-roadbed-lowflight.test.mjs tests/nyc-times-sidewalk-curb-source.test.mjs tests/nyc-sidewalk-curb-lowflight-port.test.mjs
+      - name: Fetch genuine DCM, OTI roadbed, sidewalks, curbs, and curb cuts
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          node scripts/nyc-metre-lowflight-roadbed-build.mjs
+          node scripts/nyc-times-sidewalk-curb-source.mjs
+          node scripts/nyc-sidewalk-curb-lowflight-mesh.mjs
+          test -s artifacts/nyc-true-scale/roadbed-mesh.json
+          test -s artifacts/nyc-true-scale/edge-mesh.json
+          cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
+          cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
+          cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+          cp tools/nyc/true-scale-edge-layer.mjs artifacts/nyc-true-scale/edge-layer.mjs
+      - name: Independently audit true-metre topology and retain source conflicts
+        run: |
+          python3 -m pip install --disable-pip-version-check shapely==2.1.2
+          python3 tools/nyc/official-street-topology-audit.py
+          test -s artifacts/nyc-curb-sidewalk-source/topology-audit.json
+      - name: Install headless Chromium with software WebGL2
+        run: npx playwright install --with-deps chromium
+      - name: Serve existing source-only lowflight, never production game
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-true-scale > /tmp/nyc-real-curb-lowflight.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/preview.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Prove default measured flight has no regressions
+        run: node tools/nyc/true-scale-flight-browser-smoke.mjs
+      - name: Prove new opt-in measured sidewalk pixels plus collision-safe lowflight
+        run: node tools/nyc/true-scale-edge-lowflight-browser-smoke.mjs
+      - name: Upload original source, topology conflicts, baseline and 3D evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-sidewalk-curb-lowflight-port-qa
+          path: |
+            artifacts/nyc-true-scale/
+            artifacts/nyc-curb-sidewalk-source/
+          retention-days: 7
+          if-no-files-found: ignore
