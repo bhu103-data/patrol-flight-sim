@@ -155,3 +155,92 @@ test('negative control: original faster sedan really overlapped by 1943s',()=>{
   assert.ok(smallest<-.1,
     'Control must reject the original delayed car-overlap regression');
 });
+
+/**
+ * Conservative continuous-time exclusion for the current, specifically
+ * guarded pair of cars (not all NYC road actors).
+ *
+ * At t0, SAT supplies a world-space separating direction. For that FIXED
+ * direction, moving either containing 3D car box changes its projected
+ * extremity no faster than a bound on its world-space vertex velocity.
+ * Thus gap(t0) - (vTaxi+vSedan)*dt > safetyMargin proves the boxes remain
+ * separated throughout [t0,t0+dt], not just at the sampled endpoints.
+ *
+ * Velocity budget: route-distance derivative <=5.6; horizontal lane
+ * offset 1.07; blend radius 4 with <1.2 rad adjacent bends; U-turn yaw
+ * derivative 1/1.07 per distance; bridge ramp slope <0.16; widest
+ * vertex radial reach <2.25. These yield a conservative <25 game units/s
+ * maximum world vertex velocity; use 40 per car to retain headroom.
+ * Any source/route changes invalidating these guards require re-audit.
+ *
+ * This certifies disjoint upright containing OBBs under those derivative
+ * bounds; it does NOT trace triangle-triangle contacts, handle other
+ * vehicles, or prove unrelated physics/collision routines.
+ */
+test('certify EVERY intersample interval over 9000s using guarded vertex-speed bounds',()=>{
+  assert.match(html,/blend=4;/,
+    'corner tangent interpolation changed: re-audit vertex velocity bound');
+  assert.match(html,/const turnLength=Math.PI\*rad,period=/,
+    'U-turn parametrization changed: re-audit angular velocity');
+  assert.ok(cars.every(c=>c.pace>0&&c.pace<=5.6));
+  assert.ok(cars.every(c=>(c.laneOffset??1.07)>=1.07));
+  const segments=route.points.slice(1).map((p,i)=>{
+    const last=route.points[i],d=[p[0]-last[0],p[1]-last[1]];
+    const length=Math.hypot(...d);
+    return {length,unit:d.map(v=>v/length)};
+  });
+  let maxBend=0;
+  for(let k=1;k<segments.length;k++){
+    const a=segments[k-1].unit,b=segments[k].unit;
+    const angle=Math.acos(Math.max(-1,Math.min(1,
+      a[0]*b[0]+a[1]*b[1])));
+    maxBend=Math.max(maxBend,angle);
+  }
+  assert.ok(segments.every(s=>s.length>8)&&maxBend<1.2,
+    'Authored road curvature or blend zones changed: invalidate swept bound');
+  const radial=Math.max(...[taxiBounds,sedanBounds].map(m=>
+    Math.hypot(m.half[0]+Math.abs(m.center[0]),
+      m.half[2]+Math.abs(m.center[2]))));
+  assert.ok(radial<2.3,'Unexpected new body/roof geometry, re-audit bound');
+  // 40 units/s per car is deliberately >2x this route's derived ~20-25
+  // world-space extremal vertex velocity (translation plus rotation).
+  const maxRelativeVertexSpeed=80,requiredClearance=.08;
+  const at=t=>clearance3D(pose(cars[0],t),pose(cars[1],t));
+  let certified=0,subdivisions=0,maxDepth=0,minObserved=Infinity,
+    lowestGuaranteed=Infinity,firstIssue=null;
+  function certify(t0,t1,atStart,depth){
+    minObserved=Math.min(minObserved,atStart);
+    if(!Number.isFinite(atStart))
+      assert.fail('Non-finite 3D projection at '+t0);
+    const guaranteed=atStart-maxRelativeVertexSpeed*(t1-t0);
+    if(guaranteed>requiredClearance){
+      certified++;lowestGuaranteed=Math.min(lowestGuaranteed,guaranteed);
+      maxDepth=Math.max(maxDepth,depth);
+      return;
+    }
+    if(depth>=17){
+      firstIssue={t0,t1,atStart,guaranteed};
+      assert.fail('Unable to certify continuous 3D hull separation: '+
+        JSON.stringify(firstIssue));
+    }
+    subdivisions++;
+    const mid=(t0+t1)/2,atMid=at(mid);
+    certify(t0,mid,atStart,depth+1);
+    certify(mid,t1,atMid,depth+1);
+  }
+  let start=at(0);
+  for(let k=0;k<90000;k++){
+    const t0=k*.1,t1=(k+1)*.1;
+    certify(t0,t1,start,0);
+    start=at(t1);
+  }
+  assert.ok(certified>=90000&&subdivisions>3000,
+    'Intersample check must exercise close approaches, not vacuously pass');
+  assert.ok(maxDepth>=7&&maxDepth<17);
+  assert.ok(minObserved>.12&&lowestGuaranteed>.08);
+  console.log('NYC_3D_INTERVAL_CERT '+JSON.stringify({
+    horizonSeconds:9000,baseIntervals:90000,certified,subdivisions,
+    maxDepth,maxBend,radial,maxRelativeVertexSpeed,
+    minObserved,lowestGuaranteed,firstIssue
+  }));
+});
