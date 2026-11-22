@@ -867,7 +867,7 @@ function stopJoystick(e){
 }
 joystick.addEventListener('pointerdown',e=>{
   if(joystickPointer!==null)return;
-  e.preventDefault();marketDetailTarget=null;joystickPointer=e.pointerId;
+  e.preventDefault();marketDetailTarget=marketDetailCamera=null;joystickPointer=e.pointerId;
   joystick.setPointerCapture(e.pointerId);updateJoystick(e);
 });
 joystick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointer)updateJoystick(e);});
@@ -899,7 +899,7 @@ function toggleFlight(){
   if(state.flying)state.vel.y=Math.max(9,state.vel.y);
   message(state.flying?'飞行模式开启！Shift 加速，Space 上升，Ctrl 下降':'关闭飞行，准备降落');
 }
-let marketDetailTarget=null;
+let marketDetailTarget=null,marketDetailCamera=null;
 // Optional viewpoint shortcuts let players visually inspect the distant landmarks
 // without waiting for a long flyover; they do not alter the world or quest progress.
 function scenicView(key){
@@ -952,13 +952,18 @@ function scenicView(key){
         target:[site.x,site.base+9.6,site.z+2.6],
         // Aim the lens at two ground openings rather than the pilot's helmet.
         // Only Digit8 gets this inspect target; player camera control is unchanged.
-        inspectTarget:[site.x+2.4,site.base+6.8,site.z+2.78]
+        inspectTarget:[site.x+1.2,site.base+6.8,site.z+2.78],
+        // Actual facade-level inspection camera: downhill, right of the
+        // gallery, and below the roof so the windows fill the frame.
+        // Fixed only for Digit8; no aircraft, collision or world changes.
+        inspectCamera:[site.x+13,site.base+12,site.z+22]
       };
     }
   }
   const next=destinations[key];
   if(!next)return false;
   marketDetailTarget=next.inspectTarget??null;
+  marketDetailCamera=next.inspectCamera??null;
   state.pos.set(...next.pos);
   state.vel.set(0,0,0);
   state.flying=key!=='Digit4';
@@ -968,7 +973,8 @@ function scenicView(key){
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
   viewPitch=key==='Digit8'?-.22:key==='Digit7'?-.28:.23;
-  cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
+  if(marketDetailCamera)cameraPos.set(...marketDetailCamera);
+  else cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
 }
@@ -976,7 +982,9 @@ function press(key,once=false){
   // Any deliberate movement/flight input restores normal third-person framing.
   if(marketDetailTarget&&['KeyW','KeyA','KeyS','KeyD','Space',
     'ControlLeft','ControlRight','ShiftLeft','ShiftRight','KeyF',
-    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key))marketDetailTarget=null;
+    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){
+    marketDetailTarget=null;marketDetailCamera=null;
+  }
   if(once&&key==='KeyE')eatHotpot();
   if(once&&key==='KeyF')toggleFlight();
   if(once&&key==='Space')jumpQueued=true;
@@ -998,7 +1006,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{keys.clear();touchForward=touchSideways=0;joystickPointer=null;joystickKnob.style.transform='translate(0,0)';});
-canvas.addEventListener('pointerdown',e=>{marketDetailTarget=null;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{marketDetailTarget=marketDetailCamera=null;dragging=true;mouseX=e.clientX;mouseY=e.clientY;canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',()=>dragging=false);
 canvas.addEventListener('pointercancel',()=>dragging=false);
 canvas.addEventListener('pointermove',e=>{
@@ -1007,7 +1015,7 @@ canvas.addEventListener('pointermove',e=>{
   viewPitch=clamp(viewPitch+(e.clientY-mouseY)*.004,-.3,1.05);
   mouseX=e.clientX;mouseY=e.clientY;
 });
-canvas.addEventListener('wheel',e=>{marketDetailTarget=null;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
+canvas.addEventListener('wheel',e=>{marketDetailTarget=marketDetailCamera=null;camDistance=clamp(camDistance+Math.sign(e.deltaY)*1.5,7,32);},{passive:true});
 document.querySelectorAll('#mobile button').forEach(b=>{
   const key=b.dataset.key;
   b.addEventListener('pointerdown',e=>{e.preventDefault();press(key,true);b.setPointerCapture(e.pointerId);});
@@ -1314,6 +1322,7 @@ function updateCamera(dt){
     state.pos.y+4.7+sp*distance,
     state.pos.z+Math.cos(viewYaw)*cp*distance
   );
+  if(marketDetailCamera)cameraDesired.set(...marketDetailCamera);
   cameraFocus.set(state.pos.x,state.pos.y+1,state.pos.z);
   cameraRay.subVectors(cameraDesired,cameraFocus);
   let cut=1;
@@ -1332,6 +1341,9 @@ function updateCamera(dt){
   if(intersectsBuilding(cameraPos.x,cameraPos.y,cameraPos.z))cameraPos.copy(cameraDesired);
   cameraPos.y=Math.max(cameraPos.y,Math.max(ground(cameraPos.x,cameraPos.z),-2.0)+1.15);
   camera.position.copy(cameraPos);
+  // Remove only the QA pilot silhouette, not physical collisions or controls.
+  // Restore immediately on any other viewpoint or movement input.
+  avatar.visible=!marketDetailCamera;
   cameraAim.copy(cameraFocus);
   // The collision-safe camera stays behind the player, but this one inspector
   // looks at the physical door/window reveals instead of centering the avatar.
@@ -1417,7 +1429,10 @@ window.PatrolSpaceBridge={getState:()=>({
   marketGalleryInstances:marketFronts.stats.instances,
   marketOpenFacades:marketFronts.stats.openFacades,
   marketOpenFacadeTriangles:marketFronts.stats.openFacadeTriangles,
-  marketDetailInspect:Boolean(marketDetailTarget)
+  marketDetailInspect:Boolean(marketDetailTarget),
+  marketDetailCameraActive:Boolean(marketDetailCamera),
+  marketDetailAvatarHidden:!avatar.visible,
+  marketDetailCameraPose:marketDetailCamera?camera.position.toArray():null
 })};
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
