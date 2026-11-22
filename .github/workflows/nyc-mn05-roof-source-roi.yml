@@ -7,6 +7,9 @@ on:
       - 'tests/nyc-mn05-building-component-linkage.test.py'
       - 'tools/nyc/match-mn05-components-via-footprints.py'
       - 'tests/nyc-mn05-component-spatial-join.test.py'
+      - 'assets/nyc/times-square-footprints.json'
+      - 'tools/nyc/match-mn05-components-to-current-fids.py'
+      - 'tests/nyc-mn05-current-fid-height-gate.test.py'
       - 'tools/nyc/mn05-authentic-roof-facade-preview.html'
       - 'scripts/nyc-mn05-source-roof-facade-browser-smoke.mjs'
       - 'tests/nyc-official-2014-facade-source-mesh.test.py'
@@ -36,6 +39,8 @@ jobs:
           python -m py_compile tests/nyc-mn05-building-component-linkage.test.py
           python -m py_compile tools/nyc/match-mn05-components-via-footprints.py
           python -m py_compile tests/nyc-mn05-component-spatial-join.test.py
+          python -m py_compile tools/nyc/match-mn05-components-to-current-fids.py
+          python -m py_compile tests/nyc-mn05-current-fid-height-gate.test.py
           python -m pip install --no-cache-dir --disable-pip-version-check rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
           python tests/nyc-official-mn05-coordinate-frame.test.py
       - name: Obtain ORIGINAL official NYC DCP MN05 3DM in bounded single-job temporary area
@@ -60,6 +65,11 @@ jobs:
           python tools/nyc/match-mn05-components-via-footprints.py
           test -s artifacts/nyc-official-mn05/mn05-component-spatial-join.json
           python tests/nyc-mn05-component-spatial-join.test.py
+      - name: Match 2014 source footprints to current NYC FIDs and screen height changes
+        run: |
+          python tools/nyc/match-mn05-components-to-current-fids.py
+          test -s artifacts/nyc-official-mn05/mn05-2014-to-current-fid-height-gate.json
+          python tests/nyc-mn05-current-fid-height-gate.test.py
       - name: Install free browser and run actual cached rooftop WebGL QA
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -83,6 +93,7 @@ jobs:
             artifacts/nyc-official-mn05/mn05-building-component-linkage.json
             artifacts/nyc-official-mn05/times-square-original-footprint-mesh.json
             artifacts/nyc-official-mn05/mn05-component-spatial-join.json
+            artifacts/nyc-official-mn05/mn05-2014-to-current-fid-height-gate.json
             artifacts/nyc-official-mn05/times-square-roof-source-roi.json
             artifacts/nyc-official-mn05/times-square-original-roof-mesh.json
             artifacts/nyc-official-mn05/times-square-original-facade-mesh.json
