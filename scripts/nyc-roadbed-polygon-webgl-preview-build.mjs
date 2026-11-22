@@ -3,7 +3,7 @@
  * never to the compressed production flight map.
  */
 import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
-import earcut from 'earcut';
+import earcut,{deviation} from 'earcut';
 const src=JSON.parse(readFileSync('artifacts/nyc-roadbed-source/roadbed.json','utf8'));
 if(src.schema!=='patrol-nyc-oti-roadbed-planimetric-2022-v1')
   throw Error('Unrecognized official NYC pavement polygon schema');
@@ -22,7 +22,7 @@ for(const feature of src.roadbeds){
     const indices=earcut(coords,holes,2);
     if(indices.length<3||indices.length%3)
       throw Error('Cannot triangulate official polygon '+feature.objectId);
-    const error=earcut.deviation(coords,holes,2,indices);
+    const error=deviation(coords,holes,2,indices);
     if(!Number.isFinite(error)||error>.0005)
       throw Error('Triangulation filled a polygon hole or lost source area '+
         feature.objectId+' deviation='+error);
