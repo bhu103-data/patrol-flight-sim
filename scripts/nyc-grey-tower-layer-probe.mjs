@@ -129,67 +129,127 @@ try{
   });
   check(Array.isArray(baselineStats.sourceFids)&&baselineStats.sourceFids.length>0,
     'GIS source FID inventory is unavailable');
-  await page.evaluate(()=>{
-    const canvas=document.getElementById('glCanvas'),gl=canvas?.getContext('webgl2');
-    if(!gl||gl.isContextLost())throw Error('WebGL2 context unavailable for source FID scan');
-    gl.finish();
-    const data=new Uint8Array(canvas.width*canvas.height*4);
-    gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);
-    window.__patrolNycGisBaseline={width:canvas.width,height:canvas.height,data};
-  });
-  report.gisSourceFids=baselineStats.sourceFids;
-  report.fidScan=await page.evaluate(async fids=>{
-    const api=window.__patrolNycVisualProbe,canvas=document.getElementById('glCanvas'),
-      gl=canvas?.getContext('webgl2'),baseline=window.__patrolNycGisBaseline;
-    if(!gl||!baseline||baseline.width!==canvas.width||baseline.height!==canvas.height)
-      throw Error('Source FID baseline framebuffer mismatch');
-    const {width,height,data:before}=baseline,results=[];
-    for(const fid of fids){
-      const stats=api.setGisSkippedFids([fid]);
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-      gl.finish();
-      const after=new Uint8Array(width*height*4);
-      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,after);
-      let pixels=0,changed24=0,changed45=0,meanAbs=0;
-      for(let y=0;y<height;y+=2){
-        const gy=height-1-y;
-        for(let x=0;x<460;x+=2){
-          const i=(gy*width+x)*4;
-          const dr=Math.abs(before[i]-after[i]),
-            dg=Math.abs(before[i+1]-after[i+1]),
-            db=Math.abs(before[i+2]-after[i+2]),delta=Math.max(dr,dg,db);
-          meanAbs+=(dr+dg+db)/3;
-          if(delta>=24)changed24++;
-          if(delta>=45)changed45++;
-          pixels++;
-        }
-      }
-      results.push({fid,sourceBuildings:stats.sourceBuildings,
-        skippedDiagnosticFids:stats.skippedDiagnosticFids,
-        changed24Fraction:Number((changed24/pixels).toFixed(4)),
-        changed45Fraction:Number((changed45/pixels).toFixed(4)),
-        meanAbsRgb:Number((meanAbs/pixels).toFixed(2)),
-        glError:gl.getError()});
+  const sourceFids=baselineStats.sourceFids.slice();
+  report.gisSourceFids=sourceFids;
+  report.fidScanMethod='paired 1280x720 Playwright PNGs; baseline→skip→restore per FID; only pixels stable between baseline and restore count';
+  const captureFidFrame=async()=>{
+    const state=await page.evaluate(()=>{
+      const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+      return {valid:Boolean(gl&&!gl.isContextLost()),glError:gl?.getError(),
+        selected:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent};
+    });
+    check(state.valid&&state.glError===0&&state.selected===report.camera,
+      'FID PNG capture has invalid WebGL/camera state: '+JSON.stringify(state));
+    await page.evaluate(()=>document.body.classList.add('patrol-qa-scene-only'));
+    let bytes;
+    try{
+      bytes=await page.locator('#glCanvas').screenshot({timeout:90000});
+    }finally{
+      await page.evaluate(()=>document.body.classList.remove('patrol-qa-scene-only'));
     }
-    api.setGisSkippedFids([]);
-    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    gl.finish();
-    return results.sort((a,b)=>b.changed45Fraction-a.changed45Fraction);
-  },baselineStats.sourceFids);
-  report.fidScanHypothesis=report.fidScan[0]
-    ?'Highest-impact single GIS source FID: '+report.fidScan[0].fid
-    :'No individually rendered GIS source FIDs were scanned';
-  report.fidScanTop=report.fidScan.slice(0,10);
-  report.fidScanGlErrors=report.fidScan.filter(x=>x.glError!==0);
-  if(report.fidScan[0]?.changed45Fraction>=.01){
-    const topFid=report.fidScan[0].fid;
-    await page.evaluate(fid=>window.__patrolNycVisualProbe.setGisSkippedFids([fid]),topFid);
-    await capture('44th-skip-fid-'+topFid,'none');
+    const png=PNG.sync.read(bytes);
+    check(png.width===1280&&png.height===720,
+      'Per-FID Playwright screenshot must be exact 1280x720');
+    return {png,glError:state.glError};
+  };
+  const measureStableRoi=(before,skipped,restored,roi)=>{
+    const [x0,y0,x1,y1]=roi;
+    let samples=0,stable=0,changed24=0,changed45=0,meanAbs=0,restore45=0;
+    for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){
+      const i=(y*before.width+x)*4;
+      const maxDiff=(a,b)=>Math.max(
+        Math.abs(a.data[i]-b.data[i]),
+        Math.abs(a.data[i+1]-b.data[i+1]),
+        Math.abs(a.data[i+2]-b.data[i+2]));
+      const restoreDelta=maxDiff(before,restored);
+      samples++;
+      if(restoreDelta>=24){if(restoreDelta>=45)restore45++;continue;}
+      stable++;
+      const delta=maxDiff(before,skipped);
+      const rgb=(Math.abs(before.data[i]-skipped.data[i])+
+        Math.abs(before.data[i+1]-skipped.data[i+1])+
+        Math.abs(before.data[i+2]-skipped.data[i+2]))/3;
+      meanAbs+=rgb;
+      if(delta>=24)changed24++;
+      if(delta>=45)changed45++;
+    }
+    return {
+      samples,stableSamples:stable,
+      stableFraction:Number((stable/Math.max(1,samples)).toFixed(4)),
+      changed24Fraction:Number((changed24/Math.max(1,stable)).toFixed(4)),
+      changed45Fraction:Number((changed45/Math.max(1,stable)).toFixed(4)),
+      meanAbsRgb:Number((meanAbs/Math.max(1,stable)).toFixed(2)),
+      restoreDrift45Fraction:Number((restore45/Math.max(1,samples)).toFixed(4)),
+      mask:'only same-pixel baseline→restored max RGB delta < 24',
+      note:'Dynamic cars/LED pixels that fail the restore-stability test are excluded'
+    };
+  };
+  report.fidScan=[];
+  let bestFidFrame=null;
+  for(let index=0;index<sourceFids.length;index++){
+    const fid=sourceFids[index];
     await page.evaluate(()=>window.__patrolNycVisualProbe.setGisSkippedFids([]));
+    await page.waitForTimeout(120);
+    const before=await captureFidFrame();
+    const skippedStats=await page.evaluate(id=>
+      window.__patrolNycVisualProbe.setGisSkippedFids([id]),fid);
+    check(skippedStats.skippedDiagnosticFids===1 &&
+      Array.isArray(skippedStats.sourceFids) &&
+      !skippedStats.sourceFids.includes(fid) &&
+      skippedStats.sourceFids.length===sourceFids.length-1,
+      'Diagnostic did not remove exactly source FID '+fid);
     await page.waitForTimeout(650);
-    await capture('44th-fid-scan-restored','none');
-    report.fidScanRestored=compare('44th-none','44th-fid-scan-restored');
+    const skipped=await captureFidFrame();
+    const restoredStats=await page.evaluate(()=>
+      window.__patrolNycVisualProbe.setGisSkippedFids([]));
+    check(restoredStats.skippedDiagnosticFids===0 &&
+      JSON.stringify(restoredStats.sourceFids)===JSON.stringify(sourceFids),
+      'Diagnostic did not restore the exact original GIS source FID list');
+    await page.waitForTimeout(650);
+    const restored=await captureFidFrame();
+    const regions={};
+    for(const [region,roi] of Object.entries(report.focusRois))
+      regions[region]=measureStableRoi(before.png,skipped.png,restored.png,roi);
+    const result={fid,skippedDiagnosticFids:skippedStats.skippedDiagnosticFids,
+      sourceFidsBefore:sourceFids.length,sourceFidsAfter:skippedStats.sourceFids.length,
+      glErrors:[before.glError,skipped.glError,restored.glError],regions};
+    report.fidScan.push(result);
+    if(!bestFidFrame ||
+       regions.leftWall.changed45Fraction>
+         bestFidFrame.result.regions.leftWall.changed45Fraction){
+      bestFidFrame={fid,result,baseline:before.png,skipped:skipped.png,restored:restored.png};
+    }
   }
+  report.fidScan.sort((a,b)=>
+    b.regions.leftWall.changed45Fraction-a.regions.leftWall.changed45Fraction);
+  report.fidScanHypothesis=report.fidScan[0] &&
+    report.fidScan[0].regions.leftWall.stableFraction>=.60 &&
+    report.fidScan[0].regions.leftWall.changed45Fraction>=.035
+      ?'Highest-impact stable left-wall GIS source FID: '+report.fidScan[0].fid
+      :'INCONCLUSIVE: no single GIS source FID has a stable >=3.5% left-wall pixel effect';
+  report.fidScanTop=report.fidScan.slice(0,10);
+  report.fidScanGlErrors=report.fidScan.filter(x=>x.glErrors.some(e=>e!==0));
+  report.fidScanStableGate=report.fidScan.every(x=>
+    x.regions.leftWall.stableFraction>=.60 &&
+    x.glErrors.every(e=>e===0) &&
+    x.skippedDiagnosticFids===1 &&
+    x.sourceFidsAfter===x.sourceFidsBefore-1);
+  check(report.fidScan.length===sourceFids.length && sourceFids.length>0,
+    'Per-FID PNG scan did not cover every rendered source FID');
+  check(report.fidScanGlErrors.length===0,'WebGL errors during per-FID PNG scan');
+  check(report.fidScanStableGate,
+    'Per-FID PNG scan did not maintain stable control pixels and exact restore');
+  if(bestFidFrame){
+    const top=bestFidFrame.result.regions.leftWall;
+    const name='44th-skip-fid-'+bestFidFrame.fid;
+    await writeFile(dir+'/'+name+'.png',PNG.sync.write(bestFidFrame.skipped));
+    await writeFile(dir+'/44th-fid-scan-baseline.png',
+      PNG.sync.write(bestFidFrame.baseline));
+    report.screenshots.push({name,hidden:'none',skippedFid:bestFidFrame.fid});
+    report.fidScanBest={fid:bestFidFrame.fid,leftWall:top};
+  }
+  await capture('44th-fid-scan-restored','none');
+  report.fidScanRestored=compare('44th-none','44th-fid-scan-restored');
   report.rankedByRoi=Object.keys(report.focusRois).map(region=>{
     const ranked=Object.entries(report.comparison).map(([layer,regions])=>({
       layer,...regions[region]
