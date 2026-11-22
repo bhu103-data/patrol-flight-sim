@@ -379,6 +379,7 @@ def current_cscl_comparison(
     width_deltas: list[float] = []
     matches: list[dict[str, Any]] = []
     same_name_count = physical_id_match_count = direction_agreement_count = 0
+    physical_id_spatial_mismatch_count = 0
     lane_count_compared = lane_count_agreement = 0
     for feature in roadbed:
         geometry_data = feature.get("geometry")
@@ -400,20 +401,47 @@ def current_cscl_comparison(
             line for line in lines
             if normalized_source_name and line["normalizedName"] == normalized_source_name
         ]
-        if physical_candidates:
-            candidates = physical_candidates
+        physical_id_nearest = (
+            min(physical_candidates, key=lambda line: centroid.distance(line["geometry"]))
+            if physical_candidates else None
+        )
+        physical_id_distance_m = (
+            centroid.distance(physical_id_nearest["geometry"])
+            if physical_id_nearest is not None else None
+        )
+        same_name_nearest = (
+            min(same_name, key=lambda line: centroid.distance(line["geometry"]))
+            if same_name else None
+        )
+        same_name_distance_m = (
+            centroid.distance(same_name_nearest["geometry"])
+            if same_name_nearest is not None else None
+        )
+
+        # TUM's older physical IDs can span a different segment split from
+        # current CSCL. Keep the ID evidence, but do not force a distant line
+        # when a same-name current segment is geometrically much closer.
+        if physical_id_nearest is not None and (
+            physical_id_distance_m <= 10.0
+            or same_name_nearest is None
+            or same_name_distance_m >= physical_id_distance_m
+        ):
+            nearest = physical_id_nearest
             match_method = "physical_id"
-        elif same_name:
-            candidates = same_name
-            match_method = "normalized_street_name"
+        elif same_name_nearest is not None:
+            nearest = same_name_nearest
+            match_method = "normalized_street_name_after_physical_id_spatial_mismatch"
         else:
-            candidates = lines
+            nearest = min(lines, key=lambda line: centroid.distance(line["geometry"]))
             match_method = "nearest_fallback"
-        nearest = min(candidates, key=lambda line: centroid.distance(line["geometry"]))
         distance_m = centroid.distance(nearest["geometry"])
         distances.append(distance_m)
         name_match = bool(same_name)
         physical_match = bool(physical_candidates)
+        physical_id_spatial_mismatch = (
+            physical_id_distance_m is not None and physical_id_distance_m > 10.0
+        )
+        physical_id_spatial_mismatch_count += int(physical_id_spatial_mismatch)
         direction_match = (
             expected_direction is not None
             and str(nearest["direction"]).strip().upper() == expected_direction
@@ -467,6 +495,13 @@ def current_cscl_comparison(
             "matchMethod": match_method,
             "sameStreetName": name_match,
             "physicalIdExistsInCurrentCscl": physical_match,
+            "physicalIdCandidateDistanceM": (
+                round(physical_id_distance_m, 3)
+                if physical_id_distance_m is not None else None
+            ),
+            "physicalIdCandidateSpatialMismatch": (
+                physical_id_spatial_mismatch if physical_id_distance_m is not None else None
+            ),
             "trafficDirectionCodeAgrees": direction_match,
         })
 
@@ -503,6 +538,7 @@ def current_cscl_comparison(
             "comparedRoadbedCount": len(matches),
             "sameStreetNameCount": same_name_count,
             "physicalIdMatchCount": physical_id_match_count,
+            "physicalIdSpatialMismatchCount": physical_id_spatial_mismatch_count,
             "trafficDirectionComparedCount": len([m for m in matches if m["expectedCurrentTrafficDirectionCode"] is not None]),
             "trafficDirectionAgreementCount": direction_agreement_count,
             "totalLaneCountComparedCount": lane_count_compared,
