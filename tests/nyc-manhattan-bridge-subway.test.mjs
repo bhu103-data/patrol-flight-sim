@@ -118,5 +118,28 @@ test('every horizontal track bed and upper/lower road top faces point UP',()=>{
       seen.push(normalY);
     }
   });
-  assert.ok(seen.length>300,'covered both trackways plus the separated road decks');
+  assert.equal(seen.length,7,'two track beds, two upper roads, two footwalks, one lower road');
+});
+
+test('straight rails and flat road slabs are emitted once, not in redundant LOD fragments',()=>{
+  let triangles=0,quads=0,walkwayYellow=0,railPairs=0;
+  const result=rail.build({
+    box:()=>{triangles+=12;},
+    beam:(_a,_b,w,color)=>{
+      triangles+=12;
+      if(Math.abs(w-.075)<1e-6&&color[0]>.8&&color[1]>.6)walkwayYellow++;
+      if(Math.abs(w-.095)<1e-6)railPairs++;
+    },
+    addQuad:()=>{quads++;triangles+=2;}
+  });
+  assert.equal(quads,7,'7 continuous quads, no duplicated coplanar panels');
+  assert.equal(railPairs,8,'exactly 4 dual-rail tracks, one beam per rail');
+  assert.ok(walkwayYellow>=4,'two yellow maintenance handrails on each outside edge');
+  assert.ok(triangles<15000,'rail realism must fit a 15k added-triangle budget');
+  assert.equal(result.quads,quads);
+});
+test('rail-level spectator camera inspects trains below the upper road deck',()=>{
+  assert.match(html,/Manhattan Bridge · Subway Rail Level/);
+  const [scenic]=html.match(/name:'Manhattan Bridge · Subway Rail Level',[^\r\n]*/)||[];
+  assert.ok(scenic?.includes('height:12'),'lower train viewpoint must preserve the physical road deck');
 });

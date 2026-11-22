@@ -221,6 +221,20 @@ try{
    subwayView.webgl&&subwayView.graphicsError===0,
    'Manhattan subway bridge failed to render: '+JSON.stringify(subwayView));
  await capture('10-manhattan-bridge-subway.png');
+// Secondary fixed-angle browser proof: the source-correct upper roads can
+// occlude the cars from an elevated camera; never remove roads just for QA.
+ await page.locator('#hotelTarget').selectOption({label:'Manhattan Bridge · Subway Rail Level'});
+ await page.waitForTimeout(1550);
+ const railLevel=await page.evaluate(()=>{
+   const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+   const selected=document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent;
+   return {selected,webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(railLevel.selected==='Manhattan Bridge · Subway Rail Level'&&
+   railLevel.webgl&&railLevel.graphicsError===0,
+   'Rail-level subway camera failed: '+JSON.stringify(railLevel));
+ await capture('11-manhattan-bridge-rail-level.png');
+
  // Also inspect the residential/warehouse blocks. The bridge deck camera
  // fills most of the frame with cables and cannot assess street facades.
  await page.locator('#hotelTarget').selectOption({label:'DUMBO · Warehouse Blocks'});

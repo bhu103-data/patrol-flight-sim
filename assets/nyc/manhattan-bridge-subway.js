@@ -71,35 +71,58 @@ function build({box,addQuad,beam}){
     else addQuad(d,c,b,a,color);
     quads++;
   };
-  // Two side trackways and a higher, recessed roadway. No rails on Brooklyn Bridge.
+  // All these strips are exactly planar in the compressed bridge coordinate
+  // system. Emit one long quad per track/road lane instead of re-tessellating
+  // each 3.5-unit panel: same visible contour, fewer fragments and normals.
+  const serviceWalk=[.41,.42,.37],safetyYellow=[.85,.67,.17];
+  for(const side of [-1,1]){
+    const inner=side*4.15,outer=side*11.75;
+    Q(point(SPEC.west,inner,SPEC.deck-.29),
+      point(SPEC.east,inner,SPEC.deck-.29),
+      point(SPEC.east,outer,SPEC.deck-.29),
+      point(SPEC.west,outer,SPEC.deck-.29),trackBed);
+    const upperInner=Math.min(side*4.05,side*11.65);
+    const upperOuter=Math.max(side*4.05,side*11.65);
+    Q(point(SPEC.west,upperInner,UPPER_ROAD_Y),
+      point(SPEC.east,upperInner,UPPER_ROAD_Y),
+      point(SPEC.east,upperOuter,UPPER_ROAD_Y),
+      point(SPEC.west,upperOuter,UPPER_ROAD_Y),deckColor);
+    // First-person railway photographs show a narrow maintenance walkway
+    // and yellow rails outside the two outboard track pairs.
+    const walkwayNear=side*10.78,walkwayFar=side*11.68;
+    Q(point(SPEC.west,walkwayNear,SPEC.deck+.105),
+      point(SPEC.east,walkwayNear,SPEC.deck+.105),
+      point(SPEC.east,walkwayFar,SPEC.deck+.105),
+      point(SPEC.west,walkwayFar,SPEC.deck+.105),serviceWalk);
+    for(const h of [.62,1.32])
+      B(point(SPEC.west,side*11.93,SPEC.deck+h),
+        point(SPEC.east,side*11.93,SPEC.deck+h),.075,safetyYellow);
+    for(let x=SPEC.west+2.5;x<SPEC.east-1;x+=12.0)
+      B(point(x,side*11.93,SPEC.deck+.16),
+        point(x,side*11.93,SPEC.deck+1.37),.072,safetyYellow);
+  }
+  Q(point(SPEC.west,-3.75,SPEC.deck+.04),
+    point(SPEC.east,-3.75,SPEC.deck+.04),
+    point(SPEC.east,3.75,SPEC.deck+.04),
+    point(SPEC.west,3.75,SPEC.deck+.04),deckColor);
+  // Retain structural panel seams where the girders actually cross the span.
   for(let x=SPEC.west;x<SPEC.east;x+=3.5){
     const nx=Math.min(x+3.5,SPEC.east);
     for(const side of [-1,1]){
-      const inner=side*4.15,outer=side*11.75;
-      Q(point(x,inner,SPEC.deck-.29),point(nx,inner,SPEC.deck-.29),
-        point(nx,outer,SPEC.deck-.29),point(x,outer,SPEC.deck-.29),trackBed);
-      B(point(x,side*12.0,SPEC.deck-.10),point(nx,side*12.0,SPEC.deck-.10),.31,structural);
-      B(point(x,side*3.9,SPEC.deck-.23),point(nx,side*3.9,SPEC.deck-.23),.24,structural);
-    }
-    // Real bridge has a central lower roadway, flanked by B/D and N/Q subway
-    // rails, plus two raised roads; vertical clearance preserves the car mesh.
-    Q(point(x,-3.75,SPEC.deck+.04),point(nx,-3.75,SPEC.deck+.04),
-      point(nx,3.75,SPEC.deck+.04),point(x,3.75,SPEC.deck+.04),deckColor);
-    for(const side of [-1,1]){
-      const inner=Math.min(side*4.05,side*11.65);
-      const outer=Math.max(side*4.05,side*11.65);
-      Q(point(x,inner,UPPER_ROAD_Y),point(nx,inner,UPPER_ROAD_Y),
-        point(nx,outer,UPPER_ROAD_Y),point(x,outer,UPPER_ROAD_Y),deckColor);
+      B(point(x,side*12.0,SPEC.deck-.10),
+        point(nx,side*12.0,SPEC.deck-.10),.31,structural);
+      B(point(x,side*3.9,SPEC.deck-.23),
+        point(nx,side*3.9,SPEC.deck-.23),.24,structural);
       B(point(x,side*12.0,UPPER_ROAD_Y-.21),
         point(nx,side*12.0,UPPER_ROAD_Y-.21),.32,structural);
     }
   }
+  // These eight steel running rails are straight in game-space.
+  // Former 5.6-unit segments were co-linear and caused needless GPU vertices.
   for(const side of SPEC.trackOffsets){
     for(const railSide of [-.72,.72]){
-      for(let x=SPEC.west;x<SPEC.east;x+=5.6){
-        B(point(x,side+railSide,SPEC.deck+.18),
-          point(Math.min(x+5.6,SPEC.east),side+railSide,SPEC.deck+.18),.095,rail);
-      }
+      B(point(SPEC.west,side+railSide,SPEC.deck+.18),
+        point(SPEC.east,side+railSide,SPEC.deck+.18),.095,rail);
     }
     for(let x=SPEC.west+.42;x<SPEC.east;x+=3.1)
       B(point(x,side-1.24,SPEC.deck+.065),

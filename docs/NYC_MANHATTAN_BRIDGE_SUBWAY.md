@@ -45,3 +45,12 @@ This project and authors are credited for the dimensional selection and control 
 - The bridge builder now tests each normal's Y component and reverses any downward horizontal quad at generation, before the single shared native mesh is uploaded.
 - `tests/nyc-manhattan-bridge-subway.test.mjs` checks the real 330 generated horizontal quads are nondegenerate, up-facing and planar; no changes to GIS, city roads or aircraft shaders.
 - Same-camera Chrome WebGL2 screenshots are still required after this fix. The sampled software-renderer screenshot duration is not a reliable production FPS benchmark.
+
+## Lower-deck rail detail / geometry batching (post-visual QA)
+- Photo references (study only, no media copied): `Manhattan Bridge North Side Subway Tracks` by Marcin Wichary, Wikimedia Commons and `Subway tracks on the Manhattan bridge` by biwook, Wikimedia Commons. These show narrow yellow service walkways, structural lattice and train tracks. Do not claim hand-authored safety walkway width is an exact MTA dimension.
+- Seven continuous flat top-face quads now cover the two track beds, the two raised roads, the center lower roadway and two outside maintenance footwalks; previous 330 separate co-planar quads were redundant and frequently caused seams.
+- Eight long continuous running rail beams replace 336 overlapping/co-linear rail segments. Sleepers, truss panels and bridge support segmentation are still modeled.
+- Yellow dual-height maintenance handrails with uprights are added along the two track-adjacent outside edges. They are original simplified game geometry, not copied assets.
+- Native source-geometry budget **14,582 triangles**, **1,221 component calls** (1,108 beams, 106 boxes, seven quads). Previous calibrated baseline had ~18,660 triangles and 1,830 calls. Reducing geometry is a structural optimization, not an FPS guarantee.
+- An additional Scenic Views entry `Manhattan Bridge · Subway Rail Level` provides an unobstructed low oblique inspection angle beneath the physically correct upper road decks. The special browser QA captures `11-manhattan-bridge-rail-level.png` alongside the original `10-manhattan-bridge-subway.png`.
+- Both the new camera and the optimized geometry require a **new Chrome WebGL2 screenshot review** before merge.
