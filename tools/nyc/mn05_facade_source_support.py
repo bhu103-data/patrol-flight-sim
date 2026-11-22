@@ -144,3 +144,19 @@ def relative_height_metres(source_z, source_min_z, source_max_z, modern_height_m
     if fraction < -1e-5 or fraction > 1.00001:
         raise ValueError("source Z lies outside the building-relative range")
     return max(0.0, min(1.0, fraction)) * float(modern_height_metres)
+
+
+def plausible_height_ratio(source_z_span, modern_height_ft, min_ratio=0.50,
+                           max_ratio=1.75):
+    """Conservative shape-consistency gate, not proof of vertical datum.
+
+    The source Z unit remains unverified; this ratio is used only to reject
+    obvious cross-building/partial-wall mismatches before display anchoring.
+    """
+    values = (source_z_span, modern_height_ft, min_ratio, max_ratio)
+    if not all(math.isfinite(float(v)) for v in values):
+        return False
+    if float(source_z_span) <= 0 or float(modern_height_ft) <= 0:
+        return False
+    ratio = float(source_z_span) / float(modern_height_ft)
+    return float(min_ratio) <= ratio <= float(max_ratio)
