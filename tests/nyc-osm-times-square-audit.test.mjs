@@ -25,6 +25,8 @@ test('Overpass query is bounded to the source WGS84 Times Square bbox',()=>{
   const q=buildOverpassQuery(source.bboxWGS84);
   assert.match(q,/way\["building"\]/);
   assert.match(q,/relation\["building"\]/);
+  assert.match(q,/way\["building:part"\]/);
+  assert.match(q,/relation\["building:part"\]/);
   assert.match(q,/40\.756,-73\.9885,40\.7595,-73\.9835/);
   assert.throws(()=>buildOverpassQuery([1,2,0,3]),/Invalid WGS84 bbox/);
 });
