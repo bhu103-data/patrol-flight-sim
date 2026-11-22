@@ -6,6 +6,8 @@ on:
       - "scripts/nyc-times-cscl-roadbed-probe.mjs"
       - "assets/nyc/times-square-metric-massing.js"
       - "tests/nyc-cscl-roadbed-source.test.mjs"
+      - "tests/nyc-cscl-footprint-clearance.test.mjs"
+      - "scripts/nyc-cscl-footprint-clearance.mjs"
       - ".github/workflows/nyc-cscl-roadbed-source-audit.yml"
 
 permissions:
@@ -21,7 +23,7 @@ jobs:
         with:
           node-version: "22"
       - name: Validate schema, physical road classification and unavailable lanes
-        run: node --test tests/nyc-cscl-roadbed-source.test.mjs
+        run: node --test tests/nyc-cscl-roadbed-source.test.mjs tests/nyc-cscl-footprint-clearance.test.mjs
       - name: Syntax preflight before network query
         run: node --check scripts/nyc-times-cscl-roadbed-probe.mjs
       - name: Query current NYC OTI official CSCL roadbed layer (read-only)
