@@ -37,6 +37,7 @@ def inspect_archive(name, file_id, directory, timeout):
         "name": name, "resource_id": file_id, "url": download_url(file_id),
         "status": "BLOCKED", "downloaded_bytes": 0, "zip_sha256": None,
         "zip_entries": [], "tiffs": [], "error": None,
+        "geographic_target_match": None, "valid_pixel_overlap_tested": False,
         "license": "NPS government-data public-domain catalog (verify per file)",
     }
     archive_path = pathlib.Path(directory) / (name + "_2p5m.zip")
@@ -121,7 +122,16 @@ def inspect_archive(name, file_id, directory, timeout):
                     })
         if not record["tiffs"]:
             raise RuntimeError("ZIP did not contain a parseable GeoTIFF")
-        record["status"] = "METADATA_READ"
+        # A mere zip filename match is NOT geographic identity. The NPS
+        # published aggregate bbox even stops west of the intended fjord.
+        # Individual TIFF envelopes, not archive names, decide candidacy.
+        record["geographic_target_match"] = any(
+            item["intersects_noaa_study_bbox"] is True
+            for item in record["tiffs"]
+        )
+        record["status"] = ("GEO_CANDIDATE_METADATA_ONLY" if
+            record["geographic_target_match"] else
+            "REJECT_OUTSIDE_TRACY_ARM_STUDY_BBOX")
     except Exception as exc:
         record["error"] = (type(exc).__name__ + ": " + str(exc))[:800]
     finally:
@@ -145,11 +155,16 @@ def main():
         "original_game_bbox_wgs84": AOI_GAME,
         "noaa_study_bbox_wgs84": AOI_NOAA,
         "source_public_catalog": "https://irma.nps.gov/DataStore/Reference/Profile/2314560",
+        "publisher_readme": "https://irma.nps.gov/DataStore/DownloadFile/747319?Reference=2314560",
+        "publisher_readme_elevation_reference": "WGS84 ellipsoidal height, Float32; declared NoData -9999",
+        "catalog_aggregate_bbox_wgs84": [-158.342865, 56.6082, -135.094727, 68.43901],
         "assumptions": [
             "bounding boxes may overstate actual valid survey pixels",
             "UTM projected CRS does not itself establish elevation vertical datum",
             "2000-era survey strips must not be presented as 2026 Sawyer terminus",
             "no raw raster archives or derived terrain were added to the repo",
+            "NPS README lists SawyerCanada/SawyerEast/SawyerWest in Sawyer ZIP; naming is not evidence of Tracy Arm location",
+            "catalog aggregate east bound -135.094727 conflicts with Tracy Arm target ~-133; trust actual TIFF georeferencing, not archive labels",
         ],
         "results": [], "status": "BLOCKED",
     }
@@ -162,9 +177,10 @@ def main():
                 report["results"].append(result)
                 output.write_text(json.dumps(report, indent=2) + "\n",
                                   encoding="utf-8")
-        report["status"] = ("METADATA_VERIFIED" if len(report["results"]) == 2 and all(
-            item["status"] == "METADATA_READ" for item in report["results"])
-            else "BLOCKED")
+        report["status"] = ("BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY"
+            if len(report["results"]) == 2 and all(
+                item["status"] == "GEO_CANDIDATE_METADATA_ONLY"
+                for item in report["results"]) else "BLOCKED_GEOGRAPHIC_IDENTITY")
     finally:
         output.write_text(json.dumps(report, indent=2) + "\n",
                           encoding="utf-8")
@@ -174,11 +190,13 @@ def main():
                 "name": x["name"], "status": x["status"],
                 "zip_sha256": x["zip_sha256"],
                 "downloaded_bytes": x["downloaded_bytes"],
-                "tiffs": len(x["tiffs"]), "error": x["error"]
+                "tiffs": len(x["tiffs"]),
+                "geographic_target_match": x["geographic_target_match"],
+                "error": x["error"]
             } for x in report["results"]],
             "output": str(output),
         }, indent=2))
-    return 0 if report["status"] == "METADATA_VERIFIED" else 2
+    return 0 if report["status"] == "BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY" else 2
 
 
 if __name__ == "__main__":
