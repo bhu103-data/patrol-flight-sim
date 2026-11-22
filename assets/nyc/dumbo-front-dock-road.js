@@ -37,11 +37,24 @@ export function validateFrontDockOfficialSource(data){
   if(data?.schema!==EXPECTED_SCHEMA||data.year!==2022||
     data.origin?.lon!==-73.992042||data.origin?.lat!==40.702634||
     !Array.isArray(data.triangles)||data.triangles.length<150||
-    data.triangles.length>2500||!data.triangles.every(sourceTriangleValid))
+    data.triangles.length>2500)
     throw new Error('Untrusted or missing official OTI 2022 DUMBO pavement source');
-  const ids=new Set(data.triangles.map(t=>t.id));
+  // The pinned source preserves the exact clipped FID audit. Rounding to
+  // 0.001 m collapses 24 ultra-thin intersections; NEVER render a degenerate
+  // triangle or silently bridge it with a synthetic road rectangle.
+  const bad=data.triangles.filter(t=>!sourceTriangleValid(t));
+  if(bad.some(t=>!t||!Number.isSafeInteger(t.id)||
+      !Array.isArray(t.v)||t.v.length!==3||
+      t.v.some(p=>!Array.isArray(p)||p.length!==2||
+        p.some(n=>!Number.isFinite(n)))))
+    throw new Error('OTI source has an invalid or nonfinite coordinate');
+  const renderable=data.triangles.filter(sourceTriangleValid);
+  if(renderable.length<150||bad.length>data.triangles.length*.15)
+    throw new Error('Too many OTI source triangles collapsed after clipping');
+  const ids=new Set(renderable.map(t=>t.id));
   if(ids.size<3)throw new Error('OTI source has too few distinct official FIDs');
-  return {triangleCount:data.triangles.length,uniqueFids:ids.size,
+  return {triangleCount:data.triangles.length,renderableTriangles:renderable.length,
+    droppedDegenerateTriangles:bad.length,uniqueFids:ids.size,
     areaSquareMetres:data.areaSquareMetres,
     source:data.source,year:data.year};
 }
@@ -57,7 +70,7 @@ export function buildDumboFrontDockRoad(data,{
     return terrainAt(x,z)>=waterY+1.58&&isClear(x,z,.12);
   };
   const accepted=[];
-  for(const t of data.triangles){
+  for(const t of data.triangles.filter(sourceTriangleValid)){
     const centroid=[
       t.v.reduce((s,p)=>s+p[0],0)/3,
       t.v.reduce((s,p)=>s+p[1],0)/3
@@ -148,6 +161,7 @@ export function buildDumboFrontDockRoad(data,{
     enabled:true,sourceYear:2022,sourceFids:verified.uniqueFids,
     sourceTriangles:verified.triangleCount,officialTriangles:accepted.length,
     rejectedRoadTriangles:verified.triangleCount-accepted.length,
+    droppedDegenerateTriangles:verified.droppedDegenerateTriangles,
     triangles,estimatedVertexBufferBytes:triangles*3*(3+3+3+1)*4,
     bikePaintQuads:lanes,bikeArrows:arrows,signalHeads,
     signalLensTriangles:signalTriangles,
