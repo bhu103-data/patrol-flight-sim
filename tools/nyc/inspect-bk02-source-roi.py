@@ -110,9 +110,9 @@ def inspect():
         layer_kind={}
         for i,name in layer_names.items():
             # BK02 uses Buildings::Surface_RoofTop / Surface_Facade /
-            # Surface_FootPrint. MN05 uses * Surface. Do not include the
-            # parallel Building_RoofTop/Facade/FootPrint inventory layers:
-            # those are separate catalog layers and would double-render.
+            # Surface_FootPrint. MN05 uses * Surface. This pilot is explicitly
+            # scoped to the Surface_* family; the parallel Building_* catalog
+            # family is not mixed in without a separate geometry audit.
             kind=classify_surface_layer(name)
             if kind:
                 layer_kind[i]=kind
