@@ -3,7 +3,7 @@ import {PNG} from 'pngjs';
 import {writeFileSync} from 'node:fs';
 const dir='artifacts/nyc-official-mn05/';
 const report={passed:false,errors:[],sourceYear:2014,
- provenance:'NYC DCP 2014 MN05 BrepFace.GetMesh cached triangles; matched to 2026-11-20 official HEIGHTROOF footprints; relative-only vertical display'};
+ provenance:'NYC DCP 2014 MN05 cached triangles; Rhino ModelUnitSystem Feet verified; matched to 2026-11-20 HEIGHTROOF; absolute vertical datum remains unknown'};
 const browser=await chromium.launch({headless:true,args:[
  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
  '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
