@@ -3,6 +3,7 @@
  * Not a claim of real facades/roadbeds or aircraft flight physics.
  */
 import {chromium} from 'playwright';
+import {createHash} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
 const browser=await chromium.launch({headless:true,args:[
   '--no-sandbox','--disable-dev-shm-usage',
@@ -24,6 +25,9 @@ try{
     const state=window.geoPilotQA;
     return {...state,
       historySource:{...state.historySource,visible:state.historySource?.visible?.()},
+      realRoadbedSource:{...state.realRoadbedSource,
+        visible:state.realRoadbedSource?.visible?.(),
+        oldHintVisible:state.realRoadbedSource?.oldHintVisible?.()},
       getFlight:undefined,setFlight:undefined,resetFlight:undefined};
   });
   if(!info.ready||info.error||info.sourceBuildings<110||info.sourceRoads<25||
@@ -32,6 +36,12 @@ try{
      info.streetWidthEnvelopes.derivedWidthFeatures<20||
      info.streetWidthEnvelopes.missingWidthRecords<8||
      info.streetWidthEnvelopes.triangles<30||
+     info.realRoadbedSource?.features<75||
+     info.realRoadbedSource?.triangles<8000||
+     info.realRoadbedSource?.referenceYear!==2022||
+     info.realRoadbedSource?.trianglesInsideBuildings!==0||
+     info.realRoadbedSource?.visible!==true||
+     info.realRoadbedSource?.oldHintVisible!==false||
      info.historySource?.actualPolygons!==17||
      info.historySource?.renderedPolygons<14||
      info.historySource?.crs!=='EPSG:32118'||
@@ -39,11 +49,19 @@ try{
      !/metres/.test(info.projection))throw Error('Invalid official-source view '+JSON.stringify(info));
   const shot=async name=>{
     await page.waitForTimeout(400);
-    await page.locator('#scene').screenshot({path:'artifacts/nyc-true-scale/'+name+'.png',
+    const png=await page.locator('#scene').screenshot({
+      path:'artifacts/nyc-true-scale/'+name+'.png',
       timeout:90000,animations:'allow'});
     shots.push(name);
+    return createHash('sha256').update(png).digest('hex');
   };
-  await shot('01-metric-aerial');
+  // Source-exact A/B: same real camera, polygon OFF/ON; no fake row hint.
+  await page.locator('#roadbedToggle').uncheck();
+  const officialRoadbedOff=await shot('00-oti-roadbed-off');
+  await page.locator('#roadbedToggle').check();
+  const officialRoadbedOn=await shot('01-metric-aerial');
+  if(officialRoadbedOn===officialRoadbedOff)
+    throw Error('Official 2022 OTI roadbed polygon mesh made no WebGL canvas difference');
   // Toggle only genuine 2015–2017 source geometry in EXACTLY same camera.
   // This is NOT the 2026 city lane network.
   await page.locator('#historicToggle').check();
@@ -90,8 +108,11 @@ try{
     throw Error('WebGL/console failure '+JSON.stringify({browserInfo,warnings,errors}));
   report.passed=true;
   Object.assign(report,{sourceBuildings:info.sourceBuildings,sourceRoads:info.sourceRoads,
+    roadbedSource:info.realRoadbedSource,
+    actualRoadbedWebGLDifference:officialRoadbedOn!==officialRoadbedOff,
+    officialRoadbedOffHash:officialRoadbedOff,officialRoadbedOnHash:officialRoadbedOn,
     spawn:info.sourceRoadSpawn,initial,climbed,moved,displacement,browserInfo,shots,errors,warnings,
-    caveat:'Actual FID roof masses + DCM centerlines, but no surveyed street roadbed/facades/terrain'});
+    caveat:'2022 OTI official roadbed polygons, 2015–2017 optional medians; FID masses + DCM centerlines; still no 2026 facades/terrain or aircraft physics'});
 }catch(e){
   report.error=e.stack||String(e);
   report.errors=errors;report.warnings=warnings;report.shots=shots;
