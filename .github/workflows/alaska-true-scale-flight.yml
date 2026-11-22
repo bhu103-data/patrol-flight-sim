@@ -1,0 +1,49 @@
+name: Alaska original-coordinate terrain flight pilot WebGL2 QA
+
+on:
+  pull_request:
+    branches: [feat/alaska-wgs84-metre-frame-20261122-chat]
+    paths:
+      - index.html
+      - tracy-arm-true-scale.html
+      - assets/alaska/tracy-arm-geodesy.js
+      - tests/alaska-true-scale-flight-pilot.test.mjs
+      - tools/alaska/smoke_true_scale_flight.mjs
+      - .github/workflows/alaska-true-scale-flight.yml
+
+permissions:
+  contents: read
+
+jobs:
+  actual-wgs84-metre-scene:
+    if: github.head_ref == 'feat/alaska-true-scale-terrain-flight-pilot-20261122-chat'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact WGS84/ENU source/flight/isolation tests
+        run: node --test tests/alaska-true-scale-flight-pilot.test.mjs tests/alaska-wgs84-metre-frame.test.mjs
+      - name: Chromium WebGL2 QA
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve original USGS asset locally
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-usgs-geo.log 2>&1 &
+          for i in {1..35}; do
+            if curl -fsS http://127.0.0.1:8765/tracy-arm-true-scale.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Real 256² USGS mesh, WebGL2 screenshots and real-metre interactive camera
+        run: node tools/alaska/smoke_true_scale_flight.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alaska-true-scale-source-flight
+          path: artifacts/alaska-true-scale-*
+          if-no-files-found: ignore
+          retention-days: 7
