@@ -1,0 +1,30 @@
+name: NYC historical LoD2 street geometry source evidence
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/probe-tum-lod2-markings.py'
+      - '.github/workflows/nyc-tum-lod2-marking-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check bounded source verifier syntax
+        run: python -m py_compile tools/nyc/probe-tum-lod2-markings.py
+      - name: Query real historical CityGML ZIP; no fabricated geometry fallback
+        run: python tools/nyc/probe-tum-lod2-markings.py
+      - name: Upload provenance, archive header and CRS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-tum-lod2-provenance-only
+          path: artifacts/nyc-tum-lod2-markings/probe.json
+          retention-days: 7
+          if-no-files-found: warn
