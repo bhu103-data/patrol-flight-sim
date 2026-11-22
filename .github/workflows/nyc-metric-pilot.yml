@@ -9,6 +9,7 @@ on:
       - "nyc-metric-pilot.html"
       - "scripts/nyc-metric-pilot-browser.mjs"
       - "tests/nyc-metric-footprint-pilot.test.mjs"
+      - "tests/nyc-metric-cscl-centerlines.test.mjs"
       - ".github/workflows/nyc-metric-pilot.yml"
   workflow_dispatch:
 permissions:
@@ -23,7 +24,7 @@ jobs:
         with:
           node-version: "22"
       - name: Verify geospatial metre geometry without overlays
-        run: node --test tests/nyc-metric-footprint-pilot.test.mjs
+        run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs
       - name: Pin real public NYC street centrelines as QA artifact (never fabricated)
         run: node tools/nyc/fetch-times-square-cscl.mjs
       - name: Install open-source WebGL2 test browser
