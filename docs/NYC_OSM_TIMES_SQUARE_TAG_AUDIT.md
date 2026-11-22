@@ -25,8 +25,9 @@ license and documented 3D-building tags.
 - Data license: Open Database License 1.0 (ODbL).
 - Attribution: © OpenStreetMap contributors.
 - The package code is MIT; the bundled OSM-derived GeoParquet database is
-  explicitly ODbL 1.0. The workflow checks out the exact data commit and
-  includes its `inst/COPYRIGHTS` notice in the artifact.
+  explicitly ODbL 1.0. The workflow downloads the three exact public blobs
+  from the pinned commit and verifies each Git blob SHA-1 before parsing.
+  The original `inst/COPYRIGHTS` notice is included in the artifact.
 - No raw OSM data is committed or uploaded as an artifact. A temporary
   clipped JSON sample exists only during the CI job and is deleted with the
   runner. The report exports aggregate coverage only, not FID ↔ OSM ID pairs.
@@ -80,3 +81,40 @@ Do not create or import 3D facade assets from this audit until:
 A successful workflow means only that the pinned, bounded source extraction
 and coverage analysis completed. It is not a production map or realism
 acceptance.
+
+
+## First measured result — 2026-11-22
+
+GitHub Actions run
+[45053459214](https://github.com/bhu103-data/patrol-flight-sim/actions/runs/45053459214)
+passed the pinned-source download, blob-integrity checks, Python extraction,
+Node audit and repository regression jobs. The 7-day artifact contains only
+`report.json` and the original ODbL `COPYRIGHTS.txt` notice.
+
+- Official footprint snapshot: 120 features; 118 valid single-ring
+  footprints considered.
+- Pinned OSM extract: 138 elements — 130 whole-building ways, 3 building
+  relations and 5 building-part elements.
+- Conservative whole-building joins: 96 unique matches, 13 ambiguous and
+  9 unmatched. The median centroid separation is 0.931 m; the maximum is
+  6.96 m. Matched area ratios range from 0.6722 to 1.8291.
+- Among the 96 unique matches, `height` is present on 78 (81.3%),
+  `building:levels` on 8 (8.3%), `roof:shape` on 6 (6.3%),
+  `roof:material` on 6 (6.3%), `building:material` on 1 (1.0%),
+  `building:colour` on 6 (6.3%), `name` on 60 (62.5%) and
+  `wikidata` on 46 (47.9%). No matched feature has `roof:height`.
+
+### Interpretation
+
+OSM is useful as a **secondary identity and height cross-check** for this
+bounded Times Square sample, but it is not a reliable source for detailed
+facade construction: floor-count, roof-shape and material tags are sparse.
+Do not synthesize missing storeys, window spacing, roof setbacks or cladding
+from absent tags. The 13 ambiguous and 9 unmatched footprints remain
+unassigned. OSM is volunteer-maintained and may share municipal geometry
+lineage; these matches are not independent survey verification.
+
+The result does not change the promotion gate: no OSM runtime import, no
+generated facade meshes and no claim of photorealism. Any future asset work
+must be separately scoped to uniquely matched buildings and retain ODbL
+attribution/share-alike obligations.
