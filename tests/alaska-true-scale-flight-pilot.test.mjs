@@ -5,9 +5,12 @@ import {readFileSync} from 'node:fs';
 const src=readFileSync(new URL('../tracy-arm-true-scale.html',import.meta.url),'utf8');
 const game=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const geoSrc=readFileSync(new URL('../assets/alaska/tracy-arm-geodesy.js',import.meta.url),'utf8');
+const lodSrc=readFileSync(new URL('../assets/alaska/ifsar-lod.js',import.meta.url),'utf8');
 const {rasterCellToLocalEnu,rasterCellWgs84,sourceTileOrigin,
   sampleSourceElevationMetres}=await import('data:text/javascript;base64,'+
   Buffer.from(geoSrc).toString('base64'));
+const {decimateIfsarRaster}=await import('data:text/javascript;base64,'+
+  Buffer.from(lodSrc).toString('base64'));
 const raw=JSON.parse(readFileSync(new URL('../assets/alaska/tracy-arm-3dep.json',import.meta.url),'utf8'));
 const decodeSrc=readFileSync(new URL('../assets/alaska/usgs-dem.js',import.meta.url),'utf8');
 const {decodeAlaskaDEM}=await import('data:text/javascript;base64,'+
@@ -58,13 +61,15 @@ test('actual ArcGIS WGS84 pixel extent corrected, revealing true 7.7x14.4km DEM 
   assert.ok(Math.abs(lon0+133.2)<.00001&&Math.abs(lat0-57.887)<.00001);
 });
 test('flight starts from a verified water source location and keeps real dynamic envelope',()=>{
-  const [lon,lat]=rasterCellWgs84(dem,170,105);
+  const [lon,lat]=rasterCellWgs84(correctedDem,170,105);
   const start=sampleSourceElevationMetres(correctedDem,lon,lat);
   assert.ok(start<=3,'corrected source DEM launch GPS belongs on water');
   const [e,n]=rasterCellToLocalEnu(correctedDem,170,105,0);
   assert.ok(Number.isFinite(e)&&Number.isFinite(n));
   assert.match(src,/spawn=\[e,320,north\]/);
-  assert.match(src,/if\(sampleSourceElevationMetres\(coarse,spawnLon,spawnLat\)>3\)/);
+  assert.match(src,/rasterCellWgs84\(coarse,170,105\)/);
+  assert.match(src,/sampleSourceElevationMetres\(nativeSource,spawnLon,spawnLat\)/);
+  assert.match(src,/launchElevation>3/);
   assert.match(src,/Math\.max\(Math\.max\(0,surface\)\+18,Math\.min\(3800,pose\.xyz\[1\]\)\)/);
   assert.match(src,/gl\.drawElements\(gl\.TRIANGLES,m\.count,gl\.UNSIGNED_INT,0\)/);
 });
@@ -95,7 +100,7 @@ test('optional 5m tile is source-aligned, leaves default 30m untouched and valid
   const decoder=readFileSync(
     new URL('../assets/alaska/usgs-5m-tile.js',import.meta.url),'utf8');
   assert.match(src,/get\('alaskaDetail'\)==='5m'/);
-  assert.match(src,/decodeAlaskaFiveMetreTile\(await response\.json\(\),coarseRaw\)/);
+  assert.match(src,/decodeAlaskaFiveMetreTile\(await response\.json\(\),coarse\)/);
   assert.match(src,/detailMode='source-5m-local'/);
   assert.match(src,/detailWarning='5m source tile is unavailable\/invalid/);
   assert.match(src,/wgs84ToLocalEnu\(\.\.\.rasterCellWgs84\(dem,col,row\),0,\.\.\.origin\)/);
@@ -123,4 +128,44 @@ test('new USGS 5m extraction explicitly disables ArcGIS auto-bbox expansion',()=
   assert.match(builder,/actual=\[envelope\.get\(k\) for k in/);
   assert.match(builder,/max\(abs\(a-b\) for a,b in zip\(actual,bbox\)\)>1e-8/);
   assert.match(builder,/"originalActualPixelBboxWgs84"/);
+});
+
+
+test('native 5m IfSAR full-area LOD preserves WGS84 extent and uses 3x3 median cells',()=>{
+  const native={
+    format:'patrol-usgs-ifsar-5m-source-native-v1',
+    crs:'EPSG:4326',axis:'x=east, z=north, south-first raster rows',
+    bbox:[-133.265,57.822,-133.135,57.952],
+    width:6,height:6,heights:Float32Array.from({length:36},(_,i)=>i),
+    sampleSpacingApproxMeters:[5,5],sourceElevationRangeMeters:[0,35],
+    verticalDatum:'NAVD88 / GEOID09',sourceVerticalCrs:'EPSG:5703',
+    sourceProject:'Alaska_Mid_Accuracy_DEM_Summer_2015',
+    workunit:'AK_IFSAR_Sum_L4_C353_2010',
+    sourceTileSha256:['a'.repeat(64),'b'.repeat(64)]
+  };
+  const lod=decimateIfsarRaster(native,3);
+  assert.equal(lod.width,2);assert.equal(lod.height,2);
+  assert.deepEqual(Array.from(lod.heights),[7,10,25,28]);
+  assert.deepEqual(lod.bbox,native.bbox);
+  assert.deepEqual(lod.sourceResolutionMeters,[5,5]);
+  assert.deepEqual(lod.sampleSpacingApproxMeters,[15,15]);
+  assert.equal(lod.sourceCellCount,36);assert.equal(lod.meshCellCount,4);
+  assert.equal(lod.meshLodStride,3);
+});
+test('full native IfSAR mode is opt-in, source-verified and memory-bounded to 15m mesh LOD',()=>{
+  const loader=readFileSync(new URL('../assets/alaska/usgs-ifsar5m.js',import.meta.url),'utf8');
+  const smoke=readFileSync(new URL('../tools/alaska/smoke_true_scale_flight.mjs',import.meta.url),'utf8');
+  assert.match(src,/get\\('alaskaSource'\\)==='ifsar5m'/);
+  assert.match(src,/loadAlaskaIfsar5m\\(/);
+  assert.match(src,/decimateIfsarRaster\\(nativeSource,3\\)/);
+  assert.match(src,/source-native-ifsar5m-lod15m/);
+  assert.match(src,/nativeSource\\.sourceVerticalCrs!=='EPSG:5703'/);
+  assert.match(src,/rasterCellWgs84\\(coarse,170,105\\)/);
+  assert.match(src,/indices=new Uint32Array\\(\\(n-1\\)\\*\\(m-1\\)\\*6\\)/);
+  assert.match(loader,/manifest\\.sourceVerticalCrs!=='EPSG:5703'/);
+  assert.match(loader,/manifest\\.geoid!=='GEOID09'/);
+  assert.match(loader,/manifest\\.sourceProject/);
+  assert.match(smoke,/PATROL_ALASKA_IFSAR5M/);
+  assert.match(smoke,/sourceCellCount===1536\\*2880/);
+  assert.match(smoke,/meshSpacingMeters/);
 });
