@@ -951,10 +951,11 @@ function scenicView(key){
       // The chase camera aims at the pilot, not the site's `target` below.
       // A separate front-facing, street-height eye makes physical jambs visible
       // without placing the player or a giant cliff in the inspection frame.
-      // On this actual terrain the entire sightline stays >5 units above soil.
+      // An offset to the clear right terrace leaves >7.5 units of terrain gap,
+      // frames center/right window apertures and reduces cliff foreground.
       marketInspect={
-        eye:new THREE.Vector3(site.x+2,site.base+8.5,site.z+18),
-        aim:new THREE.Vector3(site.x,site.base+5.7,site.z+2.78)
+        eye:new THREE.Vector3(site.x+8,site.base+8.5,site.z+17),
+        aim:new THREE.Vector3(site.x+3.5,site.base+5.7,site.z+2.78)
       };
       destinations.Digit8={
         name:'山城商铺 · 实体窗洞近景',
@@ -1317,7 +1318,7 @@ function updateCamera(dt){
     cameraPos.copy(cameraDesired);
     camera.position.copy(cameraPos);
     camera.lookAt(cameraFocus);
-    if(Math.abs(camera.fov-62)>.015){camera.fov=62;camera.updateProjectionMatrix();}
+    if(Math.abs(camera.fov-48)>.015){camera.fov=48;camera.updateProjectionMatrix();}
     return;
   }
   const speed=Math.hypot(state.vel.x,state.vel.z);
