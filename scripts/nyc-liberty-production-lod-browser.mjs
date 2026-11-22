@@ -24,10 +24,12 @@ function imageStats(bytes){
     'blank/corrupt actual game screenshot');
   return {width:img.width,height:img.height,colorBins:colors.size,blackFraction:black/sampled};
 }
-async function run(label,query,{rejectCandidate=false}={}){
+async function run(label,query,{rejectCandidate=false,tamperCandidate=false}={}){
   const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFactor:1});
-  const errors=[],downloads=[],loadTimes={};
+  const errors=[],downloads=[],loadTimes={},warnings=[];
+  let tamperAudit=null;
   page.on('pageerror',err=>errors.push('pageerror:'+err.message));
+  page.on('console',msg=>{if(msg.type()==='warning')warnings.push(msg.text());});
   page.on('response',r=>{
     if(/\/assets\/nyc\/(scenario\/liberty|statue-of-liberty)\.glb/.test(r.url())){
       downloads.push({url:r.url(),status:r.status()});
@@ -39,6 +41,50 @@ async function run(label,query,{rejectCandidate=false}={}){
   });
   if(rejectCandidate)await page.route('**/assets/nyc/scenario/liberty.glb',
     r=>r.abort('failed'));
+  if(tamperCandidate)await page.route('**/assets/nyc/scenario/liberty.glb',async route=>{
+    // Alter a BIN payload bit: HTTP 200, same bytes count and exact GLB JSON
+    // including the 15,900 triangles. This cannot be dismissed as a 404.
+    const response=await route.fetch();
+    assert.equal(response.status(),200);
+    const bytes=Buffer.from(await response.body());
+    assert.equal(bytes.toString('ascii',0,4),'glTF');
+    const jsonLength=bytes.readUInt32LE(12);
+    const json=JSON.parse(bytes.subarray(20,20+jsonLength).toString('utf8'));
+    const primitive=json.meshes[0].primitives[0];
+    const indexedTriangles=json.accessors[primitive.indices].count/3;
+    assert.equal(indexedTriangles,15900);
+    const flippedOffset=20+jsonLength+8+48;
+    assert.ok(flippedOffset<bytes.length-1024,'BIN payload out of bounds');
+    const oldValue=bytes[flippedOffset];
+    bytes[flippedOffset]=oldValue^1;
+    tamperAudit={indexedTriangles,bytes:bytes.length,flippedOffset,
+      oldValue,newValue:bytes[flippedOffset],jsonChunkUnchanged:true};
+    await route.fulfill({response,body:bytes,
+      headers:{...response.headers(),'content-length':String(bytes.length)}});
+  });
+  // Browser-response-only source telemetry (not a production HTML edit).
+  await page.route('**/index.html*',async route=>{
+    const response=await route.fetch();
+    let html=await response.text();
+    const anchor='  // Web Audio Synthesizer (Muted by default)';
+    assert.ok(html.includes(anchor),'QA state hook anchor missing');
+    html=html.replace(anchor,[
+      '  window.__libertyIntegrityQA=()=>{',
+      '    const model=nycRealismAssets?.models?.liberty;',
+      '    const d=model?.dimensions;',
+      '    return {source:model?.source||"bundled-or-procedural",',
+      '      triangles:model?.triangleCount||0, dimensions:d||null,',
+      '      failures:nycRealismAssets?.failures||[],',
+      '      sourceColliderEligible:model?.source==="scenario" &&',
+      '        model?.triangleCount===15900 &&',
+      '        Math.abs(d?.height-31.3)<0.01 &&',
+      '        Math.abs(d?.width-9.323)<0.04 &&',
+      '        Math.abs(d?.depth-9.323)<0.04};',
+      '  };'
+    ].join('\n')+'\n'+anchor);
+    await route.fulfill({response,body:html,
+      contentType:'text/html; charset=utf-8'});
+  });
   const first=Date.now();
   try{
     await page.goto(base+'/index.html?'+query,{waitUntil:'domcontentloaded',timeout:40000});
@@ -51,6 +97,12 @@ async function run(label,query,{rejectCandidate=false}={}){
         document.getElementById('glCanvas')?.width>=500);
     },null,{timeout:180000});
     loadTimes.flightSceneMs=Date.now()-first;
+    await page.waitForFunction(()=>window.__libertyIntegrityQA?.().triangles>0,
+      null,{timeout:60000});
+    if(tamperCandidate)await page.waitForFunction(()=>
+      window.__libertyIntegrityQA?.().failures.some(
+        f=>f.includes('Liberty CC0 SHA-256 mismatch')),
+      null,{timeout:90000});
     await page.keyboard.press('h');
     await page.waitForFunction(()=>!document.querySelector('#hotelViews')?.hidden,
       null,{timeout:20000});
@@ -61,6 +113,7 @@ async function run(label,query,{rejectCandidate=false}={}){
     }else{
       await page.waitForTimeout(1100);
     }
+    const integrity=await page.evaluate(()=>window.__libertyIntegrityQA());
     const runtime=await page.evaluate(()=>{
       const gl=document.querySelector('#glCanvas').getContext('webgl2');
       return {ready:!!gl&&!gl.isContextLost(),
@@ -71,11 +124,24 @@ async function run(label,query,{rejectCandidate=false}={}){
     assert.equal(runtime.glError,0,'WebGL error');
     assert.equal(runtime.view,'Statue of Liberty');
     if(label==='optin'){
+      assert.equal(integrity.source,'scenario');
+      assert.equal(integrity.sourceColliderEligible,true,'genuine source geometry collider not active');
       assert.equal(runtime.lod?.lod,'near-cc0','Audited CC0 model not actually drawn');
       assert.equal(runtime.lod?.nearTriangles,15900);
       assert.equal(runtime.lod?.textureReady,true,'texture atlas failed');
       assert.ok(runtime.lod?.midTriangles>0,'original GLB fallback unavailable');
       assert.ok(downloads.some(x=>x.url.endsWith('/scenario/liberty.glb')&&x.status===200));
+    }else if(tamperCandidate){
+      assert.equal(tamperAudit?.indexedTriangles,15900);
+      assert.ok(downloads.some(x=>x.url.endsWith('/scenario/liberty.glb')&&x.status===200),
+        'forged GLB must be HTTP 200, not a network failure');
+      assert.equal(integrity.triangles,292,'hash failure must keep original bundled model');
+      assert.equal(integrity.sourceColliderEligible,false,
+        'rejected same-triangle-count GLB cannot arm source-based collision');
+      assert.notEqual(integrity.source,'scenario');
+      assert.equal(runtime.lod,null,'forged source must not select audited LOD');
+      assert.ok(integrity.failures.some(x=>x.includes('Liberty CC0 SHA-256 mismatch')),
+        'no evidence that runtime SHA rejected forged 15.9k-triangle GLB');
     }else{
       assert.ok(!runtime.lod,'Default and rollback must not show staged CC0');
       assert.ok(!downloads.some(x=>x.url.endsWith('/scenario/liberty.glb')),
@@ -88,7 +154,8 @@ async function run(label,query,{rejectCandidate=false}={}){
     });
     const pixels=imageStats(png);
     assert.equal(errors.length,0,errors.join('\n'));
-    report.scenarios.push({label,download:downloads,loadTimes,runtime,pixels});
+    report.scenarios.push({label,download:downloads,loadTimes,runtime,
+      integrity,tamperAudit,warnings,pixels});
     return png;
   }finally{
     await page.close();
@@ -121,6 +188,8 @@ try{
   // Simulate an actual HTTP/network resource failure and prove the original
   // bundled/procedural statue still renders without a WebGL context error.
   await run('network-fail','nycLibertyCC0=1&nycLibertyLodQA=1',{rejectCandidate:true});
+  await run('tampered-same-triangles','nycLibertyCC0=1&nycLibertyLodQA=1',
+    {tamperCandidate:true});
   report.status='PASS';
   console.log('NYC Liberty production optin WebGL PASS '+JSON.stringify(report));
 }catch(e){
