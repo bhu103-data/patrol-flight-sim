@@ -46,7 +46,15 @@ export function makeChongqingMarketOpenFacade(THREE,{doorSide=-1,variant=0}={}){
   let frontQuads=0;
   const quad=(a,b,c,d,face='side')=>{
     const start=vertices.length/3;
-    for(const p of [a,b,c,d]){vertices.push(...p);uvs.push(p[0]/3.4,p[1]/3.4);}
+    // Each perpendicular reveal needs its own UV plane: without this,
+    // timber texture collapses to a line across the window jamb.
+    const constantX=[b,c,d].every(p=>Math.abs(p[0]-a[0])<1e-8);
+    const constantY=[b,c,d].every(p=>Math.abs(p[1]-a[1])<1e-8);
+    for(const p of [a,b,c,d]){
+      vertices.push(...p);
+      uvs.push(constantX?p[2]*2:p[0]/3.4,
+        constantY?p[2]*2:p[1]/3.4);
+    }
     indices.push(start,start+1,start+2,start,start+2,start+3);
     if(face==='front')frontQuads++;
   };
