@@ -18,7 +18,7 @@ const connectorSource=sourceBetween('  function makeBrooklynBridgeheadCarRoute('
 const makeRoute=new Function(routeSource+'return makeTrafficRoute;')();
 const connect=new Function('makeTrafficRoute',clipSource+connectorSource+
   'return makeBrooklynBridgeheadCarRoute;')(makeRoute);
-const turnSource=sourceBetween('  function bridgeheadTrafficPose(','  function trafficPose(');
+const turnSource=sourceBetween('  function bridgeheadSignalPhase(','  function trafficPose(');
 const poseSource=turnSource+sourceBetween('  function trafficPose(','  function prepareCityTraffic(');
 const lerp=(a,b,t)=>a+(b-a)*t;
 const bridgeRoadHeight=x=>lerp(bridge.deck+.60,STREET_Y,
@@ -91,4 +91,47 @@ test('traffic visibility uses per-pose bridge exemption only',()=>{
   assert.match(html,/!\(actor\.bridgehead&&pose\.onBridge\)/);
   assert.match(html,/if\(selectedMap\.city && !actor\.bridge/);
   assert.match(html,/if\(connector\)for\(let j=0;j<2;j\+\+\)/);
+});
+
+test('two live bridgehead car envelopes remain disjoint across 9000 seconds',()=>{
+  const route=connect(streets,bridge,clear,empty,WATER_H);
+  assert.ok(route,'full bridge-to-DUMBO connector missing');
+  const cars=[0,1].map(j=>({
+    kind:j?'sedan':'taxi',bridgehead:true,signalized:true,
+    signalQueueSlot:j,bridgeSegmentCount:streets[0].length-1,
+    route,offset:route.total*.18-(j?12:0),pace:5+j*.6
+  }));
+  cars[1].bridgeheadLeader=cars[0];
+  // Production meshes: x-mirror extreme ~0.9955, nose and bumper
+  // ~2.0 from center. Use small conservative 1.0 / 2.05 half-extents.
+  const axes=p=>[[Math.cos(p.yaw),-Math.sin(p.yaw)],
+    [Math.sin(p.yaw),Math.cos(p.yaw)]];
+  function orientedClearance(a,b){
+    const aAxes=axes(a),bAxes=axes(b),delta=[a.x-b.x,a.z-b.z];
+    let maxGap=-Infinity;
+    for(const axis of [...aAxes,...bAxes]){
+      const extent=axes=>1.0*Math.abs(axis[0]*axes[0][0]+axis[1]*axes[0][1])+
+        2.05*Math.abs(axis[0]*axes[1][0]+axis[1]*axes[1][1]);
+      const gap=Math.abs(delta[0]*axis[0]+delta[1]*axis[1])-
+        extent(aAxes)-extent(bAxes);
+      maxGap=Math.max(maxGap,gap);
+    }
+    return maxGap;
+  }
+  let min=Infinity,checks=0,nearPasses=0;
+  for(let k=0;k<=45000;k++){
+    const t=k*.2,a=pose(cars[0],t),b=pose(cars[1],t);
+    assert.ok([a.x,a.y,a.z,b.x,b.y,b.z].every(Number.isFinite));
+    // Bridge deck versus dry street are different height surfaces.
+    if(Math.abs(a.y-b.y)>1.5)continue;
+    const gap=orientedClearance(a,b);
+    min=Math.min(gap,min);checks++;
+    if(gap<.5)nearPasses++;
+    assert.ok(gap>=.08,
+      'bridgehead car meshes overlap or lack margin at '+t+
+      ' (clearance='+gap+', min='+min+')');
+  }
+  assert.ok(checks>1000&&nearPasses>5,
+    'must cover actual close encounters, not vacuously pass');
+  assert.ok(min>=.08,'unsafe minimum oriented separation: '+min);
 });
