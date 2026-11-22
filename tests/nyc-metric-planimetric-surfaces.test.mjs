@@ -123,3 +123,18 @@ test('the future source outlines are separate from game mesh and not called road
  assert.match(fetcher,/ring/);
  assert.doesNotMatch(source,/fillRect|THREE.Mesh|roadWidth\s*=/);
 });
+
+test('CI and live viewer reject absent official roadbed and sidewalk source layers',()=>{
+ const workflow=readFileSync(resolve(dir,'../.github/workflows/nyc-metric-pilot.yml'),'utf8');
+ const viewer=readFileSync(resolve(dir,'../nyc-metric-pilot.html'),'utf8');
+ const browser=readFileSync(resolve(dir,'../scripts/nyc-metric-pilot-browser.mjs'),'utf8');
+ assert.match(workflow,/node tools\/nyc\/fetch-times-square-planimetrics\.mjs/);
+ assert.match(workflow,/tests\/nyc-metric-planimetric-surfaces\.test\.mjs/);
+ assert.match(viewer,/roadbed-polygons\.json/);
+ assert.match(viewer,/sidewalk-polygons\.json/);
+ assert.match(viewer,/buildMetricPlanimetricOutlines/);
+ assert.match(viewer,/仅画边界，尚未填充道路表面/);
+ assert.match(browser,/planimetricStats/);
+ assert.match(browser,/s\.sourceHolesPreserved===true/);
+ assert.match(browser,/s\.pavementFill===false/);
+});
