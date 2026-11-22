@@ -13,6 +13,13 @@ if(baseline.graphicsProfile!==candidate.graphicsProfile||
   baseline.browserChannel!==candidate.browserChannel)
   throw new Error('Baseline and candidate graphics profiles differ');
 
+const pairing=JSON.parse(await readFile(root+'/qa-camera-pairing.json','utf8'));
+if(pairing.status!=='passed'||!pairing.qaOnlyBaselineCameraOverride)
+  throw new Error('World-space camera baseline alignment not verified');
+for(const name of ['Strip Street View','Bellagio','The Venetian']){
+  if(pairing.after[name]?.join(',')!==pairing.candidate[name]?.join(','))
+    throw new Error('World-space camera pose drift for '+name);
+}
 const names=candidate.screenshots;
 if(names.length!==6||baseline.screenshots.length!==6||
   names.some((v,i)=>v!==baseline.screenshots[i]))
@@ -58,6 +65,8 @@ const candidateMs=candidate.frameSampling?.meanFrameIntervalMs;
 const report={
   scope:'Vegas fixed-camera software-WebGL2 visual comparison; NOT a photorealism/GPU FPS grade',
   baselineSha:process.env.PATROL_VEGAS_BASELINE_SHA||'unknown',
+  cameraWorldSpaceVerified:true,
+  scenicPosePairing:pairing.after,
   // GitHub pull_request checkout can be a synthetic test merge commit.
   // Label the source head separately so artifacts cannot misattribute code.
   candidateSha:process.env.PATROL_CANDIDATE_HEAD_SHA||process.env.GITHUB_SHA||'unknown',

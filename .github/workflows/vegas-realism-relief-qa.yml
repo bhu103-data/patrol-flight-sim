@@ -7,6 +7,7 @@ on:
       - 'assets/vegas/**'
       - 'scripts/vegas-core-browser-smoke.mjs'
       - 'scripts/vegas-baseline-compare.mjs'
+      - 'scripts/vegas-baseline-camera-pair.mjs'
       - 'tests/allmap-visual-relief.test.mjs'
       - 'tests/vegas-usgs-ridges.test.mjs'
       - '.github/workflows/vegas-realism-relief-qa.yml'
@@ -50,6 +51,7 @@ jobs:
         run: |
           git cat-file -e "$PATROL_VEGAS_BASELINE_SHA^{commit}"
           git worktree add --detach /tmp/patrol-vegas-baseline "$PATROL_VEGAS_BASELINE_SHA"
+          node scripts/vegas-baseline-camera-pair.mjs
           python3 -m http.server 8766 --directory /tmp/patrol-vegas-baseline --bind 127.0.0.1 >/tmp/patrol-vegas-baseline-http.log 2>&1 &
           sleep 2
           curl --fail --silent --show-error http://127.0.0.1:8766/index.html >/dev/null
