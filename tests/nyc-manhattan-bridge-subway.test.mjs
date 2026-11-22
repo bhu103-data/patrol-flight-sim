@@ -143,3 +143,13 @@ test('rail-level spectator camera inspects trains below the upper road deck',()=
   const [scenic]=html.match(/name:'Manhattan Bridge · Subway Rail Level',[^\r\n]*/)||[];
   assert.ok(scenic?.includes('height:12'),'lower train viewpoint must preserve the physical road deck');
 });
+
+test('outside maintenance walkways clear the existing train glazing envelope',()=>{
+  // Side glass/door trim of the shared NYC train extends ~1.365 units from
+  // centre (see buildStreetVehicle('train')); reserve a material clearance.
+  const maxTrack=Math.max(...rail.spec.trackOffsets),outerGlazing=1.365;
+  assert.ok(rail.spec.serviceWalkInner-(maxTrack+outerGlazing)>=.25,
+    'maintenance walkway must not intersect the outboard train windows/doors');
+  assert.ok(11.68-rail.spec.serviceWalkInner>=.5,
+    'a usable but game-scale footpath must remain between train and outer guardrail');
+});

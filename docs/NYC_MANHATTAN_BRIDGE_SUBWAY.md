@@ -54,3 +54,8 @@ This project and authors are credited for the dimensional selection and control 
 - Native source-geometry budget **14,582 triangles**, **1,221 component calls** (1,108 beams, 106 boxes, seven quads). Previous calibrated baseline had ~18,660 triangles and 1,830 calls. Reducing geometry is a structural optimization, not an FPS guarantee.
 - An additional Scenic Views entry `Manhattan Bridge · Subway Rail Level` provides an unobstructed low oblique inspection angle beneath the physically correct upper road decks. The special browser QA captures `11-manhattan-bridge-rail-level.png` alongside the original `10-manhattan-bridge-subway.png`.
 - Both the new camera and the optimized geometry require a **new Chrome WebGL2 screenshot review** before merge.
+
+### Maintenance path clearance
+- The existing shared subway car mesh extends about 1.365 game units laterally from its centre at the cab glazing. The outer rail axis is ±9.5.
+- Earlier walkway inside-edge offset ±10.78 was nearly tangent to the car's glazed envelope, an unsafe near-overlap. Increase the inside-edge offset to ±11.15, leaving **0.285 game units** of side clearance while preserving a **0.53 game-unit** walk strip to the outer edge at ±11.68. This is a **game-model safety clearance**, not an official MTA platform dimension.
+- The dedicated unit test reads the game-space offset and rejects any later change that moves the maintenance path within 0.25 of the subway car's real generated window/door geometry.

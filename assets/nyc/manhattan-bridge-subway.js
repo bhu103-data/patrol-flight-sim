@@ -8,7 +8,7 @@
 const SPEC=Object.freeze({
   name:'Manhattan Bridge — four subway tracks', west:-30, east:201,
   cx:85, z:-285, slope:-0.105, deck:26.0, water:12.2,
-  trackOffsets:Object.freeze([-9.5,-6.3,6.3,9.5]),
+  trackOffsets:Object.freeze([-9.5,-6.3,6.3,9.5]), serviceWalkInner:11.15,
   towerXs:Object.freeze([31,150]), pace:7.4, carPitch:13.35
 });
 // Derived from Ethical Tech CoLab's source-governed control skeleton (CC BY 4.0).
@@ -89,7 +89,7 @@ function build({box,addQuad,beam}){
       point(SPEC.west,upperOuter,UPPER_ROAD_Y),deckColor);
     // First-person railway photographs show a narrow maintenance walkway
     // and yellow rails outside the two outboard track pairs.
-    const walkwayNear=side*10.78,walkwayFar=side*11.68;
+    const walkwayNear=side*SPEC.serviceWalkInner,walkwayFar=side*11.68;
     Q(point(SPEC.west,walkwayNear,SPEC.deck+.105),
       point(SPEC.east,walkwayNear,SPEC.deck+.105),
       point(SPEC.east,walkwayFar,SPEC.deck+.105),
