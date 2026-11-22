@@ -42,9 +42,9 @@ jobs:
         env:
           PATROL_COMPARE_MODE: sea-detail
         run: node tools/aircraft/nyc-water-crest-compare.mjs
-      - name: NYC coherent long-crest phase bend A/B (render and buoyancy)
+      - name: NYC horizon long-slope visual filter A/B (physics unchanged)
         env:
-          PATROL_COMPARE_MODE: crest-warp
+          PATROL_COMPARE_MODE: band-filter
         run: node tools/aircraft/nyc-water-crest-compare.mjs
       - name: Preserve screenshots and report
         if: always()
