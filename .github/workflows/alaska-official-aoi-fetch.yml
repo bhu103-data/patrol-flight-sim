@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - uses: actions/checkout@v4
+      - name: Install GIS audit library
+        run: python3 -m pip install --disable-pip-version-check numpy rasterio
       - name: Fetch only bounded official USGS/NOAA samples (no repository changes)
         shell: bash
         run: |
@@ -112,6 +115,12 @@ jobs:
           if not real_tiffs:
               raise SystemExit('No real official TIFF could be fetched; inspect artifact report')
           PY
+      - name: Reconcile real LANDFIRE vegetation with PATROL USGS DEM
+        run: |
+          python3 tools/alaska/audit_landfire_aoi.py \
+            --input alaska-official-aoi-results \
+            --dem assets/alaska/tracy-arm-3dep.json \
+            --output alaska-official-aoi-results/qa
       - name: Preserve downloaded samples and failure logs
         if: always()
         uses: actions/upload-artifact@v4
