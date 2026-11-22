@@ -31,7 +31,7 @@ try{
   const start=await page.evaluate(()=>window.PatrolTrueScaleQA());
   if(!start.active||start.contextLost||start.cells!==65536||
      start.triangles!==130050||start.terrainPeak!==1836||
-     start.gpuErrors.length||!start.bounds)
+     start.gpuErrors.length||!start.bounds||!start.photoReady)
     throw Error('Wrong active georeferenced 3D source terrain '+JSON.stringify(start));
   const width=start.bounds.maxE-start.bounds.minE,
     height=start.bounds.maxN-start.bounds.minN;
