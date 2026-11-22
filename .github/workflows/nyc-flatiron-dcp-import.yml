@@ -1,13 +1,9 @@
 name: NYC Flatiron official 2014 model import
 
-on:
+'on':
   push:
     branches:
-      - feat/nyc-flatiron-dcp-2014-model-import-20261122
-    paths:
-      - .github/workflows/nyc-flatiron-dcp-import.yml
-      - tools/nyc/import_dcp_flatiron.py
-  workflow_dispatch:
+      - 'feat/nyc-flatiron-dcp-2014-model-import-20261122'
 
 permissions:
   contents: write
