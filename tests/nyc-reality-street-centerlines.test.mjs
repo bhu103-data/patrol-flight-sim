@@ -20,6 +20,8 @@ const lines={
     example(42,'West 42 Street',[-73.99,40.7573],[-73.984,40.7553]),
     example(7,'7 Avenue',[-73.9869,40.7553],[-73.9835,40.7606]),
     example(90,'Shubert Alley',[-73.9871,40.7579],[-73.9867,40.7584],'Way_on_record'),
+    example(91,'West 44 Street',[-73.989,40.7585],[-73.984,40.7564]),
+    example(92,'Broadway',[-73.985,40.757],[-73.984,40.759]),
     example(7,'duplicate ID',[-73.9869,40.7553],[-73.9835,40.7606])
   ]
 };
@@ -44,8 +46,8 @@ test('street edges are clipped to source query envelope without stretching',()=>
 });
 test('same ENU projection as buildings, source IDs and provisional status',()=>{
   const result=projectDCMRoads(lines);
-  assert.equal(result.records.length,3);
-  assert.equal(result.builtCount,2);
+  assert.equal(result.records.length,5);
+  assert.equal(result.builtCount,4);
   assert.equal(result.records[0].objectId,7);
   assert.equal(result.records[2].name,'Shubert Alley');
   assert.equal(result.records[2].built,false);
