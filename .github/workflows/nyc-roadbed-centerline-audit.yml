@@ -1,0 +1,58 @@
+name: NYC measured roadbed vs DCM centerline/building geometry audit
+
+on:
+  pull_request:
+    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat]
+    paths:
+      - 'tools/nyc/audit_roadbed_centerline_conflicts.py'
+      - 'tests/nyc-roadbed-centerline-consistency.test.py'
+      - '.github/workflows/nyc-roadbed-centerline-audit.yml'
+      - 'scripts/nyc-times-roadbed-polygon-source.mjs'
+      - 'scripts/nyc-times-true-scale-pilot.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-geometry-consistency:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate existing official source importers
+        run: |
+          node --test tests/nyc-times-true-scale-pilot.test.mjs
+          node --test tests/nyc-times-roadbed-polygon-source.test.mjs
+      - name: Acquire official NYC centreline, buildings, roadbed without fallback
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          node scripts/nyc-times-roadbed-polygon-source.mjs
+          test -s artifacts/nyc-true-scale/source.json
+          test -s artifacts/nyc-roadbed-source/roadbed.json
+      - name: Install pinned open source GEOS geometry validator
+        run: |
+          python3 -m venv /tmp/nyc-roadbed-shapely
+          /tmp/nyc-roadbed-shapely/bin/pip install --disable-pip-version-check shapely==2.1.2
+      - name: Test polygon holes, genuine overlaps, CRS guards
+        run: |
+          /tmp/nyc-roadbed-shapely/bin/python tests/nyc-roadbed-centerline-consistency.test.py
+      - name: Audit ALL real roadbed polygons against ALL real buildings
+        run: |
+          /tmp/nyc-roadbed-shapely/bin/python tools/nyc/audit_roadbed_centerline_conflicts.py
+          test -s artifacts/nyc-roadbed-alignment/report.json
+          test -s artifacts/nyc-roadbed-alignment/focus-centerline-vs-roadbed.svg
+      - name: Upload exact official source and centreline/roadbed QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-official-roadbed-vs-building-consistency
+          path: |
+            artifacts/nyc-roadbed-alignment/
+            artifacts/nyc-roadbed-source/roadbed.json
+            artifacts/nyc-true-scale/source.json
+          retention-days: 7
+          if-no-files-found: ignore
