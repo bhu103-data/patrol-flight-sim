@@ -31,7 +31,7 @@ test('upstream source-FID and projection conflicts block rather than guess surfa
   assert.match(builder,/Building, roadbed, pedestrian and curb CRS must be identical/);
   assert.match(builder,/holes\.push\(n\)/);
   assert.match(builder,/deviation\(flat,holes,2,triangles\)/);
-  assert.match(builder,/no 2026 lanes, curbs, heights/);
+  assert.match(builder,/NOT actual NYC 2026 elevations/);
   assert.match(builder,/roadbed\.json/);
   assert.match(builder,/Official pedestrian QA geometry coverage or budget violated/);
 });
