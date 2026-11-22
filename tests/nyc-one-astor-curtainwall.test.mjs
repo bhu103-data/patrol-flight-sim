@@ -56,7 +56,7 @@ test('One Astor Plaza is tagged as a reflective glass shell, not a stone box',()
     ()=>{},()=>{},()=>{},()=>{},()=>{},()=>{},()=>{},
     14.97,[1,.8,.5],[.24,.27,.28],12);
   assert.deepEqual(tones.find(([fid])=>fid===212747),[212747,.61]);
-  assert.deepEqual(tones.find(([fid])=>fid===384606),[384606,.24]);
+  assert.deepEqual(tones.find(([fid])=>fid===30857),[30857,.24]);
   assert.ok(height>30,'retain tall municipal 1515 Broadway silhouette');
 });
 
