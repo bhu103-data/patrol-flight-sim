@@ -1,36 +1,63 @@
 name: NYC OSM Times Square building-tag source audit (no game import)
-
 on:
   pull_request:
     paths:
       - "assets/nyc/times-square-footprints.json"
       - "scripts/nyc-osm-times-square-audit.mjs"
+      - "scripts/nyc_osm_times_square_extract.py"
       - "tests/nyc-osm-times-square-audit.test.mjs"
+      - "tests/test_nyc_osm_times_square_extract.py"
       - "docs/NYC_OSM_TIMES_SQUARE_TAG_AUDIT.md"
-
 permissions:
   contents: read
-
 jobs:
   source-audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Check out pinned ODbL NYC OSM GeoParquet
+        uses: actions/checkout@v4
+        with:
+          repository: kjhealy/nycosm
+          ref: 75ec01ced7fdd85619493d59f4e7e9236e0990fd
+          path: .tmp/nycosm
+          sparse-checkout: |
+            inst/extdata/nyc_osm_buildings_manhattan.parquet
+            inst/extdata/nyc_osm_areas.parquet
+            inst/COPYRIGHTS
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Syntax and offline fixture tests
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install GeoParquet readers
+        run: python -m pip install --disable-pip-version-check pyarrow shapely pyproj
+      - name: Syntax and offline fixtures
         run: |
           node --check scripts/nyc-osm-times-square-audit.mjs
           node --test tests/nyc-osm-times-square-audit.test.mjs
-      - name: Fetch bounded OSM tags and audit source coverage
-        run: node scripts/nyc-osm-times-square-audit.mjs
-      - name: Upload ODbL-attributed summary report
+          python -m py_compile scripts/nyc_osm_times_square_extract.py
+          python -m unittest tests/test_nyc_osm_times_square_extract.py
+      - name: Extract only the Times Square ODbL sample to temporary storage
+        env:
+          PATROL_OSM_AUDIT_INPUT: /tmp/nyc-osm-times-square-elements.json
+        run: |
+          python scripts/nyc_osm_times_square_extract.py --nycosm-root .tmp/nycosm --out "$PATROL_OSM_AUDIT_INPUT"
+          node scripts/nyc-osm-times-square-audit.mjs
+      - name: Attach source ODbL notice
+        if: always()
+        run: |
+          mkdir -p artifacts/nyc-osm-times-square-audit
+          cp .tmp/nycosm/inst/COPYRIGHTS artifacts/nyc-osm-times-square-audit/COPYRIGHTS.txt
+      - name: Upload ODbL-attributed aggregate audit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nyc-osm-times-square-tag-audit
-          path: artifacts/nyc-osm-times-square-audit/report.json
+          path: artifacts/nyc-osm-times-square-audit/
           retention-days: 7
           if-no-files-found: warn
