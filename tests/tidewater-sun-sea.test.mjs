@@ -58,6 +58,29 @@ test('twilight cloud warm-light gate retains existing fixed seven ray-march step
  assert.match(clouds,/for \(int c = 0; c < 7; c\+\+\)/);
 });
 
+test('cloud masses favor broad scales with a feathered and density-shaped ceiling',()=>{
+ const density=between('    float cloudDensity(vec2 xz) {','    vec4 sampleMap(vec2 xz) {');
+ assert.match(density,/xz \* 0\.009/);
+ assert.match(density,/vnoise\(p\) \* 0\.66/);
+ assert.match(density,/vnoise\(p \* 4\.4 - 3\.4\) \* 0\.09/);
+ assert.equal((density.match(/vnoise\(/g)||[]).length,3,
+   'keep cloud density at three spatial-noise calls');
+ const cloud=between('      \/\/ Cumulus cloud layer below cruise altitude',
+   '      gl_FragDepth = 1.0;');
+ assert.match(cloud,/float cloudEnvelope=smoothstep\(0\.0,0\.11,hFrac\)/);
+ assert.match(cloud,/1\.0-smoothstep\(0\.73\+0\.12\*d,0\.98,hFrac\)/);
+ assert.match(cloud,/d\*=cloudEnvelope/);
+});
+
+test('ocean normals become irregular without editing shared 18-mode buoyancy',()=>{
+ const water=between('          float gust = mix(0.82, 1.18,', '          vec3 wn = normalize');
+ assert.match(water,/float swellShear=mix\(0\.79,1\.19,/);
+ assert.match(water,/float smallWavePatch=mix\(0\.80,1\.20,noiseH\)/);
+ assert.match(water,/float patchLod=1\.0-smoothstep\(0\.22,1\.28,pixel\)/);
+ assert.match(water,/\+noiseSlope\*patchLod\*\(0\.31\+0\.20\*openWater\)/);
+ assert.match(water,/if\(hasOceanCascades\(\)\)/);
+});
+
 test('ocean glints use angular LOD and beach foam follows falling crests',()=>{
  const water=between('          float alpha2=max(roughness*roughness','          // Bow pressure, hull wash');
  assert.match(water,/max\(0\.0012,pixelAngle\*pixelAngle\*0\.48\)/);

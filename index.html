@@ -1603,9 +1603,12 @@ const CENTRAL_PARK_SITES=[
     }
 
     float cloudDensity(vec2 xz) {
-      vec2 p = xz * 0.013 + vec2(uTime * 0.0045, uTime * 0.0018);
-      float n = vnoise(p) * 0.55 + vnoise(p * 2.13 + 7.1) * 0.30 + vnoise(p * 4.4 - 3.4) * 0.15;
-      return smoothstep(0.65-uAtmosphere.z*0.32,0.87-uAtmosphere.z*0.30,n);
+      // Broader connected cloud masses with low-frequency-dominant detail.
+      // Still exactly three noise fetches and the same advected wind field.
+      vec2 p = xz * 0.009 + vec2(uTime * 0.0037, uTime * 0.0015);
+      float n = vnoise(p) * 0.66 + vnoise(p * 2.23 + 7.1) * 0.25
+              + vnoise(p * 4.4 - 3.4) * 0.09;
+      return smoothstep(0.635-uAtmosphere.z*0.32,0.865-uAtmosphere.z*0.30,n);
     }
 
     vec4 sampleMap(vec2 xz) {
@@ -1969,7 +1972,16 @@ const CENTRAL_PARK_SITES=[
             swell=oceanCascade(xz,uTime,pixel,0)*oceanShoaling(depth);
             chop=oceanCascade(xz,uTime,pixel,6)*smoothstep(0.06,0.72,depth);
             ripple=oceanCascade(xz,uTime,pixel,12)*smoothstep(0.06,0.72,depth);
-            slope=oceanExposure(xz)*gust*(swell.yz+chop.yz+ripple.yz*0.75);
+            // Break the overly regular parallel bright bands with the
+            // existing low-frequency gust and three previously evaluated
+            // noise derivatives; filter fine normals at flight distance.
+            // Height/foam timing, seaplane float pose and collision stay put.
+            float swellShear=mix(0.79,1.19,clamp((gust-0.82)/0.36,0.0,1.0));
+            float smallWavePatch=mix(0.80,1.20,noiseH);
+            float patchLod=1.0-smoothstep(0.22,1.28,pixel);
+            slope=oceanExposure(xz)*gust*(swell.yz*swellShear+
+              (chop.yz+ripple.yz*0.75)*smallWavePatch)
+              +noiseSlope*patchLod*(0.31+0.20*openWater);
           }
           if(uAlaska){
             // Suppress artificial parallel bright-ocean wave bands in the
@@ -2417,6 +2429,11 @@ const CENTRAL_PARK_SITES=[
               float d = cloudDensity(cp.xz);
               if (d > 0.01) {
                 float hFrac = clamp((cp.y - cloudBase()) / (cloudTop() - cloudBase()), 0.0, 1.0);
+                // Cloud silhouettes fade into the base and the rounded top;
+                // denser cells hold a taller crown. No extra ray steps.
+                float cloudEnvelope=smoothstep(0.0,0.11,hFrac)*
+                  (1.0-smoothstep(0.73+0.12*d,0.98,hFrac));
+                d*=cloudEnvelope;
                 // Stepped peach/violet cloud shading
                 float shadeBand = floor((hFrac * 0.75 + (1.0 - d) * 0.35) * 3.0) / 2.0;
                 vec3 cShadow = vec3(0.52, 0.36, 0.56);
