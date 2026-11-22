@@ -26,6 +26,10 @@ const injection=String.raw`
     // Disable scheduled scenic-camera rotation while capturing matched frames.
     nextDcView=Number.POSITIVE_INFINITY;
   };
+  window.__patrolBridgeheadQaSetCloseCamera = enabled => {
+    window.__patrolBridgeheadQaCloseCamera=!!enabled;
+    camInitialized=false;
+  };
   window.__patrolBridgeheadQaSignal = () => ({
     time:sceneryTime,state:bridgeheadSignalState(sceneryTime),
     green:bridgeheadSignalGreen(sceneryTime)
@@ -178,7 +182,17 @@ try{
     const clockHook=tick+'\n'+
       '    if(Number.isFinite(window.__patrolBridgeheadQaHoldTime))'+
       'sceneryTime=window.__patrolBridgeheadQaHoldTime;';
-    const instrumented=html.replace(marker,injection+marker).replace(tick,clockHook);
+    const cameraEntry='  function getScenicCamera() {';
+    assert(html.split(cameraEntry).length===2,
+      'Scenic camera override marker missing/ambiguous');
+    // This near-pole camera exists ONLY in the intercepted browser document.
+    // Face the physical eastbound lens, not the distant bridge deck.
+    const closeCamera=cameraEntry+'\n'+
+      '    if(window.__patrolBridgeheadQaCloseCamera) return {'+
+      'eye:[247.5,19.55,-347.4],look:[252.798,18.69,-345.51],'+
+      'up:worldUp,fov:35};';
+    const instrumented=html.replace(marker,injection+marker)
+      .replace(tick,clockHook).replace(cameraEntry,closeCamera);
     await route.fulfill({response,body:instrumented});
     result.probeInjected=true;
   });
@@ -210,6 +224,7 @@ try{
   assert(state.probe==='function','Runtime traffic probe not installed');
   assert(await page.evaluate(()=>
     typeof window.__patrolBridgeheadQaSetHold==='function'&&
+    typeof window.__patrolBridgeheadQaSetCloseCamera==='function'&&
     typeof window.__patrolBridgeheadQaSignal==='function'),
   'Test-only signal controls not installed');
   result.renderer='ANGLE SwiftShader / software WebGL2';
@@ -275,16 +290,18 @@ try{
     }
     screenshots.push({name,label,view});
   }
-  // Three actual WebGL2 frames from the SAME bridgehead scenic camera.
-  // Capture with a test-only fixed scene clock, not a mocked signal renderer.
+  // Three actual WebGL2 frames from ONE fixed near-pole camera.
+  // Capture with a test-only fixed clock and camera, not a mocked signal mesh.
+  // The standard scenic scene snapshots above remain unchanged.
   await page.locator('#hotelTarget').selectOption({label:'Brooklyn Bridge · Deck View'});
+  await page.evaluate(()=>window.__patrolBridgeheadQaSetCloseCamera(true));
   await page.waitForTimeout(500);
   result.signalFrames=[];
   try{
     for(const [expected,time,name] of [
-      ['red',4,'03-bridgehead-signal-red.png'],
-      ['green',18,'04-bridgehead-signal-green.png'],
-      ['amber',30.5,'05-bridgehead-signal-amber.png']
+      ['red',4,'03-bridgehead-signal-red-close.png'],
+      ['green',18,'04-bridgehead-signal-green-close.png'],
+      ['amber',30.5,'05-bridgehead-signal-amber-close.png']
     ]){
       await page.evaluate(value=>window.__patrolBridgeheadQaSetHold(value),time);
       await page.waitForTimeout(250);
@@ -308,11 +325,16 @@ try{
       }finally{
         await page.evaluate(()=>document.body.classList.remove('patrol-bridge-qa'));
       }
-      result.signalFrames.push({name,expected,actual});
-      screenshots.push({name,label:actual.label,view:actual});
+      result.signalFrames.push({name,expected,actual,
+        camera:{eye:[247.5,19.55,-347.4],look:[252.798,18.69,-345.51],fov:35,
+          origin:'test-only intercepted WebGL2 response'}});
+      screenshots.push({name,label:'Brooklyn Bridge · Signal Lens QA',view:actual});
     }
   }finally{
-    await page.evaluate(()=>window.__patrolBridgeheadQaSetHold(null));
+    await page.evaluate(()=>{
+      window.__patrolBridgeheadQaSetHold(null);
+      window.__patrolBridgeheadQaSetCloseCamera(false);
+    });
   }
   assert(result.signalFrames.length===3,
     'Missing same-camera RGB signal-phase evidence');
