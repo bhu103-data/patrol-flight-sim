@@ -60,11 +60,11 @@ def metric_bbox(city):
 
 
 def encode(poly):
-    """Keep GEOS precision (six decimals); never round to fictitious grid cells."""
+    """Subnanometre floating precision avoids reintroducing visual-overlap slivers."""
     if not poly.is_valid:
         raise ValueError("Invalid derived polygon; refuse to mask source silently")
     def coords(r):
-        return [[round(x, 6), round(y, 6)] for x,y in r.coords]
+        return [[round(x, 10), round(y, 10)] for x,y in r.coords]
     return [coords(poly.exterior)] + [coords(r) for r in poly.interiors]
 
 
