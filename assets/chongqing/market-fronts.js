@@ -42,7 +42,8 @@ export function makeChongqingMarketTileRoof(THREE){
 // Front and inner jamb surfaces are 0.43 world-units apart, with the
 // original shop shell remaining deeper behind as a reversible fallback.
 export function makeChongqingMarketOpenFacade(THREE,{doorSide=-1,variant=0}={}){
-  const vertices=[],uvs=[],indices=[],front=0,back=-.43,edge=9.38;
+  // 0.04 overlap of side wall inner faces at x=±9.72 prevents daylight seams.
+  const vertices=[],uvs=[],indices=[],front=0,back=-.43,edge=9.76;
   let frontQuads=0;
   const quad=(a,b,c,d,face='side')=>{
     const start=vertices.length/3;
