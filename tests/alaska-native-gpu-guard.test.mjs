@@ -1,0 +1,67 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {classifyHardwareRenderer,percentileMs,assessNativeGpuRuns}
+  from '../tools/alaska/native-gpu-guard.mjs';
+
+const hardware={unmaskedRenderer:'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11)',
+  unmaskedVendor:'Google Inc. (NVIDIA)'};
+const mk=(label,dt=18,firstPlayableMs=2500)=>({
+  label,renderer:hardware,intervals:Array.from({length:220},()=>dt),
+  firstPlayableMs,pageErrors:[],contextLost:false,map:'alaska',pose:79
+});
+const abba=()=>[mk('baseline'),mk('updated',19),mk('updated',19),mk('baseline')];
+const budgets={maxP95Ms:33.33,maxFirstPlayableMs:10000,maxRegressionPct:10};
+
+test('native renderer identifies physical GPU with explicit vendor and renderer',()=>{
+  assert.equal(classifyHardwareRenderer(hardware).accepted,true);
+  assert.equal(classifyHardwareRenderer({unmaskedRenderer:'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics)',unmaskedVendor:'Google Inc.'}).accepted,true);
+  assert.equal(classifyHardwareRenderer({unmaskedRenderer:'AMD Radeon RX 6600 XT',unmaskedVendor:'AMD'}).accepted,true);
+});
+
+test('software, hidden and virtual GPU devices cannot certify a pass',()=>{
+  for(const renderer of ['Google SwiftShader','ANGLE (Intel, Microsoft Basic Render Driver)',
+    'llvmpipe (LLVM 15.0.7)','Mesa lavapipe','VMware SVGA 3D']){
+    assert.equal(classifyHardwareRenderer({unmaskedRenderer:renderer,unmaskedVendor:'Intel'}).accepted,false,renderer);
+  }
+  assert.equal(classifyHardwareRenderer({unmaskedRenderer:'WebKit WebGL',unmaskedVendor:''}).accepted,false);
+  assert.equal(classifyHardwareRenderer({unmaskedRenderer:'Unknown GPU',unmaskedVendor:'Google'}).accepted,false);
+});
+
+test('frame quantiles are exact for sorted positive intervals and reject invalid input',()=>{
+  assert.equal(percentileMs([30,10,20,40],.95),40);
+  assert.equal(percentileMs([30,10,20,40],.5),20);
+  assert.throws(()=>percentileMs([],0.5));
+  assert.throws(()=>percentileMs([16,NaN],0.95));
+});
+
+test('ABBA native samples and positive absolute/relative budgets can pass',()=>{
+  const report=assessNativeGpuRuns(abba(),budgets);
+  assert.equal(report.status,'PASS');
+  assert.equal(report.candidate.frames,440);
+  assert.equal(report.candidate.frameP95Ms,19);
+  assert.equal(report.checks.frameRegression,true);
+});
+
+test('fail closed on missing budgets, software hardware or skipped samples',()=>{
+  assert.throws(()=>assessNativeGpuRuns(abba(),{}),/budgets/);
+  assert.throws(()=>assessNativeGpuRuns(abba().slice(0,3),budgets),/four-run/);
+  const soft=abba();soft[1].renderer={unmaskedRenderer:'Google SwiftShader',unmaskedVendor:'Google'};
+  assert.throws(()=>assessNativeGpuRuns(soft,budgets),/Unverified hardware/);
+  const missing=abba();missing[0].intervals=[16.7,16.7];
+  assert.throws(()=>assessNativeGpuRuns(missing,budgets),/Insufficient/);
+  const state=abba();state[1].pageErrors=['webgl lost'];
+  assert.throws(()=>assessNativeGpuRuns(state,budgets),/Invalid first-load/);
+});
+
+test('slow hardware, worsened frame P95 or slower first-load prevent passing',()=>{
+  const tooSlow=abba();
+  tooSlow[1].intervals.fill(50);tooSlow[2].intervals.fill(50);
+  const frame=assessNativeGpuRuns(tooSlow,budgets);
+  assert.equal(frame.status,'FAIL');
+  assert.equal(frame.checks.p95Budget,false);
+  assert.equal(frame.checks.frameRegression,false);
+  const load=abba();load[1].firstPlayableMs=3600;load[2].firstPlayableMs=3600;
+  const result=assessNativeGpuRuns(load,budgets);
+  assert.equal(result.status,'FAIL');
+  assert.equal(result.checks.firstLoadRegression,false);
+});
