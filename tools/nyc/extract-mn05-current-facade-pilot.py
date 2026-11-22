@@ -7,6 +7,7 @@ and roof triangles come from the original Rhino cached display tessellation.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import pathlib
@@ -233,6 +234,13 @@ def collect_base_z(geom):
 def main():
     probe = json.loads(PROBE.read_text(encoding="utf-8"))
     mesh = json.loads(ROOF_MESH.read_text(encoding="utf-8"))
+    expected_source_sha = "b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57"
+    if probe.get("source3dmSha256") != expected_source_sha:
+        raise ValueError("MN05 probe does not reference the vetted original Rhino source")
+    if mesh.get("source3dmSHA256") != expected_source_sha:
+        raise ValueError("Roof mesh does not reference the vetted original Rhino source")
+    if hashlib.sha256(SOURCE.read_bytes()).hexdigest() != expected_source_sha:
+        raise ValueError("Temporary Rhino source bytes changed before facade extraction")
     audit, selected = load_candidates()
     rings = load_candidate_rings(selected)
     if "feet" not in str(probe.get("modelUnitSystem", "")).lower():
