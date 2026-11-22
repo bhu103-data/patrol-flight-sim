@@ -145,22 +145,29 @@ def main() -> None:
     valid_fraction = float(valid.mean())
     if valid_fraction < 0.97:
         raise RuntimeError(f"USGS 5m extraction has {100*(1-valid_fraction):.2f}% missing/out-of-range pixels")
-    # Compare against bilinear interpolation from the existing coarse 30m tile.
+    # Compare ACTUAL WGS84 source positions, never the historical metadata
+    # request bounds. USGS exportImage with auto aspect gave the original TIFF
+    # [-133.265,57.822,-133.135,57.952] despite recorded request bbox of
+    # [-133.265,57.851,-133.135,57.923]. This previously produced a fake
+    # 169m difference between two mutually consistent elevation rasters.
+    geo = json.loads((ROOT / "assets/alaska/tracy-arm-3dep-actual-extent.json").read_text())
+    if geo["requestedBboxWgs84"] != source["bbox"] or geo["outputCrs"] != "EPSG:4326":
+        raise RuntimeError("Original USGS output extent provenance mismatch")
+    ow, os, oe, on = geo["actualPixelBboxWgs84"]
+    if any(not math.isfinite(x) for x in (ow,os,oe,on)):
+        raise RuntimeError("Original USGS actual raster bbox nonfinite")
     coarse = np.empty_like(fine)
     for row in range(SIZE):
-        rf = ROW0 + row * (ROW1 - ROW0) / (SIZE - 1)
-        r0 = int(rf)
-        r1 = min(255, r0 + 1)
-        rt = rf - r0
+        latitude = bbox[1] + (row+.5)*(bbox[3]-bbox[1])/SIZE
+        rf = np.clip((latitude-os)/(on-os)*256-.5,0,255)
+        r0 = int(rf);r1 = min(255,r0+1);rt = rf-r0
         for col in range(SIZE):
-            cf = COL0 + col * (COL1 - COL0) / (SIZE - 1)
-            c0 = int(cf)
-            c1 = min(255, c0 + 1)
-            ct = cf - c0
-            coarse[row, col] = (
-                (original[r0, c0] * (1-ct) + original[r0, c1] * ct) * (1-rt)
-                + (original[r1, c0] * (1-ct) + original[r1, c1] * ct) * rt
-            )
+            longitude = bbox[0] + (col+.5)*(bbox[2]-bbox[0])/SIZE
+            cf = np.clip((longitude-ow)/(oe-ow)*256-.5,0,255)
+            c0 = int(cf);c1 = min(255,c0+1);ct = cf-c0
+            coarse[row,col]=(
+                ((1-rt)*((1-ct)*original[r0,c0]+ct*original[r0,c1]))
+                + rt*((1-ct)*original[r1,c0]+ct*original[r1,c1]))
     rmse = float(np.sqrt(np.mean((fine[valid] - coarse[valid]) ** 2)))
     p95diff = float(np.percentile(np.abs(fine[valid] - coarse[valid]), 95))
     if rmse < 0.25:
@@ -186,6 +193,7 @@ def main() -> None:
         "parentCoarseCellCentres": [COL0, COL1, ROW0, ROW1],
         "parentAnchorWarning": "These indices refer to the old stored REQUEST bbox, NOT actual old-raster source pixel centres. 30m source has an ArcGIS-expanded latitude extent.",
         "originalBbox": source["bbox"],
+        "originalActualPixelBboxWgs84": geo["actualPixelBboxWgs84"],
         "projectIndexEvidence": {
             "workunit": project.get("workunit"),
             "project": project.get("project"),
@@ -213,12 +221,14 @@ def main() -> None:
         "finiteMinMeters": float(fine[valid].min()),
         "finiteMaxMeters": float(fine[valid].max()),
         "fineVsBilinearCoarseRmseMeters": round(rmse, 4),
+        "comparisonBboxSource": "USGS f=json VERIFIED true old TIFF bbox; fine TIFF adjustAspectRatio=false verified",
         "fineVsBilinearCoarseP95AbsDiffMeters": round(p95diff, 4),
         "projectIndex": payload["projectIndexEvidence"],
         "outputBytes": OUTPUT.stat().st_size,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "warnings": [payload["datumWarning"], payload["derivedResolutionWarning"],
                      "2010-2012 source may not reflect August 2025 Tracy Arm landslide changes.",
+                     "Source high-low differences are calculated using verified actual WGS84 pixel positions.",
                      "Must not be merged into runtime without border seam handling and collision parity."],
     }
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
