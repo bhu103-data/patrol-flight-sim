@@ -19,8 +19,9 @@ test('uses 120 unique municipal FIDs already in the official snapshot',()=>{
 });
 
 test('true-coordinate preview respects 1 meter per horizontal model unit',()=>{
-  assert.deepEqual(toLocalMeters(TRUEGEO_ORIGIN.lon,TRUEGEO_ORIGIN.lat),
-    [0,0]);
+  const origin=toLocalMeters(TRUEGEO_ORIGIN.lon,TRUEGEO_ORIGIN.lat);
+  assert.ok(origin.every(v=>Math.abs(v)<1e-9),
+    'local origin may be -0 but must have zero-meter displacement');
   const east=toLocalMeters(TRUEGEO_ORIGIN.lon+.001,TRUEGEO_ORIGIN.lat);
   const north=toLocalMeters(TRUEGEO_ORIGIN.lon,TRUEGEO_ORIGIN.lat+.001);
   assert.ok(Math.abs(east[0]-84.44)<.15,'eastward geodetic shift was compressed');
