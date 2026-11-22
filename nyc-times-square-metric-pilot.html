@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PATROL — NYC metre-scale footprint reference (isolated pilot)</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111925;color:#f3f6fa;font:14px/1.45 system-ui,sans-serif}
+    canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+    canvas:active{cursor:grabbing}
+    header{position:absolute;left:18px;top:18px;z-index:2;max-width:470px;
+      background:rgba(12,20,32,.87);padding:15px 18px;border:1px solid #5b6979;border-radius:8px}
+    h1{margin:0 0 7px;font-size:18px;line-height:1.25}
+    p{margin:5px 0} .muted{color:#c4d1dd;font-size:12px}
+    a{color:#9dd5ff}
+    #status{font-variant-numeric:tabular-nums}
+    @media(max-width:600px){header{left:8px;right:8px;top:8px;padding:10px;max-width:none}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Times Square · real geographic footprint pilot</h1>
+    <p id="status" role="status">Loading the official NYC footprint snapshot…</p>
+    <p class="muted">Drag to orbit · Scroll to zoom · 50 m grid. One scene unit is exactly one metre.
+      This is an <strong>isolated, measurable geometry reference</strong>, not a finished photoreal
+      Manhattan or a replacement for the PATROL flight map. Materials are authored,
+      ground is flat, road topology and facades are NOT measured, and records do not establish
+      the present-day appearance of each building.</p>
+    <p class="muted">Building source: <a href="https://data.cityofnewyork.us/d/3g6p-4u5s"
+      target="_blank" rel="noopener">NYC Building Footprints</a> · snapshot in
+      <code>assets/nyc/times-square-footprints.json</code>, retrieved 2026-11-20.</p>
+  </header>
+  <canvas id="scene" aria-label="Three-dimensional, metre-scale surveyed building footprints"></canvas>
+  <script type="module">
+    import {buildMetricFootprintMesh} from './assets/nyc/nyc-metric-geometry-pilot.js';
+    const canvas=document.getElementById('scene');
+    const status=document.getElementById('status');
+    const gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+    if(!gl){
+      status.textContent='WebGL2 is unavailable; the reference viewer cannot run.';
+      throw new Error('WebGL2 unavailable');
+    }
+    const vertexShader=`#version 300 es
+      precision highp float;
+      layout(location=0) in vec3 aPosition;
+      layout(location=1) in vec3 aColor;
+      uniform mat4 uProjection,uView;
+      out vec3 vWorld,vColor;
+      void main(){
+        vWorld=aPosition;vColor=aColor;
+        gl_Position=uProjection*uView*vec4(aPosition,1.0);
+      }`;
+    const fragmentShader=`#version 300 es
+      precision highp float;
+      in vec3 vWorld,vColor;
+      out vec4 finalColor;
+      void main(){
+        vec3 normal=normalize(cross(dFdx(vWorld),dFdy(vWorld)));
+        if(!gl_FrontFacing)normal=-normal;
+        vec3 sun=normalize(vec3(0.48,0.84,0.30));
+        float lit=max(0.17,dot(normal,sun));
+        finalColor=vec4(vColor*(0.24+lit*0.76),1.);
+      }`;
+    const shader=(kind,source)=>{
+      const s=gl.createShader(kind);
+      gl.shaderSource(s,source);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))
+        throw new Error(gl.getShaderInfoLog(s)||'Shader compilation failed');
+      return s;
+    };
+    const program=gl.createProgram();
+    gl.attachShader(program,shader(gl.VERTEX_SHADER,vertexShader));
+    gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragmentShader));
+    gl.linkProgram(program);
+    if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(program)||'Shader link failed');
+    gl.useProgram(program);
+    const projectionLoc=gl.getUniformLocation(program,'uProjection');
+    const viewLoc=gl.getUniformLocation(program,'uView');
+    const vaoFromFloats=vertices=>{
+      const vao=gl.createVertexArray(),buffer=gl.createBuffer();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+      gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
+      gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
+      gl.bindVertexArray(null);
+      return {vao,buffer,count:vertices.length/6};
+    };
+    function perspective(fov,aspect,near,far){
+      const f=1/Math.tan(fov/2),q=1/(near-far);
+      return new Float32Array([f/aspect,0,0,0, 0,f,0,0,
+        0,0,(far+near)*q,-1, 0,0,2*far*near*q,0]);
+    }
+    function lookAt(eye,target){
+      const normalize=v=>{const d=Math.hypot(...v);return v.map(x=>x/d);};
+      const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],
+        a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+      const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+      const f=normalize(target.map((v,i)=>v-eye[i]));
+      const s=normalize(cross(f,[0,1,0])),u=cross(s,f);
+      return new Float32Array([
+        s[0],u[0],-f[0],0, s[1],u[1],-f[1],0,
+        s[2],u[2],-f[2],0,-dot(s,eye),-dot(u,eye),dot(f,eye),1
+      ]);
+    }
+    try{
+      const response=await fetch('./assets/nyc/times-square-footprints.json');
+      if(!response.ok)throw new Error('NYC snapshot HTTP '+response.status);
+      const asset=await response.json();
+      const {interleaved,stats}=buildMetricFootprintMesh(asset);
+      const buildings=vaoFromFloats(interleaved);
+      const size=50*Math.ceil(Math.max(
+        Math.abs(stats.minX),Math.abs(stats.maxX),
+        Math.abs(stats.minZ),Math.abs(stats.maxZ))+50)/50;
+      const ticks=Math.ceil(size/50),grid=[];
+      function line(a,b){
+        for(const p of [a,b])grid.push(...p,.21,.35,.41);
+      }
+      for(let i=-ticks;i<=ticks;i++){
+        const p=i*50;
+        line([p,.02,-size],[p,.02,size]);
+        line([-size,.02,p],[size,.02,p]);
+      }
+      const groundGrid=vaoFromFloats(new Float32Array(grid));
+      let yaw=0.82,elevation=0.45,
+        radius=Math.max(440,Math.hypot(stats.maxX-stats.minX,stats.maxZ-stats.minZ)*.95);
+      const target=[(stats.minX+stats.maxX)/2,
+        Math.min(78,stats.maxHeight*.36),(stats.minZ+stats.maxZ)/2];
+      let drag=null;
+      canvas.addEventListener('pointerdown',e=>{
+        drag={x:e.clientX,y:e.clientY,yaw,elevation};
+        canvas.setPointerCapture(e.pointerId);
+      });
+      canvas.addEventListener('pointermove',e=>{
+        if(!drag)return;
+        yaw=drag.yaw+(e.clientX-drag.x)*.006;
+        elevation=Math.min(1.37,Math.max(-.12,
+          drag.elevation-(e.clientY-drag.y)*.006));
+      });
+      canvas.addEventListener('pointerup',()=>drag=null);
+      canvas.addEventListener('pointercancel',()=>drag=null);
+      canvas.addEventListener('wheel',e=>{
+        e.preventDefault();
+        radius=Math.min(2400,Math.max(45,radius*Math.exp(e.deltaY*.001)));
+      },{passive:false});
+      status.textContent=stats.acceptedBuildings+' / '+stats.inputRecords+
+        ' official building footprints · '+stats.triangles.toLocaleString()+
+        ' triangles · '+stats.rejectedBuildings+' rejected · 1:1 metres';
+      gl.enable(gl.DEPTH_TEST);
+      function render(){
+        const dpi=Math.min(2,window.devicePixelRatio||1);
+        const width=Math.max(1,Math.floor(canvas.clientWidth*dpi)),
+          height=Math.max(1,Math.floor(canvas.clientHeight*dpi));
+        if(canvas.width!==width||canvas.height!==height){
+          canvas.width=width;canvas.height=height;gl.viewport(0,0,width,height);
+        }
+        const eye=[
+          target[0]+radius*Math.cos(elevation)*Math.sin(yaw),
+          target[1]+radius*Math.sin(elevation),
+          target[2]+radius*Math.cos(elevation)*Math.cos(yaw)
+        ];
+        gl.clearColor(.07,.105,.15,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(program);
+        gl.uniformMatrix4fv(projectionLoc,false,
+          perspective(Math.PI/3,width/height,.3,6000));
+        gl.uniformMatrix4fv(viewLoc,false,lookAt(eye,target));
+        gl.bindVertexArray(groundGrid.vao);
+        gl.drawArrays(gl.LINES,0,groundGrid.count);
+        gl.bindVertexArray(buildings.vao);
+        gl.drawArrays(gl.TRIANGLES,0,buildings.count);
+        gl.bindVertexArray(null);
+        requestAnimationFrame(render);
+      }
+      requestAnimationFrame(render);
+    }catch(error){
+      status.textContent='Reference pilot failed: '+error.message;
+      console.error('[PATROL metric NYC pilot]',error);
+    }
+  </script>
+</body>
+</html>
