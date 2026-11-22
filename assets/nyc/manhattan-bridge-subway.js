@@ -9,6 +9,9 @@ const SPEC=Object.freeze({
   name:'Manhattan Bridge — four subway tracks', west:-30, east:201,
   cx:85, z:-285, slope:-0.105, deck:26.0, water:12.2,
   trackOffsets:Object.freeze([-9.5,-6.3,6.3,9.5]), serviceWalkInner:11.15,
+  // A train is exposed up to 6 units beyond the nominal deck; its carbody
+  // has 6.41 units of half-length. Keep a conservative 13-unit track apron.
+  carHalfLength:6.42, visibleMargin:6, approachLength:13,
   towerXs:Object.freeze([31,150]), pace:7.4, carPitch:13.35
 });
 // Derived from Ethical Tech CoLab's source-governed control skeleton (CC BY 4.0).
@@ -46,7 +49,7 @@ function trainPose(time,run,car){
   return Object.freeze({
     x,y:SPEC.deck+0.22,z:at(x,run.side),
     yaw:Math.atan2(run.direction,run.direction*SPEC.slope),
-    visible:x>=SPEC.west-6&&x<=SPEC.east+6
+    visible:x>=SPEC.west-SPEC.visibleMargin&&x<=SPEC.east+SPEC.visibleMargin
   });
 }
 function build({box,addQuad,beam}){
@@ -105,28 +108,45 @@ function build({box,addQuad,beam}){
     point(SPEC.east,-3.75,SPEC.deck+.04),
     point(SPEC.east,3.75,SPEC.deck+.04),
     point(SPEC.west,3.75,SPEC.deck+.04),deckColor);
-  // Retain structural panel seams where the girders actually cross the span.
-  for(let x=SPEC.west;x<SPEC.east;x+=3.5){
-    const nx=Math.min(x+3.5,SPEC.east);
-    for(const side of [-1,1]){
-      B(point(x,side*12.0,SPEC.deck-.10),
-        point(nx,side*12.0,SPEC.deck-.10),.31,structural);
-      B(point(x,side*3.9,SPEC.deck-.23),
-        point(nx,side*3.9,SPEC.deck-.23),.24,structural);
-      B(point(x,side*12.0,UPPER_ROAD_Y-.21),
-        point(nx,side*12.0,UPPER_ROAD_Y-.21),.32,structural);
+  // Six continuous straight girders replace hundreds of collinear pieces.
+  // The actual cross-girders and truss web panels remain independent below.
+  for(const side of [-1,1]){
+    for(const [offset,level,gauge] of [
+      [12.0,SPEC.deck-.10,.31],
+      [3.9,SPEC.deck-.23,.24],
+      [12.0,UPPER_ROAD_Y-.21,.32]
+    ])B(point(SPEC.west,side*offset,level),
+      point(SPEC.east,side*offset,level),gauge,structural);
+  }
+  // Do not make the train vanish halfway off a raw end of track. The game
+  // still has no surveyed subway portals, so use only short rail aprons at
+  // the Manhattan and Brooklyn bridgeheads, never fictional tunnel geometry.
+  const apronEnds=[[SPEC.west-SPEC.approachLength,SPEC.west],
+    [SPEC.east,SPEC.east+SPEC.approachLength]];
+  for(const side of [-1,1]){
+    const near=side*4.15,far=side*11.75;
+    for(const [a,b] of apronEnds){
+      Q(point(a,near,SPEC.deck-.29),point(b,near,SPEC.deck-.29),
+        point(b,far,SPEC.deck-.29),point(a,far,SPEC.deck-.29),trackBed);
+      // Short under-deck girders and limited cross braces give the rail apron
+      // a visible load path without guessing the land foundation height.
+      for(const offset of [side*4.08,side*11.90])
+        B(point(a,offset,SPEC.deck-.43),
+          point(b,offset,SPEC.deck-.43),.22,structural);
     }
   }
-  // These eight steel running rails are straight in game-space.
-  // Former 5.6-unit segments were co-linear and caused needless GPU vertices.
+  // Extend all eight steel running rails into the supported aprons.
   for(const side of SPEC.trackOffsets){
-    for(const railSide of [-.72,.72]){
-      B(point(SPEC.west,side+railSide,SPEC.deck+.18),
-        point(SPEC.east,side+railSide,SPEC.deck+.18),.095,rail);
-    }
+    for(const railSide of [-.72,.72])
+      B(point(SPEC.west-SPEC.approachLength,side+railSide,SPEC.deck+.18),
+        point(SPEC.east+SPEC.approachLength,side+railSide,SPEC.deck+.18),.095,rail);
     for(let x=SPEC.west+.42;x<SPEC.east;x+=3.1)
       B(point(x,side-1.24,SPEC.deck+.065),
         point(x,side+1.24,SPEC.deck+.065),.16,sleeper);
+    for(const [a,b] of apronEnds)
+      for(let x=a+.55;x<b-.12;x+=3.1)
+        B(point(x,side-1.24,SPEC.deck+.065),
+          point(x,side+1.24,SPEC.deck+.065),.16,sleeper);
   }
   // Portal-frame bridge: physical compression path into tower piers, not floating walls.
   for(const tx of SPEC.towerXs){

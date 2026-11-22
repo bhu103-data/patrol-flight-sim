@@ -63,7 +63,7 @@ test('all bridge components have finite coordinates and a bounded face budget',(
   const upperBoundTris=groups.beam*12+groups.box*12+groups.quad*2;
   assert.ok(upperBoundTris<=20000,'limit added native subway geometry to 20k triangles');
   assert.ok(groups.box>=100,'bridge piers, towers, parapets and lights are 3D');
-  assert.ok(groups.beam>=1000,'truss, four rail pairs, catenaries and sleepers exist');
+  assert.ok(groups.beam>=650,'truss, four rail pairs, catenaries and sleepers exist');
 });
 
 test('trains follow the same sloped rail corridor, with deterministic two-way movement',()=>{
@@ -118,7 +118,7 @@ test('every horizontal track bed and upper/lower road top faces point UP',()=>{
       seen.push(normalY);
     }
   });
-  assert.equal(seen.length,7,'two track beds, two upper roads, two footwalks, one lower road');
+  assert.equal(seen.length,11,'two track beds, two upper roads, two footwalks, lower road and four short rail aprons');
 });
 
 test('straight rails and flat road slabs are emitted once, not in redundant LOD fragments',()=>{
@@ -132,10 +132,10 @@ test('straight rails and flat road slabs are emitted once, not in redundant LOD 
     },
     addQuad:()=>{quads++;triangles+=2;}
   });
-  assert.equal(quads,7,'7 continuous quads, no duplicated coplanar panels');
+  assert.equal(quads,11,'7 continuous bridge deck quads and 4 approach trackbed quads');
   assert.equal(railPairs,8,'exactly 4 dual-rail tracks, one beam per rail');
   assert.ok(walkwayYellow>=4,'two yellow maintenance handrails on each outside edge');
-  assert.ok(triangles<15000,'rail realism must fit a 15k added-triangle budget');
+  assert.ok(triangles<12500,'supported approaches must keep rails and girders within 12.5k triangles');
   assert.equal(result.quads,quads);
 });
 test('rail-level spectator camera inspects trains below the upper road deck',()=>{
@@ -152,4 +152,40 @@ test('outside maintenance walkways clear the existing train glazing envelope',()
     'maintenance walkway must not intersect the outboard train windows/doors');
   assert.ok(11.68-rail.spec.serviceWalkInner>=.5,
     'a usable but game-scale footpath must remain between train and outer guardrail');
+});
+
+test('whole car remains above real authored rail aprons at both bridgeheads',()=>{
+  const s=rail.spec;
+  assert.ok(s.approachLength>=s.carHalfLength+s.visibleMargin,
+    'entire visible carbody must fit on physically emitted track');
+  assert.ok(s.approachLength<=15,'limited bridgehead segment avoids inventing long city railway');
+  const beds=[],rails=[],supports=[];
+  rail.build({
+    box:()=>{},
+    addQuad:(a,b,c,d,color)=>{
+      // Track-bed slabs have the distinct flat gray tone, road beds do not.
+      if(color[0]===.25&&color[1]===.29&&color[2]===.33)
+        beds.push([Math.min(a[0],b[0],c[0],d[0]),
+          Math.max(a[0],b[0],c[0],d[0])]);
+    },
+    beam:(a,b,w,color)=>{
+      if(Math.abs(w-.095)<1e-8)rails.push([Math.min(a[0],b[0]),Math.max(a[0],b[0])]);
+      if(Math.abs(w-.22)<1e-8&&color[0]<.3)supports.push([a,b]);
+    }
+  });
+  assert.equal(beds.length,6,'two main track beds and four bridgehead aprons');
+  assert.equal(rails.length,8,'four track pairs must continue into the approaches');
+  assert.equal(supports.length,8,'both ends have lower support girders for both track decks');
+  const lo=s.west-s.approachLength,hi=s.east+s.approachLength;
+  for(const [a,b] of rails){assert.equal(a,lo);assert.equal(b,hi);}
+  for(const run of rail.runs){
+    for(const car of [0,1,2,3])for(let time=0;time<=200;time+=.15){
+      const p=rail.trainPose(time,run,car);
+      if(!p.visible)continue;
+      assert.ok(p.x-s.carHalfLength>=lo-1e-6);
+      assert.ok(p.x+s.carHalfLength<=hi+1e-6);
+      assert.ok(beds.some(([a,b])=>p.x>=a-s.carHalfLength&&p.x<=b+s.carHalfLength),
+        'train must never be left with no rail bed');
+    }
+  }
 });

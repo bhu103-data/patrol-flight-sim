@@ -59,3 +59,10 @@ This project and authors are credited for the dimensional selection and control 
 - The existing shared subway car mesh extends about 1.365 game units laterally from its centre at the cab glazing. The outer rail axis is ±9.5.
 - Earlier walkway inside-edge offset ±10.78 was nearly tangent to the car's glazed envelope, an unsafe near-overlap. Increase the inside-edge offset to ±11.15, leaving **0.285 game units** of side clearance while preserving a **0.53 game-unit** walk strip to the outer edge at ±11.68. This is a **game-model safety clearance**, not an official MTA platform dimension.
 - The dedicated unit test reads the game-space offset and rejects any later change that moves the maintenance path within 0.25 of the subway car's real generated window/door geometry.
+
+## Bridgehead train apron — not an invented subway tunnel
+The car source `index.html / buildStreetVehicle('train')` defines an overall cab envelope of about 12.8 game units. Each animated car currently appears while its **centre** can be 6 units past either formal end of the bridge. This let the outward half of a carriage be rendered with no track under it. The source now declares `carHalfLength=6.42`, `visibleMargin=6`, `approachLength=13` so the entire visible cab stays over a short rail support.
+- Two side trackbeds continue 13 units beyond **each** end, including original rails, sleeper pitches and longitudinal support beams; no station or tunnel portal is invented at a location not verified by GIS/MTA sources.
+- The six long straight girders are now one beam each rather than hundreds of collinear pieces, keeping the new apron geometry inside a 12,500 triangle target without changing flight physics or water contours.
+- Direct geometry tests enumerate the actual generated trackbed bounds and all eight running rails and sample the four-car train position densely in both directions. The constraint checks only **this pilot's game-space** envelope, not track-center survey accuracy.
+- The unmodelled farther routes to Grand Street, Canal Street and DeKalb Avenue are still open tasks, not in-game represented underground tunnels.
