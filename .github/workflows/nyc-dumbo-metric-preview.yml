@@ -10,6 +10,8 @@ on:
       - 'assets/nyc/dumbo-cscl-true-metre.js'
       - 'assets/nyc/dumbo-cscl-metric-reconcile.mjs'
       - 'tests/nyc-dumbo-metric-cscl-reconcile.test.mjs'
+      - 'assets/nyc/dumbo-cscl-roadbed-coverage.mjs'
+      - 'tests/nyc-dumbo-cscl-roadbed-coverage.test.mjs'
       - 'tests/nyc-dumbo-metric-roadbed.test.mjs'
       - 'assets/nyc/dumbo-oti-metric-48.json'
       - 'tools/nyc/dumbo-metric-preview.html'
@@ -28,7 +30,11 @@ jobs:
         with:
           node-version: '22'
       - name: Validate projection, roof triangulation and fallback isolation
-        run: node --test tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs
+        run: node --test tests/nyc-dumbo-metric-preview.test.mjs tests/nyc-dumbo-metric-roadbed.test.mjs tests/nyc-dumbo-metric-cscl-reconcile.test.mjs tests/nyc-dumbo-cscl-roadbed-coverage.test.mjs
+      - name: Measure genuine 2022 pavement intersection with every real CSCL segment
+        run: |
+          node assets/nyc/dumbo-cscl-roadbed-coverage.mjs
+          test -s artifacts/nyc-dumbo-metric/cscl-roadbed-source-coverage.json
       - name: Install pinned Chromium browser harness
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
