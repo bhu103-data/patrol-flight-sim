@@ -37,3 +37,20 @@ Run source tests: `node --test tests/nyc-times-square-metric-massing.test.mjs`. 
 5. A/B with current release at fixed camera/lens, real authorized street/photo reference, readable report of footprint/height error (metres), collision/traffic and NYC↔Alaska/Chongqing/Vegas transition. Native physical GPU FPS P50/P95 and memory budget, including low-graphics fallback.
 
 **Release:** Draft only. Do not merge or enable in the playable map on CI success alone. Tracks P0 issue #229; this branch is intentionally isolated to prevent replacing real flight/collision logic with an incomplete second NYC scene.
+
+
+## 2026-11-22 P0 roadbed source comparison (source QA only; no city import)
+
+The independent source-only NYC DCP mapped-road 1:1 layer already exists in [Draft #234](https://github.com/bhu103-data/patrol-flight-sim/pull/234). **Do not duplicate/merge both as whole city scenes.** #234's original official DCM mapped line audit reported **one** Broadway mapped line (OBJECTID 1712) crossing building FID **981369** for **8.44 metres**.
+
+The newer **NYC OTI actual-roadbed CSCL** source is a *different* feature layer:
+- Live official [CSCL Centerline_view/0](https://services6.arcgis.com/yG5s3afENB5iO9fj/ArcGIS/rest/services/Centerline_view/FeatureServer/0), ArcGIS data last edited **2026-11-07**, with fields `STATUS`, `TRAFDIR`, `RW_TYPE`, `STREETWIDTH`, `STREETWIDTH_IRR`, `NUMBER_TRAVEL_LANES`, `NUMBER_PARK_LANES`, `FROM_LEVEL_CODE`, `TO_LEVEL_CODE`.
+- Original [City of New York geo metadata](https://github.com/CityOfNewYork/nyc-geo-metadata/blob/main/Metadata/Metadata_StreetCenterline.md): `ST_WIDTH` denotes width of **paved area in feet**; traffic direction codes `FT/TF/TW/NV`, road-type `1` ordinary street, `6` path/trail, status `2` constructed. The service's `STREETWIDTH` is the current field spelling. NYC Open Data terms/asset redistribution need final signoff.
+- Independent repo-root `node scripts/nyc-times-cscl-roadbed-probe.mjs` queries read-only WGS84 Times Square bbox; stores temporary JSON in `artifacts/nyc-cscl-roadbed/` (not in production source). Source record dates and real-time closures are **not** guaranteed.
+- On a successful 2026-11-22 audited snapshot: **56** valid CSCL lines, **49** constructed motorized streets with source paved-area width and travel-lane count, **7** nonvehicular paths. A true shared-metre footprint check found **0 motorized centerline-through-building segments** and **0 approximate symmetric half-pavement-width overlaps** with the **118** simple official building polygons, threshold 0.10m. The one genuine path-line/building intersection is **Broadway CSCL ID 3488 `RW_TYPE=6`, `TRAFDIR=NV` with FID 981369, 8.429m**. This explains the DCM overlap without calling it a motor-car-through-wall bug. Still no claim of real pedestrian passage or curb clearance.
+
+### Optional same-camera visual QA (not a surveyed road mesh)
+
+The original isolated page `nyc-metric-pilot.html` is unchanged when used normally. Only `nyc-metric-pilot.html?roadbed=1` reads the **locally generated CI audit artifact**, if present, to draw vehicle `STREETWIDTH` as symmetric gray metric *screening bands*, plus thin amber nonvehicular source **centerline markers**. If the official artifact is absent or widths are unknown, the QA mode refuses to create fake motorized road surfaces. Its Chromium CI workflow `nyc-cscl-roadbed-source-audit.yml` must capture same-camera A/B lowflight and overhead screenshots, validate visibly changed road pixels and source counts. Use `python3 -m http.server 8766` after running the road source script to review locally.
+
+**Non-waivable:** these bands are *not* physical curb surveys, lanes, sidewalk lines, Broadway pedestrian plaza barriers, or a game-ready road mesh. They include no collision geometry or signal phases and **must not be copied into `index.html`**. A source widths test is not native-GPU performance certification. Product-level realism P0 #229 stays OPEN until current cartographic roadbed/curb polygons + independent control points + shared flight/traffic scaling + real facades and before/after render are complete.
