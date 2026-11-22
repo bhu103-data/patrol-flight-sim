@@ -1,9 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
-const probe=await readFile(
-  new URL('../scripts/nyc-grey-tower-layer-probe.mjs',import.meta.url),'utf8');
+const [html,probe,gis]=await Promise.all([
+  readFile(new URL('../index.html',import.meta.url),'utf8'),
+  readFile(new URL('../scripts/nyc-grey-tower-layer-probe.mjs',import.meta.url),'utf8'),
+  readFile(new URL('../assets/nyc/nyc-gis-infill.js',import.meta.url),'utf8')
+]);
 
 test('debug draw omission is explicitly opt-in and NYC-only',()=>{
   assert.match(html,/\.get\('nycVisualProbe'\)==='1'/);
