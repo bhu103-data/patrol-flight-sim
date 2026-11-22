@@ -309,7 +309,8 @@ def main():
    best=None
    for dy in range(-12,13):
     for dx in range(-12,13):
-     sample_valid=valid_sample&base_valid
+     sample_valid=(valid_sample&(XX+dx>=0)&(XX+dx<=255)&
+       (YY+dy>=0)&(YY+dy<=255))
      if not sample_valid.any():continue
      interp=bilinear(orient,XX+dx,YY+dy)
      delta=new_sample[sample_valid]-interp[sample_valid]
