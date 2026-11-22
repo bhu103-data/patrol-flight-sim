@@ -354,6 +354,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       roadbed:officialRoadbed?.source||officialSurfaces?.sources?.roadbeds||null,
       plaza:officialSurfaces?.sources?.plazas||null,
       sidewalk:officialSurfaces?.sources?.sidewalks||null,
+      roadbedImageryYear:officialSurfaces?.imageryYear||officialRoadbed?.imagery||null,
       surfaceImageryYear:officialSurfaces?.imageryYear||officialRoadbed?.imagery||null,
       surfaceTerms:officialSurfaces?.terms||null,
       surfaceCaptureRules:officialSurfaces?.captureRules||null},
