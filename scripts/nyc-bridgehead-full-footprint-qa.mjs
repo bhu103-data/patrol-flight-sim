@@ -210,8 +210,16 @@ try{
       '    if(window.__patrolBridgeheadQaCloseCamera) return {'+
       'eye:[247.5,19.55,-347.4],look:[252.798,18.69,-345.51],'+
       'up:worldUp,fov:35};';
+    // Test-only proof that the verified OTI meshes are ACTUALLY emitted.
+    // A successful PNG without this counter could just show old boxes.
+    const otiEntry='  function buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,source,y){';
+    assert(html.split(otiEntry).length===2,'DUMBO official source renderer missing');
+    const otiProbe=otiEntry+'\n'+
+      '    (window.__patrolDumboOtiRendered??=[]).push({'+
+      'fid:source.fid,center:lot.slice(0,2),height:lot[4]});';
     const instrumented=html.replace(marker,injection+marker)
-      .replace(tick,clockHook).replace(cameraEntry,closeCamera);
+      .replace(tick,clockHook).replace(cameraEntry,closeCamera)
+      .replace(otiEntry,otiProbe);
     await route.fulfill({response,body:instrumented});
     result.probeInjected=true;
   });
@@ -250,6 +258,13 @@ try{
   'Test-only signal controls not installed');
   result.renderer='ANGLE SwiftShader / software WebGL2';
   result.webgl=state;
+  result.otiRendered=await page.evaluate(()=>window.__patrolDumboOtiRendered||[]);
+  const renderedFids=[...new Set(result.otiRendered.map(x=>x.fid))].sort();
+  assert(JSON.stringify(renderedFids)===JSON.stringify([1031082,1051309,1080628]),
+    'Municipal polygon silhouettes did not enter real WebGL2 city mesh: '+
+      JSON.stringify(result.otiRendered));
+  assert(result.otiRendered.every(x=>x.height>10&&x.center.every(Number.isFinite)),
+    'Municipal polygon mesh site metrics are invalid');
   const traffic=await page.evaluate(()=>window.__patrolBridgeheadQa());
   result.traffic=traffic;
   assert(traffic.mapCity,'Loaded map is not NYC');
