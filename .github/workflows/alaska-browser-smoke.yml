@@ -13,6 +13,7 @@ on:
       - 'index.html'
       - 'assets/alaska/**'
       - 'tools/alaska/smoke_browser.mjs'
+      - 'tools/alaska/compare_realtime_aurora.mjs'
       - '.github/workflows/alaska-browser-smoke.yml'
   workflow_dispatch:
 
@@ -22,9 +23,11 @@ permissions:
 jobs:
   alaska-webgl-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -42,6 +45,10 @@ jobs:
           exit 1
       - name: Launch Alaska and test photographic materials
         run: node tools/alaska/smoke_browser.mjs
+      - name: Capture same-camera Alaska aurora, sky and water with RAF pacing
+        run: |
+          git show 38a9be192ca14cf5d47f6991d050b4093357f044:index.html > alaska-aurora-base.html
+          node tools/alaska/compare_realtime_aurora.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

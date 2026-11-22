@@ -1740,7 +1740,10 @@ const CENTRAL_PARK_SITES=[
       return 1.0-smoothstep(0.30,0.95,area);
     }
 
-    // Alaska-only coherent auroral curtains: advected folds, not a flashing panel.
+    // Alaska-only two-layer auroral curtains: lower shader cost and stable
+    // filmic veils, with one moving noise field per layer (formerly two).
+    // This is the same sky sampled by fjord Fresnel reflections. No textures,
+    // separate particle batches, physics coupling, or daytime work.
     vec3 alaskaAurora(vec3 rd) {
       float night=1.0-smoothstep(-0.22,-0.11,uSun.y);
       float visibility=night*(1.0-smoothstep(0.22,0.91,uAtmosphere.z))
@@ -1748,29 +1751,34 @@ const CENTRAL_PARK_SITES=[
       if(visibility<0.005 || rd.y<0.055)return vec3(0.0);
       float az=atan(rd.x,rd.z);
       float el=asin(clamp(rd.y,0.0,1.0));
+      float filamentAA=1.0-smoothstep(.014,.065,fwidth(az));
       vec3 light=vec3(0.0);
-      for(int i=0;i<3;i++){
+      for(int i=0;i<2;i++){
         float layer=float(i);
-        float a=az+layer*0.41;
-        float drift=vnoise(vec2(a*2.6+layer*13.7,uTime*0.025))-.5;
-        float fine=vnoise(vec2(a*10.1-layer*11.3,uTime*0.049))-.5;
-        float fold=sin(a*11.4-uTime*(0.17+layer*.025)+fine*4.3);
-        float edge=0.20+layer*0.105+drift*0.085+fold*0.036;
+        float a=az+layer*.39;
+        float drift=vnoise(vec2(a*2.75+layer*13.7,uTime*.023))-.5;
+        float fold=sin(a*10.8-uTime*(.14+layer*.027)+drift*3.2);
+        float edge=.20+layer*.12+drift*.075+fold*.055;
         float above=el-edge;
-        float height=.13+.026*sin(a*4.3+uTime*.05+layer);
-        float curtain=smoothstep(-.015,.011,above)
-                     *(1.0-smoothstep(height*.58,height,above));
-        float threads=.60+.24*sin(a*58.0+fine*6.3-uTime*.56)
-                           +.16*sin(a*117.0+fold*2.0+uTime*.21);
-        float bright=.67+.33*smoothstep(-.15,.65,fine+fold*.36);
-        float rim=exp(-abs(above-.008)*53.0)*.23;
-        float bounds=1.0-smoothstep(.47,1.25,abs(az+.07-layer*.11));
-        vec3 green=vec3(.085,.72,.35);
-        vec3 violet=vec3(.34,.21,.62);
-        vec3 hue=mix(green,violet,smoothstep(.02,height*.92,above)*(.57+layer*.09));
-        light+=hue*(curtain*max(.18,threads)+rim)*bright*bounds*(.88-layer*.16);
+        float height=.14+.028*sin(a*4.1+uTime*.042+layer);
+        float curtain=smoothstep(-.016,.010,above)
+                     *(1.0-smoothstep(height*.60,height,above));
+        // High-frequency threads fade with pixel footprint rather than
+        // sparkling on distant hills or jagged water reflection samples.
+        float fibers=.55+.30*sin(a*58.0+drift*6.0-uTime*.45)
+                     +.15*sin(a*110.0+fold*2.0+uTime*.21);
+        fibers=mix(.68,clamp(fibers,.10,1.0),filamentAA);
+        float halo=exp(-abs(above-.008)*45.0)*.12;
+        float bounds=1.0-smoothstep(.48,1.16,abs(az+.08-layer*.10));
+        vec3 green=vec3(.07,.63,.32);
+        vec3 violet=vec3(.30,.18,.51);
+        vec3 hue=mix(green,violet,
+          smoothstep(.035,height*.9,above)*(.47+layer*.15));
+        light+=hue*(curtain*(.20+.90*fibers)+halo)
+          *bounds*(1.06-layer*.16);
       }
-      return light*visibility*smoothstep(.055,.18,rd.y);
+      return clamp(light*visibility*smoothstep(.055,.17,rd.y),
+        vec3(0.0),vec3(.80));
     }
 
         vec3 getSky(vec3 rd) {
