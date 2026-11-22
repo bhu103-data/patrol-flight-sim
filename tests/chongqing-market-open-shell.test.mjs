@@ -10,6 +10,21 @@ const end=source.indexOf('  // Hotpot shop facade:',begin);
 assert.ok(begin>=0&&end>begin,'actual secondary-shop construction must exist');
 const shopLoop=source.slice(begin,end);
 
+// The gap check uses the actual facade generator and real shop-loop draw
+// transforms, not hard-coded assumptions about the shop-box dimensions.
+const marketSource=await readFile(new URL('../assets/chongqing/market-fronts.js',import.meta.url),'utf8');
+const {makeChongqingMarketOpenFacade}=await import(
+  'data:text/javascript;base64,'+Buffer.from(marketSource).toString('base64'));
+class FacadeGeometry {
+  setAttribute(k,a){this[k]=a}
+  setIndex(a){this.index=a}
+  computeVertexNormals(){}
+}
+const facadeThree={
+  BufferGeometry:FacadeGeometry,
+  Float32BufferAttribute:class{constructor(a,n){this.array=a;this.itemSize=n}}
+};
+
 function generated(){
   const draws=[],signs=[],obstacles=[];
   const ground=(x,z)=>43+.003*x+.17*(z-345);
@@ -40,6 +55,34 @@ test('exact three gallery shells retain sides/back but no opaque original front 
       'market sign should be a small unique plaque, above the windows');
     assert.ok(obstacles.some(o=>o.x===x&&o.z===z-6&&o.w===20&&o.d===16),
       'existing collision shell stays unchanged');
+  }
+});
+
+test('real open facades overlap side walls and rear walls without daylight cracks',()=>{
+  assert.match(marketSource,/frontWall\\.position\\.set\\(x,earth,z\\+2\\.78\\)/);
+  const facade=makeChongqingMarketOpenFacade(facadeThree);
+  const verts=facade.position.array;
+  const facadeHalfWidth=Math.max(...verts.filter((_,i)=>i%3===0).map(Math.abs));
+  const frontBack=2.78-facade.userData.wallThickness;
+  assert.equal(facade.index.length/3,624,'unchanged 3D wall triangle budget');
+  const {draws,ground}=generated();
+  for(const x of [236,284,332]){
+    const z=345,base=ground(x,z);
+    const sides=draws.filter(([kind,px,py,pz,w,h,d])=>
+      (kind==='terra'||kind==='timber')&&Math.abs(py-(base+7.9))<1e-6&&
+      Math.abs(px-x)>9&&Math.abs(px-x)<10&&w<.5&&h>15&&d>15);
+    assert.equal(sides.length,2,'only original two side walls for shop '+x);
+    for(const side of sides){
+      const [kind,px,py,pz,w,h,d]=side;
+      const sideInner=Math.abs(px-x)-w/2;
+      const forwardEdge=pz-z+d/2;
+      const rearEdge=pz-z-d/2;
+      assert.ok(facadeHalfWidth>=sideInner+.02,
+        'front facade must overlap inner side wall instead of leaving horizontal light gap');
+      assert.ok(forwardEdge>=frontBack+.02,
+        'side wall front must overlap back of 0.43-deep facade wall');
+      assert.ok(rearEdge<=-13.98,'extended side must still meet original rear wall');
+    }
   }
 });
 
