@@ -14,8 +14,29 @@ try{
   const response=await page.goto('http://127.0.0.1:8765/preview.html',
     {waitUntil:'domcontentloaded',timeout:30000});
   if(response?.status()!==200)throw Error('Pilot preview HTML is unavailable');
-  await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
-    null,{timeout:90000});
+  // The source CI must build *all* assets consumed by today's preview.
+  // An absent roadbed/pedestrian mesh or flight module is a fast, explicit
+  // failure instead of a misleading 90-second "scene did not load" timeout.
+  const expected=['source.json','roadbed-mesh.json','pedestrian-mesh.json',
+    'flight.mjs','street-envelope.mjs'];
+  const missing=await page.evaluate(async names=>{
+    const results=await Promise.all(names.map(async name=>{
+      try {
+        const r=await fetch('./'+name,{cache:'no-store'});
+        return {name,status:r.status,ok:r.ok};
+      }catch(e){return {name,status:0,ok:false,error:String(e)};}
+    }));
+    return results.filter(r=>!r.ok);
+  },expected);
+  if(missing.length)throw Error('Required official preview assets missing: '+
+    JSON.stringify(missing));
+  try {
+    await page.waitForFunction(()=>window.geoPilotQA?.ready||window.geoPilotQA?.error,
+      null,{timeout:90000});
+  }catch(e){
+    throw Error('True-metre preview browser did not initialize: '+
+      JSON.stringify({errors,detail:String(e)}));
+  }
   const stats=await page.evaluate(()=>{
     const state=window.geoPilotQA;
     const canvas=document.getElementById('scene');
@@ -25,7 +46,15 @@ try{
   });
   if(stats.error||!stats.ready||stats.contextLost||stats.glError||
      stats.sourceBuildings<100||stats.sourceRoads<20||
-     stats.buildingTriangles<300||stats.streetVertices<100){
+     stats.buildingTriangles<300||stats.streetVertices<100||
+     !stats.officialRoadbed2022||stats.officialRoadbed2022.features<70||
+     stats.officialRoadbed2022.triangles<7000||
+     !stats.officialPedestrian2022||
+     stats.officialPedestrian2022.plazas<5||
+     stats.officialPedestrian2022.sidewalks<40||
+     stats.officialPedestrian2022.curb<150||
+     stats.officialPedestrian2022.curbCuts<150||
+     !stats.noInventedStreetSurface){
     throw Error('Real metre WebGL source preview failed '+JSON.stringify(stats));
   }
   await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
