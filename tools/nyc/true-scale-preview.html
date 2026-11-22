@@ -237,12 +237,22 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
-  const historyResponse=await fetch('./historic-markings.json');
-  if(!historyResponse.ok)throw Error('Verified historic CityGML geometry is missing');
-  const historical=await historyResponse.json();
-  if(historical.role!=='QA_ONLY_HISTORIC_CITYGML_NOT_IN_GAME'||
+  // Explicit independent rooftop/low-flight QA can disable the unrelated
+  // historic TUM 2015-2017 road-median overlay. Default route is unchanged:
+  // if not explicitly skipped, genuine TUM JSON is still mandatory and
+  // cannot silently be replaced by invented/stale geometry.
+  const skipHistoricGML=new URLSearchParams(location.search).get('skipHistoricGML')==='1';
+  const historyResponse=skipHistoricGML?null:await fetch('./historic-markings.json');
+  if(!skipHistoricGML&&!historyResponse.ok)
+    throw Error('Verified historic CityGML geometry is missing');
+  const historical=skipHistoricGML?{
+    role:'EXPLICITLY_DISABLED_IN_ROOFTOP_QA',
+    sourceCrs:'NOT_LOADED',readyToRender:false,polygons:[],
+    sourceVintage:'NOT_LOADED'}:await historyResponse.json();
+  if(!skipHistoricGML&&(
+     historical.role!=='QA_ONLY_HISTORIC_CITYGML_NOT_IN_GAME'||
      historical.sourceCrs!=='EPSG:32118'||historical.readyToRender!==false||
-     !Array.isArray(historical.polygons)||historical.polygons.length>60)
+     !Array.isArray(historical.polygons)||historical.polygons.length>60))
     throw Error('Historical polygon provenance or size is not valid');
   // Build a SEPARATE optional material layer from real clipped polygons.
   // No automatic historical 2017 layer appears in the 2026 current-city view.
@@ -270,6 +280,7 @@ try{
   position.length=oldVertex;colors.length=oldColors;normals.length=oldNormals;
   triCount=oldTriangleCount;
   const historicToggle=document.querySelector('#historicToggle');
+  if(skipHistoricGML){historicToggle.checked=false;historicToggle.disabled=true;}
   const realRoadResponse=await fetch('./roadbed-mesh.json');
   if(!realRoadResponse.ok)throw Error('Actual source OTI Roadbed 2022 triangles missing');
   const realRoads=await realRoadResponse.json();
