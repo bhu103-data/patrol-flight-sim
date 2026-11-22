@@ -6403,6 +6403,163 @@ const CENTRAL_PARK_SITES=[
       maxNewHeight:roofY+Math.max(.68,frontH+.34,rearH+.10)};
   }
 
+
+  // PATROL_DUMBO_OTI_SOURCE_OUTLINE_PILOT_V1
+  // Real, source-preserved NYC OTI BUILDING_view exterior rings and roof
+  // heights; see assets/nyc/DUMBO_OTI_SOURCE_NOTES.md. Game targets are
+  // explicitly *not* georeferenced: shape is uniformly fitted INSIDE each
+  // existing procedurally cleared/collidable building proxy.
+  const DUMBO_OTI_PILOT=[
+    {target:[366.89,-346.09],fid:1080628,bin:3389054,roofHeightFt:121,
+      ring:[[-73.9893464,40.7022776],[-73.9893399,40.702386],
+        [-73.9893364,40.7024432],[-73.988964,40.7024303],
+        [-73.9889665,40.7023891],[-73.9889738,40.7022675],
+        [-73.9889739,40.7022648],[-73.9889734,40.7022646],
+        [-73.9889792,40.7021668],[-73.9891526,40.7021728],
+        [-73.9892997,40.7021779],[-73.9893522,40.7021798]]},
+    {target:[390.63,-346.49],fid:1031082,bin:3000135,roofHeightFt:83.41,
+      ring:[[-73.9872874,40.7021037],[-73.9872875,40.702103],
+        [-73.9872918,40.7021032],[-73.9874341,40.702108],
+        [-73.9874708,40.7021713],[-73.9875086,40.7022365],
+        [-73.9875489,40.7023059],[-73.9875534,40.7023136],
+        [-73.9875494,40.7023824],[-73.9872716,40.702373],
+        [-73.9872716,40.7023729],[-73.9872778,40.7022679],
+        [-73.9872821,40.7021937]]},
+    {target:[358.67,-280.37],fid:1051309,bin:3344163,roofHeightFt:86.5,
+      ring:[[-73.9896642,40.7036985],[-73.9896741,40.7034704],
+        [-73.9896827,40.7032695],[-73.9897988,40.7032724],
+        [-73.9899908,40.7032772],[-73.9899856,40.7033972],
+        [-73.9899464,40.7033962],[-73.9899337,40.7036921],
+        [-73.9899331,40.7037052],[-73.9899261,40.703705]]}
+  ];
+  function matchingDumboOtiPilot(lot,detailBand){
+    if(detailBand!==3||graphicsCompat||!smoothScenery()||
+      !selectedMap.city||lot[6]||lot[7])return null;
+    const [x,z,w,d,h]=lot;
+    if(w<8||d<9||h<10)return null;
+    return DUMBO_OTI_PILOT.find(rec=>
+      Math.abs(x-rec.target[0])<.19&&
+      Math.abs(z-rec.target[1])<.19)||null;
+  }
+  function buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,source,y){
+    const [x,z,w,d,h]=lot,roofY=y+h;
+    // WGS84 lon/lat -> local meters, then a UNIFORM miniature scale
+    // into the already road-cleared PATROL proxy. Source orientation and
+    // concave corners remain, but PATROL placement is not a real map.
+    const ms=source.ring.map(([lon,lat])=>[
+      (lon+73.99)*84300,(lat-40.70)*110900]);
+    const xs=ms.map(p=>p[0]),zs=ms.map(p=>p[1]);
+    const xmin=Math.min(...xs),xmax=Math.max(...xs);
+    const zmin=Math.min(...zs),zmax=Math.max(...zs);
+    const factor=Math.min((w-.66)/(xmax-xmin),(d-.66)/(zmax-zmin));
+    if(!Number.isFinite(factor)||factor<=0)return null;
+    const cx=(xmin+xmax)*.5,cz=(zmin+zmax)*.5;
+    const raw=ms.map(([u,v])=>[x+(u-cx)*factor,z+(v-cz)*factor]);
+    const ring=[];
+    for(const p of raw)
+      if(!ring.length||Math.hypot(p[0]-ring.at(-1)[0],
+        p[1]-ring.at(-1)[1])>.07)ring.push(p);
+    if(ring.length>2&&Math.hypot(ring[0][0]-ring.at(-1)[0],
+      ring[0][1]-ring.at(-1)[1])<.07)ring.pop();
+    if(ring.length<3)return null;
+    const signed=poly=>poly.reduce((sum,a,i)=>{
+      const b=poly[(i+1)%poly.length];
+      return sum+a[0]*b[1]-a[1]*b[0];
+    },0)*.5;
+    if(signed(ring)>0)ring.reverse();
+    // Ring winds clockwise in game X/Z: wall faces outward, roof +Y.
+    const cross=(a,b,c)=>
+      (b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    const brickPalette=[
+      [.57,.37,.31],[.47,.30,.29],[.56,.40,.34]];
+    const brick=brickPalette[source.fid%3],stone=[.67,.64,.59],
+      glass=[.13,.24,.31],frame=[.33,.35,.36];
+    let walls=0,windows=0,roofTriangles=0,parapets=0;
+    // Source HEIGHT_ROOF controls the *relative* floor rhythm only;
+    // final PATROL h stays at the existing worker collision roof height.
+    const floors=Math.max(2,Math.min(6,
+      Math.floor(source.roofHeightFt/22)));
+    for(let k=0;k<ring.length;k++){
+      const a=ring[k],b=ring[(k+1)%ring.length];
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      if(len<.075)continue;
+      addQuad([a[0],y,a[1]],[b[0],y,b[1]],
+        [b[0],roofY,b[1]],[a[0],roofY,a[1]],brick,12);
+      walls++;
+      // Inset-looking WGS84 edge-specific bay spacing; authored window
+      // surfaces are not a survey of actual window locations.
+      const bays=Math.min(4,Math.floor(len/2.15));
+      const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+      const at=(t,yy,out=.055)=>[
+        a[0]+(b[0]-a[0])*t+nx*out,yy,
+        a[1]+(b[1]-a[1])*t+nz*out
+      ];
+      if(bays>=1){
+        for(let row=0;row<floors;row++){
+          const floorStep=(h-3.6)/floors;
+          const low=y+2.75+floorStep*row+.21;
+          const high=Math.min(roofY-.40,low+Math.min(1.58,floorStep*.65));
+          if(high<=low+.30)continue;
+          for(let j=0;j<bays;j++){
+            const left=(j+.22)/bays,right=(j+.78)/bays;
+            const tone=((source.fid+k*11+row*7+j*13)%7===0)
+              ?[.36,.35,.32]:glass;
+            addQuad(at(left,low),at(right,low),
+              at(right,high),at(left,high),tone,13);
+            addQuad(at(left-.016,high+.04,.078),
+              at(right+.016,high+.04,.078),
+              at(right+.016,high+.12,.078),
+              at(left-.016,high+.12,.078),stone,12);
+            if((row+j)%2===0){
+              const mid=(left+right)*.5;
+              addQuad(at(mid-.007,low,.079),at(mid+.007,low,.079),
+                at(mid+.007,high,.079),at(mid-.007,high,.079),frame,12);
+            }
+            windows++;
+          }
+        }
+      }
+      // Low, brick roof-rim step without altering existing roof collider.
+      addQuad([a[0],roofY-.12,a[1]],[b[0],roofY-.12,b[1]],
+        [b[0],roofY+.12,b[1]],[a[0],roofY+.12,a[1]],stone,12);
+      parapets++;
+    }
+    const inside=(p,a,b,c)=>
+      cross(a,b,p)<=.000001&&cross(b,c,p)<=.000001&&
+      cross(c,a,p)<=.000001;
+    const ids=ring.map((_,i)=>i);
+    let guard=0;
+    while(ids.length>=3&&guard++<ring.length*ring.length){
+      if(ids.length===3){
+        const [a,b,c]=ids.map(i=>ring[i]);
+        if(cross(a,b,c)<-.000001){
+          addTri([a[0],roofY,a[1]],[b[0],roofY,b[1]],
+            [c[0],roofY,c[1]],[.33,.35,.34],14);
+          roofTriangles++;
+        }
+        break;
+      }
+      let clipped=false;
+      for(let i=0;i<ids.length;i++){
+        const ai=ids[(i+ids.length-1)%ids.length],
+          bi=ids[i],ci=ids[(i+1)%ids.length];
+        const a=ring[ai],b=ring[bi],c=ring[ci];
+        if(cross(a,b,c)>=-.000001)continue;
+        if(ids.some(j=>j!==ai&&j!==bi&&j!==ci&&
+          inside(ring[j],a,b,c)))continue;
+        addTri([a[0],roofY,a[1]],[b[0],roofY,b[1]],
+          [c[0],roofY,c[1]],[.33,.35,.34],14);
+        roofTriangles++;
+        ids.splice(i,1);clipped=true;break;
+      }
+      if(!clipped)break;
+    }
+    return {fid:source.fid,ring,roofY,floors,
+      walls,windows,roofTriangles,parapets,
+      originalArea:Math.abs(signed(ring))};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6492,6 +6649,12 @@ const CENTRAL_PARK_SITES=[
           addModelBox(addQuad,x+Math.sin(a)*w*0.32,y+height/2,z+Math.cos(a)*d*0.30,
             w*(0.13+i%3*0.037),height,d*(0.14+i%4*0.034),i%3===0?trim:material);
         }
+        continue;
+      }
+      const dumbOtiPilot=!local&&bridgeheadBrooklyn
+        ?matchingDumboOtiPilot(lot,detailBand):null;
+      if(dumbOtiPilot){
+        buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,dumbOtiPilot,y);
         continue;
       }
       if(heroDowntown && h>=9.2){
