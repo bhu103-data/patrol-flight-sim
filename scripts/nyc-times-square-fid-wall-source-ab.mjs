@@ -81,7 +81,8 @@ async function waitForPaint(){
     requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 }
 async function checkpoint(){
-  report.completedFids=report.fidScan.length;
+  report.completedBatches=(report.fidBatchScan||[]).length;
+  report.completedBisectionSteps=report.fidScan.length;
   await writeFile(dir+'/report.partial.json',JSON.stringify(report,null,2));
 }
 try{
