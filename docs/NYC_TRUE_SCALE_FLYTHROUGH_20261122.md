@@ -154,3 +154,29 @@ a richer source-aligned native WebGL2 3-D batch, a walk/fly camera,
 a launcher option, Node/browser regression and evidence workflow.
 No writes to \`main\`, integration branch, aircraft physics, other maps or
 original Manhattan scene generation.
+
+
+## Measured-roadbed-only provenance view (independent Draft QA)
+
+For accurate visual attribution use `?roadbed=only` on
+`assets/nyc/nyc-true-scale-flight.html`. This **opt-in browser evidence
+mode** draws all 11 source-backed 2022 OTI ROADBED/intersection polygons,
+real DCM centerline audit traces, and municipal building footprints, but
+**suppresses every fictional DCM-width asphalt ribbon**. The city beyond
+the 11-FID pavement slice intentionally has no filled street surface.
+This is a transparent representation of *missing source coverage*, not a
+photoreal city, 2026 as-built road network, or a default-flight feature.
+
+The original `?roadbed=off` baseline keeps the older invented ribbon
+and removes the official polygons; the default URL still combines the
+pilot ribbons and official layer for navigation. `?quality=low` still
+retains source polygon geometry. None of these query flags alter original
+PATROL aircraft flight physics or the old Manhattan map.
+
+Node QA compares the full buffer triangles: 89 DCM segments generate
+178 illustrative asphalt triangles in the default pilot, **zero** in
+`?roadbed=only`, while exactly 207 official source triangles remain.
+Dedicated Chromium screenshots compare default, off and only from a fixed
+same-source aerial view **and a matched FID 24700 70-metre close-up**. The
+camera must match bit-for-bit at the same focus anchor and frame size; Their existence does not prove source-photo 6DoF
+match, 2026 lane geometry, real curbs or hardware GPU FPS.
