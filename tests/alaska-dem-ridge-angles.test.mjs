@@ -28,8 +28,10 @@ test('fjord west/east views target measured high terrain instead of water/harbor
   assert.ok(eastSlope-eastSea>500,'east camera faces an actual DEM high-slope');
   assert.ok(qa.includes('west:{x:30,z:-240,yaw:-Math.PI/2,pitch:0.075,minAlt:30}'));
   assert.ok(qa.includes('east:{x:70,z:0,yaw:Math.PI/2,pitch:0.060,minAlt:35}'));
-  assert.ok(qa.includes("['west-ridge','west','15']"));
-  assert.ok(qa.includes("['east-ridge','east','10']"));
+  assert.ok(qa.includes("['west-ridge','west','12']"));
+  assert.ok(qa.includes("['east-ridge','east','12']"));
+  assert.ok(shipped.includes('<option value="12">Noon</option>'));
+  assert.ok(qa.includes("Invalid QA environment option"));
 });
 
 test('fixed DEM QA still uses source-exact baseline and never changes the shipped game',()=>{
