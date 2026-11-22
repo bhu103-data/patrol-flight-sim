@@ -38,7 +38,7 @@ jobs:
           test -s artifacts/nyc-official-mn05/mn05-source.3dm
       - name: Extract original cached 2014 roof mesh and validate source topology
         run: |
-          python tools/nyc/inspect-mn05-roof-source-roi.py
+          PATROL_KEEP_MN05=1 python tools/nyc/inspect-mn05-roof-source-roi.py
           python tests/nyc-official-2014-roof-mesh-source.test.py
       - name: Match 2014 roof patches to current and historic official OTI footprints
         run: |
