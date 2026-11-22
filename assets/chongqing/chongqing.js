@@ -944,7 +944,7 @@ function scenicView(key){
     if(site){
       // A second, closer angle reveals the physical window jamb depth;
       // Digit7 stays unchanged for baseline before/after comparisons.
-      const eyeX=site.x+16,eyeZ=site.z+10;
+      const eyeX=site.x+3,eyeZ=site.z+18;
       destinations.Digit8={
         name:'山城商铺 · 实体窗洞近景',
         pos:[eyeX,ground(eyeX,eyeZ)+18,eyeZ],
