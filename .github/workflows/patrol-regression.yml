@@ -20,3 +20,24 @@ jobs:
           node-version: '22'
       - name: Verify all browser-free regression tests
         run: node --test tests/*.test.mjs
+      # Isolated source preflight for Draft #275 only; existing Node CI unchanged.
+      - name: Verify NPS Sawyer archive probe offline contracts
+        if: github.event.pull_request.number == 275
+        run: |
+          python3 -m py_compile tools/alaska/probe_nps_sawyer_surveys.py
+          python3 tests/test_alaska_nps_survey_preflight.py
+          python3 tools/alaska/probe_nps_sawyer_surveys.py \
+            --offline --output artifacts/alaska-nps-sawyer-catalog-only.json
+      - name: Check NPS Sawyer public ZIP headers on runner
+        if: github.event.pull_request.number == 275
+        run: |
+          python3 tools/alaska/probe_nps_sawyer_surveys.py \
+            --timeout 20 --output artifacts/alaska-nps-sawyer-source-preflight.json
+      - name: Preserve NPS source probe evidence
+        if: always() && github.event.pull_request.number == 275
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaska-nps-sawyer-pr275-source-preflight
+          path: artifacts/alaska-nps-sawyer-*.json
+          retention-days: 7
+          if-no-files-found: warn
