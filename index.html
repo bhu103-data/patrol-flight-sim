@@ -8195,7 +8195,7 @@ const CENTRAL_PARK_SITES=[
         }
       }
     } else if(selectedMap.vegas) {
-      buildVegasStrip({box,lamp,cylinder,solidAt,place,addQuad:solid.addQuad,lightQuad:lights.addQuad});
+      buildVegasStrip({box,lamp,cylinder,solidAt,place,addTri:solid.addTri,addQuad:solid.addQuad,lightQuad:lights.addQuad});
     }
     buildLocalLandmark({box,lamp,cylinder,addQuad:solid.addQuad,solidAt,place,shed});
     if(sceneryPlaces.length || selectedMap.vegas){
@@ -8980,6 +8980,138 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
+  // Vegas core visual acceptance sample: original triangulated mountain
+  // ridges and asphalt surface breakup. No third-party models, textures,
+  // GIS-derived coordinates, collider additions or flight-physics changes.
+  // Verified USGS 3DEP-derived ridge profiles are staged only for Vegas.
+  // Remain on the original procedural flight-scale fallback when the data
+  // is absent, malformed, incorrectly georeferenced or not yet published.
+  let vegasMeasuredRidges=null;
+  let vegasMeasuredStrip=null;
+  let vegasMeasuredStripX=z=>VEGAS_BOULEVARD;
+  function buildVegasCoreRidgeSample(geometry) {
+    const {addTri,addQuad}=geometry;
+    // Original, editable earth-toned silhouette geometry. The shape is
+    // intentionally not presented as a real USGS digital elevation model.
+    const stone=[[.47,.37,.29],[.43,.34,.27],[.38,.31,.26],
+      [.52,.41,.32],[.46,.36,.28]];
+    let triangles=0;
+    const face=(a,b,c,color)=>{addTri(a,b,c,color);triangles++;};
+    // Combine non-repeating long ridges, secondary crests and smaller
+    // weathered outcrops; avoid the former five-sample sawtooth skyline.
+    const ridgeHeight=(i,side)=>{
+      if(vegasMeasuredRidges){
+        const data=vegasMeasuredRidges.elevationMeters;
+        // USGS elevations are meters above datum. The existing gameplay
+        // has a deliberately compressed horizontal map and flight ceiling,
+        // so only the *shape* of source-derived relative relief is mapped
+        // to distant display geometry (not a 1:1 elevation model).
+        const relative=data[side<0?'west':'east'][i]-data.center[i];
+        return Math.max(12,Math.min(160,relative*.23));
+      }
+      const phase=side===1?.35:1.47;
+      return Math.max(28,61+17*Math.sin(i*.17+phase)+
+        10*Math.sin(i*.39+phase*.7)+
+        5.5*Math.sin(i*1.21+phase*2.3));
+    };
+    const rows=48,dz=1332/rows,z0=-666;
+    if(vegasMeasuredRidges?.ridgeSurface){
+      // Two independent 49x9 meter-elevation grids from the same official
+      // USGS GeoTIFF. This is an actual two-dimensional DEM surface,
+      // spatially compressed into distant game scenery; city ground and
+      // physics/collisions remain unchanged.
+      const grid=vegasMeasuredRidges.ridgeSurface;
+      const cols=grid.gridColumns;
+      for(const side of [-1,1]){
+        const source=side<0?grid.west:grid.east;
+        const vertices=Array.from({length:rows+1},(_,i)=>{
+          const z=z0+i*dz;
+          return Array.from({length:cols},(_,j)=>{
+            const x=side*(686+(847-686)*j/(cols-1));
+            const meters=source.elevationDecimeters[i*cols+j]/10;
+            const relief=meters-vegasMeasuredRidges.elevationMeters.center[i];
+            // Blend the first three source columns into the existing
+            // desert grade. This is a *display seam* adaptation, not an
+            // alteration to the measured USGS elevations in the asset.
+            const foothillBlend=Math.min(1,j/3);
+            const y=sampleTerrainHeight(x,z)+
+              Math.max(0,Math.min(160,relief*.23))*foothillBlend;
+            return [x,y,z];
+          });
+        });
+        for(let i=0;i<rows;i++)for(let j=0;j<cols-1;j++){
+          const a=vertices[i][j],b=vertices[i+1][j],
+            c=vertices[i][j+1],d=vertices[i+1][j+1];
+          // Broad patches rather than repeated high-contrast bands.
+          const color=stone[(Math.floor(i/9)+j+(side>0?1:0))%stone.length];
+          // Side-dependent winding keeps BOTH west and east normals
+          // facing up and prevents one mountain wing being back-face culled.
+          if(side<0){face(a,c,b,color);face(b,c,d,color);}
+          else{face(a,b,c,color);face(b,d,c,color);}
+        }
+      }
+    }else{
+      // This procedural/four-band geometry remains a fully working
+      // fallback if the local measured JSON is unavailable or invalid.
+      for(const side of [-1,1])for(let i=0;i<rows;i++){
+        const z=z0+i*dz,zn=z+dz;
+        const h0=ridgeHeight(i,side),h1=ridgeHeight(i+1,side);
+        const profile=(zz,h)=>{
+          const point=(depth,fraction)=> {
+            const x=side*depth;
+            return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
+          };
+          return [point(686,.018),point(720,.25),point(754,.59),
+            point(811,1),point(847,.12)];
+        };
+        const a=profile(z,h0),b=profile(zn,h1);
+        for(let band=0;band<4;band++){
+          const color=stone[(band+i%3+(side===1?1:0))%stone.length];
+          face(a[band],b[band],a[band+1],color);
+          face(b[band],b[band+1],a[band+1],color);
+        }
+      }
+    }
+    // Small-scale parallel pavement joints and tonal repair strips along
+    // the *existing* straight Strip between Harmon and Flamingo; flush
+    // overlays create no new blocking collider or new vehicle route.
+    const asphalt=[.19,.20,.21],joint=[.34,.33,.32];
+    for(let z=-210;z<=-122;z+=11){
+      // Measured TIGER curvature stays well within original asphalt. The
+      // joints are surface-only; road geometry, traffic and collisions stay.
+      const roadX=vegasMeasuredStripX(z);
+      const y=sampleTerrainHeight(roadX,z)+.332;
+      const dark=(z%3===0)?joint:asphalt;
+      addQuad([roadX-8.46,y,z],[roadX-8.46,y,z+.095],
+        [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
+      triangles+=2;
+    }
+    // Continuous fine pavement patch seams follow TIGER-derived road
+    // curvature. Both ±7.2-unit strips are entirely inside the original
+    // asphalt half-width of 8.575, leaving traffic and lane markings intact.
+    // These are original graphical surface details, NOT claimed surveyed
+    // expansion-joint positions or new physical curbs.
+    for(let i=0;i<24;i++){
+      const za=-210+i*88/24,zb=-210+(i+1)*88/24;
+      const xa=vegasMeasuredStripX(za),xb=vegasMeasuredStripX(zb);
+      for(const side of [-1,1]){
+        const left=Math.min(side*7.14,side*7.22),
+          right=Math.max(side*7.14,side*7.22);
+        const point=(center,offset,z)=> {
+          const x=center+offset;
+          return [x,sampleTerrainHeight(x,z)+.333,z];
+        };
+        // Consistent +Y winding on both shoulders; avoid a one-sided
+        // invisible seam when normal-based back-face culling is enabled.
+        addQuad(point(xa,left,za),point(xb,left,zb),
+          point(xb,right,zb),point(xa,right,za),
+          i%6===0?joint:asphalt);
+        triangles+=2;
+      }
+    }
+    return {mountainTriangles:triangles-114,roadTriangles:114,triangles};
+  }
+
   function buildVegasStrip(geometry) {
     const {box,lamp,cylinder,solidAt,place,addQuad}=geometry;
     const hotelDistricts=[
@@ -8998,6 +9130,8 @@ const CENTRAL_PARK_SITES=[
     const roadway=[0.25,0.26,0.27];
     const roadX=VEGAS_BOULEVARD;
     buildVegasRoads(box,lamp,addQuad);
+    // Geometry is batched with the existing Strip; no new loader or shader.
+    buildVegasCoreRidgeSample(geometry);
     place('Sands Avenue',{x:126,z:-20});
     place('Tropicana Avenue',{x:81,z:-323});
     buildVegasHotels(geometry);
@@ -12744,6 +12878,40 @@ const CENTRAL_PARK_SITES=[
         console.warn('[PATROL] NYC official footprint fallback:',error);
         selectedMap.city.officialFootprints=[];
       }
+    }
+    // USGS asset is vetted locally before it can change Vegas skyline.
+    // Any failed download leaves the original fully flyable terrain.
+    vegasMeasuredRidges=null;
+    vegasMeasuredStrip=null;
+    vegasMeasuredStripX=z=>VEGAS_BOULEVARD;
+    if(selectedMap.vegas){
+      // Independent, validated public-domain assets load concurrently.
+      // Each source has its own fallback; a TIGER failure must not suppress
+      // USGS mountains, and a DEM failure must not suppress road details.
+      await Promise.all([
+        (async()=>{
+          try{
+            const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
+            vegasMeasuredRidges=await loadVegasRidgeDEM();
+            console.info('[PATROL] Vegas USGS measured ridge profile loaded',
+              vegasMeasuredRidges.source.rawGeoTiffSHA256);
+          }catch(error){
+            console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
+          }
+        })(),
+        (async()=>{
+          try{
+            const {loadVegasTIGERCenterline,vegasMeasuredRoadX}=
+              await import('./assets/vegas/tiger-strip.js');
+            vegasMeasuredStrip=await loadVegasTIGERCenterline();
+            vegasMeasuredStripX=z=>vegasMeasuredRoadX(vegasMeasuredStrip,z);
+            console.info('[PATROL] Vegas Census TIGER measured Strip loaded',
+              vegasMeasuredStrip.source.archiveSHA256);
+          }catch(error){
+            console.warn('[PATROL] Vegas TIGER road visual fallback:',error);
+          }
+        })()
+      ]);
     }
     const terrainOptions={
       size:MAP_SIZE,span:MAP_SPAN,landmarks:selectedMap.landmarks,

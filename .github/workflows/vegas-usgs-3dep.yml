@@ -1,0 +1,34 @@
+name: Vegas USGS 3DEP source verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/fetch-vegas-usgs-3dep.py"
+      - ".github/workflows/vegas-usgs-3dep.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install raster verification libraries
+        run: python -m pip install --disable-pip-version-check --quiet numpy rasterio
+      - name: Query official 3DEP elevation GeoTIFF and verify its CRS/dtype
+        run: python scripts/fetch-vegas-usgs-3dep.py
+      - name: Archive exact source bytes and small checked game profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-usgs-3dep-source
+          path: artifacts/vegas-dem/
+          retention-days: 7
+          if-no-files-found: ignore
