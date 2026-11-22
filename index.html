@@ -5962,6 +5962,47 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
+  // Bounded low-cost LOD1 facade kit: physically layered glazing, mullions,
+  // shadow reveals and stone sills, not a new rectangular building shell.
+  // Only explicitly selected non-surveyed Lower Manhattan lots call this.
+  // 18 triangles per window in the existing city batch; no new draw calls,
+  // collisions, textures or changes to near-field/surveyed map geometry.
+  function addDistantManhattanWindowRows(addQuad,x,z,w,d,y,shaftHeight,tone,trim){
+    if(w<=6.2||d<=5.5||shaftHeight<=11)
+      return {panes:0,triangles:0};
+    const bays=Math.min(3,Math.floor((w-.6)/3.2));
+    if(bays<2)return {panes:0,triangles:0};
+    const span=shaftHeight-3.2;
+    const paneW=Math.min(1.24,w*.80/bays*.56);
+    const paneH=Math.min(1.04,span*.105);
+    const glass=[.14+tone*.062,.21+tone*.066,.27+tone*.072];
+    const shadow=[.085,.108,.13],mullion=[.30,.34,.36];
+    let panes=0;
+    for(const side of [-1,1]){
+      const plane=(bx,by,halfW,halfH,depth,color,tag=0)=>{
+        const zz=z+side*(d*.5+depth);
+        const a=[bx-halfW,by-halfH,zz],b=[bx+halfW,by-halfH,zz],
+          c=[bx+halfW,by+halfH,zz],d0=[bx-halfW,by+halfH,zz];
+        if(side>0)addQuad(a,b,c,d0,color,tag);
+        else addQuad(d0,c,b,a,color,tag);
+      };
+      for(let row=0;row<4;row++){
+        // Offset each row from the 25/50/75% horizontal masonry courses.
+        const by=y+2+span*(row+.48)/4;
+        for(let col=0;col<bays;col++){
+          const bx=x+(col-(bays-1)/2)*w*.80/bays;
+          plane(bx,by,paneW*.5+.075,paneH*.5+.055,.047,shadow);
+          plane(bx,by,paneW*.5,paneH*.5,.079,glass,5);
+          plane(bx,by,.025,paneH*.46,.129,mullion);
+          addModelBox(addQuad,bx,by-paneH*.54,
+            z+side*(d*.5+.122),paneW+.16,.075,.15,trim);
+          panes++;
+        }
+      }
+    }
+    return {panes,triangles:panes*18};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6104,6 +6145,9 @@ const CENTRAL_PARK_SITES=[
             const rowY=y+2.0+(h*k-3.2)*band*.25;
             addModelBox(addQuad,x,rowY,facadeZ,w*.90,.082,.10,trim);
           }
+          // Recess-look window bays are mounted only on these LOD1 towers;
+          // the existing upper-floor/grazing-height geometry is untouched.
+          addDistantManhattanWindowRows(addQuad,x,z,w,d,y,h*k,tone,trim);
           // The shared rooftop coping below already closes the upper crown.
           // Instead, attach small corbels to the LOWER setback seam; an
           // extra roof slab here would overlap the existing cap and z-fight.
