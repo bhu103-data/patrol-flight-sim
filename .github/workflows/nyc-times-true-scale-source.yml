@@ -1,0 +1,41 @@
+name: NYC Times Square true-metre street/building source pilot
+
+on:
+  pull_request:
+    branches: [qa/nyc-main-merged-candidate-20261122-chat]
+    paths:
+      - 'scripts/nyc-times-true-scale-pilot.mjs'
+      - 'tests/nyc-times-true-scale-pilot.test.mjs'
+      - '.github/workflows/nyc-times-true-scale-source.yml'
+      - 'assets/nyc/times-square-footprints.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify unit consistency, municipal source FIDs and roads
+        run: |
+          node --check scripts/nyc-times-true-scale-pilot.mjs
+          node --test tests/nyc-times-true-scale-pilot.test.mjs
+      - name: Acquire authoritative NYC DCM road centerlines and measured building outlines
+        run: |
+          node scripts/nyc-times-true-scale-pilot.mjs
+          test -s artifacts/nyc-true-scale/source.json
+          test -s artifacts/nyc-true-scale/plan.svg
+      - name: Upload measured-source pilot (NOT production game scene)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-true-scale-source-pilot
+          path: artifacts/nyc-true-scale/
+          retention-days: 7
+          if-no-files-found: ignore
