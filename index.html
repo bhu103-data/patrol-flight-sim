@@ -10905,7 +10905,13 @@ const CENTRAL_PARK_SITES=[
   // Terrain Height Query on CPU (matches shader exactly)
   const WATER_H = 12.2;
   const TERRAIN_SCALE = 54.0;
-  const terrainScaleFor = map => map.alaska ? 75 : map.vegas ? 68 : TERRAIN_SCALE;
+  // Only the explicitly requested, successfully decoded USGS DEM preview may
+  // raise Alaska terrain. This mutable scale is reset before every launch and
+  // is shared by CPU collisions, the worker and the GPU terrain uniform.
+  const ALASKA_STANDARD_SCALE = 75;
+  const ALASKA_DEM_RELIEF_PREVIEW_SCALE = 95;
+  let activeAlaskaTerrainScale = ALASKA_STANDARD_SCALE;
+  const terrainScaleFor = map => map.alaska ? activeAlaskaTerrainScale : map.vegas ? 68 : TERRAIN_SCALE;
 
   // Ocean displacement needs the unclamped bed (the terrain collision
   // sampler deliberately clamps all water to WATER_H, yielding zero depth).
@@ -12561,6 +12567,9 @@ const CENTRAL_PARK_SITES=[
       menuError.hidden=false;
       return;
     }
+    // A duplicate submit while terrain is loading must not reset the live
+    // worker/CPU/GPU Alaska scale. Only accepted launches reset this state.
+    activeAlaskaTerrainScale = ALASKA_STANDARD_SCALE;
     crash = null;
     crashOverlay.hidden = true;
     groundWarning.hidden = true;
@@ -12839,11 +12848,20 @@ const CENTRAL_PARK_SITES=[
         const dem=await loadAlaskaDEM(
           './assets/alaska/tracy-arm-3dep.json',fetch,controller.signal);
         const highest=dem.heights.reduce((max,value)=>Math.max(max,value),0);
+        const reliefPreview=new URLSearchParams(location.search)
+          .get('alaskaRelief')==='preview';
+        const selectedTerrainScale=reliefPreview
+          ? ALASKA_DEM_RELIEF_PREVIEW_SCALE : ALASKA_STANDARD_SCALE;
         dem.verticalScale=Math.min(.04,
-          (terrainScaleFor(selectedMap)*.90-WATER_H)/Math.max(highest,1));
+          (selectedTerrainScale*.90-WATER_H)/Math.max(highest,1));
+        // The same scale must feed the 1024-cell worker, CPU terrain queries
+        // and uTerrainScale; setting just one would create invisible cliffs.
+        terrainOptions.scale=selectedTerrainScale;
         terrainOptions.alaskaDEM=dem;
+        activeAlaskaTerrainScale=selectedTerrainScale;
         console.info('[PATROL] Alaska measured USGS terrain loaded',
-          {bbox:dem.bbox,highest,verticalScale:dem.verticalScale});
+          {bbox:dem.bbox,highest,verticalScale:dem.verticalScale,
+           reliefPreview,terrainScale:selectedTerrainScale});
       }catch(error){
         console.warn('[PATROL] Alaska USGS DEM fallback to legacy terrain:',error);
       }finally{
