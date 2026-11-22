@@ -8,6 +8,7 @@ on:
       - tests/alaska-dem-relief-preview.test.mjs
       - tools/alaska/compare_dem_relief.mjs
       - tools/alaska/preview-floatplane-water-smoke.mjs
+      - tools/alaska/verify_dem_relief_lifecycle.mjs
       - .github/workflows/alaska-relief-preview-qa.yml
 
 permissions:
@@ -17,7 +18,7 @@ jobs:
   alaska-relief-webgl:
     if: github.head_ref == 'feat/alaska-dem-relief-preview-20261122-chat'
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +44,8 @@ jobs:
           node tools/alaska/compare_dem_relief.mjs
       - name: Real C185 preview water taxi, touchdown and docking
         run: PATROL_TEST_URL=http://127.0.0.1:8765/ node tools/alaska/preview-floatplane-water-smoke.mjs
+      - name: Real flight-menu map switch plus forced DEM load failure
+        run: node tools/alaska/verify_dem_relief_lifecycle.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
