@@ -1,11 +1,20 @@
-/** Source-exact parent #202 vs outward-normal correction in live PATROL WebGL2.
+/** Source-exact parent #217 vs added inward snow shoulder bevel in live PATROL WebGL2.
  * QA temporary HTML only: identical GPU time and flyable world, no runtime edit.
  * Software RAF intervals are not target hardware GPU frame timings.
  */
 import {chromium} from 'playwright';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 
-const baseSha='080392ecc4d2d507fba4ffe3326efa583c48431e';
+const baseSha='599154e48e06859cf8493fd5c259423f711c2655';
+const checkoutSha=execFileSync('git',['rev-parse','HEAD'],
+  {encoding:'utf8'}).trim();
+if(checkoutSha===baseSha)throw Error('Parent and candidate resolve to one SHA');
+const headModule=execFileSync('git',
+  ['show',checkoutSha+':assets/alaska/alaska-fjord-detail.js'],
+  {encoding:'utf8'});
+if(headModule!==readFileSync('assets/alaska/alaska-fjord-detail.js','utf8'))
+  throw Error('Working floating-ice module differs from exact PR HEAD');
 const sourceBaseline=readFileSync('alaska-floe-relief-base.html','utf8');
 const sourceCandidate=readFileSync('index.html','utf8');
 if(sourceBaseline!==sourceCandidate)
@@ -111,8 +120,9 @@ const browser=await chromium.launch({headless:true,args:[
   '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
   '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
 ]});
-const record={baselineSha:baseSha,headSha:process.env.GITHUB_SHA||null,
-  capture:'live game WebGL2, parent #202 inward vs corrected outward normals at identical pose/time',
+const record={baselineSha:baseSha,headSha:checkoutSha,
+  triggerSha:process.env.GITHUB_SHA||null,
+  capture:'live game WebGL2, parent #217 sharp snow lip vs bevelled snow shoulder at identical pose/time',
   softwareOnly:true,frozenShaderTime:photoPhase,scenarios:{}};
 async function capture(name,file,expectedModule){
   const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:1});
@@ -182,11 +192,11 @@ async function capture(name,file,expectedModule){
   }finally{await page.close();}
 }
 try{
-  await capture('parent-inward','alaska-floe-relief-baseline-qa.html',
+  await capture('parent-sharp','alaska-floe-relief-baseline-qa.html',
     '/assets/alaska/alaska-fjord-detail-baseline-qa.js');
-  await capture('corrected-outward','alaska-floe-relief-candidate-qa.html',
+  await capture('beveled-lip','alaska-floe-relief-candidate-qa.html',
     '/assets/alaska/alaska-fjord-detail.js');
-  const a=record.scenarios['parent-inward'],b=record.scenarios['corrected-outward'];
+  const a=record.scenarios['parent-sharp'],b=record.scenarios['beveled-lip'];
   const drift=Math.hypot(...a.pose.position.map((v,i)=>v-b.pose.position[i]));
   if(a.selected.index!==b.selected.index||
      Math.abs(a.selected.radius-b.selected.radius)>.00001||

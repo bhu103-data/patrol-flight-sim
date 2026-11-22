@@ -1,4 +1,4 @@
-name: Alaska floe skyward normals source-exact WebGL2 A/B
+name: Alaska floe beveled snow lip source-exact WebGL2 A/B
 on:
   pull_request:
     paths:
@@ -19,6 +19,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Pull-request checkout defaults to a synthetic merge SHA. Use
+          # the exact authored head for a defensible parent-vs-patch A/B.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -36,9 +39,9 @@ jobs:
           exit 1
       - name: Read source-exact parent game and floating ice module
         run: |
-          git show 080392ecc4d2d507fba4ffe3326efa583c48431e:index.html > alaska-floe-relief-base.html
-          git show 080392ecc4d2d507fba4ffe3326efa583c48431e:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
-      - name: Capture WebGL2 parent-inward vs upward snowcap normals at frozen time
+          git show 599154e48e06859cf8493fd5c259423f711c2655:index.html > alaska-floe-relief-base.html
+          git show 599154e48e06859cf8493fd5c259423f711c2655:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
+      - name: Capture WebGL2 parent sharp snow lip vs beveled snow shoulder at frozen time
         run: node tools/alaska/compare_floe_relief.mjs
       - uses: actions/upload-artifact@v4
         if: always()

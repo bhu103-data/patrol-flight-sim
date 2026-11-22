@@ -1,5 +1,5 @@
 // Keep floe snowcaps in the same existing CC0 glacier-snow mesh material.
-// This stacked sample adds bounded snow ridges; shoreline, collisions and textures stay fixed.
+// This stacked sample adds bounded shoulder bevels; coastline, ice draft and textures stay fixed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -20,15 +20,19 @@ test('all 86 afloat floe snowcaps select existing mirrored PBR surface 13',()=>{
     color[0]>=.69&&color[0]<=.80&&
     color[1]>=.85&&color[1]<=.94&&
     color[2]>=.90&&color[2]<=.97);
-  // Each original 7-9 sided cap now has three shallow triangles per
-  // old flat wedge, entirely inside its original shoreline-safe footprint.
+  // Each original 7-9 sided snow cap has three inner ridge faces and
+  // two extra beveled-lip faces per old horizontal fan triangle.
   const oldCount=Array.from({length:86},(_,i)=>7+i%3)
     .reduce((sum,count)=>sum+count,0);
-  const expected=3*oldCount;
+  const expected=5*oldCount;
   assert.equal(stats.iceFloes,86);
   assert.equal(stats.iceFloesRejectedShore,0);
   assert.equal(snowcaps.length,expected);
   assert.equal(stats.floeCapTriangles,expected);
+  assert.equal(stats.floeBevelTriangles,2*oldCount,
+    'exactly two bounded bevel facets per original floe edge');
+  assert.ok(stats.floeBevelMaxInset>.17&&stats.floeBevelMaxInset<.28,
+    'shoulder must be inset 18-27% without changing the original ice footprint');
   assert.ok(stats.floeCapMaxRelief>.23&&stats.floeCapMaxRelief<.58,
     'snow ridge lift is visible but bounded below one game unit');
   assert.ok(snowcaps.every(face=>face.surface===13),
@@ -70,8 +74,10 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
   assert.ok(renderer.includes('uAlaskaPhotoNormalRough'));
   assert.ok(renderer.includes('uAlaskaPhotoAlbedo'));
   assert.ok(moduleSource.includes('addTri(crown,ridge[next],ridge[k],top,13)'));
-  assert.ok(moduleSource.includes('addTri(ridge[k],rimB,rimA,top,13)'));
-  assert.ok(moduleSource.includes('addTri(ridge[k],ridge[next],rimB,top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],shB,shA,top,13)'));
+  assert.ok(moduleSource.includes('addTri(ridge[k],ridge[next],shB,top,13)'));
+  assert.ok(moduleSource.includes('addTri(shA,shB,rimB,top,13)'));
+  assert.ok(moduleSource.includes('addTri(shA,rimB,rimA,top,13)'));
   const photoStart=renderer.indexOf('if(uAlaskaPhotoReady)',renderer.indexOf('void alaskaGlacierFace('));
   const lift=renderer.indexOf('material=min(material*(1.0+.20*near),vec3(.95));',photoStart);
   const photoEnd=renderer.indexOf('      }',lift);
@@ -103,7 +109,7 @@ test('every snow top normal faces sky and each ice skirt points out to water',()
     const h=hash(i*11+17),j=hash(i*13+37);
     const east=i<56?28+j*152:38+j*137;
     const north=i<56?250+h*195:-600+h*215;
-    for(const cap of caps.slice(capOffset,capOffset+3*corners)){
+    for(const cap of caps.slice(capOffset,capOffset+5*corners)){
       const n=normal(cap.a,cap.b,cap.c);
       assert.ok(n[1]>.001,'floe '+i+' cap must face +Y to receive sunlight');
     }
@@ -117,10 +123,72 @@ test('every snow top normal faces sky and each ice skirt points out to water',()
         Math.abs(side.d[1]-lower)<1e-6,
         'ice draft and waterline must stay unchanged');
     }
-    capOffset+=3*corners;skirtOffset+=corners;
+    capOffset+=5*corners;skirtOffset+=corners;
   }
-  assert.equal(capOffset,caps.length,'all 2061 sculpted top faces checked');
+  assert.equal(capOffset,caps.length,'all 3435 sculpted top and bevel faces checked');
   assert.equal(skirtOffset,skirts.length,'all 687 waterline sides checked');
-  assert.equal(caps.length,2061);
+  assert.equal(caps.length,3435);
   assert.equal(skirts.length,687);
+});
+
+test('every sloped snow shoulder is inward of its original shore-tested rim',()=>{
+  const tops=[];
+  const stats=buildAlaskaFjordDetail({
+    waterY:12.2,terrainAt:()=>11,
+    addTri(a,b,c,color,surface){
+      if(surface===13)tops.push({a,b,c});
+    },
+    addQuad(){}
+  });
+  const hash=n=>{const t=Math.sin(n*127.1+78.233)*43758.5453;
+    return t-Math.floor(t);};
+  let offset=0;
+  for(let i=0;i<86;i++){
+    const h=hash(i*11+17),j=hash(i*13+37);
+    const east=i<56?28+j*152:38+j*137;
+    const north=i<56?250+h*195:-600+h*215;
+    const radius=1.35+3.9*hash(i*19+3);
+    const corners=7+i%3;
+    const originalRim=Array.from({length:corners},(_,k)=>{
+      const a=k*2*Math.PI/corners,scale=.75+.31*hash(i*37+k*23);
+      return [east+Math.cos(a)*radius*scale,
+        north+Math.sin(a)*radius*(.53+.23*h)*scale];
+    });
+    const within=(p)=>{
+      // Polygon boundary itself is valid; cross-product signs ensure the
+      // inset shoulder and every bevel triangle stay inside the actual
+      // surveyed-water-safe original (possibly irregular) perimeter.
+      const px=p[0],pz=p[2],eps=1e-6;
+      let inside=false;
+      for(let k=0,prev=corners-1;k<corners;prev=k++){
+        const [ax,az]=originalRim[prev],[bx,bz]=originalRim[k];
+        const dx=bx-ax,dz=bz-az;
+        const cross=dx*(pz-az)-dz*(px-ax);
+        const projection=((px-ax)*dx+(pz-az)*dz)/(dx*dx+dz*dz);
+        if(Math.abs(cross)<eps&&projection>=-eps&&projection<=1+eps)
+          return true;
+        if((az>pz)!==(bz>pz) &&
+           px < (bx-ax)*(pz-az)/(bz-az)+ax)inside=!inside;
+      }
+      return inside;
+    };
+    for(const tri of tops.slice(offset,offset+5*corners)){
+      for(const vertex of [tri.a,tri.b,tri.c])
+        assert.ok(within(vertex),
+          'floe '+i+' top/bevel vertex may not escape its original coast-tested footprint');
+    }
+    for(let k=0;k<corners;k++){
+      // Last two of each wedge form the shoulder -> outer rim snow bevel.
+      const [t1,t2]=tops.slice(offset+5*k+3,offset+5*k+5);
+      const shA=t1.a,shB=t1.b,rimB=t1.c,rimA=t2.c;
+      assert.ok(shA[1]>rimA[1]&&shB[1]>rimB[1],
+        'snow bevel must descend outward into the blue wall, not form an inverted gutter');
+      const inner=Math.hypot(shA[0]-east,shA[2]-north);
+      const outer=Math.hypot(rimA[0]-east,rimA[2]-north);
+      assert.ok(outer>inner+.05,'bevel must have a meaningful positive width');
+    }
+    offset+=5*corners;
+  }
+  assert.equal(offset,tops.length);
+  assert.equal(stats.floeBevelTriangles,1374);
 });
