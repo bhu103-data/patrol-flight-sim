@@ -43,7 +43,11 @@ export function createNycHarborFerryLods(gl, decodeGLB, opts={}) {
       const digest=hex(await globalThis.crypto.subtle.digest('SHA-256',bytes));
       if(digest!==spec.sha256)throw Error('Asset integrity mismatch');
       if(disposed||gl.isContextLost())return;
-      const mesh=await decodeGLB(gl,bytes,7.5);
+      // LOD0 has 52,069 indexed triangles (468,621 expanded XYZ floats).
+      // Only the SHA/length-verified near tier can exceed the native
+      // 240,000-float landmark budget; all other GLBs keep that default.
+      const mesh=await decodeGLB(gl,bytes,7.5,
+        spec.tier==='near'?480000:240000);
       if(mesh.triangleCount!==spec.tris ||
          mesh.dimensions.width>6.6||mesh.dimensions.depth>26.5){
         releaseMesh(gl,mesh);
