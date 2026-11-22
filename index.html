@@ -14,7 +14,7 @@
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
   #glCanvas{image-rendering:auto;}
   #hudCanvas{pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;}
-  #flightMap{position:absolute;top:14px;left:14px;z-index:16;width:min(190px,37vw);
+  #flightMap{position:absolute;top:46px;left:14px;z-index:16;width:min(190px,37vw);
     padding:6px;background:rgba(14,10,24,.88);border:1px solid #a97458;color:#ffd699;}
   #flightMap.expanded{width:min(440px,70vw,68vh);}
   #flightMapCanvas{position:static;width:100%;height:auto;aspect-ratio:1;image-rendering:pixelated;}
@@ -45,6 +45,10 @@
   #skyPanel{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px 10px;
     padding:10px;background:#142334eb;border:1px solid #a8c6dc90;border-radius:6px;min-width:233px;}
   #skyStatus{grid-column:1/-1;color:#e6d4ab;font-variant-numeric:tabular-nums;}
+  #fpsCounter{position:absolute;top:12px;left:14px;z-index:19;pointer-events:none;
+    font:11px 'Share Tech Mono',monospace;letter-spacing:.2px;line-height:17px;
+    color:#e4f2ff;background:#0c2338c9;border:1px solid #96bac988;
+    border-radius:4px;padding:3px 7px;font-variant-numeric:tabular-nums;}
   #skyAzimuth{width:100%;min-width:0;accent-color:#f4c480;}
   #skyAzimuthValue{color:#f6d5a4;font-variant-numeric:tabular-nums;}
   #hotelViewButton,#bridgeShortcutButton,#centralParkShortcutButton,#hotelViews button,#hotelViews select{
@@ -52,7 +56,7 @@
     padding:5px 8px;font:inherit;cursor:pointer;
   }
   #hotelViews{
-    position:absolute;top:14px;left:14px;z-index:17;width:min(288px,calc(100vw - 28px));
+    position:absolute;top:46px;left:14px;z-index:17;width:min(288px,calc(100vw - 28px));
     display:grid;grid-template-columns:auto minmax(90px,1fr);align-items:center;gap:7px 10px;
     padding:10px 12px;color:#f2f8fa;font:12px system-ui,sans-serif;background:#172b38e8;
     border:1px solid #b9d7e479;border-radius:7px;
@@ -179,6 +183,7 @@
 </head>
 <body>
 <div id="wrap">
+  <output id="fpsCounter" aria-label="Frame rate and internal WebGL resolution" hidden>FPS -- · --×--</output>
   <canvas id="glCanvas" tabindex="-1"></canvas>
   <canvas id="hudCanvas"></canvas>
   <section id="flightMap" aria-label="Flight map" hidden>
@@ -324,6 +329,7 @@
   'use strict';
 
   const glCanvas = document.getElementById('glCanvas');
+  const fpsCounter=document.getElementById('fpsCounter');
   const hudCanvas = document.getElementById('hudCanvas');
   const hudCtx = hudCanvas.getContext('2d');
   const loadOverlay = document.getElementById('loadOverlay');
@@ -11676,6 +11682,7 @@ const CENTRAL_PARK_SITES=[
     if (loading || (!flying && !crash)) return;
     setScenicView(false);
     skySettings.hidden=true;
+    fpsCounter.hidden=true;
     toggleSkyPanel(false);
     crash = null;
     crashOverlay.hidden = true;
@@ -12985,6 +12992,10 @@ const CENTRAL_PARK_SITES=[
       renderVerified=false;
       frameCheckPending=true;
       flying = true;
+      fpsCounter.hidden=false;
+      fpsCounter.textContent='FPS -- · --×--';
+      fpsWindowSeconds=0;
+      fpsWindowFrames=0;
       glCanvas.focus({ preventScroll: true });
       resetFlightEnvironment();
       lastTime = null;
@@ -13237,6 +13248,7 @@ const CENTRAL_PARK_SITES=[
 
   // Main Simulation & Render Loop
   let lastTime = null;
+  let fpsWindowSeconds=0,fpsWindowFrames=0;
   let slowFrames = 0;
   let lastScaleAdjustment = -Infinity;
   let trailAccum = 0;
@@ -14158,6 +14170,19 @@ const CENTRAL_PARK_SITES=[
     const dt = Math.min(rawDt, 0.05);
     const time = now * 0.001;
 
+    // Display measured requestAnimationFrame cadence, not a fabricated GPU
+    // benchmark. Update the small text only about once a second.
+    if(rawDt>0 && rawDt<1 && !document.hidden && !frameCheckPending){
+      fpsWindowSeconds+=rawDt;
+      fpsWindowFrames++;
+      if(fpsWindowSeconds>=0.9){
+        const fps=Math.round(fpsWindowFrames/fpsWindowSeconds);
+        fpsCounter.textContent='FPS '+fps+' · '+fboW+'×'+fboH;
+        fpsWindowSeconds=0;
+        fpsWindowFrames=0;
+      }
+    }
+
     // Keep all scene effects and raise resolution only after stable frames.
     if (rawDt > 0 && !document.hidden && !frameCheckPending) {
       const limit = Math.min(scaleCeiling, directRendering ? 0.60 : 1);
@@ -14714,6 +14739,7 @@ const CENTRAL_PARK_SITES=[
 
     if (crash && crash.age >= 1.15) {
       flying = false;
+      fpsCounter.hidden=true;
       skySettings.hidden=true;
       crashDetail.textContent = crash.reason;
       crashOverlay.hidden = false;

@@ -64,6 +64,11 @@ try{
     selected:document.querySelector('input[name="flightMap"]:checked')?.value,
     camera:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.text,
     graphicsCompat:new URLSearchParams(location.search).get('graphics')==='compat',
+    internalWidth:canvas?.width||0,internalHeight:canvas?.height||0,
+    displayedWidth:Math.round(canvas?.getBoundingClientRect().width||0),
+    displayedHeight:Math.round(canvas?.getBoundingClientRect().height||0),
+    fpsText:document.getElementById('fpsCounter')?.textContent,
+    fpsShown:document.getElementById('fpsCounter')?.hidden===false,
     clock:document.getElementById('skyTime')?.value,
     azimuth:document.getElementById('skyAzimuth')?.value,
     label:document.getElementById('skyAzimuthValue')?.textContent};
@@ -73,6 +78,8 @@ try{
     'Wrong map/camera '+JSON.stringify(state));
   requireState(state.graphicsCompat===(graphicsMode==='compat'),
     'Mismatched actual graphics mode: '+JSON.stringify(state));
+  requireState(state.internalWidth>120&&state.internalHeight>100&&state.fpsShown,
+    'Invalid internal framebuffer or performance meter: '+JSON.stringify(state));
   requireState(state.clock===clock&&state.azimuth===angle&&
     state.label===(angle==='-1'?'Auto':angle+'°'),
     'Sun direction control not applied: '+JSON.stringify(state));

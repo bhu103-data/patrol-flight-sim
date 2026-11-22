@@ -121,3 +121,18 @@ test('browser QA captures normal full renderer and labels compatibility separate
  assert.match(workflow,/PATROL_GRAPHICS_MODE: compat/);
  assert.match(workflow,/Capture true full-quality NYC Harbor dusk and noon/);
 });
+
+test('top-left live FPS meter uses real rAF intervals and reports internal resolution',async()=>{
+ assert.match(html,/#fpsCounter\{position:absolute;top:12px;left:14px/);
+ assert.match(html,/<output id="fpsCounter"[^>]*hidden>/);
+ assert.match(source,/const fpsCounter=document\.getElementById\('fpsCounter'\)/);
+ assert.match(source,/fpsWindowSeconds\+=rawDt/);
+ assert.match(source,/fpsWindowFrames\+\+/);
+ assert.match(source,/Math\.round\(fpsWindowFrames\/fpsWindowSeconds\)/);
+ assert.match(source,/fpsCounter\.textContent='FPS '\+fps\+' · '\+fboW\+'×'\+fboH/);
+ assert.match(source,/fpsCounter\.hidden=true/);
+ const script=await readFile(new URL('../scripts/nyc-tidewater-sun-sea-browser-qa.mjs',import.meta.url),'utf8');
+ assert.match(script,/internalWidth:canvas\?\.width\|\|0/);
+ assert.match(script,/displayedWidth:Math\.round/);
+ assert.match(script,/fpsShown:document\.getElementById\('fpsCounter'\)\?\.hidden===false/);
+});
