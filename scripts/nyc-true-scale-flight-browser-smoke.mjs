@@ -214,6 +214,31 @@ try{
   report.sourceOnlyPixelDifferenceOver18=onlyDifferent;
   check(onlyDifferent>60,
     'Removing all fake DCM road bands was not visible in fixed aerial evidence: '+onlyDifferent);
+  // Third matching FID 24700 close-up: source-only vs source+inferred
+  // asphalt at EXACTLY the same camera, not merely the wide aerial.
+  await page.locator('#roadbedFocus').click();
+  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.camera?.[1]===70,
+    null,{timeout:45000});
+  report.sourceOnlyCoreCamera=await page.evaluate(()=>window.PatrolMetricFlightQA.camera);
+  check(report.sourceOnlyCoreCamera.every((v,i)=>
+    Math.abs(v-report.sourceCoreCamera[i])<1e-8),
+    'Source-only FID24700 camera drift from normal source mode');
+  const sourceOnlyCore=await page.locator('#scene').screenshot({
+    path:out+'/08-source-only-FID24700-core.png',timeout:90000});
+  const onlyCore=PNG.sync.read(sourceOnlyCore);
+  check(onlyCore.width===src.width&&onlyCore.height===src.height,
+    'Source-only FID24700 size differs from matched camera');
+  let coreWithoutGuessedRoads=0;
+  for(let y=210;y<src.height;y+=2)for(let x=2;x<src.width;x+=2){
+    const i=(y*src.width+x)*4;
+    if(Math.max(...[0,1,2].map(j=>Math.abs(src.data[i+j]-onlyCore.data[i+j])))>18)
+      coreWithoutGuessedRoads++;
+  }
+  report.coreWithoutGuessedRoadsPixelsOver18=coreWithoutGuessedRoads;
+  check(coreWithoutGuessedRoads>30,
+    'Unsurveyed road bands did not change fixed FID24700 core view: '+
+      coreWithoutGuessedRoads);
+
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
