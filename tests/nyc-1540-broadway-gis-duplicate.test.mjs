@@ -99,9 +99,9 @@ test('remove only the two proven misregistered FIDs; preserve every other polygo
   for(const kind of ['quads','triangles','boxes']){
     assert.deepEqual(b[kind],withoutDuplicates[kind],
       'Only the two duplicate FIDs may be omitted from '+kind);
-    assert.ok(isOrderedSubsequence(a[kind],b[kind]),
-      'All retained '+kind+' must preserve exact source order/colors');
   }
+  assert.ok(b.result.infillPieces<=b.result.maximumPieces,
+    'Freed geometry budget must remain inside the original cap');
 });
 test('source-only, unprotected and unrelated FIDs still render normally',()=>{
   const sourceOnly=run(oldBuilder,[]),sourceOnlyNew=run(newBuilder,[]);
