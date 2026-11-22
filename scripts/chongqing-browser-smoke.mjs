@@ -79,6 +79,12 @@ async function capture(name){
     check(state.game.hotpotDisplayParts>=17&&state.game.hotpotDisplayParts<=25&&
       state.game.hotpotDisplayHeight<=2.5,
       'Grounded open hotpot display missing from live game');
+    check(Number.isFinite(state.game.hotpotTerraceCornerSpread)&&
+      state.game.hotpotTerraceCornerSpread<.03,
+      'Hotpot shop corner terrain still clips the foundation: '+
+        JSON.stringify(state.game.hotpotTerraceCornerSpread));
+    check(state.game.hotpotTerraceFloor>40&&state.game.hotpotTerraceFloor<50,
+      'Hotpot restaurant retained an unsafe/unsupported floor height');
   }
   // Conservative limits: reject empty/noise frames without treating this as
   // a geometry realism score. Keep night scenes and dark river areas valid.
