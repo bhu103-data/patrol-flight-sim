@@ -26,7 +26,7 @@ const oldBuilder=compile(baselineSource),newBuilder=compile(source);
 const run=(build,sites=protectedSites,features=asset.features,skipFids=null)=>{
   const quads=[],triangles=[],boxes=[];
   const result=build({...asset,features},{ground:14.95,bounds:[-34,56,-52,68],
-    protectedSites,skipFids,
+    protectedSites:sites,skipFids,
     addQuad:(...args)=>quads.push(JSON.stringify(args)),
     addTri:(...args)=>triangles.push(JSON.stringify(args)),
     box:(...args)=>boxes.push(JSON.stringify(args))});
