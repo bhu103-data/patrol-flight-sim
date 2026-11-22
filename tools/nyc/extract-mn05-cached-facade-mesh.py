@@ -22,7 +22,8 @@ from shapely.geometry import Polygon
 
 HERE=pathlib.Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-from official_mn05_projection import mn05_stateplane_to_metric, ORIGIN_WGS84
+from official_mn05_projection import (mn05_stateplane_to_metric, wgs84_to_local_metres,
+    ORIGIN_WGS84)
 from inspect_mn05_support import (
     require_feet_model_unit, anchored_source_height_metres,
     MODEL_FOOT_IN_METRES)
@@ -51,7 +52,7 @@ def official_buildings():
         ring=row["rings"][0]
         if len(ring)<4:
             continue
-        p=Polygon([mn05_stateplane_to_metric(*xy[:2]) for xy in ring])
+        p=Polygon([wgs84_to_local_metres(*xy[:2]) for xy in ring])
         if not p.is_valid or p.area<2:
             continue
         result.append({"fid":row["fid"],"heightMetres":row["heightFt"]*.3048,
