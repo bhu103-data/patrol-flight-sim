@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/nyc-dcp-mn05-3dmodel-audit /tmp/nyc-mn05
           URL="https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_mn05.zip"
-          curl --head --location --silent --show-error --fail "$URL" | tee artifacts/nyc-dcp-mn05-3dmodel-audit/http-headers.txt
+          curl --head --location --silent --show-error "$URL" | tee artifacts/nyc-dcp-mn05-3dmodel-audit/http-headers.txt || true
           curl --location --fail --retry 3 --retry-all-errors --connect-timeout 30 --max-time 2400 \
             -H "User-Agent: PATROL-NYC-DCP-3D-Model-Source-Audit/1.0" \
             --output /tmp/nyc-mn05/nyc_3dmodel_mn05.zip "$URL"
