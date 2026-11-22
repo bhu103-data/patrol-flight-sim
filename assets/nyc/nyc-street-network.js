@@ -426,7 +426,7 @@ export function buildNycStreetNetwork({
   try{
     officialFrontDock=buildFrontDockRoad?buildFrontDockRoad(frontDockRoadbed,{
       addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
-      streetY,waterY,detailBand
+      streetY,waterY,detailBand,grid
     }):{enabled:false,officialTriangles:0,reason:'nyc feature opt-in disabled'};
   }catch(error){
     // Invalid or stale Open Data cannot take down all Manhattan streets.
@@ -435,7 +435,8 @@ export function buildNycStreetNetwork({
       reason:'source validation failed; original streets preserved'};
   }
   stats.officialFrontDock=officialFrontDock;
-  const replaceFrontDock=officialFrontDock.enabled;
+  const coveredLegacyStreets=new Set((officialFrontDock.skipFictionalStreetSegments||[])
+    .map(([i,j])=>i+':'+j));
   // Unified surface-road generation. Positions align with the EXISTING
   // Manhattan building parcel basis (24 x 33 compressed game units).
   const segmentMap=new Set();
@@ -461,8 +462,9 @@ export function buildNycStreetNetwork({
     streetSegment(a,b,'avenue',i,j);
   }
   for(let j=-12;j<=-7;j++)for(let i=9;i<=19;i++){
-    // Replace the two original rectangular strips; other blocks untouched.
-    if(replaceFrontDock && j===-9 && (i===16||i===17))continue;
+    // Source-proven full-corridor coverage ONLY; otherwise preserve the old
+    // road connectivity underneath the thinner 2022 polygon visual layer.
+    if(coveredLegacyStreets.has(i+':'+j))continue;
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
