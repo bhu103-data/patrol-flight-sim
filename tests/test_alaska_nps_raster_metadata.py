@@ -49,6 +49,41 @@ class NpsSurveyMetadataSafetyTests(unittest.TestCase):
             audit.AOI_NOAA
         ))
 
+    def test_true_pixel_mask_inside_wgs84_study_bounds(self):
+        import numpy as np
+        from rasterio.io import MemoryFile
+        from rasterio.transform import from_bounds
+
+        profile = {
+            "driver": "GTiff", "height": 32, "width": 32,
+            "count": 1, "dtype": "float32", "crs": "EPSG:4326",
+            "transform": from_bounds(-133.4, 57.7, -132.9, 58.1, 32, 32),
+            "nodata": -9999.0,
+        }
+        grid = np.full((32, 32), -9999.0, dtype="float32")
+        grid[10, 10] = 245.5  # Actual pixel centre is inside NOAA study AOI.
+        grid[0, 0] = 200.0   # This point is outside and must be excluded.
+        with MemoryFile() as mem:
+            with mem.open(**profile) as writer:
+                writer.write(grid, 1)
+            with mem.open() as raster:
+                result = audit.sample_valid_study_pixels(
+                    raster, audit.AOI_NOAA, max_axis=32)
+                self.assertEqual(result["valid_inside_bbox"], 1)
+                self.assertEqual(result["status"],
+                                 "POSITIVE_VALID_PIXEL_SAMPLES_IN_NOAA_BBOX")
+
+        grid.fill(-9999.0)
+        with MemoryFile() as mem:
+            with mem.open(**profile) as writer:
+                writer.write(grid, 1)
+            with mem.open() as raster:
+                result = audit.sample_valid_study_pixels(
+                    raster, audit.AOI_NOAA, max_axis=32)
+                self.assertEqual(result["valid_inside_bbox"], 0)
+                self.assertEqual(result["status"],
+                                 "NO_VALID_PIXELS_IN_SAMPLED_GRID")
+
     def test_only_expected_nps_endpoints_are_imported(self):
         self.assertEqual(audit.SOURCES, (
             ("Sawyer", "744015"), ("SouthSawyer", "744024")
