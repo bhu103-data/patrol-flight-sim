@@ -72,6 +72,9 @@ class TumCityGmlStreetspaceQaTests(unittest.TestCase):
     def test_street_name_normalization_is_case_and_space_insensitive(self):
         self.assertEqual(normalize_name("  7   Avenue "), "7 AVENUE")
         self.assertEqual(normalize_name("West 41 Street"), "WEST 41 STREET")
+        self.assertEqual(normalize_name("W 44 ST"), "WEST 44 STREET")
+        self.assertEqual(normalize_name("7 AVE"), "7 AVENUE")
+        self.assertEqual(normalize_name("AVE OF THE AMERICAS"), "AVENUE OF THE AMERICAS")
 
 
 if __name__ == "__main__":
