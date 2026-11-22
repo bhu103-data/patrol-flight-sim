@@ -126,7 +126,8 @@ def build_glb(source, output_path, provenance_path):
         "nodes":[{"name":"DUMBO BK02 2014 source mesh","mesh":0}],
         "meshes":[{"name":"DUMBO BK02 2014 source roof facade footprint","primitives":primitives}],
         "materials":materials,"buffers":[{"byteLength":len(binary)}],"bufferViews":views,"accessors":accessors}
-    json_chunk=pad4(json.dumps(document,separators=(",",":"),ensure_ascii=False).encode("utf-8"))
+    json_raw=json.dumps(document,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    json_chunk=json_raw+b" "*((-len(json_raw))%4)
     bin_chunk=pad4(bytes(binary));total=12+8+len(json_chunk)+8+len(bin_chunk)
     glb=struct.pack("<III",0x46546C67,2,total)
     glb+=struct.pack("<II",len(json_chunk),0x4E4F534A)+json_chunk
