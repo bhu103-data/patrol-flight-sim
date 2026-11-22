@@ -15,7 +15,8 @@ const legacy=shader.slice(nycEnd);
 
 test('Manhattan rain uses sparse varied streaks instead of the dense screen-speckle grid',()=>{
   assert.match(nyc,/vec2\(p\.x\+p\.y\*0\.16,p\.y\)\*vec2\(96\.0,12\.0\)/);
-  assert.match(nyc,/step\(0\.68,seed\)/);
+  assert.match(nyc,/float streakEnabled=step\(0\.68,seed\)/);
+  assert.doesNotMatch(nyc,/\bactive\b/);
   assert.match(nyc,/width=mix\(0\.040,0\.105,/);
   assert.match(nyc,/streakLength=mix\(0\.18,0\.42,/);
   assert.match(nyc,/depthFade=mix\(0\.72,1\.0,/);
