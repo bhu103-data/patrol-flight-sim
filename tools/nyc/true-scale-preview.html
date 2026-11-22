@@ -26,7 +26,7 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
 <h1>时代广场 · 官方测绘形体预览</h1>
 <p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
 <p id="status">正在读取官方建筑与道路数据...</p>
-<p>灰色：官方建筑体量；蓝线：官方道路中心线；灰绿色带：仅根据有记录的官方街道用地宽度绘制的范围提示，<strong>不是实际铺装路面或车道</strong>。无真实外立面。</p>
+<p>灰色：官方建筑体量；蓝线：官方 DCM 道路中心线；<strong>绿色：官方 OTI 2022 道路面、黄色：官方 2022 路口面</strong>。不把路权宽度画成猜测的车道；道路面无真实坡度、路缘、2026 车道或材质。无真实建筑外立面。</p>
 <small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
 </aside>
 <section id="flightPanel">
@@ -60,7 +60,7 @@ gl.linkProgram(prog);
 if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
 gl.useProgram(prog);
 const uniform=gl.getUniformLocation(prog,'uTransform');
-const position=[],colors=[],normals=[],roadPos=[],roadColors=[],roadNormals=[];
+const position=[],colors=[],normals=[],roadPos=[],roadColors=[],roadNormals=[],pavementPos=[],pavementColors=[],pavementNormals=[];
 let triCount=0,roofTriangles=0;
 function addPoint(dstPos,dstColor,dstNorm,p,c,n){
   dstPos.push(p[0],p[1],p[2]);dstColor.push(...c);dstNorm.push(...n);
@@ -220,8 +220,32 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
+  // Retain old width-envelope data only for QA comparison. Its illustrative
+  // strips must NOT render over real, independently surveyed source polygons.
   const envelopes=buildOfficialStreetWidthEnvelopes(source);
-  const rowSurface=meshBuffer(envelopes.positions,envelopes.colors,envelopes.normals);
+  const pavementResponse=await fetch('./roadbed-mesh.json',{cache:'no-store'});
+  if(!pavementResponse.ok)throw Error('Source-verified 2022 OTI roadbed mesh unavailable');
+  const roadbed=await pavementResponse.json();
+  if(roadbed.schema!=='patrol-nyc-lowflight-oti-roadbed-metre-v1'||
+     roadbed.mode!=='SOURCE_VERIFIED_NO_DEFAULT_GAME_CHANGE'||
+     roadbed.year!==2022||
+     JSON.stringify(roadbed.projection)!==JSON.stringify(source.projection)||
+     roadbed.counts?.features<70||
+     roadbed.counts?.triangles<7000||
+     roadbed.positions?.length!==roadbed.counts.triangles*9||
+     roadbed.subtypes?.length!==roadbed.counts.triangles)
+    throw Error('Missing or incompatible official 1:1 OTI pavement geometry');
+  for(let i=0;i<roadbed.positions.length;i+=9){
+    const subtype=roadbed.subtypes[i/9];
+    const color=subtype===350010?[.74,.60,.32]:
+      subtype===350020?[.48,.44,.57]:[.29,.49,.43];
+    for(let j=0;j<9;j+=3){
+      const p=roadbed.positions.slice(i+j,i+j+3);
+      if(!p.every(Number.isFinite))throw Error('Nonfinite source pavement');
+      addPoint(pavementPos,pavementColors,pavementNormals,p,color,[0,1,0]);
+    }
+  }
+  const pavement=meshBuffer(pavementPos,pavementColors,pavementNormals);
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
   gl.enable(gl.DEPTH_TEST);
@@ -253,7 +277,7 @@ try{
     const cameraTarget=flyMode?
       metricFlightTarget(flyState.position,flyState.yaw,flyState.pitch):target;
     gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,cameraTarget)));
-    gl.bindVertexArray(rowSurface.vao);gl.drawArrays(gl.TRIANGLES,0,rowSurface.count);
+    gl.bindVertexArray(pavement.vao);gl.drawArrays(gl.TRIANGLES,0,pavement.count);
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
     gl.bindVertexArray(null);
@@ -263,6 +287,9 @@ try{
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
     buildingTriangles:triCount,streetVertices:streets.count,
     streetWidthEnvelopes:envelopes.stats,
+    officialRoadbed2022:{source:roadbed.source,features:roadbed.counts.features,
+      triangles:roadbed.counts.triangles,provenance:'2022 OTI pavement polygon, not current lane or curb'},
+    noInventedStreetSurface:true,
     sourceRoadSpawn:flyOrigin,
     metricBounds:metreBounds.slice(),
     getFlight:()=>({mode:flyMode,position:flyState?.position.slice(),
@@ -276,7 +303,7 @@ try{
     resetFlight:()=>{resetToOfficialStreet();return flyState.position.slice();}};
 
   status.textContent='官方建筑 '+source.counts.buildings+' 栋 · 街道要素 '+source.counts.roadFeatures+
-    ' 条 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
+    ' 条 · 2022 OTI 道路面 '+roadbed.counts.features+' 处 · 真实范围 '+Math.round(source.boundsMetres[2]-source.boundsMetres[0])+
     ' × '+Math.round(source.boundsMetres[3]-source.boundsMetres[1])+' 米';
   render();
 }catch(error){
