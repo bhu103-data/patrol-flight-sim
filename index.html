@@ -8503,18 +8503,23 @@ const CENTRAL_PARK_SITES=[
           box(x+dx*w,ground+panelY*.5,z+screenSide*(d*.5+.06),
             .095,panelY,.10,[.29,.33,.36]);
         }
-        // Physical LED backing, catwalk and rear power rails at the *named*
-        // FID-derived site. No extra ad duplication or fake street-facing screens.
+        // Source-site screens gain lightweight mounting trusses and ledges.
+        // Quads share the existing mesh, preserve the 13-box survey facade
+        // budget, and never duplicate the original static advertisements.
         const rack=[.22,.27,.30],service=[.39,.41,.40];
         for(const [screenHeight,screenSize] of panels){
           const rearZ=z+screenSide*(d*.5+.072);
           const y0=ground+Math.min(surveyedHeight-.9,screenHeight);
-          const beamWidth=w*.66;
-          box(x,y0-screenSize*.5-.22,rearZ,beamWidth,.12,.25,rack);
-          box(x,y0+screenSize*.5+.16,rearZ,beamWidth,.14,.24,service);
+          const band=(u0,u1,v0,v1,color)=>{
+            const a=[x+u0,y0+v0,rearZ],b=[x+u1,y0+v0,rearZ],
+              c=[x+u1,y0+v1,rearZ],d0=[x+u0,y0+v1,rearZ];
+            if(screenSide>0)addQuad(a,b,c,d0,color);
+            else addQuad(d0,c,b,a,color);
+          };
+          band(-w*.34,w*.34,-screenSize*.5-.23,-screenSize*.5-.09,rack);
+          band(-w*.34,w*.34,screenSize*.5+.06,screenSize*.5+.20,service);
           for(const dx of [-.27,.27])
-            box(x+dx*w,y0,rearZ-screenSide*.13,.12,
-              Math.min(screenSize+.4,surveyedHeight-.6),.32,rack);
+            band(dx*w-.055,dx*w+.055,-screenSize*.47,screenSize*.47,rack);
         }
       }
     }
