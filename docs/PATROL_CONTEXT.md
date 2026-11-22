@@ -140,3 +140,45 @@ This is a new, explicitly recorded handoff, NOT a claim that an older
   roof surfaces, uniform true road/building geolocation, close hand-flown
   aircraft/collision + map-switch evidence, native GPU timing and human
   street-level architectural matching. Keep Draft; merge parents in order.
+
+## 2026-11-22 follow-up — critical building-identity correction
+
+**Supersedes earlier "brick warehouse" language for FID 1080628.**
+Independent verified BIN/address linkage:
+`FID 1080628 / BIN 3389054 / BBL 3000517501` corresponds to **Nexus at
+84 Front Street, Brooklyn**, a **12-story 2006 condominium**. Architect
+Meltzer/Mandl's first-party description: https://archinect.com/meltzermandl/project/the-nexus
+and https://www.archpaper.com/2005/07/all-rise-2/ describe a modern
+building with yellow brick and blue/green/silver metal-clad components.
+The old 5-row red-brick warehouse look was factually wrong.
+- Production `index.html` changed only for `source.fid===1080628`: now
+  12 source-referenced levels, 108 inset glazing bays, 40 polygon-edge
+  attached metal spandrel panels; yellow brick, blue-green-silver palette,
+  original collision/lot, source ring and original authored roof tier retained.
+  **Color pattern and individual windows are original stylization**, not
+  copied copyrighted facade images, photographic textures, measured
+  window patterns or official LoD2 surfaces.
+- Corrected FID geometry count: 1,056 quads + 11 roof triangles vs
+  original #204 441 quads + 9 roof triangles. Difference 615 quads and
+  2 roof triangles => **+1,232 triangle faces** (two per quad), one city
+  draw batch, no new texture/asset/network. Other two source FIDs
+  remain 336/455 quads. All vertices stay bounded to old proxy.
+- Source rights and identity references added to
+  `assets/nyc/DUMBO_OTI_SOURCE_NOTES.md`.
+- The original roof split remains NOT from measured 2014 3D; official
+  NYC metadata states the bulk of 2014 building models are LoD1 with
+  roof details mainly on ~100 iconic LoD2 structures. A free BK02 .3dm
+  archive would need exact-building extract; no correct inner geometry
+  can be asserted merely from metadata.
+- New `scripts/nyc-dumbo-nexus-map-switch-browser.mjs` and workflow
+  `.github/workflows/nyc-nexus-map-switch-webgl.yml` launch actual PATROL
+  **seaplane Manhattan -> Alaska -> Manhattan** inside one session,
+  verify `selectedMap`, craft, world-space flight pose, WebGL health,
+  draw 3 actual canvas screenshots. This is not full manual flying.
+- Previous roof A/B and 480/480 tests apply to the OLD 5-level facade
+  only; the new 12-storey facade requires **fresh exact-head CI** with
+  screenshots/load/rAF and central flight/bridgehead regression.
+- **Merge gate:** keep #264 Draft on #204, do not touch main.
+  Inspect source-correct modern facade plus low-flying view, transition
+  check and triangle/frame-time budgets before acceptance; document exact
+  head SHA and Actions artifacts only after the new jobs pass.
