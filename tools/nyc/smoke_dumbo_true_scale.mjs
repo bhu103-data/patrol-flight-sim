@@ -47,7 +47,10 @@ try{
       [azimuth,elevation,distanceMetres]);
     await page.waitForTimeout(400);
     const state=await page.evaluate(()=>window.PatrolDumboTrueScaleQA.getState());
-    assert.ok(state.meshTriangles>=100,'Expected real exterior walls and roofs');
+    const exactTriangleCount=meta.buildings.reduce((sum,b)=>
+      sum+2*(b.faceCount+2)+b.faceCount,0);
+    assert.equal(state.meshTriangles,exactTriangleCount,
+      'Render exactly original wall polygons and triangulated roofs, not extra box faces');
     assert.ok(state.gridSegments>=10,'Metre scale reference grid must show');
     assert.equal(state.glError,0,'WebGL2 must have no GL errors');
     assert.equal(state.contextLost,false,'3D context must not be lost');
