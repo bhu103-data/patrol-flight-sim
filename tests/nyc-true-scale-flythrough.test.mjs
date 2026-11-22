@@ -156,3 +156,37 @@ test('source street view has upstream 3.2m eye and 1.2m footprint clearance, not
   assert.doesNotMatch(html,/buildingContains\(massing,east,north,65\)/);
   assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/);
 });
+
+
+test('source-only provenance mode hides ALL guessed DCM-width road bands',()=>{
+  // All official polygon positions and source DCM audit lines remain. This
+  // mode deliberately does NOT invent any asphalt outside the 11-FID core.
+  const normal=buildNeighborhoodMesh(massing,roads,{
+    detail:false,officialRoadbed:roadbed});
+  const only=buildNeighborhoodMesh(massing,roads,{
+    detail:false,officialRoadbed:roadbed,sourceRoadbedOnly:true});
+  assert.equal(normal.counts.illustrativeRoadBandTriangles,89*2);
+  assert.equal(only.counts.illustrativeRoadBandTriangles,0);
+  assert.equal(only.counts.officialRoadbedPolygons,11);
+  assert.equal(only.counts.officialRoadbedIntersections,3);
+  assert.equal(only.counts.officialRoadbedTriangles,207);
+  assert.equal(only.counts.buildings,normal.counts.buildings);
+  assert.equal(only.counts.streetSegments,normal.counts.streetSegments);
+  assert.equal(only.counts.triangles,
+    normal.counts.triangles-normal.counts.illustrativeRoadBandTriangles);
+  assert.equal(only.provenance.sourceRoadbedOnly,true);
+  assert.equal(only.provenance.roadbedImageryYear,2022);
+  assert.ok(only.interleaved.every(Number.isFinite));
+  assert.throws(()=>buildNeighborhoodMesh(massing,roads,{
+    detail:false,sourceRoadbedOnly:true
+  }),/Source-only roadbed requires official NYC OTI polygons/);
+});
+
+test('source-only mode is explicit opt-in and cannot modify the old PATROL map',async()=>{
+  const page=await readFile(new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  const game=await readFile(new URL('../index.html',import.meta.url),'utf8');
+  assert.match(page,/params\.get\('roadbed'\)==='only'/);
+  assert.match(page,/sourceRoadbedOnly,illustrativeRoadBandTriangles:/);
+  assert.match(page,/guessed road widths hidden outside 2022 FIDs/);
+  assert.ok(!game.includes('sourceRoadbedOnly'),'default PATROL maps remain unchanged');
+});
