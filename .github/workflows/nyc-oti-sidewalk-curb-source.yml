@@ -2,7 +2,7 @@ name: NYC true-metre official sidewalk curb source QA
 
 on:
   pull_request:
-    branches: [qa/nyc-real-roadbed-polygons-20261122-chat]
+    branches: [qa/nyc-real-roadbed-polygons-20261122-chat, feat/nyc-oti-sidewalk-curb-source-20261122-chat]
     paths:
       - 'scripts/nyc-times-sidewalk-curb-source.mjs'
       - 'tests/nyc-times-sidewalk-curb-source.test.mjs'
