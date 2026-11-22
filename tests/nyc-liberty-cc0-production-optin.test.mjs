@@ -27,7 +27,7 @@ test('publisher CC0 attribution is explicit but Liberty remains OFF in default g
   assert.match(liberty.license,/Innerscene.*CC0/);
   assert.match(liberty.license,/innerscene\.com\/tools\/library/);
   assert.match(loader,/options\.get\('nycLibertyCC0'\)==='1'/);
-  assert.match(loader,/spec\.enabled===false&&spec\.file==='scenario\/liberty\.glb'/);
+  assert.match(loader,/spec\?\.enabled===false&&spec\.file==='scenario\/liberty\.glb'/);
   assert.match(loader,/libertyCC0Pilot=options\.get\('nycLibertyCC0'\)==='1' && !useProceduralLandmarks/);
 });
 
@@ -51,7 +51,7 @@ test('existing native WebGL fallback and separate map physics stay intact',()=>{
   assert.match(html,/nycRealismAssets\?\.models\[mark\.kind\]/);
   assert.match(html,/const selectedMap|let selectedMap/);
   assert.match(html,/selectedMap\.city/);
-  assert.match(html,/nycModels/);
+  assert.match(loader,/nycModels/);
   assert.match(html,/floatOceanPose\(/);
   assert.match(html,/selectedAircraft==='seaplane'/);
   assert.match(html,/chongqing\.html/);
