@@ -28,6 +28,7 @@ try{
    const audit=window.PatrolNycMetricQA();
    const gl=document.querySelector('canvas')?.getContext('webgl2');
    return {stats:audit.stats,rejections:audit.rejections,
+     streetStats:audit.streetStats,
      camera:audit.camera,contextLost:gl?.isContextLost(),
      webglError:gl?.getError(),canvas:[gl?.drawingBufferWidth,gl?.drawingBufferHeight]};
  });
@@ -37,6 +38,11 @@ try{
     state.stats.units!=='metres'||
     state.stats.maxHeightMetres<200||
     state.stats.triangles<1000||
+    !state.streetStats||state.streetStats.records<15||
+    state.streetStats.uniqueStreetNames<8||
+    state.streetStats.edges<15||
+    state.streetStats.totalLengthMetres<100||
+    state.streetStats.noRoadEdgesOrPavement!==true||
     state.contextLost||state.webglError!==0||
     state.canvas[0]!==1280||state.canvas[1]!==800)
     throw Error('Meter-scale scene audit not valid '+JSON.stringify(state));
