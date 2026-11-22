@@ -440,6 +440,16 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       put(facade,x-9.86,y+7.9,z-5.8,.28,15.7,16.4);
       put(facade,x+9.86,y+7.9,z-5.8,.28,15.7,16.4);
       put(facade,x,y+7.9,z-13.84,19.75,15.7,.32);
+      // The front facade uses cut-stone on stone-stair and carved-wood
+      // on the two neighbors; a short, matching side return anchors that
+      // finish around each real corner instead of a hard 90° material cut.
+      // Existing side shells and occupied collision volumes remain intact.
+      const cornerFinish=x===284?'steps':'carved';
+      for(const side of [-1,1]){
+        // Side-shell outer x=±10; front jamb extends back to z+2.35.
+        // 0.02 x-overlap and 0.18 z-overlap prevent daylight slivers.
+        put(cornerFinish,x+side*10.04,y+5.475,z+.98,.12,9.65,3.10);
+      }
       // The local cliff drops sharply to the east of tea-lane and
       // stone-stair: the old 21x25 floor plate hung 6–11 units above the
       // sampled terrain at its downhill side. Ground three real cut-stone
