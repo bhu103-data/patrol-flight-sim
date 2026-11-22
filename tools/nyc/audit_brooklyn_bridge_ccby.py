@@ -81,7 +81,12 @@ for path in [
 ]:
     p=Path(path)
     try:
-        item=inspect(path,p.read_bytes())
+        blob=p.read_bytes()
+        item=inspect(path,blob)
+        if path == "assets/nyc/statue-of-liberty.glb":
+            (OUT/"patrol-current-liberty-source-mit.glb").write_bytes(blob)
+        if path == "assets/nyc/scenario/empire.glb":
+            (OUT/"patrol-current-empire-original.glb").write_bytes(blob)
     except Exception as exc:
         item={"name":path,"error":type(exc).__name__+": "+str(exc)[:150]}
     report["existing_models"].append(item)
