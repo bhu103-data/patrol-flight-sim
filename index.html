@@ -5869,7 +5869,13 @@ const CENTRAL_PARK_SITES=[
         }
       }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
-      const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
+      // PATROL_NYC_TIMES_UPPER_FENESTRATION_V1: compressed, officially
+      // sourced Times Square towers may exceed nine visual floors. The former
+      // generic LOD3 cap left 30-50% of their upper street-facing walls as
+      // featureless masonry; only detailBand=4 receives the bounded extension.
+      // Existing municipal FID outline, site/collider and roof are unchanged.
+      const floors=Math.min(detailBand===4?18:detailBand>=3?9:6,
+        Math.floor((h-2.4)/3.15));
       for(let floor=0;floor<floors;floor++){
         const bottom=y+2.9+floor*3.15,top=Math.min(roofY-.54,bottom+1.80);
         if(top<=bottom)continue;
@@ -6089,6 +6095,26 @@ const CENTRAL_PARK_SITES=[
         addModelBox(addQuad,x,y+h*k*.5,z,w,h*k,d,material);
         addModelBox(addQuad,x,y+h*(1+k)*.5,z,w*(.68+(archType%3)*.05),
           h*(1-k),d*(.69+(archType%4)*.045),material);
+        // Selectively relieve distant Lower Manhattan silhouettes without
+        // ballooning LOD1's global window/batch budget. Never touch survey lots.
+        if(east>-185&&east<175&&north>-526&&north<-155&&
+           ((parcelSeed>>>4)&3)===0){
+          const facadeZ=z+d*.5+.041;
+          for(let band=1;band<=3;band++){
+            const rowY=y+2.0+(h*k-3.2)*band*.25;
+            addModelBox(addQuad,x,rowY,facadeZ,w*.90,.082,.10,trim);
+          }
+          // The shared rooftop coping below already closes the upper crown.
+          // Instead, attach small corbels to the LOWER setback seam; an
+          // extra roof slab here would overlap the existing cap and z-fight.
+          const setbackY=y+h*k;
+          for(const offset of [-.30,-.10,.10,.30])
+            addModelBox(addQuad,x+offset*w,setbackY-.14,facadeZ,
+              .11,.28,.12,trim);
+          for(const offset of [-.24,.24])
+            addModelBox(addQuad,x+offset*w,y+h*k*.47,facadeZ,
+              .075,h*k*.72,.085,trim);
+        }
       }else{
         addModelBox(addQuad,x,y+h/2,z,w,h,d,material,
           bridgeheadBrooklyn?12:0);
@@ -8193,7 +8219,7 @@ const CENTRAL_PARK_SITES=[
         }
       }
     } else if(selectedMap.vegas) {
-      buildVegasStrip({box,lamp,cylinder,solidAt,place,addQuad:solid.addQuad,lightQuad:lights.addQuad});
+      buildVegasStrip({box,lamp,cylinder,solidAt,place,addTri:solid.addTri,addQuad:solid.addQuad,lightQuad:lights.addQuad});
     }
     buildLocalLandmark({box,lamp,cylinder,addQuad:solid.addQuad,solidAt,place,shed});
     if(sceneryPlaces.length || selectedMap.vegas){
@@ -8556,6 +8582,24 @@ const CENTRAL_PARK_SITES=[
         for(const dx of [-.33,.33]){
           box(x+dx*w,ground+panelY*.5,z+screenSide*(d*.5+.06),
             .095,panelY,.10,[.29,.33,.36]);
+        }
+        // Source-site screens gain lightweight mounting trusses and ledges.
+        // Quads share the existing mesh, preserve the 13-box survey facade
+        // budget, and never duplicate the original static advertisements.
+        const rack=[.22,.27,.30],service=[.39,.41,.40];
+        for(const [screenHeight,screenSize] of panels){
+          const rearZ=z+screenSide*(d*.5+.072);
+          const y0=ground+Math.min(surveyedHeight-.9,screenHeight);
+          const band=(u0,u1,v0,v1,color)=>{
+            const a=[x+u0,y0+v0,rearZ],b=[x+u1,y0+v0,rearZ],
+              c=[x+u1,y0+v1,rearZ],d0=[x+u0,y0+v1,rearZ];
+            if(screenSide>0)addQuad(a,b,c,d0,color);
+            else addQuad(d0,c,b,a,color);
+          };
+          band(-w*.34,w*.34,-screenSize*.5-.23,-screenSize*.5-.09,rack);
+          band(-w*.34,w*.34,screenSize*.5+.06,screenSize*.5+.20,service);
+          for(const dx of [-.27,.27])
+            band(dx*w-.055,dx*w+.055,-screenSize*.47,screenSize*.47,rack);
         }
       }
     }
@@ -8978,6 +9022,114 @@ const CENTRAL_PARK_SITES=[
     }
   }
 
+  // PATROL_VEGAS_USGS_3DEP_PORT_V1: validated public-domain, source-based display relief.
+  let vegasMeasuredRidges=null;
+  function buildVegasCoreRidgeSample(geometry) {
+    const {addTri,addQuad}=geometry;
+    // Original, editable earth-toned silhouette geometry. The shape is
+    // intentionally not presented as a real USGS digital elevation model.
+    const stone=[[.47,.37,.29],[.43,.34,.27],[.38,.31,.26],
+      [.52,.41,.32],[.46,.36,.28]];
+    let triangles=0;
+    const face=(a,b,c,color)=>{
+      // Correct both 2D source and fallback winding without mesh duplication.
+      const normalY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      addTri(a,normalY<0?c:b,normalY<0?b:c,color);
+      triangles++;
+    };
+    // Combine non-repeating long ridges, secondary crests and smaller
+    // weathered outcrops; avoid the former five-sample sawtooth skyline.
+    const ridgeHeight=(i,side)=>{
+      if(vegasMeasuredRidges){
+        const data=vegasMeasuredRidges.elevationMeters;
+        // USGS elevations are meters above datum. The existing gameplay
+        // has a deliberately compressed horizontal map and flight ceiling,
+        // so only the *shape* of source-derived relative relief is mapped
+        // to distant display geometry (not a 1:1 elevation model).
+        const relative=data[side<0?'west':'east'][i]-data.center[i];
+        return Math.max(12,Math.min(160,relative*(side<0?.14:.23)));
+      }
+      const phase=side===1?.35:1.47;
+      return Math.max(28,61+17*Math.sin(i*.17+phase)+
+        10*Math.sin(i*.39+phase*.7)+
+        5.5*Math.sin(i*1.21+phase*2.3));
+    };
+    const rows=48,dz=1332/rows,z0=-666;
+    if(vegasMeasuredRidges?.ridgeSurface){
+      // Two independent 49x9 meter-elevation grids from the same official
+      // USGS GeoTIFF. This is an actual two-dimensional DEM surface,
+      // spatially compressed into distant game scenery; city ground and
+      // physics/collisions remain unchanged.
+      const grid=vegasMeasuredRidges.ridgeSurface;
+      const cols=grid.gridColumns;
+      for(const side of [-1,1]){
+        const source=side<0?grid.west:grid.east;
+        const vertices=Array.from({length:rows+1},(_,i)=>{
+          const z=z0+i*dz;
+          return Array.from({length:cols},(_,j)=>{
+            const x=side*(686+(847-686)*j/(cols-1));
+            const meters=source.elevationDecimeters[i*cols+j]/10;
+            const relief=meters-vegasMeasuredRidges.elevationMeters.center[i];
+            // Blend the first three source columns into the existing
+            // desert grade. This is a *display seam* adaptation, not an
+            // alteration to the measured USGS elevations in the asset.
+            const foothillBlend=Math.max(0,Math.min(1,j/3,(cols-1-j)/2));
+            // West-scale protects source relief from the 160-unit flat cap.
+            const scale=side<0?.14:.23;
+            const y=sampleTerrainHeight(x,z)+
+              Math.max(0,Math.min(160,relief*scale))*foothillBlend;
+            return [x,y,z];
+          });
+        });
+        for(let i=0;i<rows;i++)for(let j=0;j<cols-1;j++){
+          const a=vertices[i][j],b=vertices[i+1][j],
+            c=vertices[i][j+1],d=vertices[i+1][j+1];
+          // Broad patches rather than repeated high-contrast bands.
+          const color=stone[(Math.floor(i/9)+j+(side>0?1:0))%stone.length];
+          // Side-dependent winding keeps BOTH west and east normals
+          // facing up and prevents one mountain wing being back-face culled.
+          if(side<0){face(a,c,b,color);face(b,c,d,color);}
+          else{face(a,b,c,color);face(b,d,c,color);}
+        }
+      }
+    }else{
+      // This procedural/four-band geometry remains a fully working
+      // fallback if the local measured JSON is unavailable or invalid.
+      for(const side of [-1,1])for(let i=0;i<rows;i++){
+        const z=z0+i*dz,zn=z+dz;
+        const h0=ridgeHeight(i,side),h1=ridgeHeight(i+1,side);
+        const profile=(zz,h)=>{
+          const point=(depth,fraction)=> {
+            const x=side*depth;
+            return [x,sampleTerrainHeight(x,zz)+h*fraction,zz];
+          };
+          // Keep procedural fallback terrain skirts grounded as well.
+          return [point(686,0),point(720,.25),point(754,.59),
+            point(811,1),point(847,0)];
+        };
+        const a=profile(z,h0),b=profile(zn,h1);
+        for(let band=0;band<4;band++){
+          const color=stone[(band+i%3+(side===1?1:0))%stone.length];
+          face(a[band],b[band],a[band+1],color);
+          face(b[band],b[band+1],a[band+1],color);
+        }
+      }
+    }
+    // Small-scale parallel pavement joints and tonal repair strips along
+    // the *existing* straight Strip between Harmon and Flamingo; flush
+    // overlays create no new blocking collider or new vehicle route.
+    const roadX=VEGAS_BOULEVARD, asphalt=[.19,.20,.21],
+      joint=[.34,.33,.32];
+    for(let z=-210;z<=-122;z+=11){
+      const y=sampleTerrainHeight(roadX,z)+.332;
+      const dark=(z%3===0)?joint:asphalt;
+      addQuad([roadX-8.46,y,z],[roadX-8.46,y,z+.095],
+        [roadX+8.46,y,z+.095],[roadX+8.46,y,z],dark);
+      triangles+=2;
+    }
+    return {mountainTriangles:triangles-18,roadTriangles:18,triangles};
+  }
+
   function buildVegasStrip(geometry) {
     const {box,lamp,cylinder,solidAt,place,addQuad}=geometry;
     const hotelDistricts=[
@@ -8996,6 +9148,7 @@ const CENTRAL_PARK_SITES=[
     const roadway=[0.25,0.26,0.27];
     const roadX=VEGAS_BOULEVARD;
     buildVegasRoads(box,lamp,addQuad);
+    buildVegasCoreRidgeSample(geometry);
     place('Sands Avenue',{x:126,z:-20});
     place('Tropicana Avenue',{x:81,z:-323});
     buildVegasHotels(geometry);
@@ -9266,6 +9419,23 @@ const CENTRAL_PARK_SITES=[
           box(x+curve/4,h+0.44,z+u+side*0.025,depth*0.57,0.69,0.053,glass);
         }
       }
+      // Hotel-specific roof crown relief: ventilated screen walls and stepped
+      // perimeter fins, not another filled skyline cuboid or collision box.
+      // Only tall Strip towers pay this near-field geometry budget.
+      if(floors>=18){
+        box(x,roof+.21,z,depth*.72,.24,width*.79,edgeTile);
+        for(const side of [-1,1]){
+          box(x+side*depth*.28,roof+.46,z,
+            .14,.68,width*.61,cream);
+          for(let vent=0;vent<Math.min(11,Math.floor(width/3.8));vent++){
+            const zz=z+(vent+.5)*width/Math.min(11,Math.floor(width/3.8))-width*.5;
+            box(x+side*depth*.31,roof+.49,zz,
+              .095,.32,Math.min(.45,width*.032),glass);
+          }
+        }
+        for(const end of [-1,1])
+          box(x,roof+.33,z+end*width*.36,depth*.57,.39,.12,cream);
+      }
     }
 
     const bellagio=VEGAS_SITES.bellagio;
@@ -9391,11 +9561,69 @@ const CENTRAL_PARK_SITES=[
     plantedCourt(4,43,9.2,10.5);
     plantedCourt(3.6,24,9.2,11.8);
     plantedCourt(-2.5,57,21,7);
-    mass('Venetian Campanile',-11,8,3.85,3.85,16.4,[0.57,0.32,0.24]);
-    box(-11,ground+15.2,8,4.32,2.5,4.32,cream);
-    for(const side of [-1,1])for(let i=-1;i<=1;i++){
-      box(-11+side*2.18,ground+15.14,8+i*1.19,0.055,1.49,0.58,glass);
-      box(-11+i*1.19,ground+15.14,8+side*2.18,0.58,1.49,0.055,glass);
+    // PATROL_VEGAS_VENETIAN_CAMPANILE_BELFRY_V1
+    // The resort's campanile has a red masonry shaft, a genuinely OPEN
+    // pale stone belfry and green pyramidal spire, not a filled white cube.
+    // Architecture reference: The Venetian Resort official Art & Architecture.
+    // These are original authored details, not copied models or exact survey.
+    // Preserve the existing tower's 16.4-high collision and 20.75-high spire.
+    const bellX=-11,bellZ=8,bellBrick=[.57,.32,.24],
+      bellShade=[.41,.22,.17],bellTrim=[.88,.80,.68];
+    box(bellX,ground+(13.75-.4)/2,bellZ,3.85,14.15,3.85,bellBrick);
+    solidAt('Venetian Campanile',bellX,bellZ,ground,ground+16.4,1.925,1.925);
+    // Projecting brick corner pilasters and narrow real mesh slit windows.
+    for(const side of [-1,1]){
+      for(const offset of [-1.68,1.68]){
+        box(bellX+offset,ground+7.18,bellZ+side*1.952,
+          .19,12.65,.095,bellShade);
+        box(bellX+side*1.952,ground+7.18,bellZ+offset,
+          .095,12.65,.19,bellShade);
+      }
+      for(const level of [3.4,5.9,8.4,10.7]){
+        box(bellX,ground+level,bellZ+side*1.956,
+          .23,.46,.067,bellShade);
+        box(bellX,ground+level,bellZ+side*1.994,
+          .12,.34,.033,glass);
+        box(bellX+side*1.956,ground+level,bellZ,
+          .067,.46,.23,bellShade);
+        box(bellX+side*1.994,ground+level,bellZ,
+          .033,.34,.12,glass);
+      }
+    }
+    // An open set of bell chambers. Unlike the old solid cap, the sky is
+    // visible between masonry columns. A single shallow crown slab remains.
+    box(bellX,ground+13.88,bellZ,4.34,.31,4.34,bellTrim);
+    box(bellX,ground+16.23,bellZ,4.42,.34,4.42,cream);
+    for(const ux of [-1.89,1.89])for(const uz of [-1.89,1.89])
+      box(bellX+ux,ground+15.06,bellZ+uz,.52,2.22,.52,cream);
+    for(const face of [-1,1])for(const axis of ['x','z']){
+      const point=(u,y,depth=2.174)=>axis==='z'
+        ?[bellX+u,ground+y,bellZ+face*depth]
+        :[bellX+face*depth,ground+y,bellZ+u];
+      for(const u of [-1.10,0,1.10]){
+        // Three genuinely empty arched apertures per facade. The ring is
+        // polygonal, never an opaque rectangular plane behind dark paint.
+        for(const end of [-.52,.52]){
+          const v=u+end;
+          if(axis==='z')box(bellX+v,ground+14.73,bellZ+face*2.105,
+            .12,1.32,.17,cream);
+          else box(bellX+face*2.105,ground+14.73,bellZ+v,
+            .17,1.32,.12,cream);
+        }
+        for(let seg=0;seg<8;seg++){
+          const a=seg*Math.PI/8,b=(seg+1)*Math.PI/8;
+          const p=(theta,rad)=>point(u+Math.cos(theta)*rad,
+            15.34+Math.sin(theta)*rad);
+          const quad=[p(a,.43),p(b,.43),p(b,.58),p(a,.58)];
+          if((axis==='z'&&face<0)||(axis==='x'&&face>0))
+            quad.reverse();
+          addQuad(...quad,seg%3===0?bellTrim:cream);
+        }
+      }
+    }
+    for(const y of [13.96,16.26])for(const side of [-1,1]){
+      box(bellX,ground+y,bellZ+side*2.18,4.46,.14,.19,cream);
+      box(bellX+side*2.18,ground+y,bellZ,.19,.14,4.46,cream);
     }
     for(const side of [-1,1]){
       const clock=(u,v)=>[-11+side*1.949,ground+12.04+v,8+u];
@@ -9404,9 +9632,37 @@ const CENTRAL_PARK_SITES=[
         const dial=(t,r)=>clock(Math.cos(t)*r,Math.sin(t)*r);
         addQuad(clock(0,0),dial(a,0.69),dial(b,0.69),dial(b,0.2),cream);
       }
-      box(-11+side*1.976,ground+12.25,8,0.034,0.46,0.071,iron);
-      box(-11+side*1.976,ground+12.04,8+side*0.15,0.034,0.07,0.32,iron);
+      // PATROL_VEGAS_CAMPANILE_CLOCK_DETAIL_V1
+      // Model-only clock detail: two stylized hands and twelve real ticks.
+      // These are dark, batched mesh quads above the original ivory dial,
+      // not textured graphics or measured instrument/clockwork dimensions.
+      const darkClock=[.20,.19,.17];
+      const dialFace=(u,v)=>[-11+side*2.022,ground+12.04+v,8+u];
+      const clockStroke=(angle,inner,outer,width,color)=>{
+        const polar=(rad,tangent)=>dialFace(Math.cos(angle)*rad-Math.sin(angle)*tangent,
+          Math.sin(angle)*rad+Math.cos(angle)*tangent);
+        const quad=[polar(inner,-width),polar(outer,-width),
+          polar(outer,width),polar(inner,width)];
+        if(side<0)quad.reverse();
+        addQuad(...quad,color);
+      };
+      for(let tick=0;tick<12;tick++)
+        clockStroke(tick*Math.PI/6,tick%3===0?.48:.54,.64,
+          tick%3===0?.028:.018,darkClock);
+      clockStroke(5*Math.PI/6,.05,.38,.039,darkClock);
+      clockStroke(Math.PI/3,.05,.53,.026,darkClock);
+      box(-11+side*2.032,ground+12.04,8,.035,.083,.083,iron);
     }
+    // PATROL_VEGAS_CAMPANILE_BELL_V1: a small suspended bronze bell inside
+    // the new open arcade, not an opaque replacement of its openings.
+    // No physical bell collision: retain the conservative existing building.
+    const bellBronze=[.57,.39,.22],bellDark=[.35,.25,.19];
+    box(-11,ground+15.59,8,1.68,.10,.12,iron);
+    cylinder(-11,8,[[ground+14.73,.43],[ground+14.85,.51],
+      [ground+15.16,.34],[ground+15.39,.15],[ground+15.48,.10]],
+      bellBronze,10);
+    cylinder(-11,8,[[ground+14.58,.11],[ground+14.79,.11]],
+      bellDark,8);
     cylinder(-11,8,[[ground+16.4,3.05],[ground+20.75,0.12]],[0.29,0.46,0.41],4,Math.PI/4);
     solidAt('Venetian Campanile spire',-11,8,ground+16.4,ground+20.75,0.6,0.6);
     const canalX=-12,canalZ=31,canalY=ground+0.27;
@@ -11070,6 +11326,9 @@ const CENTRAL_PARK_SITES=[
       detail:'Roman portico, columns and fountain court'},
     {site:VEGAS_SITES.venetian, x:5,z:27,height:15,bearing:-58,radius:64,rise:20,
       detail:'Campanile, canal bridge and moving gondolas'},
+    {site:{name:'Venetian Campanile Close-up'},x:-11,z:8,height:15.7,
+      bearing:138,radius:18,rise:3.4,
+      detail:'Open bell arches, brick shaft, clock and stone cornices'},
     {site:VEGAS_SITES.wynn, x:12,z:155,height:20,bearing:-72,radius:70,rise:21,
       detail:'Curved bronze glazing and gold facade bands'},
     {site:VEGAS_SITES.paris,x:10,z:-165,height:21,bearing:-46,radius:75,rise:26,
@@ -11080,7 +11339,7 @@ const CENTRAL_PARK_SITES=[
       detail:'Gondolas, stone bridge, striped mooring poles and canal arcades'},
     {site:{name:'Wynn Waterfall'},x:2.5,z:185.2,height:1.2,bearing:-105,radius:9.0,rise:1.6,
       detail:'Animated water cascading through the landscaped entrance court'},
-    {site:{name:'Strip Street View'},x:-26,z:-171.5,height:1.5,bearing:169,radius:10,rise:2,
+    {site:{name:'Strip Street View'},x:-23,z:-171.5,height:1.5,bearing:152,radius:10,rise:2,
       detail:'Strip traffic, a curbside police stop and the hotel promenade'},
     {site:VEGAS_SITES.coaster,ride:'coaster',x:57,z:-269,height:13,bearing:-42,radius:72,rise:24,
       detail:'Four-car train, boarding platforms and a pedestrian plaza'},
@@ -12741,6 +13000,18 @@ const CENTRAL_PARK_SITES=[
       }catch(error){
         console.warn('[PATROL] NYC official footprint fallback:',error);
         selectedMap.city.officialFootprints=[];
+      }
+    }
+    // Vegas USGS DEM is for distant visual relief only; fallback remains flyable.
+    vegasMeasuredRidges=null;
+    if(selectedMap.vegas){
+      try{
+        const {loadVegasRidgeDEM}=await import('./assets/vegas/usgs-ridges.js');
+        vegasMeasuredRidges=await loadVegasRidgeDEM();
+        console.info('[PATROL] Vegas USGS measured ridge profile loaded',
+          vegasMeasuredRidges.source.rawGeoTiffSHA256);
+      }catch(error){
+        console.warn('[PATROL] Vegas 3DEP ridge fallback:',error);
       }
     }
     const terrainOptions={

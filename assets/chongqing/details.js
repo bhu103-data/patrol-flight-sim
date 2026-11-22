@@ -43,13 +43,20 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     return texture;
   }
   const woodTexture=pbr?.wood?null:tiledTexture('wood');
+  // Existing Poly Haven CC0 stone/concrete PBR, reused for pedestrian
+  // paving; fallback remains local and texture-free if assets fail.
+  const pavedStone=pbr?.stone?.clone?.()??
+    new THREE.MeshStandardMaterial({color:0x777b7d,roughness:.98});
+  if(pavedStone.color?.setHex)pavedStone.color.setHex(0x858d91);
+  pavedStone.roughness=.96;
+  pavedStone.metalness=0;
   const materials={
     timber:pbr?.wood??new THREE.MeshStandardMaterial({color:0x9f6855,map:woodTexture,bumpMap:woodTexture,bumpScale:.025,roughness:.79}),
     carved:pbr?.carvedWood??new THREE.MeshStandardMaterial({color:0xbd8b62,map:woodTexture,roughness:.67}),
     terra:pbr?.roof??new THREE.MeshStandardMaterial({color:0x5d6061,roughness:.86}),
     rail:new THREE.MeshStandardMaterial({color:0x7e8791,metalness:.52,roughness:.5}),
     stone:pbr?.stone??new THREE.MeshStandardMaterial({color:0xb6adb0,roughness:.91}),
-    paving:new THREE.MeshStandardMaterial({color:0x55545a,roughness:.96}),
+    paving:pavedStone,
     steps:pbr?.cutStone??new THREE.MeshStandardMaterial({color:0xbdb2a9,roughness:.89}),
     window:pbr?.window??new THREE.MeshBasicMaterial({color:0xffcf86}),
     lattice:pbr?.carvedWood??new THREE.MeshStandardMaterial({color:0x694c34,roughness:.8}),
@@ -161,7 +168,16 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     const sections=Math.floor((w-8)/7);
     put('terra',hongX,y+10.45,z,w+15,1.1,33);
     put('carved',hongX,y+9.15,front+1,w+5,.72,1.25);
-    put('amber',hongX,y+10.1,front+3,w+7,.19,.3);
+    // PATROL_CQ_HONGYADONG_STAGGERED_GALLERIES_V1: break the former
+    // eleven identical full-width illuminated bands into individual tenant
+    // awnings. Deterministic offsets avoid flashing/repeats during flight.
+    // All strips share the existing instanced warm lamp pool.
+    for(let segment=0;segment<5;segment++){
+      if((segment+level*2)%5===1)continue;
+      const step=(w+7)/5;
+      put('amber',hongX+(segment-2)*step,y+10.1,front+3,
+        step*.77,.17,.3);
+    }
     put('timber',hongX,y+2.1,front+3.6,w+8,.85,2);
     put('carved',hongX,y+6.45,front+4.6,w+9,.45,1.1);
     // A balconied gallery, with warm restaurant interiors instead of a single flat face.
@@ -176,7 +192,7 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
         put('lattice',x,y+5.6+n*1.38,front+.37,3.88,.105,.15);
       }
       put('terra',x,y+5.5,front+.27,.28,5.8,.19);
-      if(j%2===0){
+      if((j+level)%3===0){
         lantern(x,y+8.45,front+5.5,1.05);
         beam('timber',[x,y+8.8,front],[x,y+7.5,front+4],.33);
       }
@@ -188,7 +204,13 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
     // from the Jialing River (negative z), not the inland side of the hillside.
     const waterfront=z-12.2;
     put('carved',hongX,y+1.85,waterfront-4.7,w+7,.75,10.6);
-    put('amber',hongX,y+9.55,waterfront-6.5,w+8,.22,.42);
+    // River-facing gallery has its own irregular, offset lit rhythm.
+    for(let section=0;section<5;section++){
+      if((section+level*3)%5===3)continue;
+      const step=(w+8)/5;
+      put('amber',hongX+(section-2)*step,y+9.55,
+        waterfront-6.5,step*.72,.20,.42);
+    }
     put('timber',hongX,y+6.5,waterfront-6.9,w+7,.48,.57);
     for(let j=0;j<sections;j++){
       const x=hongX-w/2+4+(j+.5)*(w-8)/sections;
@@ -202,10 +224,23 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       put('carved',x,y+2.8,waterfront-2.5,4.8,.39,.7);
       put('carved',x,y+8.9,waterfront-3.1,5.6,.5,.8);
       put('timber',x,y+3.65,waterfront-7.2,.38,3.7,.45);
-      if(j%2===0){
+      if((j+level*2)%3===0){
         lantern(x,y+8.0,waterfront-5.6,1.05);
         beam('timber',[x,y+9,waterfront-1],[x,y+7.8,waterfront-4.9],.32);
       }
+    }
+    // River-facing service bays: recessed door transoms, downpipes and
+    // partial louver shades. These are actual batched 3D strips, rather than
+    // large glowing window quads; all sit inside the existing balcony outline.
+    for(let bay=0;bay<sections;bay++){
+      if((bay+level*3)%4!==1)continue;
+      const x=hongX-w/2+4+(bay+.5)*(w-8)/sections;
+      put('carved',x,y+8.58,waterfront-2.61,4.45,.18,.31);
+      put('rail',x-2.30,y+5.48,waterfront-2.63,.095,5.95,.11);
+      put('rail',x+2.30,y+5.48,waterfront-2.63,.095,5.95,.11);
+      for(let shutter=0;shutter<4;shutter++)
+        put('carved',x+.80,y+4.45+shutter*.38,
+          waterfront-2.70,1.53,.078,.15);
     }
     // Layers of timber balcony rails, with a believable opening at the midpoint.
     for(let j=0;j<sections;j++){
@@ -283,6 +318,14 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
   for(let i=0;i<19;i++){
     const x=77+i*8.6,z=304+1.6*Math.sin(i*.45),y=ground(x,z)+.24;
     put('paving',x,y,z,8.4,.37,13);
+    // Narrow curb seams at a known upper-market terrace, not over the
+    // steep hotpot/shop pad or the road centreline.
+    put('steps',x,y+.225,z+5.78,8.1,.078,.16);
+    put('steps',x,y+.225,z-5.78,8.1,.078,.16);
+    if(i%4===0){
+      put('stone',x-3.65,y+.39,z+5.78,.16,.36,.44);
+      put('stone',x+3.65,y+.39,z+5.78,.16,.36,.44);
+    }
     if(i%2===0){
       put('rail',x,y+1.6,z-6.9,.28,3.1,.28);
       put('carved',x,y+3.04,z-6.9,7,.27,.35);

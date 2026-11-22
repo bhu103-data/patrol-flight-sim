@@ -99,6 +99,16 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     [19.7,26.3,-51.6,-43.4],[-10.8,6.6,32.7,49.4]
   ];
   for(const rec of asset.features){
+    // PATROL_NYC_TIMES_FID941790_GHOST_DUPLICATE_V1:
+    // The north-tip 2 Times Square site is already an authored polygon using
+    // its municipal FID, billboard, and scene collision proxy. The GIS
+    // supplement projects a *second* tiny 941790 tower at x~-2,z~66 instead
+    // of the curated game's x=4,z=61. Skip only this visual duplicate when
+    // that named site exists. Source GIS without that site remains usable.
+    // Do not dedupe all nine site/FID mismatches: FID 1000156 carries the
+    // camera-facing 44th Street facade, and bulk removal would erase it.
+    if(rec.fid===941790 && protectedSites.some(
+      site=>site.name==='2 Times Square'))continue;
     if(pieces>=MAX_PIECES)break;
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
         !(rec.heightFt>0&&rec.heightFt<2500)||!Array.isArray(rec.rings?.[0])||
@@ -133,12 +143,19 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     ];
     const base=families[family];
     const wall=base.map(c=>c*.92),roofCol=base.map(c=>Math.min(.94,c*1.15));
+    // Municipal FID 1000156 projects onto the tall, blank west-side wall
+    // of the 44th Street fixed camera. No claim that window locations are
+    // surveyed: these are bounded, authored facade details on its real lot.
+    const showcaseFacade=rec.fid===1000156&&h>=45;
+    let showcaseRemaining=showcaseFacade?180:0;
     for(const part of parts){
       if(pieces>=MAX_PIECES)break;
       if(part.length<3||part.length>48||Math.abs(signed(part))<MIN_AREA)continue;
       // Downward x-z winding creates upward +Y roofs and outward wall normals.
       const ring=signed(part)>0?part.slice().reverse():part;
       const top=ground+h;
+      let pieceWindows=0;
+      const pieceBudget=showcaseFacade?Math.min(88,showcaseRemaining):26;
       for(let k=0;k<ring.length;k++){
         const a=ring[k],b=ring[(k+1)%ring.length];
         if(Math.hypot(a[0]-b[0],a[1]-b[1])<.15)continue;
@@ -147,6 +164,40 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         // Narrow, recessed dark windows. Never exceed mobile detail budget.
         const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
         const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+        // PATROL_NYC_FID1000156_CAMERA_FRONT_GLAZING_V2:
+        // Two 44th Street camera-facing GIS walls on the official FID,
+        // clipped by the authored street corridor at game z=17.05, still
+        // appeared as featureless slabs despite the fair window quota.
+        // This only adds original authored facade glazing/metal trim to
+        // those two existing edges; not a surveyed real window schedule.
+        // Leave source footprint, road cuts, original windows, roof,
+        // billboards, collision and all other building FIDs untouched.
+        const cameraFacingCut=showcaseFacade && len>=3.8 && nz<-.96 &&
+          Math.abs(a[1]-17.05)<.035 && Math.abs(b[1]-17.05)<.035 &&
+          Math.min(a[0],b[0])>=20.1 && Math.max(a[0],b[0])<=31.0;
+        if(cameraFacingCut){
+          const at=(t,y,offset)=>[a[0]+(b[0]-a[0])*t+nx*offset,
+            y,a[1]+(b[1]-a[1])*t+nz*offset];
+          const strip=(u,v,low,high,depth,color,tag)=>
+            addQuad(at(u,low,depth),at(v,low,depth),
+              at(v,high,depth),at(u,high,depth),color,tag);
+          const glass=[.13,.23,.28],aluminum=[.39,.45,.48],frame=[.29,.34,.38];
+          for(let row=0;row<10 && windows<2200;row++){
+            const low=ground+5.25+row*5.55,high=low+3.75;
+            if(high>top-.82)break;
+            strip(.07,.93,low,high,.082,glass,7);
+            windows++;
+            strip(.06,.94,high+.045,high+.118,.102,
+              row%3===0?aluminum:frame,6);
+          }
+          // Actual projecting geometry; glass and trim depths differ,
+          // so this is not a flat decal or shader-only contrast change.
+          for(const u of [.30,.50,.70]){
+            strip(u-.010,u+.010,ground+5.20,
+              Math.min(top-.85,ground+5.25+9*5.55+3.87),
+              .112,aluminum,6);
+          }
+        }
         // PATROL_NYC_TIMES_FID384606_SHOPFRONT_V1: the 5.98-unit polygon
         // at the 44th Street camera's right foreground had zero window quads:
         // the generic h<9 infill gate skipped it. Keep the municipal polygon,
@@ -198,18 +249,49 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
         }
         if(len<3.2||h<9||windows>=2200)continue;
         const bays=Math.min(8,Math.floor(len/1.75)),
-          floors=Math.min(12,Math.floor((h-2.2)/2.35));
-        for(let row=0;row<floors;row++)for(let bay=0;bay<bays;bay++){
-          if(windows>=2200)break;
+          floors=Math.min(showcaseFacade?28:12,Math.floor((h-2.2)/2.35));
+        if(bays<1||floors<1)continue;
+        // PATROL_NYC_GIS_FAIR_WINDOW_COVERAGE_V1: the former unbounded
+        // row-major traversal exhausted all 2,200 windows halfway through
+        // the 76 distinct clipped source footprints. Later Times Square
+        // buildings then rendered as unbroken masonry slabs in the LED
+        // canyon even though their real polygon walls were present.
+        //
+        // Keep the same 2,200-glass-quad global cap and source coordinates.
+        // Most FIDs receive <=26 panes per clipped piece. The fixed-camera
+        // FID has a separate 180-pane *record-wide* limit, not an unlimited
+        // extra grid per chunk; building order remains immaterial.
+        const edgeQuota=Math.max(2,Math.floor(pieceBudget/Math.max(4,ring.length)));
+        const colBands=Math.min(bays,Math.max(1,Math.ceil(Math.sqrt(edgeQuota))));
+        const rowBands=Math.min(floors,Math.max(2,Math.floor(edgeQuota/colBands)));
+        for(let rr=0;rr<rowBands;rr++)for(let bb=0;bb<colBands;bb++){
+          if(windows>=2200||pieceWindows>=pieceBudget)break;
+          // Include top and base rows for a tall surveyed wall; centered
+          // samples previously missed the actual upper stories entirely.
+          const row=rowBands<2?0:Math.min(floors-1,
+            Math.round(rr*(floors-1)/(rowBands-1)));
+          const bay=Math.min(bays-1,Math.floor((bb+.5)*bays/colBands));
           const v0=(bay+.24)/bays,v1=(bay+.76)/bays;
-          const q=(t,y)=>[a[0]+(b[0]-a[0])*t+nx*.045,y,
-            a[1]+(b[1]-a[1])*t+nz*.045];
+          const q=(t,y,depth=.045)=>[a[0]+(b[0]-a[0])*t+nx*depth,y,
+            a[1]+(b[1]-a[1])*t+nz*depth];
           const lower=ground+2.4+row*2.35,upper=lower+.99;
           if(upper>top-.5)continue;
           const shade=((rec.fid+row*17+bay*31)%11);
           const tint=shade<2?[.43,.51,.54]:shade<4?[.17,.26,.30]:[.12,.20,.25];
           addQuad(q(v0,lower),q(v1,lower),q(v1,upper),q(v0,upper),tint,7);
-          windows++;
+          // Frame returns and shallow sills give the upper wall actual depth
+          // rather than an endlessly repeating painted window texture. Only
+          // the inspected FID gets these extra mesh quads; source polygon,
+          // existing lit signs and collision volumes are unchanged.
+          if(showcaseFacade && (row+bay)%3!==1){
+            const stone=[.37,.39,.40],front=.075;
+            addQuad(q(v0,lower-.06,front),q(v1,lower-.06,front),
+              q(v1,lower+.045,front),q(v0,lower+.045,front),stone,6);
+            addQuad(q(v0,upper-.035,front),q(v1,upper-.035,front),
+              q(v1,upper+.065,front),q(v0,upper+.065,front),stone,6);
+          }
+          windows++;pieceWindows++;
+          if(showcaseFacade)showcaseRemaining--;
         }
       }
       // Finish transition: one slim horizontal cornice near the crown and

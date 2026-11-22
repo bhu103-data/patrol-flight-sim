@@ -1,0 +1,75 @@
+name: Vegas USGS 3DEP visual-relief browser QA
+
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/vegas/**'
+      - 'scripts/vegas-core-browser-smoke.mjs'
+      - 'scripts/vegas-baseline-compare.mjs'
+      - 'scripts/vegas-baseline-camera-pair.mjs'
+      - 'tests/allmap-visual-relief.test.mjs'
+      - 'tests/vegas-usgs-ridges.test.mjs'
+      - '.github/workflows/vegas-realism-relief-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vegas-six-camera:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check USGS provenance, fallbacks and four-map source boundaries
+        run: node --test tests/vegas-usgs-ridges.test.mjs tests/allmap-visual-relief.test.mjs
+      - name: Install free open-source Chromium QA dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve current candidate
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-vegas-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture six real Las Vegas WebGL2 scenes and assert measured DEM was loaded
+        env:
+          PATROL_QA_TAG: candidate
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/vegas-core-browser-smoke.mjs
+      # Pinned original main at #142 creation, not the stacked PR base branch.
+      # The same candidate Playwright script runs against this separate site.
+      - name: Serve original main baseline at separate port
+        env:
+          PATROL_VEGAS_BASELINE_SHA: cc56be0aa0cb41c23a7cd97ea49defeb65b24be1
+        run: |
+          git cat-file -e "$PATROL_VEGAS_BASELINE_SHA^{commit}"
+          git worktree add --detach /tmp/patrol-vegas-baseline "$PATROL_VEGAS_BASELINE_SHA"
+          node scripts/vegas-baseline-camera-pair.mjs
+          python3 -m http.server 8766 --directory /tmp/patrol-vegas-baseline --bind 127.0.0.1 >/tmp/patrol-vegas-baseline-http.log 2>&1 &
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8766/index.html >/dev/null
+      - name: Capture the same six baseline cameras with identical graphics settings
+        env:
+          PATROL_QA_TAG: baseline
+          PATROL_BASE_URL: http://127.0.0.1:8766
+        run: node scripts/vegas-core-browser-smoke.mjs
+      - name: Generate six pixel-difference images and A/B diagnostic JSON
+        env:
+          PATROL_VEGAS_BASELINE_SHA: cc56be0aa0cb41c23a7cd97ea49defeb65b24be1
+          PATROL_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/vegas-baseline-compare.mjs
+      - name: Keep screenshot evidence and browser reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegas-usgs-3dep-six-camera-baseline-ab
+          path: artifacts/vegas/
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,0 +1,79 @@
+name: All-map visual-relief NYC and Chongqing browser evidence
+
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/chongqing/**'
+      - 'assets/nyc/**'
+      - 'tests/allmap-visual-relief.test.mjs'
+      - '.github/workflows/allmap-relief-scene-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# No shared concurrency group: captures are not displaced by unrelated
+# map branches. Isolated from the project's NYC/CQ standard workflows.
+jobs:
+  nyc-fixed-cameras:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate NYC survey, LOD and screen structure
+        run: node --test tests/allmap-visual-relief.test.mjs tests/nyc-times-verified.test.mjs tests/nyc-facade-relief.test.mjs
+      - name: Install Chromium and PNG reader
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve checked-out game
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-allmap-nyc-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture actual Lower Manhattan, bridgehead and Times Square WebGL2
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-road-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allmap-relief-nyc-webgl
+          path: artifacts/nyc/
+          if-no-files-found: warn
+          retention-days: 7
+
+  chongqing-fixed-cameras:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate architecture, GLB swap and PBR/regression cases
+        run: node --test tests/chongqing-*.test.mjs tests/allmap-visual-relief.test.mjs
+      - name: Install Chromium and PNG reader
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve checked-out Chongqing scene
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-allmap-cq-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/chongqing.html >/dev/null
+      - name: Capture actual Hongyadong, street and camera flight WebGL2
+        env:
+          CHONGQING_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/chongqing-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allmap-relief-chongqing-webgl
+          path: artifacts/chongqing/
+          if-no-files-found: warn
+          retention-days: 7
