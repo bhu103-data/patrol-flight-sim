@@ -16,15 +16,18 @@ function qaDocument(input,output){
     '  window.PatrolAlaskaNormalQA = mode => {',
     '    if(!selectedMap.alaska)throw Error("Alaska-only visual QA");',
     '    window.__patrolNormalFreeze=true;',
-    '    // Terrain-relative near-view camera; no runtime spawn edits.',
-    '    const x=mode==="glacier"?118:190;',
-    '    const z=mode==="glacier"?415:-567;',
-    '    const y=mode==="glacier"',
-    '      ?Math.max(45,sampleGroundHeight(x,z)+22)',
-    '      :Math.max(32,sampleGroundHeight(x,z)+15);',
-    '    plane.pos=[x,Math.min(CEILING-8,y),z];',
-    '    plane.yaw=mode==="glacier"?.12:.08;',
-    '    plane.pitch=mode==="glacier"?-.14:-.20;',
+    "    // Terrain-relative DEM-facing QA: view actual steep land, not glacier mesh.",
+    "    // Source grid steep gradients verified; coords are compact game units.",
+    "    const shots={",
+    "      west:{x:30,z:-240,yaw:-Math.PI/2,pitch:0.075,minAlt:30},",
+    "      east:{x:70,z:0,yaw:Math.PI/2,pitch:0.060,minAlt:35}",
+    "    };",
+    "    const shot=shots[mode];",
+    "    if(!shot)throw Error(\"Unknown Alaska DEM ridge QA camera: \"+mode);",
+    "    const y=Math.max(shot.minAlt,sampleGroundHeight(shot.x,shot.z)+18);",
+    "    plane.pos=[shot.x,Math.min(CEILING-8,y),shot.z];",
+    "    plane.yaw=shot.yaw;",
+    "    plane.pitch=shot.pitch;",
     '    plane.bank=0; plane.speed=0; plane.throttle=0; plane.vsi=0;',
     '    camInitialized=false;',
     '  };',''
@@ -37,6 +40,18 @@ function qaDocument(input,output){
     '      flightStep={basis:getPlaneBasis(),boundaryAssist:false};',
     '    }else{','      flightStep=advanceFlight(dt);','    }'
   ].join(eol));
+  // Test copies only: do not change actual game shaders. Live RAF samples
+  // are collected before the screenshots use a common GPU time phase.
+  for(const [original,replacement] of [
+    ['gl.uniform1f(uWorld.time, time);',
+      'gl.uniform1f(uWorld.time, window.__patrolDemFrozenTime ?? time);'],
+    ['gl.uniform1f(uMesh.sceneTime,sceneryTime);',
+      'gl.uniform1f(uMesh.sceneTime, window.__patrolDemFrozenTime ?? sceneryTime);']
+  ]){
+    if(html.split(original).length!==2)
+      throw Error('Nonunique DEM QA shader-time anchor: '+original+' in '+input);
+    html=html.replace(original,replacement);
+  }
   writeFileSync(output,html);
 }
 qaDocument('alaska-dem-normal-base.html','alaska-dem-normal-base-qa.html');
@@ -92,13 +107,16 @@ async function capture(label,file){
     }));
     if(state.menuError||state.gpuLost||!state.flight?.playing||state.flight.map!=='alaska')
       throw Error(label+' Alaska load failed: '+JSON.stringify(state));
-    const scenarios=[['glacier-rock-snow','glacier','12'],['harbor-coast','shore','12']];
+    // Oblique ridges from opposite sides of USGS terrain corridor.
+    const scenarios=[['west-ridge','west','12'],['east-ridge','east','12']];
     const record={};
     for(const [name,mode,hour] of scenarios){
       await page.evaluate(({mode,hour})=>{
+        window.__patrolDemFrozenTime=null; // time advances during frame pacing
         for(const [id,value] of [['skyTime',hour],['skyWeather','Clear'],['skySeason','1']]){
           const el=document.getElementById(id);
           el.value=value;
+          if(el.value!==value)throw Error('Invalid QA environment option '+id+'='+value);
           el.dispatchEvent(new Event('change',{bubbles:true}));
         }
         window.PatrolAlaskaNormalQA(mode);
@@ -112,8 +130,14 @@ async function capture(label,file){
       });
       await page.addStyleTag({content:
         '#flightMap,#statusBar,#skySettings,#hudCanvas{visibility:hidden!important}'});
+      // Freeze only AFTER timing samples, allowing two WebGL redraws at
+      // an identical phase across separately loaded baseline/patch pages.
+      await page.evaluate(async()=>{
+        window.__patrolDemFrozenTime=42;
+        await new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok)));
+      });
       await page.screenshot({path:'artifacts/alaska-dem-normal-'+label+'-'+name+'.png'});
-      record[name]={pose,timing,canvas};
+      record[name]={pose,timing,canvas,frozenShaderTime:42};
     }
     if(errors.length||failedAssets.length)throw Error(label+' errors: '+errors.join('; ')+failedAssets.join('; '));
     return record;
@@ -128,8 +152,10 @@ try{
     if(drift>.01||Math.abs(b.pose.yaw-n.pose.yaw)>.005)
       throw Error('Mismatch '+key+' camera: '+drift);
     if(b.canvas.lost||n.canvas.lost)throw Error('Lost WebGL2 context');
+    if(b.frozenShaderTime!==42||n.frozenShaderTime!==42)
+      throw Error('Mismatched shader phase in '+key);
     result[key]={cameraDrift:drift,baselineFps:b.timing.observedFps,
-      updatedFps:n.timing.observedFps,baselineCanvas:b.canvas,updatedCanvas:n.canvas};
+      updatedFps:n.timing.observedFps,baselineCanvas:b.canvas,updatedCanvas:n.canvas,frozenShaderTime:42};
   }
   console.log('Alaska DEM normal live A/B',JSON.stringify(result));
   writeFileSync('artifacts/alaska-dem-normal-performance.json',JSON.stringify(result,null,2));
