@@ -16,15 +16,18 @@ function qaDocument(input,output){
     '  window.PatrolAlaskaNormalQA = mode => {',
     '    if(!selectedMap.alaska)throw Error("Alaska-only visual QA");',
     '    window.__patrolNormalFreeze=true;',
-    '    // Terrain-relative near-view camera; no runtime spawn edits.',
-    '    const x=mode==="glacier"?118:190;',
-    '    const z=mode==="glacier"?415:-567;',
-    '    const y=mode==="glacier"',
-    '      ?Math.max(45,sampleGroundHeight(x,z)+22)',
-    '      :Math.max(32,sampleGroundHeight(x,z)+15);',
-    '    plane.pos=[x,Math.min(CEILING-8,y),z];',
-    '    plane.yaw=mode==="glacier"?.12:.08;',
-    '    plane.pitch=mode==="glacier"?-.14:-.20;',
+    "    // Terrain-relative DEM-facing QA: view actual steep land, not glacier mesh.",
+    "    // Source grid steep gradients verified; coords are compact game units.",
+    "    const shots={",
+    "      west:{x:30,z:-240,yaw:-Math.PI/2,pitch:0.075,minAlt:30},",
+    "      east:{x:70,z:0,yaw:Math.PI/2,pitch:0.060,minAlt:35}",
+    "    };",
+    "    const shot=shots[mode];",
+    "    if(!shot)throw Error(\"Unknown Alaska DEM ridge QA camera: \"+mode);",
+    "    const y=Math.max(shot.minAlt,sampleGroundHeight(shot.x,shot.z)+18);",
+    "    plane.pos=[shot.x,Math.min(CEILING-8,y),shot.z];",
+    "    plane.yaw=shot.yaw;",
+    "    plane.pitch=shot.pitch;",
     '    plane.bank=0; plane.speed=0; plane.throttle=0; plane.vsi=0;',
     '    camInitialized=false;',
     '  };',''
@@ -104,7 +107,8 @@ async function capture(label,file){
     }));
     if(state.menuError||state.gpuLost||!state.flight?.playing||state.flight.map!=='alaska')
       throw Error(label+' Alaska load failed: '+JSON.stringify(state));
-    const scenarios=[['glacier-rock-snow','glacier','12'],['harbor-coast','shore','12']];
+    // Oblique ridges from opposite sides of USGS terrain corridor.
+    const scenarios=[['west-ridge','west','12'],['east-ridge','east','12']];
     const record={};
     for(const [name,mode,hour] of scenarios){
       await page.evaluate(({mode,hour})=>{
@@ -112,6 +116,7 @@ async function capture(label,file){
         for(const [id,value] of [['skyTime',hour],['skyWeather','Clear'],['skySeason','1']]){
           const el=document.getElementById(id);
           el.value=value;
+          if(el.value!==value)throw Error('Invalid QA environment option '+id+'='+value);
           el.dispatchEvent(new Event('change',{bubbles:true}));
         }
         window.PatrolAlaskaNormalQA(mode);

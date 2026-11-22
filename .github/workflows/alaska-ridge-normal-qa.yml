@@ -2,10 +2,11 @@ name: Alaska DEM ridge normal fixed-view QA
 
 on:
   pull_request:
-    branches: [codex/patrol-integration-20261121, codex/alaska-dem-slope-footprint-20261121]
+    branches: [codex/patrol-integration-20261121, codex/alaska-dem-slope-footprint-20261121, qa/alaska-dem-normal-frozen-time-20261121-chat]
     paths:
       - index.html
       - tools/alaska/compare_dem_normals.mjs
+      - tests/alaska-dem-ridge-angles.test.mjs
       - .github/workflows/alaska-ridge-normal-qa.yml
 
 permissions:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   alaska-ridge-normals:
-    if: github.head_ref == 'codex/alaska-dem-slope-footprint-20261121' || github.head_ref == 'qa/alaska-dem-normal-frozen-time-20261121-chat'
+    if: github.head_ref == 'codex/alaska-dem-slope-footprint-20261121' || github.head_ref == 'qa/alaska-dem-normal-frozen-time-20261121-chat' || github.head_ref == 'qa/alaska-dem-ridge-angles-20261122-chat'
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     steps:
@@ -35,7 +36,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Same-camera source-exact DEM alpine/coastline A-B and RAF pacing
+      - name: Same-camera source-exact DEM west/east ridge A-B and RAF pacing
         run: |
           git show 38a9be192ca14cf5d47f6991d050b4093357f044:index.html > alaska-dem-normal-base.html
           node tools/alaska/compare_dem_normals.mjs
