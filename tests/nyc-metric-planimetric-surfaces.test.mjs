@@ -138,3 +138,18 @@ test('CI and live viewer reject absent official roadbed and sidewalk source laye
  assert.match(browser,/s\.sourceHolesPreserved===true/);
  assert.match(browser,/s\.pavementFill===false/);
 });
+
+test('static GIS buffers use VAOs once, never re-upload all source polygons per frame',()=>{
+ const html=readFileSync(resolve(dir,'../nyc-metric-pilot.html'),'utf8');
+ const browser=readFileSync(resolve(dir,'../scripts/nyc-metric-pilot-browser.mjs'),'utf8');
+ const frame=html.slice(html.indexOf('function render(){'),
+   html.indexOf("try{\n const response=await fetch("));
+ assert.ok(frame.includes('gl.drawArrays('));
+ assert.doesNotMatch(frame,/gl\.bufferData\(/);
+ assert.match(html,/gl\.createVertexArray/);
+ assert.match(html,/function uploadStaticScene/);
+ assert.match(html,/gl\.bufferData\(gl\.ARRAY_BUFFER,vertices,gl\.STATIC_DRAW\)/);
+ assert.match(html,/perFrameReuploads:false/);
+ assert.match(browser,/state\.staticGpu\.layers!==6/);
+ assert.match(browser,/state\.staticGpu\.perFrameReuploads!==false/);
+});
