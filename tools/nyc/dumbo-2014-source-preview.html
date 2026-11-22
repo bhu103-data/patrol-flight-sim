@@ -65,7 +65,10 @@ async function start(){
  const source=await meshResponse.json(),oti=await otiResponse.json();
  if(source.schema!=='patrol-nyc-dumbo-bk02-2014-cached-roof-facade-mesh-v1'||
    source.verticalDatumVerified!==false)throw Error('Unrecognized historical source schema');
- const zBase=source.rawSourceZFeetRange[0],ft=1200/3937;
+ if(source.modelUnitSystem!=='UnitSystem.Feet'||
+   !Array.isArray(source.rawSourceZRhinoFeetRange))
+   throw Error('Unverified Rhino document Z unit; refusing to scale preview');
+ const zBase=source.rawSourceZRhinoFeetRange[0],ft=.3048;
  const colorByKind={roof:[.69,.74,.78],facade:[.48,.57,.63],footprint:[.26,.36,.41]};
  const packed=[];
  let minY=Infinity,maxY=-Infinity,renderedTriangles=0;
@@ -117,8 +120,8 @@ async function start(){
   sourceRoofPatches:source.counts.roofPatches,sourceFacadePatches:source.counts.facadePatches,
   sourceFootprintPatches:source.counts.footprintPatches,sourceTriangles:source.counts.triangles,
   sourceVertices:source.counts.vertices,renderedTriangles,otiBuildings:oti.features.length,
-  sourceZRangeFeet:source.rawSourceZFeetRange,sourceVerticalDatumVerified:false,
-  sourceCoordinateFrame:'EPSG:2263 US survey feet XY -> DUMBO local east/south metres',
+  sourceZRangeRhinoFeet:source.rawSourceZRhinoFeetRange,modelUnitSystem:source.modelUnitSystem,sourceVerticalDatumVerified:false,
+  sourceCoordinateFrame:'EPSG:2263 US survey feet XY; Rhino document Feet Z -> DUMBO local east/south metres; absolute vertical datum unverified',
   webgl2:true,glError:0,contextLost:false,frames:0,camera:[]};
  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();qa.contextLost=true;});
  status.textContent='Loaded '+qa.sourceFacadePatches+' real 2014 facade patches + '+qa.sourceRoofPatches+' roof patches';
