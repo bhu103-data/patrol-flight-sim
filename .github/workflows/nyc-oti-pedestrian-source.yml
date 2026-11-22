@@ -44,6 +44,7 @@ jobs:
         run: |
           node scripts/nyc-times-pedestrian-topology-audit.mjs
           test -s artifacts/nyc-oti-pedestrian-source/centreline-surface-topology.json
+          test -s artifacts/nyc-oti-pedestrian-source/broadway-unclassified-segments.svg
       - name: Install free browser pixel QA tools
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
