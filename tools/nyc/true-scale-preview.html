@@ -35,6 +35,11 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
   <p id="flightState">等待官方建筑、道路数据核验...</p>
   <small>低空模式：W/S 前后 · A/D 平移 · Q/E 下降/上升 · Shift 加速
   · 鼠标拖动调整方向 · Esc 释放鼠标</small>
+  <label style="display:block;margin:7px 0;color:#e0c69a">
+    <input id="historicToggle" type="checkbox"/> 对照 2015–2017 历史真实涂装隔离带
+  </label>
+  <small>历史层来自 TUM／NYC Open Data，可能与 2026 年街道不同，
+  不代表当前道路中心线、车道或人行道现状。</small>
   <small>仅为测绘源场景的碰撞/尺度样板。建筑外墙是中性体量，不是真实外立面；
   路线为官方中心线，不代表车道或人行道几何。</small>
 </section>
@@ -220,6 +225,39 @@ try{
         addPoint(roadPos,roadColors,roadNormals,[p[0],.25,p[1]],col,[0,1,0]);
     }
   }
+  const historyResponse=await fetch('./historic-markings.json');
+  if(!historyResponse.ok)throw Error('Verified historic CityGML geometry is missing');
+  const historical=await historyResponse.json();
+  if(historical.role!=='QA_ONLY_HISTORIC_CITYGML_NOT_IN_GAME'||
+     historical.sourceCrs!=='EPSG:32118'||historical.readyToRender!==false||
+     !Array.isArray(historical.polygons)||historical.polygons.length>60)
+    throw Error('Historical polygon provenance or size is not valid');
+  // Build a SEPARATE optional material layer from real clipped polygons.
+  // No automatic historical 2017 layer appears in the 2026 current-city view.
+  const oldVertex=position.length,oldColors=colors.length,oldNormals=normals.length;
+  const oldTriangleCount=triCount;let historicPolygonCount=0,historicTriangles=0;
+  for(const row of historical.polygons){
+    if(!Array.isArray(row.rings)||row.rings.length!==1)continue;
+    const loop=row.rings[0].slice(0,-1);
+    if(loop.length<3||loop.length>128||
+       loop.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite)))
+      continue;
+    const oldP=position.length,oldC=colors.length,oldN=normals.length,
+      oldCount=triCount;
+    try{
+      historicTriangles+=roof(loop,.115,[.77,.64,.32]);
+      historicPolygonCount++;
+    }catch{
+      // Do not triangulate fake fill over complicated/unrepresentable source.
+      position.length=oldP;colors.length=oldC;normals.length=oldN;
+      triCount=oldCount;
+    }
+  }
+  const historicMesh=meshBuffer(position.slice(oldVertex),
+    colors.slice(oldColors),normals.slice(oldNormals));
+  position.length=oldVertex;colors.length=oldColors;normals.length=oldNormals;
+  triCount=oldTriangleCount;
+  const historicToggle=document.querySelector('#historicToggle');
   const envelopes=buildOfficialStreetWidthEnvelopes(source);
   const rowSurface=meshBuffer(envelopes.positions,envelopes.colors,envelopes.normals);
   const buildings=meshBuffer(position,colors,normals);
@@ -256,6 +294,10 @@ try{
     gl.bindVertexArray(rowSurface.vao);gl.drawArrays(gl.TRIANGLES,0,rowSurface.count);
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
+    if(historicToggle.checked&&historicMesh.count>0){
+      gl.bindVertexArray(historicMesh.vao);
+      gl.drawArrays(gl.TRIANGLES,0,historicMesh.count);
+    }
     gl.bindVertexArray(null);
     requestAnimationFrame(render);
   }
@@ -263,6 +305,10 @@ try{
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
     buildingTriangles:triCount,streetVertices:streets.count,
     streetWidthEnvelopes:envelopes.stats,
+    historySource:{actualPolygons:historical.polygons.length,
+      renderedPolygons:historicPolygonCount,renderedTriangles:historicTriangles,
+      vintage:historical.sourceVintage,crs:historical.sourceCrs,
+      visible:()=>historicToggle.checked},
     sourceRoadSpawn:flyOrigin,
     metricBounds:metreBounds.slice(),
     getFlight:()=>({mode:flyMode,position:flyState?.position.slice(),
