@@ -1966,7 +1966,11 @@ const CENTRAL_PARK_SITES=[
           waterCol *= 1.0 + wind * (swell.x * 0.045 + chop.x * 0.19);
           vec3 V = -rd;
           vec3 reflDir = reflect(rd, wn);
-          reflDir.y = abs(reflDir.y);
+          // Never mirror a below-horizon reflection into the upper sky.  The
+          // old abs() fold produced a bright, globe-like arc when flying toward
+          // the sun.  Clamp to the horizon instead, then let roughness broaden
+          // the valid sky reflection below.
+          reflDir.y = max(reflDir.y, 0.002);
           float ndv = max(dot(wn, V), 0.0001);
           float fresnel = waterFresnel(ndv);
           float meanSquareSlope = (0.003 + 0.00512 * (4.0 + wind * 6.0)) * mix(0.5,1.0,openWater);
