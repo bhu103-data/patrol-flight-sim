@@ -84,12 +84,13 @@ test('three neighbor shops are NOT PR #93 own first corner building',()=>{
   assert.ok(CHONGQING_MARKET_SITES.every(s=>s.x!==212||s.z!==303));
 });
 
-test('real gallery deck, posts, roof, glass and bracing use six bounded batches',()=>{
+test('real gallery deck, posts, roof, glass and bracing use seven bounded batches',()=>{
   const {objects,obstacles,result}=generated();
-  assert.deepEqual(objects.map(m=>m.count),[39,8,27,21,58,3,21]);
+  assert.deepEqual(objects.map(m=>m.count),[57,8,27,21,82,3,21]);
   assert.equal(result.stats.sites,3);
   assert.equal(result.stats.roofTriangles,2304);
-  assert.equal(result.stats.instances,177);
+  assert.equal(result.stats.instances,219);
+  assert.equal(result.stats.interiorFittings,42);
   assert.equal(result.stats.stairTreads,6);
   assert.equal(result.stats.meshes,10);
   assert.equal(result.stats.batchDraws,7);
@@ -114,7 +115,7 @@ test('all 21 panes sit behind physical jambs with varied projecting sashes and s
   const sites=result.snapshot();
   assert.equal(glass.transforms.length,21,'seven recessed windows per market shop');
   assert.equal(stone.count,27,'four added upper sills per shop');
-  assert.equal(lattice.count,58,'varied timber trim without another GPU draw');
+  assert.equal(lattice.count,82,'varied exterior and interior timber trim in one draw');
   assert.equal(interiors.count,21,'one deep interior plane per pane');
   for(const s of sites){
     const panes=glass.transforms.filter(t=>
@@ -138,6 +139,43 @@ test('all 21 panes sit behind physical jambs with varied projecting sashes and s
     assert.ok(sills.every(t=>t.scale[2]>=.45),'real sill projects toward street');
   }
   assert.equal(obstacles.length,15,'window styling must not alter shared colliders');
+});
+
+test('forty-two authentic parallax fittings stay between tinted glass and backing',()=>{
+  const {objects,obstacles,result}=generated();
+  const [beams,,,,lattice,,backings]=objects;
+  assert.equal(result.stats.interiorFittings,42);
+  for(const site of result.snapshot()){
+    const x=site.x,z=site.z,y=site.base;
+    const innerPieces=beams.transforms.filter(t=>
+      Math.abs(t.pos[0]-x)<9.5&&
+      [1.48,1.57,1.43].some(v=>Math.abs(t.pos[2]-(z+v))<.0001));
+    assert.equal(innerPieces.length,6,'two lower windows each get three interior objects');
+    const upperScreens=lattice.transforms.filter(t=>
+      Math.abs(t.pos[0]-x)<9.5&&
+      Math.abs(t.pos[2]-(z+1.61))<.0001);
+    assert.equal(upperScreens.length,4,'four upstairs windows each get a privacy shutter');
+    const lowerPart=lattice.transforms.filter(t=>
+      Math.abs(t.pos[0]-x)<9.5&&
+      Math.abs(t.pos[2]-(z+1.71))<.0001);
+    assert.equal(lowerPart.length,2,'two ground shop windows each get a partition');
+    const upperSlats=lattice.transforms.filter(t=>
+      Math.abs(t.pos[0]-x)<9.5&&
+      Math.abs(t.pos[2]-(z+1.68))<.0001);
+    assert.equal(upperSlats.length,2,'upper window slats alternate per store');
+    const fittings=[...innerPieces,...upperScreens,...lowerPart,...upperSlats];
+    assert.equal(fittings.length,14);
+    for(const f of fittings){
+      assert.ok(f.pos[2]+f.scale[2]/2<z+2.06,
+        'fixture must be behind the real translucent glass');
+      assert.ok(f.pos[2]-f.scale[2]/2>z+.98,
+        'fixture must stand in front of the matte internal backplate');
+    }
+    assert.ok(backings.transforms.filter(t=>
+      Math.abs(t.pos[0]-x)<9.5&&Math.abs(t.pos[2]-(z+.92))<.0001).length===7);
+  }
+  assert.equal(obstacles.length,15,'interior furnishing must not modify collision volumes');
+  assert.equal(objects.length,7,'no new draw calls or asset loads are permitted');
 });
 
 test('three genuine open storefronts preserve empty windows, deep jambs and original colliders',()=>{
