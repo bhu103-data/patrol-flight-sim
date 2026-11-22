@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const source=await readFile(new URL('../assets/chongqing/streetlife.js',import.meta.url),'utf8');
-const {buildChongqingStreetlife}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {buildChongqingStreetlife,chongqingPedestrianGlyph}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 
 class Vec{
   constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
@@ -16,8 +16,9 @@ class Object3D {
   updateMatrix(){}
 }
 class Geometry {
-  constructor(){this.attributes={}}
+  constructor(array,size){this.attributes={};this.array=array;this.itemSize=size}
   rotateX(){return this}
+  rotateZ(angle){this.zRotation=(this.zRotation??0)+angle;return this}
   setAttribute(k,v){this.attributes[k]=v}
   setIndex(idx){this.index=idx}
   computeVertexNormals(){}
@@ -153,6 +154,38 @@ test('four real crossing sites are spaced apart and serve the actual car route',
   const heads=objects.filter(x=>x instanceof InstancedMesh&&x.capacity===8);
   assert.ok(heads.length>=9,'batched masts, overhead arms and pedestrian heads');
   assert.ok(heads.every(m=>m.count===8));
+});
+
+test('round signal visors surround lit lenses within one bounded GPU batch',()=>{
+  const {traffic,objects}=setup();
+  assert.equal(traffic.stats.signalHoods,traffic.stats.trafficSignals*3);
+  assert.equal(traffic.stats.signalSideTrim,traffic.stats.trafficSignals*2);
+  const hood=objects.find(o=>o instanceof InstancedMesh&&
+    o.capacity===24&&o.material.color===0x181e23&&
+    Math.abs((o.geometry.zRotation??0)-Math.PI/2)<1e-8);
+  assert.ok(hood,'one shared metal visor batch covers every red/yellow/green lamp');
+  assert.equal(hood.count,24);
+  assert.ok(Math.abs(hood.geometry.zRotation-Math.PI/2)<1e-8,
+    'the cylindrical apertures point into oncoming traffic, not at the sky');
+  const trim=objects.find(o=>o instanceof InstancedMesh&&
+    o.capacity===16&&o.material.color===0x64737a);
+  assert.ok(trim,'one shared metallic housing-edge batch');
+  assert.equal(trim.count,16);
+  assert.ok(hood.count<=hood.capacity&&trim.count<=trim.capacity);
+});
+
+test('pedestrian WALK and WAIT are distinct human silhouettes, not rectangular LEDs',()=>{
+  const waiting=chongqingPedestrianGlyph(THREE,false);
+  const walking=chongqingPedestrianGlyph(THREE,true);
+  for(const shape of [waiting,walking]){
+    assert.ok(shape.index.length>=40&&shape.index.length<=120,
+      'small original pedestrian figure stays within geometry budget');
+    assert.ok(shape.attributes.position.array.every(Number.isFinite));
+    assert.ok(shape.attributes.position.array.every((v,i)=>i%3!==0||v===0),
+      'figure lies flush with its signal head X-facing plane');
+  }
+  assert.notDeepEqual(waiting.attributes.position.array,
+    walking.attributes.position.array,'red waiting and green walking have distinct poses');
 });
 
 test('red or amber holds traffic approaching from BOTH directions, then green releases it',()=>{
