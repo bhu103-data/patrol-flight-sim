@@ -34,7 +34,68 @@ def has_study_bbox_candidate(tiffs):
                for item in tiffs)
 
 
-def inspect_archive(name, file_id, directory, timeout):
+def sample_valid_study_pixels(raster, bbox, max_axis=512):
+    """Limited nearest-neighbour samples of true non-NoData pixel locations.
+
+    Positive hits prove *some* valid source values in the NOAA WGS84 study
+    rectangle, not continuous glacier coverage or surface elevations at the
+    terminus. Zero hits are inconclusive for sparse flight strips.
+    """
+    import math
+    import numpy as np
+    from rasterio.enums import Resampling
+    from rasterio.warp import transform as reproject, transform_bounds
+    from rasterio.windows import Window, from_bounds
+    if raster.crs is None:
+        return {"status": "UNKNOWN_SOURCE_CRS", "valid_inside_bbox": 0}
+    bounds=transform_bounds("EPSG:4326", raster.crs, *bbox, densify_pts=21)
+    win=from_bounds(*bounds, transform=raster.transform)
+    x0=max(0, math.floor(win.col_off))
+    y0=max(0, math.floor(win.row_off))
+    x1=min(raster.width, math.ceil(win.col_off+win.width))
+    y1=min(raster.height, math.ceil(win.row_off+win.height))
+    if x1<=x0 or y1<=y0:
+        return {"status": "NO_SOURCE_WINDOW_OVERLAP",
+                "valid_inside_bbox": 0, "sampled_pixels": 0}
+    window=Window(x0, y0, x1-x0, y1-y0)
+    height=min(max_axis,y1-y0)
+    width=min(max_axis,x1-x0)
+    samples=raster.read(1,window=window,out_shape=(height,width),
+                        masked=True,resampling=Resampling.nearest)
+    mask=(~np.ma.getmaskarray(samples)) & np.isfinite(np.asarray(samples))
+    rows,cols=np.nonzero(mask)
+    if rows.size==0:
+        return {"status": "NO_VALID_PIXELS_IN_SAMPLED_GRID",
+                "valid_inside_bbox": 0,
+                "sampled_pixels": int(height*width),
+                "sample_grid": [int(width),int(height)]}
+    # Map each sampled pixel centre back to source CRS and then WGS84:
+    # a projected AOI bounding rectangle alone would include points outside
+    # the WGS84 study rectangle at corners.
+    affine=raster.window_transform(window) * raster.transform.scale(
+        window.width/width,window.height/height)
+    xs=(affine.a*(cols+.5)+affine.b*(rows+.5)+affine.c).tolist()
+    ys=(affine.d*(cols+.5)+affine.e*(rows+.5)+affine.f).tolist()
+    lon,lat=reproject(raster.crs,"EPSG:4326",xs,ys)
+    lon=np.asarray(lon)
+    lat=np.asarray(lat)
+    within=((lon>=bbox[0])&(lon<=bbox[2])&
+            (lat>=bbox[1])&(lat<=bbox[3]))
+    count=int(np.count_nonzero(within))
+    return {
+        "status": "POSITIVE_VALID_PIXEL_SAMPLES_IN_NOAA_BBOX"
+                  if count else "NO_VALID_PIXEL_SAMPLE_INSIDE_STUDY_BBOX",
+        "valid_inside_bbox": count,
+        "valid_projected_window": int(rows.size),
+        "sampled_pixels": int(height*width),
+        "sample_grid": [int(width),int(height)],
+        "window_source_pixels": [int(window.width),int(window.height)],
+        "method": "nearest subsampled source values; valid mask; actual WGS84 pixel-centre filter",
+        "not_inferred": "area coverage, continuous glacier mask, current-year terminus",
+    }
+
+
+def inspect_archive(name, file_id, directory, timeout, sample_valid_pixels=False):
     import rasterio
     from rasterio.warp import transform_bounds
 
@@ -124,6 +185,10 @@ def inspect_archive(name, file_id, directory, timeout):
                         if bbox_wgs84 else None,
                         "tiff_tag_keys": sorted(raster.tags().keys())[:80],
                         "units": raster.units,
+                        "study_valid_sample": (
+                            sample_valid_study_pixels(raster, AOI_NOAA)
+                            if sample_valid_pixels else None
+                        ),
                     })
         if not record["tiffs"]:
             raise RuntimeError("ZIP did not contain a parseable GeoTIFF")
@@ -131,9 +196,21 @@ def inspect_archive(name, file_id, directory, timeout):
         # published aggregate bbox even stops west of the intended fjord.
         # Individual TIFF envelopes, not archive names, decide candidacy.
         record["geographic_target_match"] = has_study_bbox_candidate(record["tiffs"])
-        record["status"] = ("GEO_CANDIDATE_METADATA_ONLY" if
-            record["geographic_target_match"] else
-            "REJECT_OUTSIDE_TRACY_ARM_STUDY_BBOX")
+        record["sampled_valid_study_pixels"] = sum(
+            item["study_valid_sample"]["valid_inside_bbox"]
+            for item in record["tiffs"]
+            if item["study_valid_sample"] is not None
+        )
+        if sample_valid_pixels:
+            record["status"] = (
+                "GEO_VALID_PIXEL_SAMPLES_PRESENT" if
+                record["sampled_valid_study_pixels"] > 0 else
+                "BLOCKED_NO_VALID_STUDY_PIXEL_SAMPLES"
+            )
+        else:
+            record["status"] = ("GEO_CANDIDATE_METADATA_ONLY" if
+                record["geographic_target_match"] else
+                "REJECT_OUTSIDE_TRACY_ARM_STUDY_BBOX")
     except Exception as exc:
         record["error"] = (type(exc).__name__ + ": " + str(exc))[:800]
     finally:
@@ -149,6 +226,8 @@ def main():
     parser.add_argument("--output",
                         default="artifacts/alaska-nps-sawyer-geotiff-metadata.json")
     parser.add_argument("--timeout", type=int, default=90)
+    parser.add_argument("--sample-valid-pixels", action="store_true",
+                        help="read at most 512x512 geolocated mask samples per TIFF")
     args = parser.parse_args()
     if args.timeout < 10 or args.timeout > 180:
         parser.error("timeout must be 10..180 seconds")
@@ -175,14 +254,21 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix="patrol-nps-survey-") as tmp:
             for glacier, file_id in SOURCES:
-                result = inspect_archive(glacier, file_id, tmp, args.timeout)
+                result = inspect_archive(glacier, file_id, tmp, args.timeout,
+                                         sample_valid_pixels=args.sample_valid_pixels)
                 report["results"].append(result)
                 output.write_text(json.dumps(report, indent=2) + "\n",
                                   encoding="utf-8")
-        report["status"] = ("BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY"
-            if len(report["results"]) == 2 and all(
-                item["status"] == "GEO_CANDIDATE_METADATA_ONLY"
-                for item in report["results"]) else "BLOCKED_GEOGRAPHIC_IDENTITY")
+        if args.sample_valid_pixels:
+            success = "GEO_VALID_PIXEL_SAMPLES_PRESENT"
+            passed = "BOTH_HAVE_GEOLOCATED_VALID_SAMPLE_PIXELS"
+        else:
+            success = "GEO_CANDIDATE_METADATA_ONLY"
+            passed = "BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY"
+        report["status"] = (
+            passed if len(report["results"]) == 2 and all(
+                item["status"] == success for item in report["results"])
+            else "BLOCKED_GEOGRAPHIC_IDENTITY")
     finally:
         output.write_text(json.dumps(report, indent=2) + "\n",
                           encoding="utf-8")
@@ -194,11 +280,14 @@ def main():
                 "downloaded_bytes": x["downloaded_bytes"],
                 "tiffs": len(x["tiffs"]),
                 "geographic_target_match": x["geographic_target_match"],
+                "sampled_valid_study_pixels": x.get("sampled_valid_study_pixels"),
                 "error": x["error"]
             } for x in report["results"]],
             "output": str(output),
         }, indent=2))
-    return 0 if report["status"] == "BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY" else 2
+    return 0 if report["status"] in (
+        "BOTH_GEOGRAPHIC_CANDIDATES_METADATA_ONLY",
+        "BOTH_HAVE_GEOLOCATED_VALID_SAMPLE_PIXELS") else 2
 
 
 if __name__ == "__main__":
