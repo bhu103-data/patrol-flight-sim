@@ -29,6 +29,11 @@ def overlap(a, b):
             and a[1] < b[3] and a[3] > b[1])
 
 
+def has_study_bbox_candidate(tiffs):
+    return any(item.get("intersects_noaa_study_bbox") is True
+               for item in tiffs)
+
+
 def inspect_archive(name, file_id, directory, timeout):
     import rasterio
     from rasterio.warp import transform_bounds
@@ -125,10 +130,7 @@ def inspect_archive(name, file_id, directory, timeout):
         # A mere zip filename match is NOT geographic identity. The NPS
         # published aggregate bbox even stops west of the intended fjord.
         # Individual TIFF envelopes, not archive names, decide candidacy.
-        record["geographic_target_match"] = any(
-            item["intersects_noaa_study_bbox"] is True
-            for item in record["tiffs"]
-        )
+        record["geographic_target_match"] = has_study_bbox_candidate(record["tiffs"])
         record["status"] = ("GEO_CANDIDATE_METADATA_ONLY" if
             record["geographic_target_match"] else
             "REJECT_OUTSIDE_TRACY_ARM_STUDY_BBOX")
