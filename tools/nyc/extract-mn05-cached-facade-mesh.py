@@ -117,8 +117,14 @@ def source_facade_objects(model):
             if cached is None or len(cached.Faces)<1:
                 rejected["facadeFaceHasNoSavedMesh"]+=1;continue
             cached_faces+=len(cached.Faces)
-            triangles.extend(face_from_cached_facade_mesh(
-                cached,mn05_stateplane_to_metric))
+            try:
+                triangles.extend(face_from_cached_facade_mesh(
+                    cached,mn05_stateplane_to_metric))
+            except ValueError as error:
+                # Some 2014 layer objects have an oversized/out-of-ROI extent.
+                # Reject the bad face/object; never abort or clamp its vertices.
+                rejected["facadeMeshProjectionRejected:"+str(error)[:70]]+=1
+                continue
         if not triangles:
             rejected["noUsableSavedFacadeTriangles"]+=1;continue
         accepted.append({"sourceObjectIndex":index,
