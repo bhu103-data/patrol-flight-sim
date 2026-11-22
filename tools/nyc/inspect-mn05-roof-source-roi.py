@@ -57,6 +57,63 @@ def coords_from_curve(curve):
         return None
 
 
+def edge_points_from_trim(trim):
+    """Read a genuine source Brep edge in its original 3-D geometry.
+
+    A straight edge may be expressed as a LineCurve or a linear NurbsCurve;
+    no sampled/approximated NURBS curves are used here.
+    """
+    edge=getattr(trim,"Edge",None)
+    if callable(edge):edge=edge()
+    if edge is None:return None
+    points=None
+    try:
+        valid,poly=edge.TryGetPolyline()
+        if valid and poly is not None:
+            points=[[float(p.X),float(p.Y),float(p.Z)] for p in poly]
+    except Exception:
+        pass
+    if not points:
+        try:
+            if edge.IsLinear(0.000001):
+                a,b=edge.PointAtStart,edge.PointAtEnd
+                points=[[float(p.X),float(p.Y),float(p.Z)] for p in (a,b)]
+        except Exception:
+            pass
+    if not points or len(points)>1024 or len(points)<2:return None
+    if any(not all(math.isfinite(v) for v in p) for p in points):return None
+    return points
+
+
+def source_trim_loop_points(loop):
+    """Stitch actual source Trim.Edge curves in topological order only.
+
+    Match edge endpoints within 0.05 US survey feet. Never replace a
+    concavity, unknown hole or curve with a convex hull or bbox rectangle.
+    """
+    try:
+        trims=list(loop.Trims)
+        if not trims or len(trims)>1024:return None
+    except Exception:
+        return None
+    chain=[]
+    for trim in trims:
+        segment=edge_points_from_trim(trim)
+        if segment is None:return None
+        if not chain:
+            chain.extend(segment)
+        elif math.dist(chain[-1],segment[0])<0.05:
+            chain.extend(segment[1:])
+        elif math.dist(chain[-1],segment[-1])<0.05:
+            chain.extend(segment[-2::-1])
+        else:
+            return None
+        if len(chain)>1024:return None
+    if len(chain)<4 or math.dist(chain[0],chain[-1])>0.05:return None
+    if any(not all(math.isfinite(v) for v in p) for p in chain):return None
+    return chain
+
+
 def inspect():
     report={"source":"NYC DCP official 2014 Manhattan MN05, 2018 archive",
        "sourceEPSG":"EPSG:2263 NY Long Island NAD83 US survey ft",
@@ -124,6 +181,12 @@ def inspect():
                     entry={"faceIndex":j,
                        "faceMethods":[x for x in dir(face)
                            if "Loop" in x or "Curve" in x or "Mesh" in x][:24]}
+                    try:
+                        cached=face.GetMesh(rhino3dm.MeshType.Any)
+                        entry["cachedSourceMeshFaces"]=len(cached.Faces) if cached else 0
+                        entry["cachedSourceMeshVertices"]=len(cached.Vertices) if cached else 0
+                    except Exception as err:
+                        entry["sourceMeshLookupError"]=str(err)[:160]
                     loops=getattr(face,"Loops",None)
                     if loops is not None:
                         try:
@@ -135,6 +198,8 @@ def inspect():
                                          if "Curve" in x or "Trim" in x][:20]}
                                 curve=loop.To3dCurve() if hasattr(loop,"To3dCurve") else None
                                 p=coords_from_curve(curve)
+                                if p is None:p=source_trim_loop_points(loop)
+                                part["trimCount"]=getattr(loop,"TrimCount",None)
                                 part["isExactSourcePolyline"]=p is not None
                                 if p is not None:
                                     part["points"]=p[:50]
