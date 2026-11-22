@@ -2339,7 +2339,13 @@ const CENTRAL_PARK_SITES=[
                 // Brightness-matched forest grain: albedo stays coherent
                 // across the 95–425 unit LOD transition, while rock/snow
                 // retain their stronger photographic color contribution.
-                float colorStrength=mix(.19,.78,1.0-forestWeight);
+                // Recover a little native CC0 forest microtexture only at
+                // close flight range; distant canopy retains its restrained
+                // colour to avoid repeating photographic squares.
+                float forestNear=forestWeight*
+                  (1.0-smoothstep(68.0,210.0,hitDist));
+                float colorStrength=mix(.19+.18*forestNear,.78,
+                                        1.0-forestWeight);
                 albedo=mix(albedo,photo,clamp(photoAmount*colorStrength,0.0,.84));
                 float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
                                   mix(30.0,95.0,roughness));
