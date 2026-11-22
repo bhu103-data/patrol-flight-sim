@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'tools/nyc/true-scale-preview.html'
+      - 'tests/nyc-times-historic-citygml-overlay.test.mjs'
+      - 'tools/nyc/extract-tum-lod2-markings.py'
+      - 'tools/nyc/probe-tum-lod2-markings.py'
       - 'tools/nyc/true-scale-flight.mjs'
       - 'tools/nyc/true-scale-street-envelope.mjs'
       - 'tests/nyc-times-true-scale-street-envelope.test.mjs'
@@ -37,6 +40,13 @@ jobs:
           cp tools/nyc/true-scale-preview.html artifacts/nyc-true-scale/preview.html
           cp tools/nyc/true-scale-flight.mjs artifacts/nyc-true-scale/flight.mjs
           cp tools/nyc/true-scale-street-envelope.mjs artifacts/nyc-true-scale/street-envelope.mjs
+      - name: Verify historical TUM CityGML and clip source polygons into this same metre frame
+        run: |
+          pip install --disable-pip-version-check pyproj==3.7.2 shapely==2.1.2
+          PATROL_KEEP_GML=1 python3 tools/nyc/probe-tum-lod2-markings.py
+          python3 tools/nyc/extract-tum-lod2-markings.py
+          cp artifacts/nyc-tum-lod2-markings/times-square-markings-source.json artifacts/nyc-true-scale/historic-markings.json
+          test -s artifacts/nyc-true-scale/historic-markings.json
       - name: Install Chromium for source WebGL and flight acceptance
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
