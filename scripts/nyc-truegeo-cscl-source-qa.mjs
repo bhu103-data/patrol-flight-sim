@@ -21,8 +21,22 @@ const evidence={assetRole:'SOURCE_ROAD_CANDIDATES_ONLY_NOT_IN_PATROL_GAME',
   retrievedUTC:new Date().toISOString(),records:[],summary:{},passed:false};
 function assert(ok,message){if(!ok)throw Error(message);}
 try{
-  const abort=AbortSignal.timeout(60000);
-  const response=await fetch(query,{signal:abort,headers:{accept:'application/json'}});
+  // NYC OpenData is a public external service: a transient DNS/socket failure
+  // is not evidence of invalid geometry. Retry only transport, 429, and 5xx.
+  let response=null,lastError=null;
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      const next=await fetch(query,{signal:AbortSignal.timeout(25000),
+        headers:{accept:'application/json'}});
+      if(next.ok||(next.status!==429&&next.status<500)){
+        response=next;break;
+      }
+      lastError=Error('Municipal API HTTP '+next.status+' attempt '+attempt);
+    }catch(error){lastError=error;}
+    if(attempt<3)await new Promise(resolve=>setTimeout(resolve,attempt*1500));
+  }
+  if(!response)throw Error('Municipal API unavailable after retries: '+
+    String(lastError?.stack||lastError));
   const body=await response.text();
   assert(response.ok,
     'NYC CSCL API HTTP '+response.status+': '+body.slice(0,300));
