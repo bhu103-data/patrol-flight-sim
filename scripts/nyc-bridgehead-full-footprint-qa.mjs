@@ -262,11 +262,48 @@ const injection=String.raw`
         }
       }
     }
+    // Time-CONTINUOUS exclusion for upright 3D car hulls, conditionally
+    // certified by the model-derived Node speed/route precondition test.
+    // A world-space SAT witness at t0 stays separating throughout dt if
+    // even worst-case projected vehicle-vertex motion cannot close its gap.
+    // 40 units/s per car is above the current controller's derived bound.
+    const swept3d={baseIntervals:36000,certified:0,subdivisions:0,
+      maxDepth:0,minGuaranteed:Infinity,firstIssue:null,
+      maxRelativeVertexSpeed:80,requiredClearance:.08};
+    if(cars.length===2){
+      const at=t=>clearance3d(
+        trafficPose(cars[0],t),trafficPose(cars[1],t));
+      function certifyInterval(t0,t1,g0,depth){
+        const guaranteed=g0-swept3d.maxRelativeVertexSpeed*(t1-t0);
+        if(Number.isFinite(g0)&&guaranteed>swept3d.requiredClearance){
+          swept3d.certified++;
+          swept3d.maxDepth=Math.max(swept3d.maxDepth,depth);
+          swept3d.minGuaranteed=Math.min(swept3d.minGuaranteed,guaranteed);
+          return;
+        }
+        if(depth>=17){
+          swept3d.firstIssue??={t0,t1,g0,guaranteed};
+          return;
+        }
+        swept3d.subdivisions++;
+        const mid=(t0+t1)/2,gMid=at(mid);
+        certifyInterval(t0,mid,g0,depth+1);
+        certifyInterval(mid,t1,gMid,depth+1);
+      }
+      let last=at(0);
+      for(let k=0;k<36000;k++){
+        const t0=k*.25,t1=(k+1)*.25;
+        certifyInterval(t0,t1,last,0);
+        last=at(t1);
+        // Report first failed interval, don't spin on a broken model.
+        if(swept3d.firstIssue)break;
+      }
+    }
     return {mapCity:!!selectedMap.city,actorCount:cityTraffic.length,
       bridgeheadCount:cars.length,bridgeLinePoints:CITY_STREETS[0].length,
       streetY:STREET_Y,waterY:WATER_H,
       lightGreen:bridgeheadSignalGreen(sceneryTime),rows,signalRows,pair,
-      followerBlend,pair3d};
+      followerBlend,pair3d,swept3d};
   };
   // Test-only snapshot clock: drive the production signal's actual scene
   // time to known red/green windows for a stable physical-lens comparison.
@@ -368,6 +405,14 @@ try{
     traffic.pair3d.minGap>=traffic.pair3d.threshold,
     'Real-mesh 3D car envelopes overlap in live NYC WebGL2: '+
     JSON.stringify(traffic.pair3d));
+  assert(traffic.swept3d?.baseIntervals===36000&&
+    traffic.swept3d.certified>=36000&&
+    traffic.swept3d.subdivisions>1000&&
+    traffic.swept3d.maxDepth>=8&&
+    traffic.swept3d.firstIssue===null&&
+    traffic.swept3d.minGuaranteed>.08,
+    'Continuous-time 3D car hull interval certificate failed: '+
+    JSON.stringify(traffic.swept3d));
   const blend=traffic.followerBlend;
   assert(blend&&Math.abs(blend.joinTime-5)<.001&&
     Math.abs(blend.entrySpeed-5.6)<.01&&
