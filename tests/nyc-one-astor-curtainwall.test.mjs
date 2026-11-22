@@ -24,10 +24,10 @@ const height=Math.max(minHeight,
 const bodyStart=html.indexOf('  function buildOfficialFootprintMesh(');
 const bodyEnd=html.indexOf('  function buildCityBuildings(',bodyStart);
 const meshSource=html.slice(bodyStart,bodyEnd);
-const gate='if(detailBand===4 && lot[9]===212747 && isGlass &&';
+const gate='if(detailBand===4 && lot[8]===212747 && isGlass &&';
 assert.ok(meshSource.includes(gate));
 const compile=enabled=>new Function((enabled?meshSource:
-  meshSource.replace(gate,'if(false && lot[9]===212747 && isGlass &&'))+
+  meshSource.replace(gate,'if(false && lot[8]===212747 && isGlass &&'))+
   ';return buildOfficialFootprintMesh')();
 
 function render(build,fid=212747){
@@ -52,7 +52,7 @@ test('One Astor Plaza is tagged as a reflective glass shell, not a stone box',()
   const fn=new Function('NYC_TIMES_VERIFIED_FOOTPRINTS','buildOfficialFootprintMesh',
     'addTri','addQuad','box','lamp','solidAt','marquee','ledQuad',
     'ground','warm','steel','avenue',scene+'return blocks');
-  fn(polygons,(_tri,_quad,lot)=>{tones.push([lot[9],lot[5]]);return {roof:1,walls:4};},
+  fn(polygons,(_tri,_quad,lot)=>{tones.push([lot[8],lot[5]]);return {roof:1,walls:4};},
     ()=>{},()=>{},()=>{},()=>{},()=>{},()=>{},()=>{},
     14.97,[1,.8,.5],[.24,.27,.28],12);
   assert.deepEqual(tones.find(([fid])=>fid===212747),[212747,.61]);
