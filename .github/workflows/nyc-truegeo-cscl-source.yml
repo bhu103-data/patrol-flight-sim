@@ -1,0 +1,32 @@
+name: NYC Times Square official CSCL road-source audit
+on:
+  pull_request:
+    paths:
+      - 'scripts/nyc-truegeo-cscl-source-qa.mjs'
+      - '.github/workflows/nyc-truegeo-cscl-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-road-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Retrieve NYC open-data centerlines for Times Square P0
+        run: |
+          node --check scripts/nyc-truegeo-cscl-source-qa.mjs
+          node scripts/nyc-truegeo-cscl-source-qa.mjs
+      - name: Upload raw municipal source and validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-truegeo-cscl-source-qa
+          path: artifacts/nyc-truegeo-cscl/
+          if-no-files-found: ignore
+          retention-days: 7
