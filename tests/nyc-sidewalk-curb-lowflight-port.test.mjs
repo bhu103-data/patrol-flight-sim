@@ -51,13 +51,13 @@ test('never combine incompatible / compressed metre projections',()=>{
   const {edges,roads}=fake();
   assert.throws(()=>verifySourceFrames(edges,{
     ...roads,projection:{...projection,originLonLat:[0,0]}
-  }),/same exact metre projection/);
+  }),/exact metre projection/);
   assert.throws(()=>verifySourceFrames({
     ...edges,projection:{...projection,scaleMetresPerGameUnit:.32}
-  },roads),/same exact metre projection/);
+  },roads),/exact metre projection/);
   assert.throws(()=>verifySourceFrames(edges,{
     ...roads,mode:'PATROL_COMPRESSED_GAME'
-  }),/same exact metre projection/);
+  }),/exact metre projection/);
 });
 test('existing lowflight and anti-tunnel remain; realEdges opt-in never toggles default',()=>{
   const html=readFileSync(new URL('../tools/nyc/true-scale-preview.html',import.meta.url),'utf8');
