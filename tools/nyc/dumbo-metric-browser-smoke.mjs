@@ -41,6 +41,20 @@ try{
  const image=await page.screenshot({path:output+'/01-oti-metric-oblique.png'});
  await page.keyboard.press('t');await page.waitForTimeout(300);
  await page.screenshot({path:output+'/02-oti-metric-plan.png'});
+ await page.keyboard.press('r');
+ await page.waitForTimeout(350);
+ const roadImage=await page.screenshot({path:output+'/03-front-dock-2022-roadbed.png'});
+ const roadPng=PNG.sync.read(roadImage);
+ const first=PNG.sync.read(image);let changed=0;
+ for(let i=0;i<Math.min(first.data.length,roadPng.data.length);i+=4*71){
+   if(Math.abs(first.data[i]-roadPng.data[i])+
+      Math.abs(first.data[i+1]-roadPng.data[i+1])+
+      Math.abs(first.data[i+2]-roadPng.data[i+2])>35)changed++;
+ }
+ assert.ok(changed>600,'Road-focused camera did not change WebGL image: '+changed);
+ const roadFocus=await page.evaluate(()=>window.__metricCamera?.roadFocus);
+ assert.ok(Array.isArray(roadFocus)&&roadFocus.length===3&&
+   roadFocus.every(Number.isFinite),'Road world coordinate target missing');
  const png=PNG.sync.read(image),colors=new Set(),stride=4*13;
  for(let i=0;i<png.data.length;i+=stride){
   colors.add([png.data[i],png.data[i+1],png.data[i+2]].join(','));
@@ -49,8 +63,9 @@ try{
  const report={passed:true,source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
-  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png'],
-  limitation:'Only source polygons and roof height; flat datum, no LION, no verified façades, roads, bridge or game flight collisions'};
+  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png'],
+  roadFocus,roadCameraChangedSamples:changed,
+  limitation:'48 OTI roofs + one 2022 Front/Dock paved ROADBED polygon AOI; no complete LION street graph, 2026 lane/signal layout, true road elevation, bridge or flight collisions'};
  await writeFile(output+'/report.json',JSON.stringify(report,null,2)+'\n');
  console.log('PATROL metric DUMBO browser QA:',JSON.stringify(report));
  await page.close();
