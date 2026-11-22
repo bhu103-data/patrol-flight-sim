@@ -80,8 +80,10 @@ test('NYC collision top bounds real mesh mast and animated vertical bob',()=>{
     'bridge/floatplane obstacle must clear the tallest rendered mast at high bob');
   assert.equal(SHIP_TYPES.ferry.top,7.5,
     'non-NYC ferry clearance envelope remains unchanged');
-  assert.match(game,/const bob = 0\\.16\\*Math\\.sin\\(1\\.75\\*sceneryTime\\+boat\\.phase\\)/);
-  assert.match(game,/WATER_H\\+size\\.top<bridgeRoadHeight\\(px\\)-1\\.52/);
+  assert.ok(game.includes('const bob = 0.16*Math.sin(1.75*sceneryTime+boat.phase)'),
+    'render bob amplitude must be checked by source-backed envelope test');
+  assert.ok(game.includes('WATER_H+size.top<bridgeRoadHeight(px)-1.52'),
+    'bridgehead safety must consume revised NYC hull collision top');
 });
 
 test('legacy ferry and non-NYC vessel meshes remain untouched',()=>{
