@@ -164,9 +164,9 @@ def inspect(model_path: Path, report_path: Path):
             })
 
     layers = []
-    for layer in model.Layers:
+    for index, layer in enumerate(model.Layers):
         layers.append({
-            "index": layer.Index,
+            "index": index,
             "name": layer.Name,
             "fullPath": getattr(layer, "FullPath", None),
             "visible": getattr(layer, "IsVisible", None),
