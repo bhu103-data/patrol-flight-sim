@@ -1,3 +1,22 @@
+// PATROL adapter of Petalwake town's MIT-licensed per-chunk selection idea.
+// Original: jjcm/petalwake src/world/town.js, Copyright (c) 2026 Jacob Miller.
+// Full MIT notice and adapter tests: assets/nyc/petalwake-chunk-lod.js.
+// Keep the small runtime budget local: old regression tools import this entire
+// file through a data: URL, which cannot resolve relative module specifiers.
+function createStreetFurnitureChunkBudget(){
+ const used=new Map();
+ const key=(x,z,bridge)=>`${bridge?'bridge':'city'}:${Math.floor(x/96)}:${Math.floor(z/99)}`;
+ return {
+  permits(x,z,detail,bridge){
+   if(!Number.isFinite(x)||!Number.isFinite(z)||
+      !Number.isFinite(detail)||detail<(bridge?2:3))return false;
+   return (used.get(key(x,z,bridge))||0)<(bridge?8:12);
+  },
+  record(x,z,bridge){
+   const k=key(x,z,bridge);used.set(k,(used.get(k)||0)+1);
+  }
+ };
+}
 // PATROL_NYC_ROAD_MARKINGS_V12 — material and markings upgrade retaining V11.
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
@@ -29,6 +48,7 @@ export function buildNycStreetNetwork({
     dumboCrack=[.179,.202,.222],dumboCurbStain=[.455,.465,.447],
     dumboSawcut=[.412,.418,.395];
   const inDumboMaterialZone=(i,j)=>i>=9&&i<=20&&j>=-13&&j<=-7;
+  const furnitureChunks=createStreetFurnitureChunkBudget();
   const stats={avenues:0,streets:0,intersections:0,signals:0,
     crosswalks:0,hotDogCarts:0,streetFixtures:0,civilianCars:0,brooklynStreetFurniture:0,
     skippedWater:0,skippedLOD:0,skippedPark:0,streetFurniture:0,
@@ -109,8 +129,9 @@ export function buildNycStreetNetwork({
     const usedHere=bridgehead?stats.brooklynStreetFurniture:
       stats.streetFurniture-stats.brooklynStreetFurniture;
     const capHere=bridgehead?22:82;
+    const cx=(a[0]+b[0])/2,cz=(a[1]+b[1])/2;
     if(usedHere>=capHere ||
-       detailBand((a[0]+b[0])/2,(a[1]+b[1])/2)<(bridgehead?2:3))
+       !furnitureChunks.permits(cx,cz,detailBand(cx,cz),bridgehead))
       return;
     const chance=hash(i,j,49);
     if(chance<.76)return;
@@ -223,6 +244,7 @@ export function buildNycStreetNetwork({
       box(p[0],p[1]-.07,p[2],.25,.03,.36,[.89,.85,.70]);
       stats.streetlamps++;
     }else return;
+    furnitureChunks.record(cx,cz,bridgehead);
     stats.streetFurniture++;
     if(bridgehead)stats.brooklynStreetFurniture++;
   }
