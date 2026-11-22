@@ -31,7 +31,7 @@ from mn05_facade_source_support import (
     cached_mesh_triangles,
     match_facade_patch,
     match_roof_triangles,
-    relative_height_metres,
+    relative_height_metres, plausible_height_ratio,
 )
 
 DIR = pathlib.Path("artifacts/nyc-official-mn05")
@@ -211,7 +211,9 @@ def main():
         "modernHeightSource": "NYC Building Footprints HEIGHTROOF snapshot retrieved 2026-11-20",
         "sourceVerticalDatumVerified": False,
         "sourceAbsoluteZUsed": False,
-        "verticalDisplayRule": "per-FID relative raw 2014 source Z normalized to current HEIGHTROOF; no absolute source elevation",
+        "heightRatioGate": {"min": 0.50, "max": 1.75,
+            "meaning": "conservative source-Z-span / modern HEIGHTROOF plausibility filter; not vertical datum proof"},
+        "verticalDisplayRule: "per-FID relative raw 2014 source Z normalized to current HEIGHTROOF; no absolute source elevation",
         "assetRole": "RESEARCH_PREVIEW_ONLY_NOT_PATROL_RUNTIME_OR_COLLISION",
         "meshAccepted": False,
         "errors": [],
@@ -252,12 +254,20 @@ def main():
             if not math.isfinite(low) or not math.isfinite(high) or high-low < 0.25:
                 continue
             building = building_by_fid[fid]
+            height_ratio = (high-low) / building["heightFt"]
+            if not plausible_height_ratio(high-low, building["heightFt"]):
+                report.setdefault("heightRatioRejectedFids", []).append({
+                    "fid": fid, "sourceZSpan": round(high-low, 4),
+                    "modernHeightFt": round(building["heightFt"], 4),
+                    "ratio": round(height_ratio, 4)})
+                continue
             valid_fids.add(fid)
             building_stats.append({
                 "fid": fid,
                 "heightMetres": round(building["heightMetres"], 3),
                 "sourceRelativeZRange": [round(low, 4), round(high, 4)],
                 "sourceRelativeZSpan": round(high-low, 4),
+                "sourceToModernHeightRatio": round(height_ratio, 4),
                 "roofPatchCount": sum(1 for p in roofs if p["matchedFid"] == fid),
                 "facadePatchCount": sum(1 for p in facades if p["matchedFid"] == fid),
                 "outline": building["outline"],
@@ -301,6 +311,7 @@ def main():
             "facadeTriangles": len(facade_triangles),
             "roofPatches": len(roofs),
             "facadePatches": len(facades),
+            "heightRatioRejectedFids": len(report.get("heightRatioRejectedFids", [])),
         }
         report["buildings"] = [b for b in building_stats if b["fid"] in valid_fids]
         report["roofTriangles"] = roof_triangles
