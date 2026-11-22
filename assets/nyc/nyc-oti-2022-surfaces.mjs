@@ -18,6 +18,11 @@ const SOURCE_TERMS='https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3c
 const FIELDS='OBJECTID,SOURCE_ID,FEATURE_CODE,SUB_FEATURE_CODE,STATUS';
 const PAGE_SIZE=200;
 const MAX_PAGES=10;
+export const OTI_2022_MINIMUMS=Object.freeze({
+  roadbedFeatures:70,plazaFeatures:5,sidewalkFeatures:40,
+  curbFeatures:150,curbCutFeatures:150,roadbedTriangles:8000,
+  sidewalkTriangles:7000,curbSegments:2000,curbCutSegments:1000
+});
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const equalPoint=(a,b)=>Math.abs(a[0]-b[0])<1e-12&&Math.abs(a[1]-b[1])<1e-12;
 
@@ -156,7 +161,7 @@ function assertUniqueFeatures(collection,kind){
 }
 
 /** Pure compiler: all returned coordinates are in the current viewer's one-metre scene frame. */
-export function compileOfficialOti2022Surfaces({massing,center,collections}){
+export function compileOfficialOti2022Surfaces({massing,center,collections,minimums=OTI_2022_MINIMUMS}){
   if(!massing?.origin||!finite(massing.origin.lon)||!finite(massing.origin.lat)||
      !center||!finite(center.east)||!finite(center.north))
     throw new Error('A valid current NYC massing origin and scene center are required');
@@ -165,8 +170,9 @@ export function compileOfficialOti2022Surfaces({massing,center,collections}){
     sidewalks=assertUniqueFeatures(collections.sidewalk,'sidewalk'),
     curbs=assertUniqueFeatures(collections.curb,'curb'),
     curbCuts=assertUniqueFeatures(collections.curbCut,'curbCut');
-  if(roadbeds.length<70||plazas.length<5||sidewalks.length<40||
-     curbs.length<150||curbCuts.length<150)
+  if(roadbeds.length<minimums.roadbedFeatures||plazas.length<minimums.plazaFeatures||
+     sidewalks.length<minimums.sidewalkFeatures||curbs.length<minimums.curbFeatures||
+     curbCuts.length<minimums.curbCutFeatures)
     throw new Error('Official OTI 2022 source coverage below the verified Times Square minimum');
   const roadbed=[],pedestrian=[],curbLines=[];
   const stats={
@@ -219,8 +225,10 @@ export function compileOfficialOti2022Surfaces({massing,center,collections}){
   const cutStats={segments:0,sourceIds:[]};
   for(const feature of curbCuts)appendLineFeature(curbLines,feature,massing.origin,center,.18,[.98,.53,.27],cutStats);
   stats.curbCutSegments=cutStats.segments;stats.curbCutSourceIds=cutStats.sourceIds;
-  if(stats.roadbedTriangles<8000||stats.sidewalkTriangles<7000||
-     stats.curbSegments<2000||stats.curbCutSegments<1000)
+  if(stats.roadbedTriangles<minimums.roadbedTriangles||
+     stats.sidewalkTriangles<minimums.sidewalkTriangles||
+     stats.curbSegments<minimums.curbSegments||
+     stats.curbCutSegments<minimums.curbCutSegments)
     throw new Error('Official OTI mesh geometry below the verified triangle/segment budget');
   return {
     schema:'patrol-nyc-oti-2022-full-surfaces-v1',
@@ -244,9 +252,9 @@ export function compileOfficialOti2022Surfaces({massing,center,collections}){
   };
 }
 
-export async function fetchAndCompileOfficialOti2022Surfaces(massing,center,fetcher=fetch){
+export async function fetchAndCompileOfficialOti2022Surfaces(massing,center,fetcher=fetch,minimums=OTI_2022_MINIMUMS){
   const kinds=['roadbed','plaza','sidewalk','curb','curbCut'];
   const pairs=await Promise.all(kinds.map(async kind=>[kind,await fetchLayer(kind,fetcher)]));
   const collections=Object.fromEntries(pairs);
-  return compileOfficialOti2022Surfaces({massing,center,collections});
+  return compileOfficialOti2022Surfaces({massing,center,collections,minimums});
 }
