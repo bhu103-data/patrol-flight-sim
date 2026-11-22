@@ -4,6 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {prepareDistrict} from '../assets/nyc/dumbo-oti-metric.mjs';
+import {prepareOfficialDumboRoadbed}
+  from '../assets/nyc/dumbo-roadbed-metric.mjs';
 import {reconcileMetricStreets} from '../assets/nyc/dumbo-cscl-metric-reconcile.mjs';
 import {makeDumboMetricFlySafety,pointInSourceRing}
   from '../assets/nyc/dumbo-metric-fly-safety.mjs';
@@ -39,8 +41,14 @@ test('all 48 municipal building footprints are solid swept camera obstacles',()=
 });
 
 test('a true CSCL non-conflicting segment supplies an actually safe 1:1 camera spawn',()=>{
-  const focus=[(bounds.minX+bounds.maxX)*.5,0,
-    (bounds.minZ+bounds.maxZ)*.5];
+  // Same *official 2022 ROADBED source AOI* camera focus as actual browser
+  // viewer. Never substitute an arbitrary midpoint of 48 buildings,
+  // which refers to a DIFFERENT official street physical ID.
+  const pavement=prepareOfficialDumboRoadbed(json('dumbo-front-dock-roadbed-2022.json'));
+  const px=pavement.triangles.flatMap(t=>t.points.map(p=>p[0]));
+  const pz=pavement.triangles.flatMap(t=>t.points.map(p=>p[1]));
+  const focus=[(Math.min(...px)+Math.max(...px))*.5,0,
+    (Math.min(...pz)+Math.max(...pz))*.5];
   const spawn=realSafety.sourceStreetSpawn(network.lines,focus);
   assert.ok(Number.isSafeInteger(spawn.sourcePhysicalId));
   assert.equal(spawn.sourcePhysicalId,56482,
