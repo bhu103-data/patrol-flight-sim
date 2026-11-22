@@ -2248,6 +2248,12 @@ const CENTRAL_PARK_SITES=[
                   *(1.0-smoothstep(.29,.62,slope));
             vec3 snowpack=mix(vec3(.70,.80,.84),vec3(.94,.96,.97),grain*.55+fleck*.45);
             albedo=mix(albedo,snowpack,clamp(frost*(.84+.16*wind),0.0,1.0));
+            // DEM-aligned tidal dampness on steep coastal stone; no
+            // silhouette, collision, road or sea-level change. Macro noise
+            // breaks up a painted horizontal shoreline stripe.
+            float coastalStone=(1.0-smoothstep(.18,1.85,alt))
+              *smoothstep(.12,.42,slope)*(1.0-smoothstep(.2,.8,frost));
+            albedo*=1.0-coastalStone*(.075+.065*macro);
             // Flight-scale glacier extent; never presented as surveyed GIS.
             float iceAxis=130.0+12.0*sin(clamp((p.z-449.0)/148.0,0.0,1.0)*3.9);
             float glacier=1.0-smoothstep(63.0,92.0,abs(p.x-iceAxis));
@@ -2305,11 +2311,18 @@ const CENTRAL_PARK_SITES=[
                 float forestVariant=step(.54,vnoise(p.xz*.028));
                 vec2 wallUV=abs(n.x)>abs(n.z)?p.zy:p.xy;
                 vec2 projected=mix(p.xz,wallUV,smoothstep(.16,.52,slope));
-                vec2 tiled=fract(projected*.107);
-                vec2 groundUV=vec2((snowTile+.022+.956*tiled.x)*.25,
-                                   .022+.956*tiled.y);
-                vec2 forestUV=vec2((2.0+forestVariant+.022+.956*tiled.x)*.25,
-                                   .022+.956*tiled.y);
+                // One game-unit projection, three distinct photo scales:
+                // slate ~9.3, wind-packed snow ~13.5 and forest floor ~7.1
+                // units per source tile. Frost/glacier transition is smooth.
+                // These are game-unit art scales, not surveyed metres.
+                float snowCoverage=max(smoothstep(.16,.78,frost),
+                                       smoothstep(.12,.68,glacier));
+                vec2 groundTile=fract(projected*mix(.107,.074,snowCoverage));
+                vec2 forestTile=fract(projected*.140);
+                vec2 groundUV=vec2((snowTile+.022+.956*groundTile.x)*.25,
+                                   .022+.956*groundTile.y);
+                vec2 forestUV=vec2((2.0+forestVariant+.022+.956*forestTile.x)*.25,
+                                   .022+.956*forestTile.y);
                 float lod=clamp(log2(max(hitDist,1.0)*.018),0.0,5.5);
                 vec3 alpinePhoto=textureLod(uAlaskaPhotoAlbedo,groundUV,lod).rgb;
                 vec3 forestPhoto=textureLod(uAlaskaPhotoAlbedo,forestUV,lod).rgb;
@@ -2326,7 +2339,13 @@ const CENTRAL_PARK_SITES=[
                 // Brightness-matched forest grain: albedo stays coherent
                 // across the 95–425 unit LOD transition, while rock/snow
                 // retain their stronger photographic color contribution.
-                float colorStrength=mix(.19,.78,1.0-forestWeight);
+                // Recover a little native CC0 forest microtexture only at
+                // close flight range; distant canopy retains its restrained
+                // colour to avoid repeating photographic squares.
+                float forestNear=forestWeight*
+                  (1.0-smoothstep(68.0,210.0,hitDist));
+                float colorStrength=mix(.19+.18*forestNear,.78,
+                                        1.0-forestWeight);
                 albedo=mix(albedo,photo,clamp(photoAmount*colorStrength,0.0,.84));
                 float sparkle=pow(max(dot(reflect(rd,n),uSun),0.0),
                                   mix(30.0,95.0,roughness));
