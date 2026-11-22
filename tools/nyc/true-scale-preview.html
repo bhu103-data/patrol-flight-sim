@@ -26,7 +26,7 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
 <h1>时代广场 · 官方测绘形体预览</h1>
 <p><strong>不是 PATROL 正式游戏地图，也不代表真实外立面还原。</strong></p>
 <p id="status">正在读取官方建筑与道路数据...</p>
-<p>灰色：官方建筑体量；蓝线：官方道路中心线；灰绿色带：仅根据有记录的官方街道用地宽度绘制的范围提示，<strong>不是实际铺装路面或车道</strong>。无真实外立面。</p>
+<p>灰色建筑：真实足迹/米制高度的占位体量；灰绿色道路面：纽约 OTI 2022 年实测平面轮廓；浅黄路口：同源 2022 路口多边形；蓝线：DCM 道路中心线。<strong>没有真实立面、交通灯或完整 2026 铺装记录。</strong></p>
 <small>鼠标拖动旋转 · 滚轮缩放 · 采用 WGS84 同一局部米制坐标；道路与建筑不使用旧版 PATROL 压缩坐标。</small>
 </aside>
 <section id="flightPanel">
@@ -35,6 +35,12 @@ border-radius:6px;cursor:pointer;font:inherit;padding:8px 12px;margin:5px 0}
   <p id="flightState">等待官方建筑、道路数据核验...</p>
   <small>低空模式：W/S 前后 · A/D 平移 · Q/E 下降/上升 · Shift 加速
   · 鼠标拖动调整方向 · Esc 释放鼠标</small>
+  <label style="display:block;margin:7px 0;color:#8ec4aa">
+    <input id="roadbedToggle" type="checkbox" checked/> 显示 OTI 2022 官方道路实际面范围
+  </label>
+  <label style="display:block;margin:7px 0;color:#bcc8ce">
+    <input id="rowHintToggle" type="checkbox"/> 对比旧式 DCM 街道用地宽度提示（非路面）
+  </label>
   <label style="display:block;margin:7px 0;color:#e0c69a">
     <input id="historicToggle" type="checkbox"/> 对照 2015–2017 历史真实涂装隔离带
   </label>
@@ -258,8 +264,41 @@ try{
   position.length=oldVertex;colors.length=oldColors;normals.length=oldNormals;
   triCount=oldTriangleCount;
   const historicToggle=document.querySelector('#historicToggle');
+  const realRoadResponse=await fetch('./roadbed-mesh.json');
+  if(!realRoadResponse.ok)throw Error('Actual source OTI Roadbed 2022 triangles missing');
+  const realRoads=await realRoadResponse.json();
+  if(realRoads.schema!=='patrol-oti-2022-roadbed-triangles-v1'||
+     realRoads.role!=='OTI_2022_SOURCE_ROADBED_ONLY_NOT_2026_ROAD_SURVEY'||
+     realRoads.referenceImageryYear!==2022||
+     realRoads.projection?.originLonLat?.join(',')!==
+       source.projection?.originLonLat?.join(',')||
+     !Array.isArray(realRoads.flatVerticesMetres)||
+     realRoads.flatVerticesMetres.length!==realRoads.counts.triangles*6||
+     !Array.isArray(realRoads.triangleSubtypes)||
+     realRoads.triangleSubtypes.length!==realRoads.counts.triangles||
+     realRoads.counts.features<70||realRoads.counts.triangles<8000||
+     realRoads.counts.trianglesInsideBuildings>0)
+    throw Error('Official source roadway provenance, area or building clearance failed');
+  // A single static WebGL source mesh; no road sizes or lane widths inferred.
+  const pavementPos=[],pavementCol=[],pavementNor=[];
+  for(let i=0;i<realRoads.counts.triangles;i++){
+    const subtype=realRoads.triangleSubtypes[i];
+    const color=subtype===350010?[.60,.59,.48]:
+      subtype===350020?[.40,.44,.49]:[.29,.37,.39];
+    for(let j=0;j<3;j++){
+      const idx=i*6+j*2;
+      addPoint(pavementPos,pavementCol,pavementNor,
+        [realRoads.flatVerticesMetres[idx],.078,
+         realRoads.flatVerticesMetres[idx+1]],color,[0,1,0]);
+    }
+  }
+  const realPavement=meshBuffer(pavementPos,pavementCol,pavementNor);
+  const roadbedToggle=document.querySelector('#roadbedToggle');
+  const rowHintToggle=document.querySelector('#rowHintToggle');
   const envelopes=buildOfficialStreetWidthEnvelopes(source);
-  const rowSurface=meshBuffer(envelopes.positions,envelopes.colors,envelopes.normals);
+  const hintPos=envelopes.positions.slice();
+  for(let i=1;i<hintPos.length;i+=3)hintPos[i]=.096;
+  const rowSurface=meshBuffer(hintPos,envelopes.colors,envelopes.normals);
   const buildings=meshBuffer(position,colors,normals);
   const streets=meshBuffer(roadPos,roadColors,roadNormals);
   gl.enable(gl.DEPTH_TEST);
@@ -291,7 +330,14 @@ try{
     const cameraTarget=flyMode?
       metricFlightTarget(flyState.position,flyState.yaw,flyState.pitch):target;
     gl.uniformMatrix4fv(uniform,false,matMul(perspective(width/height),lookAt(eye,cameraTarget)));
-    gl.bindVertexArray(rowSurface.vao);gl.drawArrays(gl.TRIANGLES,0,rowSurface.count);
+    if(roadbedToggle.checked){
+      gl.bindVertexArray(realPavement.vao);
+      gl.drawArrays(gl.TRIANGLES,0,realPavement.count);
+    }
+    if(rowHintToggle.checked){
+      gl.bindVertexArray(rowSurface.vao);
+      gl.drawArrays(gl.TRIANGLES,0,rowSurface.count);
+    }
     gl.bindVertexArray(buildings.vao);gl.drawArrays(gl.TRIANGLES,0,buildings.count);
     gl.bindVertexArray(streets.vao);gl.drawArrays(gl.LINES,0,streets.count);
     if(historicToggle.checked&&historicMesh.count>0){
@@ -305,6 +351,12 @@ try{
     sourceBuildings:source.counts.buildings,sourceRoads:source.counts.roadFeatures,
     buildingTriangles:triCount,streetVertices:streets.count,
     streetWidthEnvelopes:envelopes.stats,
+    realRoadbedSource:{features:realRoads.counts.features,
+      polygons:realRoads.counts.polygons,triangles:realRoads.counts.triangles,
+      referenceYear:realRoads.referenceImageryYear,
+      source:realRoads.source,
+      trianglesInsideBuildings:realRoads.counts.trianglesInsideBuildings,
+      visible:()=>roadbedToggle.checked,oldHintVisible:()=>rowHintToggle.checked},
     historySource:{actualPolygons:historical.polygons.length,
       renderedPolygons:historicPolygonCount,renderedTriangles:historicTriangles,
       vintage:historical.sourceVintage,crs:historical.sourceCrs,
