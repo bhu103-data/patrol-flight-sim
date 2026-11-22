@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PATROL NYC | genuine 2014 municipal rooftop source QA</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#0a1421;color:#ebeff3;font:13px system-ui,sans-serif}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+aside{position:absolute;left:16px;top:16px;max-width:440px;background:#0a1925ed;border:1px solid #506879;border-radius:10px;padding:16px;pointer-events:none}
+h1{font-size:17px;margin:0 0 8px}
+p{margin:6px 0;line-height:1.5}
+#stat{font-variant-numeric:tabular-nums;color:#9bd9e0}
+small{color:#d1bc99}
+</style>
+</head>
+<body>
+<canvas id="roofCanvas"></canvas>
+<aside>
+<h1>纽约市官方 2014 MN05 屋顶网格源 · 真实坐标预览</h1>
+<p><strong>不是 PATROL 正式纽约地图，不是 2026 实景照片，也不是完整 3D 城市。</strong></p>
+<p id="stat">读取纽约市官方 Rhino 原始屋顶缓存网格…</p>
+<p>仅显示 2014 年市政 Brep 附带的**真实原始屋顶三角网格**；不生成平顶盒体、窗户、街道或自行绘制屋顶。</p>
+<p>鼠标拖动旋转 · 滚轮调整距离。X=向东米，Z=向北米。
+高度仅显示相对源文件最低屋顶 Z 的差值，不是 2026 地面海拔。</p>
+<small>数据源：NYC DCP 2014 Manhattan Community District 05 原始 Rhino 3DM，EPSG:2263 美制测量英尺。原始屋顶网格是市政 Brep 的缓存近似，而不是精确 BIM 曲面。</small>
+</aside>
+<script type="module">
+const SHA="b41afdad1243d12858f7f446325af30667175b1eb36e9689304a4299f1c0df57";
+const FT=1200/3937;
+const canvas=document.getElementById('roofCanvas'),stat=document.getElementById('stat');
+const gl=canvas.getContext('webgl2',{antialias:true,preserveDrawingBuffer:true});
+if(!gl)throw Error('WebGL2 required for genuine source mesh view');
+const vs='#version 300 es\nprecision highp float;layout(location=0) in vec3 aPosition;layout(location=1) in vec3 aNormal;uniform mat4 uVP;out vec3 vNormal;void main(){gl_Position=uVP*vec4(aPosition,1.);vNormal=aNormal;}';
+const fs='#version 300 es\nprecision highp float;in vec3 vNormal;out vec4 pixel;void main(){vec3 n=normalize(vNormal);float diffuse=.43+.56*abs(dot(n,normalize(vec3(.45,.85,.25))));pixel=vec4(vec3(.62,.71,.76)*diffuse,1.); }';
+function shader(type,code){const sh=gl.createShader(type);gl.shaderSource(sh,code);gl.compileShader(sh);
+ if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(sh));return sh;}
+const prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs));
+gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+function norm(v){const k=Math.hypot(...v)||1;return v.map(t=>t/k);}
+function sub(a,b){return a.map((t,i)=>t-b[i]);}
+function dot(a,b){return a.reduce((z,t,i)=>z+t*b[i],0);}
+function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function lookAt(eye,target){const z=norm(sub(eye,target)),x=norm(cross([0,1,0],z)),y=cross(z,x);
+return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,
+ -dot(x,eye),-dot(y,eye),-dot(z,eye),1]);}
+function perspective(aspect){const f=1/Math.tan(Math.PI/5.7),near=2,far=5000;
+return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,
+0,0,2*far*near/(near-far),0]);}
+function mul(a,b){const r=new Float32Array(16);
+for(let c=0;c<4;c++)for(let row=0;row<4;row++)for(let k=0;k<4;k++)r[4*c+row]+=a[4*k+row]*b[4*c+k];return r;}
+let yaw=-.66,pitch=.67,distance=880,target=[0,95,140],drag=false,last=[0,0];
+canvas.addEventListener('pointerdown',e=>{drag=true;last=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerup',()=>drag=false);
+canvas.addEventListener('pointercancel',()=>drag=false);
+canvas.addEventListener('pointermove',e=>{if(!drag)return;
+yaw+=(e.clientX-last[0])*.005;pitch=Math.max(.14,Math.min(1.45,pitch+(e.clientY-last[1])*.004));
+last=[e.clientX,e.clientY];});
+canvas.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(90,Math.min(2500,distance*Math.exp(e.deltaY*.001)));},{passive:false});
+try{
+ const response=await fetch('./times-square-original-roof-mesh.json');
+ if(!response.ok)throw Error('Official cached roof mesh artifact not served');
+ const source=await response.json();
+ if(source.schema!=='patrol-mn05-authentic-2014-cached-roof-mesh-qa-v1'||
+    source.source3dmSHA256!==SHA||
+    source.roofZInterpretation!=='RAW_2014_RHINO_SOURCE_FOOT_UNKNOWN_VERTICAL_DATUM'||
+    !Array.isArray(source.sourceRooftop3dMeshPatches))
+   throw Error('Incorrect NYC municipal source, year or vertical datum provenance');
+ const meshParts=source.sourceRooftop3dMeshPatches;
+ if(meshParts.length<50||meshParts.length>2500)throw Error('Actual municipal roof source count outside bounded budget');
+ let minZ=Infinity,maxZ=-Infinity,minE=Infinity,maxE=-Infinity,minN=Infinity,maxN=-Infinity;
+ for(const part of meshParts){
+  if(part.vertices.length!==part.vertexCount*3||part.sourceTriangles.length!==part.triangleCount*3)
+    throw Error('Source cached mesh coordinate/index count does not match');
+  for(let i=0;i<part.vertices.length;i+=3){
+   minE=Math.min(minE,part.vertices[i]);maxE=Math.max(maxE,part.vertices[i]);
+   minN=Math.min(minN,part.vertices[i+1]);maxN=Math.max(maxN,part.vertices[i+1]);
+   minZ=Math.min(minZ,part.vertices[i+2]);maxZ=Math.max(maxZ,part.vertices[i+2]);
+  }
+ }
+ if(!Number.isFinite(minZ)||maxZ<=minZ)throw Error('Real 2014 rooftop elevation range missing');
+ target=[(minE+maxE)*.5,(maxZ-minZ)*FT*.27,(minN+maxN)*.5];
+ const pos=[],normals=[];let triangleCount=0;
+ const point=(part,i)=>{
+  const k=i*3,a=part.vertices;
+  return [a[k],(a[k+2]-minZ)*FT,a[k+1]];
+ };
+ for(const part of meshParts){
+  for(let j=0;j<part.sourceTriangles.length;j+=3){
+   const a=point(part,part.sourceTriangles[j]),b=point(part,part.sourceTriangles[j+1]),
+     c=point(part,part.sourceTriangles[j+2]);
+   const n=norm(cross(sub(b,a),sub(c,a)));
+   for(const p of [a,b,c]){pos.push(...p);normals.push(...n);}
+   triangleCount++;
+  }
+ }
+ if(triangleCount<100||triangleCount>150000)throw Error('Source 3D rooftop triangles not within budget');
+ const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+ for(const [slot,values] of [[0,pos],[1,normals]]){
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(values),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(slot);gl.vertexAttribPointer(slot,3,gl.FLOAT,false,0,0);
+ }
+ const vp=gl.getUniformLocation(prog,'uVP');
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.035,.064,.097,1);
+ function render(){
+  const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
+  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+  gl.viewport(0,0,width,height);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const eye=[target[0]+distance*Math.cos(pitch)*Math.sin(yaw),
+   target[1]+distance*Math.sin(pitch),
+   target[2]+distance*Math.cos(pitch)*Math.cos(yaw)];
+  gl.uniformMatrix4fv(vp,false,mul(perspective(width/height),lookAt(eye,target)));
+  gl.bindVertexArray(vao);gl.drawArrays(gl.TRIANGLES,0,pos.length/3);
+  requestAnimationFrame(render);
+ }
+ window.patrolSourceRoofQA={ready:true,sourceRooftopMeshes:meshParts.length,
+  sourceRoofTriangles:triangleCount,sourceRawZFeetRange:[minZ,maxZ],
+  horizontalBoundsMetres:[minE,minN,maxE,maxN],
+  requiresVerticalDatum:true,camera:()=>({yaw,pitch,distance,target:target.slice()}),
+  glError:()=>gl.getError()};
+ stat.textContent='市政原始网格 '+meshParts.length+' 个 · 原始三角面 '+
+  triangleCount.toLocaleString('en-US')+' · 水平覆盖 '+
+  Math.round(maxE-minE)+' × '+Math.round(maxN-minN)+' 米 · 高程基准未核实';
+ render();
+}catch(e){
+ stat.textContent='真实屋顶来源/网格失败：'+e.message;
+ window.patrolSourceRoofQA={ready:false,error:e.message};
+ throw e;
+}
+</script>
+</body>
+</html>

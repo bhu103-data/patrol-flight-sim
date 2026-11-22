@@ -1,0 +1,36 @@
+name: NYC official 2014 MN05 Rhino 3D model source audit
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc/probe-official-mn05-rhino.py'
+      - 'tools/nyc/official_mn05_projection.py'
+      - 'tests/nyc-official-mn05-coordinate-frame.test.py'
+      - '.github/workflows/nyc-official-mn05-roof-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-mn05-3d-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source inspector and install Rhino 3DM read-only decoder
+        run: |
+          python -m py_compile tools/nyc/probe-official-mn05-rhino.py
+          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.17.0 pyproj==3.7.2
+      - name: Check EPSG2263 US-survey-foot coordinates against real WGS84 point
+        run: python tests/nyc-official-mn05-coordinate-frame.test.py
+      - name: Bounded official City Planning MN05 2014 3D model download and roof inventory
+        run: python tools/nyc/probe-official-mn05-rhino.py
+      - name: Preserve source/coordinate/provenance report even when blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-official-mn05-3dm-source-provenance
+          path: artifacts/nyc-official-mn05/mn05-probe.json
+          retention-days: 7
+          if-no-files-found: warn
