@@ -17,6 +17,7 @@ class Obj {
 class Geo {
  constructor(){this.attributes={};this.index=[]}
  rotateX(){return this}
+ rotateZ(){return this}
  setAttribute(k,v){this.attributes[k]=v}
  setIndex(v){this.index=v}
  computeVertexNormals(){}
