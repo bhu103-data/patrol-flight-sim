@@ -71,12 +71,21 @@ const baselineSha='bc155141742811bca3c4b1988672b238bd50a98b';
  }
  cameraQAPage('alaska-baseline.html','alaska-qa-baseline.html');
  cameraQAPage('index.html','alaska-qa-updated.html');
- const browser=await chromium.launch({headless:true,args:[
-  '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
-  '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
-]});
+ // CI uses pinned SwiftShader for repeatable functional screenshots only.
+ // For a physical Windows PC, opt in to a visible Edge window and reject
+ // software GPU fallbacks instead of quietly accepting misleading FPS.
+ const nativeGpu=process.env.PATROL_NATIVE_GPU==='1';
+ const browserChannel=process.env.PATROL_BROWSER_CHANNEL||'msedge';
+ const browser=await chromium.launch(nativeGpu
+   ? {headless:false,channel:browserChannel,args:['--enable-webgl','--use-gl=angle']}
+   : {headless:true,args:[
+     '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+     '--enable-unsafe-swiftshader','--disable-gpu-sandbox'
+   ]});
 mkdirSync('artifacts',{recursive:true});
-const records={baselineSha,headSha:process.env.GITHUB_SHA||null,viewport:[1280,800]};
+const records={baselineSha,headSha:process.env.GITHUB_SHA||null,viewport:[1280,800],
+  captureMode:nativeGpu?'physical-gpu-raf':'swiftshader-ci',
+  browserChannel:nativeGpu?browserChannel:'playwright-chromium'};
 
 async function verifySamePageMapSwitch(page){
   // Use the shipped Flight Menu and launcher, never set selectedMap by hand.
@@ -127,8 +136,21 @@ async function capture(label,file){
   const response=await page.goto(root+'/'+file+'?alaskaView=harbor',
     {waitUntil:'domcontentloaded',timeout:30000});
   if(response?.status()!==200)throw Error('HTTP error for '+label);
-  if(!await page.evaluate(()=>Boolean(document.querySelector('#glCanvas')?.getContext('webgl2'))))
-    throw Error('WebGL2 unavailable for '+label);
+  const gpu=await page.evaluate(()=>{
+    const gl=document.querySelector('#glCanvas')?.getContext('webgl2');
+    if(!gl)return null;
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    return {
+      vendor:ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR),
+      renderer:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER),
+      version:gl.getParameter(gl.VERSION),unmasked:Boolean(ext)
+    };
+  });
+  if(!gpu)throw Error('WebGL2 unavailable for '+label);
+  if(nativeGpu && (!gpu.unmasked ||
+    /swiftshader|llvmpipe|softpipe|software|microsoft basic render|warp|cpu raster/i
+      .test(gpu.vendor+' '+gpu.renderer)))
+    throw Error('Real GPU cannot be verified for '+label+': '+JSON.stringify(gpu));
   await page.locator('input[name="flightMap"][value="alaska"]').check({force:true});
   await page.locator('#startFlight').click({timeout:15000});
   await page.waitForFunction(()=>{
@@ -185,26 +207,36 @@ async function capture(label,file){
   const floePose=await page.evaluate(()=>window.PatrolSpaceBridge?.getState?.());
   if(!floePose?.playing||floePose.map!=='alaska')
     throw Error(label+' did not retain a live Alaska floe view');
-  // Fixed-pose RAF cadence on headless SwiftShader: diagnostic ONLY, not GPU FPS.
-  // Bound measurement to 12 intervals or 15 seconds if software GL is slow.
-  const intervals=await page.evaluate(()=>new Promise(resolve=>{
+  // RequestAnimationFrame cadence measures displayed frame pacing, never GPU
+  // timer-query execution time. Native mode gathers 180 samples on a GPU
+  // identified by WEBGL_debug_renderer_info; CI's 12-sample default stays.
+  const maxIntervals=nativeGpu?180:12;
+  const sampleTimeoutMs=nativeGpu?30000:15000;
+  const intervals=await page.evaluate(({maxIntervals,sampleTimeoutMs})=>new Promise(resolve=>{
     let previous=null,done=false;const values=[];
-    const timeout=setTimeout(()=>{done=true;resolve(values);},15000);
+    const timeout=setTimeout(()=>{done=true;resolve(values);},sampleTimeoutMs);
     const frame=now=>{
       if(done)return;
       if(previous!==null)values.push(now-previous);
       previous=now;
-      if(values.length>=12){
+      if(values.length>=maxIntervals){
         done=true;clearTimeout(timeout);resolve(values);
       }else requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
-  }));
+  }),{maxIntervals,sampleTimeoutMs});
+  if(nativeGpu && intervals.length<120)
+    throw Error('Insufficient native GPU RAF samples: '+intervals.length);
   const sorted=intervals.slice().sort((a,b)=>a-b);
   const percentile=p=>sorted.length?sorted[Math.max(0,Math.ceil(p*sorted.length)-1)]:null;
   records[label]={...state.flight,after,near,floe,floePose,alaskaModules,pageErrors:errors,
-    firstPlayableMs,softwareRafSamples:sorted.length,
-    softwareRafP50Ms:percentile(.5),softwareRafP95Ms:percentile(.95)};
+    firstPlayableMs,gpu,
+    softwareRafSamples:nativeGpu?null:sorted.length,
+    softwareRafP50Ms:nativeGpu?null:percentile(.5),
+    softwareRafP95Ms:nativeGpu?null:percentile(.95),
+    nativeRafSamples:nativeGpu?sorted.length:null,
+    nativeRafP50Ms:nativeGpu?percentile(.5):null,
+    nativeRafP95Ms:nativeGpu?percentile(.95):null};
   if(label==='updated'){
     // The screenshot-only HUD concealment includes the Flight Menu button.
     // Restore normal UI before exercising the real, clickable map selector.
