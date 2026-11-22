@@ -17,7 +17,7 @@ const hook=[
   '    activeAlaskaTerrainScale,',
   '    visibleTerrainScale:terrainScaleFor(selectedMap),',
   '    peak:sampleGroundHeight(-558.75,-461.25),',
-  '    sea:sampleGroundHeight(100,-500),',
+  '    sea:sampleGroundHeight(0,-700),',
   '    playing:flying,',
   '    webglLost:gl.isContextLost()',
   '  });',
