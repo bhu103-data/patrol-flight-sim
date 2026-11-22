@@ -119,6 +119,27 @@ test('live follower cannot overtake the taxi around a multi-hour cyclic route',(
   assert.ok(minGap>=9-1e-8);
   assert.match(html,/bridgeheadLeader:j\?cityTraffic\.find/);
 });
+test('NYC car-following eases from desired pace into lead pace without a speed snap',()=>{
+  const lead=actor(0),follow=actor(1);
+  lead.offset=73.4;follow.offset=lead.offset-12;
+  lead.pace=5;follow.pace=5.6;follow.bridgeheadLeader=lead;
+  const speed=(t,h=.0005)=>
+    (resolved(follow,t+h)-resolved(follow,t-h))/(2*h);
+  // A raw Math.min(desired, leader-9) jumps by .6 units/s exactly at t=5.
+  // The production smooth-min should join in and out of the 2.5-unit
+  // transition band without that discontinuity.
+  assert.ok(Math.abs(speed(.2)-5.6)<.001,'early free sedan speed changed');
+  assert.ok(Math.abs(speed(5)-5.3)<.003,
+    'leader/follower halfway transition speed must be interpolated');
+  assert.ok(Math.abs(speed(5-.025)-speed(5+.025))<.025,
+    'joining the leader cap must not create a velocity step');
+  assert.ok(Math.abs(speed(10)-5)<.001,
+    'sedan must match lead speed after the blend completes');
+  const headway=resolved(lead,5)-resolved(follow,5);
+  assert.ok(headway>=9&&headway<=10,
+    'soft clamping must preserve full physical following clearance');
+  assert.match(html,/blendWidth=2\.5/);
+});
 test('only NYC bridge connector actors opt in, original geometry remains intact',()=>{
   assert.match(html,/if\(actor\.bridgehead\)return bridgeheadTrafficPose\(actor,time\)/);
   assert.match(html,/const phase=\(\(traveled%period\)\+period\)%period;/);
