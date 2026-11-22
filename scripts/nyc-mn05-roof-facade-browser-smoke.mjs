@@ -26,7 +26,7 @@ try{
  report.data=info;
  if(!info.ready||info.error||info.sourceYear!==2014||
     info.matchedFids<5||info.roofTriangles<100||info.facadeTriangles<100||
-    info.sourceVerticalDatumVerified!==false||info.relativeHeightAnchor!==true||
+    info.sourceVerticalDatumVerified!==false||info.sourceVerticalUnitVerified!==true||info.relativeHeightAnchor!==true||
     info.contextLost||info.glError!==0||info.canvas[0]!==1280||info.canvas[1]!==800)
   throw Error('Actual municipal roof/facade WebGL QA invalid '+JSON.stringify(info));
  const roof=page.locator('#roof'),facade=page.locator('#facade');
