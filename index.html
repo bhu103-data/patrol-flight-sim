@@ -6340,7 +6340,8 @@ const CENTRAL_PARK_SITES=[
       const dumboInfillRecessed=bridgeheadBrooklyn &&
         detailBand===3 && !destroyed && !lot[7] &&
         east>260&&east<328&&north>-371&&north<-337 &&
-        w>=8&&d>=8.5&&h>11&&h<19;
+        w>=8&&d>=8.5&&h>11&&h<19 &&
+        !graphicsCompat && smoothScenery();
       const heroDowntown=!local && detailBand>=2 &&
         east>-180&&east<170&&north>-526&&north<-195;
       const gridX=Math.floor((east-MANHATTAN_GRID.tilt*north-
