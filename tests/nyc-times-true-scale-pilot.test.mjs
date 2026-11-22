@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {ORIGIN,BBOX,BUILDING_SOURCE,ROAD_SOURCE,metresPerDegree,toLocalMeters,
-  buildingsInMeters,roadsInMeters,fetchOfficialRoads,makeSvg
+  buildingsInMeters,roadsInMeters,fetchOfficialRoads,makeSvg,
+  SOURCE_TILE_METRES,clipSourceStreetLine
 } from '../scripts/nyc-times-true-scale-pilot.mjs';
 
 const asset=JSON.parse(readFileSync(new URL('../assets/nyc/times-square-footprints.json',import.meta.url),'utf8'));
@@ -69,6 +70,46 @@ test('official street geometry uses precisely the same metre frame',()=>{
   assert.match(svg,/polyline/);
   assert.match(svg,/#d98a57/,'paper street visually distinct, not a driveable road');
   assert.match(svg,/#55c8f5/,'mapped street visually distinct');
+});
+
+test('ArcGIS envelope-intersecting road geometry is clipped instead of shrinking the view',()=>{
+  const [west,south,east,north]=SOURCE_TILE_METRES;
+  assert.ok(east-west>600&&east-west<700);
+  assert.ok(north-south>600&&north-south<700);
+  const lines=clipSourceStreetLine([[0,0],[1000,0],[1000,300],[0,300]]);
+  assert.equal(lines.length,2,'outside gap must not become a connecting road');
+  assert.ok(Math.abs(lines[0][0][0])<.001);
+  assert.ok(Math.abs(lines[0].at(-1)[0]-east)<.002);
+  assert.ok(Math.abs(lines[1][0][0]-east)<.002);
+  assert.ok(Math.abs(lines[1].at(-1)[0])<.002);
+  assert.deepEqual(clipSourceStreetLine([
+    [1000,1000],[1200,1200]]),[],'outside road must be dropped');
+  for(const line of lines)for(const p of line){
+    assert.ok(p[0]>=west-.002&&p[0]<=east+.002,
+      'invalid east/west source position '+p);
+    assert.ok(p[1]>=south-.002&&p[1]<=north+.002,
+      'invalid north/south source position '+p);
+  }
+});
+
+test('source street identity and paper-street status survive actual clipping',()=>{
+  const outside=ORIGIN[0]+.020;
+  const data={type:'FeatureCollection',features:[
+    {type:'Feature',properties:{OBJECTID:88,Street_NM:'7 AV',
+      Streetwidth:'80',Paper_ST:'N'},geometry:{type:'LineString',
+      coordinates:[ORIGIN,[outside,ORIGIN[1]]]}},
+    {type:'Feature',properties:{OBJECTID:89,Street_NM:'PAPER ST',
+      Paper_ST:'Y'},geometry:{type:'LineString',
+      coordinates:[[outside,ORIGIN[1]],[outside,ORIGIN[1]+.001]]}}
+  ]};
+  const roads=roadsInMeters(data);
+  assert.equal(roads.length,1,'outside source line must not become scenery');
+  assert.equal(roads[0].objectId,88);
+  assert.equal(roads[0].streetName,'7 AV');
+  assert.equal(roads[0].streetWidthFeet,80);
+  assert.equal(roads[0].paperStreet,'N');
+  assert.equal(roads[0].lines.length,1);
+  assert.ok(Math.abs(roads[0].lines[0].at(-1)[0]-SOURCE_TILE_METRES[2])<.002);
 });
 
 test('network fetching is official-source-only, bounded, and not a fictional fallback',async()=>{
