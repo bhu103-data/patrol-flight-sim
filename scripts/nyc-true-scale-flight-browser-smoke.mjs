@@ -114,7 +114,8 @@ try{
       report.initial.historical2014FacadeTriangles,
     offTriangles:(await historicalOffPage.evaluate(()=>window.PatrolMetricFlightQA.triangles)),
     changedPixelsOver6:historicalChangedPixels,
-    sameViewport:true,
+    sameViewport:true,cameraPositionErrorMetres:cameraPositionError,
+    cameraAngleErrorRadians:cameraAngleError,
     offModelImported:await historicalOffPage.evaluate(()=>
       window.PatrolMetricFlightQA.historical2014ModelImported)
   };
