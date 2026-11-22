@@ -85,6 +85,20 @@ try:
    metadata["readerVersion"]=str(getattr(rhino3dm,"__version__","unknown"))
    rhino=rhino3dm.File3dm.Read(str(raw_path))
    if rhino is None:raise ValueError("rhino3dm failed to parse official archive model")
+   # Record Rhino's actual document unit settings. EPSG:2263 confirms XY
+   # US-survey-foot coordinates, but the 3D model metadata does not declare
+   # a vertical datum; do not infer Z units from the horizontal CRS alone.
+   model_settings={}
+   settings=getattr(rhino,"Settings",None)
+   for key in ("ModelUnitSystem","PageUnitSystem","ModelAbsoluteTolerance",
+               "ModelAngleToleranceDegrees"):
+     try:
+       value=getattr(settings,key,None) if settings is not None else None
+       if value is not None:model_settings[key]=str(value)
+     except Exception as err:
+       model_settings[key+"_error"]=f"{type(err).__name__}: {err}"
+   metadata["modelSettings"]=model_settings
+   metadata["modelUnitSystem"]=model_settings.get("ModelUnitSystem","unknown")
    layers=[{"index":i,"name":layer.Name,
             "fullPath":getattr(layer,"FullPath",None)}
            for i,layer in enumerate(rhino.Layers)]
