@@ -883,6 +883,16 @@ const CENTRAL_PARK_SITES=[
     // USGS 3DEP data. The exact same height samples feed CPU collisions and the
     // GPU height atlas. No runtime requests are made by the terrain worker.
     const measured = alaska && options.alaskaDEM && options.alaskaDEM.heights;
+    // QA-only LF2025 water class, loaded explicitly for Alaska preview.
+    // Preserve original 3DEP geometry when absent; never override high slopes.
+    const landfirePreview = measured && options.alaskaWaterMask;
+    function measuredWaterClass(u,v) {
+      if(!landfirePreview)return false;
+      const map=landfirePreview;
+      const col=clamp(Math.round(v*map.width-.5),0,map.width-1);
+      const row=clamp(Math.round((1-u)*map.height-.5),0,map.height-1);
+      return map.cells[row*map.width+col]===1;
+    }
     function measuredHeight(u,v) {
       const dem=options.alaskaDEM;
       // Rotate 90° to line up the REAL west–east Tracy Arm water corridor
@@ -1284,7 +1294,22 @@ const CENTRAL_PARK_SITES=[
           // Vertical scale is compressed for this game's Y=100 flight ceiling;
           // never describe the result as survey-grade 1:1 gameplay.
           const metres=measuredHeight(u,v);
-          height[idx]=clamp((metres>1
+          // Experimental water *preview* changes only low-lying classified
+          // water (1..12m) while rejecting >12m fjord walls, snow and peaks.
+          // It is OFF by default, skipped in compat graphics and never
+          // changes city terrain, aircraft rules or DEM source assets.
+          // Keep the real C185 spawn, 132-unit eastbound takeoff lane,
+          // authored harbor docks/cabins, and upper glacier strictly on the
+          // original measured DEM even when LF2025 classifies them as water.
+          // The 25-point seaplane clearance rule is unchanged.
+          const protectedFlightLane=east>-64 && east<161 && Math.abs(north+667)<54;
+          const protectedHarbor=Math.hypot(east-151,north+525)<95 ||
+            Math.hypot(east+155,north+610)<40;
+          const protectedGlacier=north>423 && Math.abs(east-130)<71;
+          const previewWater=landfirePreview && metres>1 && metres<=12 &&
+            !protectedFlightLane && !protectedHarbor && !protectedGlacier &&
+            measuredWaterClass(u,v);
+          height[idx]=clamp((metres>1 && !previewWater
             ? water+metres*options.alaskaDEM.verticalScale
             : water-4.5)/scale,0.02,0.96);
         } else if (alaska) {
@@ -12769,6 +12794,30 @@ const CENTRAL_PARK_SITES=[
           {bbox:dem.bbox,highest,verticalScale:dem.verticalScale});
       }catch(error){
         console.warn('[PATROL] Alaska USGS DEM fallback to legacy terrain:',error);
+      }finally{
+        clearTimeout(timer);
+      }
+    }
+    // Explicit Alaska-only shoreline preview; never activated by normal
+    // gameplay or by graphics=compat (baseline/low-GPU comparison).
+    // Source: U.S. public-domain LF2025 EVC, class 11 (water). It is not
+    // authoritative survey bathymetry and must not bypass float safety.
+    if(selectedMap.alaska && terrainOptions.alaskaDEM && !graphicsCompat &&
+       new URLSearchParams(location.search).get('alaskaShore')==='landfire-preview'){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),3500);
+      try{
+        const {loadLandfireWaterMask}=await import('./assets/alaska/landfire-water-mask.js');
+        const waterMask=await loadLandfireWaterMask(
+          './assets/alaska/landfire-evc-water-preview.json',fetch,controller.signal);
+        if(waterMask.bbox.some((value,i)=>
+           Math.abs(value-terrainOptions.alaskaDEM.bbox[i])>1e-8))
+          throw new Error('LANDFIRE/DEM coverage mismatch');
+        terrainOptions.alaskaWaterMask=waterMask;
+        console.warn('[PATROL] EXPERIMENTAL Alaska shoreline preview',
+          {waterCells:waterMask.waterCount,maxCarveElevationMetres:12});
+      }catch(error){
+        console.warn('[PATROL] Alaska shoreline preview skipped; original DEM retained',error);
       }finally{
         clearTimeout(timer);
       }
