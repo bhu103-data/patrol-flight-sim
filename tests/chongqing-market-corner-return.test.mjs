@@ -25,7 +25,7 @@ const generated=()=>{
 
 test('only three real storefront shells gain six matched PBR corner returns',()=>{
   const {draws,obstacles}=generated();
-  const returns=draws.filter(a=>a[4]===.12&&a[5]===9.65&&a[6]===3.10);
+  const returns=draws.filter(a=>a[4]===.36&&a[5]===9.65&&a[6]===3.10);
   assert.equal(returns.length,6,'each physical open facade must turn on both sides');
   assert.equal(obstacles.length,14,'existing shop occupied volumes are unchanged');
   for(const x of [236,284,332]){
@@ -33,14 +33,14 @@ test('only three real storefront shells gain six matched PBR corner returns',()=
     const finish=x===284?'steps':'carved';
     for(const side of [-1,1]){
       const at=returns.filter(([mat,px,py,pz,w,h,d])=>
-        mat===finish&&Math.abs(px-(x+side*10.04))<1e-7&&
+        mat===finish&&Math.abs(px-(x+side*9.92))<1e-7&&
         Math.abs(py-(y+5.475))<1e-7&&Math.abs(pz-345-.98)<1e-7);
       assert.equal(at.length,1,'one matched lower-story return for '+x+' side '+side);
       const [,px,py,pz,w,h,d]=at[0];
       assert.ok(Math.abs(py-h/2-(y+.65))<1e-6 &&
         Math.abs(py+h/2-(y+10.30))<1e-6,'cladding must stay below upper timber story');
-      assert.ok(Math.abs(px-x)-w/2<10&&Math.abs(px-x)+w/2>10,
-        'cladding should overlap the existing side shell only 0.02 units');
+      assert.ok(Math.abs(px-x)-w/2<=9.76&&Math.abs(px-x)+w/2>=10.05,
+        'return must bridge the facade half-width 9.76 and side shell outer 10');
       assert.ok(pz-345+d/2>2.35&&pz-345-d/2<2.4,
         'cladding intersects the real facade rear jamb, not the window aperture');
     }
