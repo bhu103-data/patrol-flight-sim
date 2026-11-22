@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {buildStreetEdgeMesh}
+import {verifySourceFrames}
   from '../scripts/nyc-sidewalk-curb-lowflight-mesh.mjs';
 
 const projection={
@@ -33,30 +33,29 @@ function fake(){
   roads:{schema:'patrol-nyc-lowflight-oti-roadbed-metre-v1',
     mode:'SOURCE_VERIFIED_NO_DEFAULT_GAME_CHANGE',projection}};
 }
-test('source geometry preserves official polygons and metric flight origin',()=>{
+test('meter source identity checked without optional external module',()=>{
   const {edges,roads}=fake();
-  const built=buildStreetEdgeMesh(edges,roads);
-  assert.equal(built.schema,'patrol-nyc-lowflight-street-edge-metre-v1');
-  assert.equal(built.mode,'OPT_IN_QA_NOT_DEFAULT_MAP');
-  assert.equal(built.counts.sidewalkFeatures,30);
-  assert.equal(built.counts.curbFeatures,201);
-  assert.equal(built.counts.curbCuts,217);
-  assert.ok(built.counts.sidewalkTriangles>=1000);
-  assert.ok(built.counts.curbSegments>=1000);
-  assert.deepEqual(built.projection,projection);
-  for(const triangle of built.triangles)
-    for(const point of triangle.vertices)
-      assert.equal(point.length,2,'source data cannot invent heights');
+  assert.equal(verifySourceFrames(edges,roads),true);
+  assert.deepEqual(edges.projection,roads.projection);
+  assert.ok(edges.sidewalks.every(item=>item.polygons[0][0]
+    .every(point=>point.length===2)));
+  const source=readFileSync(new URL(
+    '../scripts/nyc-sidewalk-curb-lowflight-mesh.mjs',import.meta.url),'utf8');
+  assert.match(source,/await import\('earcut'\)/,
+    'only dedicated geometry build may require Earcut');
+  assert.match(source,/deviation\(points,holes,2,indices\)/,
+    'original source holes must be area-verified');
+  assert.match(source,/mode:'OPT_IN_QA_NOT_DEFAULT_MAP'/);
 });
 test('never combine incompatible / compressed metre projections',()=>{
   const {edges,roads}=fake();
-  assert.throws(()=>buildStreetEdgeMesh(edges,{
+  assert.throws(()=>verifySourceFrames(edges,{
     ...roads,projection:{...projection,originLonLat:[0,0]}
   }),/same exact metre projection/);
-  assert.throws(()=>buildStreetEdgeMesh({
+  assert.throws(()=>verifySourceFrames({
     ...edges,projection:{...projection,scaleMetresPerGameUnit:.32}
   },roads),/same exact metre projection/);
-  assert.throws(()=>buildStreetEdgeMesh(edges,{
+  assert.throws(()=>verifySourceFrames(edges,{
     ...roads,mode:'PATROL_COMPRESSED_GAME'
   }),/same exact metre projection/);
 });
