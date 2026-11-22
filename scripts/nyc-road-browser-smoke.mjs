@@ -40,6 +40,57 @@ function screenshotPixels(bytes){
 // Narrow screenshot ROI corresponding to the previously verified blank
 // FID 384606 right foreground (at the fixed 1280x720, zoom-42 camera).
 // This is a pixel-backed *local wall detail* test, not a realism score.
+// OTI street facade diagnostic: the fixed zoom-68 canvas is mostly ONE wall.
+// Global scene-wide color-bin diversity would incorrectly reject a real,
+// source-anchored close-up. Demand visible left/right/top window contours
+// AND glass-to-wall contrast instead. This does not assess photorealism.
+function otiSourceWindowProbe(bytes){
+ const image=PNG.sync.read(bytes),scaleX=image.width/1280,scaleY=image.height/720;
+ const luma=(x,y)=>{
+  const px=Math.min(image.width-1,Math.max(0,Math.round(x*scaleX)));
+  const py=Math.min(image.height-1,Math.max(0,Math.round(y*scaleY)));
+  const i=(py*image.width+px)*4,d=image.data;
+  return d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+ };
+ const mean=(x0,x1,y0,y1)=>{
+  let sum=0,count=0;
+  for(let y=y0;y<y1;y+=8)for(let x=x0;x<x1;x+=8){
+   sum+=luma(x,y);count++;
+  }
+  return sum/Math.max(1,count);
+ };
+ const edgeX=(x0,x1,y0,y1)=>{
+  let hits=0,total=0;
+  for(let y=y0;y<y1;y+=10){
+   let best=0;
+   for(let x=x0;x<x1;x+=4)
+    best=Math.max(best,Math.abs(luma(x+8,y)-luma(x-8,y)));
+   if(best>=9)hits++;
+   total++;
+  }
+  return hits/Math.max(1,total);
+ };
+ const edgeY=(y0,y1,x0,x1)=>{
+  let hits=0,total=0;
+  for(let x=x0;x<x1;x+=12){
+   let best=0;
+   for(let y=y0;y<y1;y+=3)
+    best=Math.max(best,Math.abs(luma(x,y+8)-luma(x,y-8)));
+   if(best>=9)hits++;
+   total++;
+  }
+  return hits/Math.max(1,total);
+ };
+ const glassWallContrast=mean(540,740,240,350)-mean(980,1110,240,350);
+ const leftEdgeCoverage=edgeX(400,455,200,420);
+ const rightEdgeCoverage=edgeX(820,890,200,420);
+ const topEdgeCoverage=edgeY(115,190,540,750);
+ return {glassWallContrast:+glassWallContrast.toFixed(2),
+  leftEdgeCoverage,rightEdgeCoverage,topEdgeCoverage,
+  fixedReferenceResolution:[1280,720],
+  valid:glassWallContrast>=12&&leftEdgeCoverage>=.75&&
+    rightEdgeCoverage>=.75&&topEdgeCoverage>=.75};
+}
 function timesWallDetail(bytes){
  const img=PNG.sync.read(bytes);
  const bounds=[930,1180,190,320],scaleX=img.width/1280,scaleY=img.height/720;
@@ -92,6 +143,37 @@ function timesSquareFlatWallProbe(bytes){
 // The temporary class preserves canvas visibility and is always removed,
 // so scenic view controls still work for subsequent camera selections.
 const screenshots=[],pixels={},captureTimings={},controlPixels={};
+// Actual requestAnimationFrame intervals in Chromium SwiftShader, not PNG
+// capture latency. Use these as diagnostic frame pacing, NOT production FPS.
+const framePacing={};
+async function sampleFramePacing(label,frames=24){
+ // SwiftShader can render much more slowly than hardware. Bound diagnostic
+ // sampling so a zero-rAF tab cannot stall the entire NYC visual regression.
+ const v=await page.evaluate(async count=>{
+  const durations=[];let last=null,done=false;
+  await new Promise(resolve=>{
+   const timeout=setTimeout(()=>{done=true;resolve()},12000);
+   const tick=t=>{
+    if(done)return;
+    if(last!==null)durations.push(t-last);
+    last=t;
+    if(durations.length>=count){
+     done=true;clearTimeout(timeout);resolve();
+    }else requestAnimationFrame(tick);
+   };
+   requestAnimationFrame(tick);
+  });
+  if(!durations.length)return {frames:0,complete:false,available:false,
+    reason:'No rAF intervals within bounded SwiftShader sample'};
+  durations.sort((a,b)=>a-b);
+  const at=p=>durations[Math.min(durations.length-1,Math.floor(p*(durations.length-1)))];
+  return {frames:durations.length,complete:durations.length>=count,
+    available:true,medianFrameMs:at(.5),p95FrameMs:at(.95),
+    minFrameMs:durations[0],maxFrameMs:durations.at(-1)};
+ },frames);
+ framePacing[label]=v;
+ console.log('[PATROL QA] frame pacing '+label+' '+JSON.stringify(v));
+}
 let pendingShot=null,hudStyleInstalled=false;
 async function capture(name,{control=false}={}){
  // Navigation replaces document styles, so install the UI-hiding style
@@ -124,9 +206,18 @@ async function capture(name,{control=false}={}){
        JSON.stringify(stats.rightWall));
   }
   captureTimings[name]=Date.now()-started;
+  // Preserve the same whole-canvas health requirement for EVERY view.
+  // A single high-contrast WINDOW passed the old ROI probe despite a known
+  // visually rejected doorway shot (run 44959287197). Do not let that probe
+  // substitute for city-scene diversity or claim physical doorway visibility.
   check(stats.width>=640&&stats.height>=360&&stats.colorBins>32&&
    stats.nearBlackFraction<.97,
    'Blank or nearly uniform NYC WebGL canvas: '+name+' '+JSON.stringify(stats));
+  if(name==='12-oti-doorway-street.png'){
+   // Diagnostic only; the west-harbor doorway ROI must be inspected on the
+   // actual screenshot before defining any spatially grounded gate.
+   stats.otiSourceWindow=otiSourceWindowProbe(image);
+  }
   // A diverse set of nearby windows and walls gave a false green check in
   // actual 44865972470. Harbor-facing OTI camera must ALSO see enough
   // bright sky in the top half to prove it is outside the building canyon.
@@ -211,7 +302,33 @@ try{
  check(facadeView.label==='Lower Manhattan · Window Facades'&&
    facadeView.webgl&&facadeView.error===0&&facadeView.zoom==='42',
    'Lower Manhattan harbor-side facade view failed: '+JSON.stringify(facadeView));
+ await sampleFramePacing('09-manhattan-window-facades');
  await capture('09-manhattan-window-facades.png');
+ // Same official OTI camera target, closer zoom for street/roof relief QA.
+ // Higher zoom makes the scenic camera both physically closer and narrower
+ // (see getScenicCamera); 27 would have been farther than the default 42.
+ // Do not call this a free-flight low pass: it is a hotel-camera close view.
+ await page.locator('#hotelZoom').evaluate(el=>{
+  el.value='68';el.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ await page.waitForTimeout(1300);
+ await sampleFramePacing('11-oti-downtown-close');
+ await capture('11-oti-downtown-close.png');
+ // Unlike a rooftop scenic view, inspect the physical entrance at
+ // OTI DOITT_ID 65190 edge 11 from a west-facing harbor-side viewpoint.
+ await page.locator('#hotelTarget').selectOption({label:'Lower Manhattan · Street Entrance'});
+ await page.waitForTimeout(1700);
+ const doorway=await page.evaluate(()=>{
+  const gl=document.getElementById('glCanvas')?.getContext('webgl2');
+  return {camera:document.getElementById('hotelTarget')?.selectedOptions?.[0]?.textContent,
+   zoom:document.getElementById('hotelZoom')?.value,
+   webgl:Boolean(gl&&!gl.isContextLost()),graphicsError:gl?.getError()??null};
+ });
+ check(doorway.camera==='Lower Manhattan · Street Entrance'&&doorway.zoom==='68'&&
+   doorway.webgl&&doorway.graphicsError===0,
+   'Lower Manhattan doorway street camera failed: '+JSON.stringify(doorway));
+ await sampleFramePacing('12-oti-doorway-street');
+ await capture('12-oti-doorway-street.png');
  // Restore the same free-flight state as the original tour before invoking
  // the existing Brooklyn Bridge shortcut. Keep its visibility/controls intact.
  await page.locator('#resumeFlight').click({force:true});
@@ -239,6 +356,7 @@ try{
  });
  check(bridge.webgl&&bridge.graphicsError===0,
    'Brooklyn Bridge view lost WebGL: '+JSON.stringify(bridge));
+ await sampleFramePacing('02-brooklyn-bridgehead');
  await capture('02-brooklyn-bridgehead.png');
  // Also inspect the residential/warehouse blocks. The bridge deck camera
  // fills most of the frame with cables and cannot assess street facades.
@@ -252,6 +370,7 @@ try{
  });
  check(dumbo.camera==='DUMBO · Warehouse Blocks'&&dumbo.webgl&&
    dumbo.graphicsError===0,'DUMBO building view failed: '+JSON.stringify(dumbo));
+ await sampleFramePacing('03-dumbo-warehouse');
  await capture('03-dumbo-warehouse.png');
  // Review the procedural Liberty crown from the dedicated close-up camera,
  // rather than inferring statue quality from distant harbor screenshots.
@@ -326,9 +445,10 @@ try{
  }
  check(errors.length===0,'NYC critical JS errors: '+errors.join('; '));
  result={passed:true,state,bridge,dumbo,liberty,screenshots,pixels,controlPixels,captureTimings,warnings};
+ result.framePacing=framePacing;
 }catch(e){
  result={passed:false,error:e.stack||String(e),pendingShot,screenshots,pixels,controlPixels,
-   captureTimings,errors,warnings};
+   captureTimings,framePacing,errors,warnings};
  // Avoid another potentially stalled screenshot when the failure itself was
  // a SwiftShader capture timeout. Partial completed images stay in artifacts.
  if(!pendingShot)try{

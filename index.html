@@ -5924,7 +5924,7 @@ const CENTRAL_PARK_SITES=[
     ];
     const [stone,glass]=palettes[Math.floor(tone*palettes.length)%palettes.length];
     const wallTint=isGlass?glass:stone,frameTint=isGlass?[.35,.42,.45]:[.48,.44,.39];
-    let walls=0,windows=0,roof=0;
+    let walls=0,windows=0,roof=0,streetEntrances=0,corniceBands=0;
     const face=(a,b,c,d,color,surface=0)=>{
       if(sign>0)addQuad(d,c,b,a,color,surface);
       else addQuad(a,b,c,d,color,surface);
@@ -5933,18 +5933,44 @@ const CENTRAL_PARK_SITES=[
       const a=outline[i],b=outline[(i+1)%outline.length];
       const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
       if(length<.10)continue;
-      const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
-      const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
-      face(loA,loB,hiB,hiA,wallTint,9);
+      const normal=[sign*dz/length,-sign*dx/length];
+      // PATROL_OTI_DOWNTOWN_REAL_ENTRY_V4: cut original wall into four
+      // perimeter panels around a recessed door. No collider/lot changes.
+      const downtownRelief=(lot[8]%3===0) && detailBand===3 && y<20 &&
+        x>-155&&x<-40&&z>-515&&z<-400 && h>=8 && !destroyed;
+      const entryBase=y+.24,entryTop=Math.min(roofY-.48,y+2.42);
+      const cutEntrance=downtownRelief && streetEntrances<2 &&
+        length>=3.5 && (normal[1]<-.20 || normal[0]<-.30) &&
+        entryTop>entryBase+.88;
+      if(cutEntrance){
+        const wallPoint=(t,yy)=>[a[0]+dx*t,yy,a[1]+dz*t],u=.31,v=.69;
+        face(wallPoint(0,y),wallPoint(1,y),
+          wallPoint(1,entryBase),wallPoint(0,entryBase),wallTint,9);
+        face(wallPoint(0,entryBase),wallPoint(u,entryBase),
+          wallPoint(u,entryTop),wallPoint(0,entryTop),wallTint,9);
+        face(wallPoint(v,entryBase),wallPoint(1,entryBase),
+          wallPoint(1,entryTop),wallPoint(v,entryTop),wallTint,9);
+        face(wallPoint(0,entryTop),wallPoint(1,entryTop),
+          wallPoint(1,roofY),wallPoint(0,roofY),wallTint,9);
+      }else{
+        const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
+        const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
+        face(loA,loB,hiB,hiA,wallTint,9);
+      }
       walls++;
       if(destroyed||length<1.4||detailBand<2)continue;
-      const normal=[sign*dz/length,-sign*dx/length];
       // OTI public polygons: focus physical window depth on the
       // harbor-facing side of near-camera downtown buildings only.
       // The source supplies footprint topology, not exact window surveys.
       const detailedHarborFront=detailBand===3 && y<20 &&
         x>-110 && x<-60 && z>-500 && z<-400 && h>14 &&
         normal[1]<-.15 && length>=3.6 && i%2===0;
+      // PATROL_OTI_DOWNTOWN_ENVELOPE_V2 — retain surveyed OTI building rings
+      // and roof elevations; only small authored architectural surface relief.
+      // The near-view corridor is clipped to the original 100-footprint pilot,
+      // preserving game road/collision indices and all existing landmarks.
+      // Select a stable fraction of documented OTI DOITT_ID footprints.
+      // The full 100-building pilot must remain below its 9000-face budget.
       const at=(t,yy,offset)=>[
         a[0]+dx*t+normal[0]*offset,yy,
         a[1]+dz*t+normal[1]*offset
@@ -5987,6 +6013,54 @@ const CENTRAL_PARK_SITES=[
           }
           windows++;
         }
+      }
+      // Only existing building frontage, never synthetic replacement boxes.
+      // Ground-level entrance/glazing is *authored* and not an OTI surveyed
+      // tenant, opening, or historic architectural detail. Four-sided recess
+      // uses the same 9/10 material tags already in the native WebGL city mesh.
+      if(cutEntrance){
+        const u=.31,v=.69,base=entryBase,top=entryTop,back=-.135;
+        const trim=isGlass?[.35,.40,.41]:[.45,.43,.39];
+        const dark=[.11,.16,.20];
+        // Source wall is genuinely open; inset glass stays behind its plane.
+        face(at(u,base,back),at(v,base,back),
+          at(v,top,back),at(u,top,back),glass,10);
+        face(at(u,base,0),at(u,base,back),
+          at(u,top,back),at(u,top,0),dark,9);
+        face(at(v,base,back),at(v,base,0),
+          at(v,top,0),at(v,top,back),dark,9);
+        face(at(u,top,back),at(v,top,back),
+          at(v,top,0),at(u,top,0),trim,9);
+        face(at(u,base,0),at(v,base,0),
+          at(v,base,back),at(u,base,back),trim,9);
+        const mid=(u+v)*.5;
+        face(at(mid-.009,base+.09,back+.008),
+          at(mid+.009,base+.09,back+.008),
+          at(mid+.009,top-.09,back+.008),
+          at(mid-.009,top-.09,back+.008),trim,9);
+        streetEntrances++;
+      }
+      // Cornice lies *below* source HEIGHT_ROOF and follows polygon edges:
+      // no floating rooftop cuboid, no change to roof clipping/collisions.
+      if(downtownRelief && corniceBands<8 && length>=2.2 && i%2===0){
+        const lower=roofY-.30,upper=roofY-.19;
+        // PATROL_OTI_DOWNTOWN_CORNICE_SOLID_V3: five joined faces form a
+        // shallow solid projection instead of a floating front-only ribbon.
+        // The rear sits against the original wall; no roof/collision change.
+        const start=.035,end=.965,back=.018,front=.073;
+        face(at(start,lower,front),at(end,lower,front),
+          at(end,upper,front),at(start,upper,front),frameTint,9);
+        // The upper and lower caps wind opposite to the vertical face:
+        // with back-face culling enabled top faces up, underside faces down.
+        face(at(start,upper,front),at(end,upper,front),
+          at(end,upper,back),at(start,upper,back),frameTint,9);
+        face(at(start,lower,back),at(end,lower,back),
+          at(end,lower,front),at(start,lower,front),frameTint,9);
+        face(at(start,lower,back),at(start,lower,front),
+          at(start,upper,front),at(start,upper,back),frameTint,9);
+        face(at(end,lower,front),at(end,lower,back),
+          at(end,upper,back),at(end,upper,front),frameTint,9);
+        corniceBands++;
       }
       const bayCount=Math.min(3,Math.max(1,Math.floor(length/2.7)));
       const floors=Math.min(detailBand>=3?9:6,Math.floor((h-2.4)/3.15));
@@ -6073,7 +6147,8 @@ const CENTRAL_PARK_SITES=[
       }
       if(!clipped)break;
     }
-    return {walls,windows,roof,expectedRoof:outline.length-2};
+    return {walls,windows,roof,streetEntrances,corniceBands,
+      expectedRoof:outline.length-2};
   }
 
   function buildCityBuildings(parcels,local=false) {
@@ -11206,6 +11281,11 @@ const CENTRAL_PARK_SITES=[
     {name:'Lower Manhattan · Window Facades',x:-98,z:-452,height:15,
       bearing:228,radius:82,rise:17,
       detail:'Harbor-side view of OTI masonry, projecting metal jambs, glass and window sills'},
+    // OTI DOITT_ID 65190 edge 11, outward-facing west harbor frontage.
+    // Eye is outside both municipal and anonymous source parcel footprints.
+    {name:'Lower Manhattan · Street Entrance',x:-146.335,z:-475.815,height:2.10,
+      bearing:293.92,radius:24.0,rise:1.30,
+      detail:'Inspect source-aligned recessed OTI door openings from near street level'},
     {name:'Flatiron Building',x:-30,z:-180,height:9,bearing:41,radius:48,rise:16,
       detail:'Wedge-shaped masonry landmark'},
     {name:'Skyline Rescue',x:40,z:-70,height:31,bearing:156,radius:67,rise:18,
