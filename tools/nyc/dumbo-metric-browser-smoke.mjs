@@ -147,6 +147,32 @@ try{
  assert.ok(PNG.sync.read(flyImage).width===1280);
  await page.keyboard.press('Escape');
  assert.equal(await page.evaluate(()=>window.__metricFly.getState().enabled),false);
+ await page.evaluate(()=>window.__metricCamera.reset());
+ await page.waitForTimeout(450);
+ const baseModelShot=await page.locator('#render').screenshot();
+ await page.keyboard.press('m');
+ await page.waitForFunction('window.__metricQa?.source2014?.ready===true',null,{timeout:30000});
+ await page.waitForTimeout(650);
+ const sourceModelShot=await page.locator('#render').screenshot({path:output+'/06-dumbo-2014-source-glb-overlay.png'});
+ const baseModelPng=PNG.sync.read(baseModelShot),sourceModelPng=PNG.sync.read(sourceModelShot);
+ let sourceModelChanged=0;
+ for(let i=0;i<Math.min(baseModelPng.data.length,sourceModelPng.data.length);i+=4*17){
+  if(Math.abs(baseModelPng.data[i]-sourceModelPng.data[i])+
+     Math.abs(baseModelPng.data[i+1]-sourceModelPng.data[i+1])+
+     Math.abs(baseModelPng.data[i+2]-sourceModelPng.data[i+2])>28)sourceModelChanged++;
+ }
+ assert.ok(sourceModelChanged>100,'2014 GLB toggle did not change rendered WebGL pixels: '+sourceModelChanged);
+ const source2014=await page.evaluate(()=>({...window.__metricQa.source2014}));
+ assert.equal(source2014.ready,true);assert.equal(source2014.enabled,true);
+ assert.equal(source2014.triangles,8541);assert.equal(source2014.visibleTriangles,7475);
+ assert.equal(source2014.facadePatches,2093);assert.equal(source2014.roofPatches,314);
+ assert.equal(source2014.footprintPatches,82);assert.equal(source2014.verticalDatumVerified,false);
+ assert.equal(source2014.diagnosticOffsetApplied,false);assert.equal(source2014.collisionBuildingCount,48);
+ assert.equal(source2014.collisionUnaffected,true);
+ assert.equal(await page.evaluate(()=>window.__metricFly.safety.buildingCount),48);
+ await page.keyboard.press('m');
+ await page.waitForFunction('window.__metricQa?.source2014?.enabled===false');
+
  const flight={spawn:spawnState,afterLift,afterMovement:movedState,fixture:flyFixture,
    liveVerticalEAndForwardWKeysVerified:true,
    sourceCrossingRoadsDriveable:false,
@@ -157,7 +183,8 @@ try{
   source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
-  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png'],
+  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png','05-dumbo-true-metre-safe-lowflight.png','06-dumbo-2014-source-glb-overlay.png'],
+  source2014,sourceModelChangedSamples:sourceModelChanged,
   lowFlight:flight,
   roadFocus,roadCameraChangedSamples:changed,conflictFocus,
   conflictCameraChangedSamples:conflictChanged,

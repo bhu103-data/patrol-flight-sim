@@ -1,0 +1,105 @@
+name: NYC DUMBO 2014 source GLB import and WebGL QA
+on:
+  push:
+    branches:
+      - feat/nyc-dumbo-2014-glb-runtime-import-20261122-chat
+    paths:
+      - 'tools/nyc/export-bk02-source-glb.py'
+      - 'assets/nyc/dumbo-bk02-glb-loader.mjs'
+      - 'tools/nyc/dumbo-metric-preview.html'
+      - 'tools/nyc/dumbo-metric-browser-smoke.mjs'
+      - 'tests/nyc-dumbo-2014-glb.test.mjs'
+      - '.github/workflows/nyc-dumbo-2014-glb-import.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-and-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Rhino and coordinate readers
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir rhino3dm==8.35.0 pyproj==3.7.2 shapely==2.1.2
+      - name: Validate source coordinate and layer tests
+        run: |
+          python -m py_compile tools/nyc/official_bk02_projection.py tools/nyc/probe-official-bk02-rhino.py tools/nyc/inspect-bk02-source-roi.py tools/nyc/bk02_source_layers.py tools/nyc/export-bk02-source-glb.py
+          python tests/nyc-bk02-coordinate-frame.test.py
+          python tests/nyc-bk02-source-layers.test.py
+      - name: Download exact official BK02 2014 source and extract bounded DUMBO meshes
+        run: |
+          PATROL_KEEP_BK02=1 python tools/nyc/probe-official-bk02-rhino.py
+          python tools/nyc/inspect-bk02-source-roi.py
+          test ! -e artifacts/nyc-official-bk02/bk02-source.3dm
+          test ! -e artifacts/nyc-official-bk02/bk02-source.zip
+          python tests/nyc-bk02-source-mesh.test.py
+      - name: Match source surfaces to 2022 OTI footprints for audit only
+        run: |
+          python tools/nyc/match-bk02-2014-oti-2022.py
+          python tests/nyc-bk02-2014-oti-match.test.py
+      - name: Export the original cached roof/facade geometry to GLB 2.0
+        run: |
+          python tools/nyc/export-bk02-source-glb.py \
+            --input artifacts/nyc-official-bk02/dumbo-2014-source-mesh.json \
+            --output assets/nyc/dumbo-bk02-2014-source.glb \
+            --provenance assets/nyc/dumbo-bk02-2014-source-provenance.json
+          node --test tests/nyc-dumbo-2014-glb.test.mjs
+      - name: Commit generated GLB and provenance on the isolated branch
+        if: github.ref == 'refs/heads/feat/nyc-dumbo-2014-glb-runtime-import-20261122-chat'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/nyc/dumbo-bk02-2014-source.glb assets/nyc/dumbo-bk02-2014-source-provenance.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Import DUMBO 2014 official source surfaces as GLB"
+            git push origin "HEAD:\${GITHUB_REF_NAME}"
+          fi
+      - name: Install pinned browser harness
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Render original source surfaces in the isolated source viewer
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: |
+          mkdir -p artifacts/nyc-official-bk02
+          cp tools/nyc/dumbo-2014-source-preview.html artifacts/nyc-official-bk02/dumbo-2014-source-preview.html
+          cp assets/nyc/dumbo-oti-metric-48.json artifacts/nyc-official-bk02/dumbo-oti-metric-48.json
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory artifacts/nyc-official-bk02 >/tmp/nyc-bk02-source-http.log 2>&1 &
+          echo $! >/tmp/nyc-bk02-source-http.pid
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8765/dumbo-2014-source-preview.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/dumbo-2014-source-browser-smoke.mjs
+          kill "$(cat /tmp/nyc-bk02-source-http.pid)" || true
+      - name: Render the imported GLB overlay in the 1:1 DUMBO metric scene
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8766
+        run: |
+          python3 -m http.server 8766 --bind 127.0.0.1 >/tmp/nyc-dumbo-metric-http.log 2>&1 &
+          echo $! >/tmp/nyc-dumbo-metric-http.pid
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8766/tools/nyc/dumbo-metric-preview.html >/dev/null; then break; fi
+            sleep 1
+          done
+          PR_HEAD_SHA="$(git rev-parse HEAD)" node tools/nyc/dumbo-metric-browser-smoke.mjs
+          kill "$(cat /tmp/nyc-dumbo-metric-http.pid)" || true
+      - name: Upload GLB, provenance and fixed-camera evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-2014-glb-runtime-import
+          path: |
+            assets/nyc/dumbo-bk02-2014-source.glb
+            assets/nyc/dumbo-bk02-2014-source-provenance.json
+            artifacts/nyc-official-bk02/
+            artifacts/nyc-dumbo-metric/
+          retention-days: 14
+          if-no-files-found: ignore
