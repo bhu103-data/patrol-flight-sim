@@ -5,14 +5,20 @@
  */
 import {readFileSync,writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import earcut,{deviation} from 'earcut';
 
-export function buildStreetEdgeMesh(edgeData,roadData){
+export function verifySourceFrames(edgeData,roadData){
   if(edgeData?.schema!=='patrol-nyc-oti-sidewalk-curb-metre-source-v1'||
      roadData?.schema!=='patrol-nyc-lowflight-oti-roadbed-metre-v1'||
      roadData?.mode!=='SOURCE_VERIFIED_NO_DEFAULT_GAME_CHANGE'||
      JSON.stringify(edgeData.projection)!==JSON.stringify(roadData.projection))
     throw Error('Official curb/sidewalk and flight roadbed do not share exact metre projection');
+  return true;
+}
+export async function buildStreetEdgeMesh(edgeData,roadData){
+  verifySourceFrames(edgeData,roadData);
+  // The general PATROL Node test job runs without npm dependencies.
+  // Earcut is needed only to create real polygon geometry in dedicated CI.
+  const {default:earcut,deviation}=await import('earcut');
   const triangles=[],lineSegments=[];
   let rings=0,polygons=0,degenerate=0;
   for(const feature of edgeData.sidewalks)for(const ringsData of feature.polygons){
@@ -70,12 +76,13 @@ export function buildStreetEdgeMesh(edgeData,roadData){
     triangles,lineSegments
   };
 }
-export function run(){
+export async function run(){
   const edges=JSON.parse(readFileSync('artifacts/nyc-curb-sidewalk-source/edges.json','utf8'));
   const road=JSON.parse(readFileSync('artifacts/nyc-true-scale/roadbed-mesh.json','utf8'));
-  const output=buildStreetEdgeMesh(edges,road);
+  const output=await buildStreetEdgeMesh(edges,road);
   writeFileSync('artifacts/nyc-true-scale/edge-mesh.json',JSON.stringify(output));
   writeFileSync('artifacts/nyc-curb-sidewalk-source/edge-mesh.json',JSON.stringify(output));
   console.log('NYC real sidewalk and curb lowflight overlay',JSON.stringify(output.counts));
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)run();
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)
+  run().catch(error=>{console.error(error);process.exitCode=1;});
