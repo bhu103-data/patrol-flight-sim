@@ -2,9 +2,12 @@
 // Game-space representation of Manhattan avenues and cross streets, not GIS
 // coordinates. No Google Maps imagery or proprietary vehicle models copied.
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
+import {buildDumboFrontDockRoad} from './dumbo-front-dock-road.js';
+
 export function buildNycStreetNetwork({
   addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true,
+  frontDockRoadbed=null
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -418,6 +421,15 @@ export function buildNycStreetNetwork({
     streetFurniture(a,b,kind,i,j,width);
     return true;
   }
+  // Production NYC opt-in: SOURCE-derived 2022 geometry, not a standalone preview.
+  // Verify/build before skipping the two old fictional DUMBO asphalt strips.
+  // Rejected source geometry leaves conventional streets intact.
+  const officialFrontDock=buildDumboFrontDockRoad(frontDockRoadbed,{
+    addTri,addQuad,box,beam,ribbon,terrainAt,isClear,
+    streetY,waterY,detailBand
+  });
+  stats.officialFrontDock=officialFrontDock;
+  const replaceFrontDock=officialFrontDock.enabled;
   // Unified surface-road generation. Positions align with the EXISTING
   // Manhattan building parcel basis (24 x 33 compressed game units).
   const segmentMap=new Set();
@@ -443,6 +455,8 @@ export function buildNycStreetNetwork({
     streetSegment(a,b,'avenue',i,j);
   }
   for(let j=-12;j<=-7;j++)for(let i=9;i<=19;i++){
+    // Replace the two original rectangular strips; other blocks untouched.
+    if(replaceFrontDock && j===-9 && (i===16||i===17))continue;
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
   }
