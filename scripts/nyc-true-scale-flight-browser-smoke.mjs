@@ -313,8 +313,8 @@ try{
   }
   report.aerialRoadbedDifferencePixelsOver18=changed;
   report.aerialComparisonResolution=[a.width,a.height];
-  report.aerialComparisonNote='Identical fixed source/old aerial pose with sky/HUD excluded; pixel-difference is geometry-localization QA, not photoreal score';
-  check(changed>80,'Official roadbed aerial not distinguishable from old bands: '+changed);
+  report.aerialComparisonNote='Identical fixed aerial overview with sky/HUD excluded. The 11 source polygons occupy a small fraction of this frame; strict visibility acceptance is the focused FID24700 core comparison below.';
+  check(changed>50,'Official roadbed aerial overview shows no source difference: '+changed);
   const src=PNG.sync.read(sourceCore),ref=PNG.sync.read(sourceOffCore);
   check(src.width===ref.width&&src.height===ref.height,
     'FID24700 true-roadbed A/B framebuffer differs');
