@@ -43,10 +43,10 @@ export function c185SourceAirborneStep(state,control,dt,obstruction=null){
   if(!valid3(candidate)||!Number.isFinite(speed))
     throw Error('Non-finite PATROL airborne update');
   // Original flight envelope is a swept path, never point-end teleport.
-  // Use the real 1:1 official footprint prism at 1m + a 1.2m wing/body
+  // Use the real 1:1 official footprint prism at 0.25m substeps + 1.2m
   // margin. Unverified NYC ground elevation => require safe 5m model AGL.
   const distance=Math.hypot(...candidate.map((v,i)=>v-prev[i]));
-  const parts=Math.max(1,Math.ceil(distance/1));
+  const parts=Math.max(1,Math.ceil(distance/.25));
   let safe=true,reason=null,at=null;
   for(let i=1;i<=parts;i++){
     const p=prev.map((v,j)=>v+(candidate[j]-v)*i/parts);
@@ -64,16 +64,6 @@ export function c185SourceAirborneStep(state,control,dt,obstruction=null){
     collision:!safe?{reason,attempted:at}:null,
     steps:(state.steps||0)+1};
 }
-export function c185MetricCollision(massing,buildingContains,radius=1.2){
-  if(!Array.isArray(massing?.buildings)||typeof buildingContains!=='function')
-    throw Error('Source OTI footprints are required for metric C185 collision');
-  const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]];
-  return pos=>offsets.some(([de,dn])=>
-    buildingContains(massing,pos[0]+de,pos[2]*-1+dn,pos[1])!==null);
-}
-// Note: c185MetricCollision's input must be source-local easting/northing,
-// NOT scene-centered [-Z north] camera coordinates. Use
-// c185SceneCollision below with geometry.center for scene <-> source.
 export function c185SceneCollision(massing,center,buildingContains,radius=1.2){
   if(!Number.isFinite(center?.east)||!Number.isFinite(center?.north)||
       typeof buildingContains!=='function')
