@@ -271,7 +271,7 @@ def main():
                 fid = patch["matchedFid"]
                 if fid not in valid_fids:
                     continue
-                low, high = source_z[fid][0], max(source_z[fid])
+                low, high = min(source_z[fid]), max(source_z[fid])
                 height = building_by_fid[fid]["heightMetres"]
                 for tri in patch["triangles"]:
                     vertices = []
