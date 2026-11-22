@@ -6294,6 +6294,295 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
+// PATROL_DUMBO_OTI_SOURCE_OUTLINE_PILOT_V1
+  // Real, source-preserved NYC OTI BUILDING_view exterior rings and roof
+  // heights; see assets/nyc/DUMBO_OTI_SOURCE_NOTES.md. Game targets are
+  // explicitly *not* georeferenced: shape is uniformly fitted INSIDE each
+  // existing procedurally cleared/collidable building proxy.
+  const DUMBO_OTI_PILOT=[
+    {target:[366.89,-346.09],fid:1080628,bin:3389054,roofHeightFt:121,
+      ring:[[-73.9893464,40.7022776],[-73.9893399,40.702386],
+        [-73.9893364,40.7024432],[-73.988964,40.7024303],
+        [-73.9889665,40.7023891],[-73.9889738,40.7022675],
+        [-73.9889739,40.7022648],[-73.9889734,40.7022646],
+        [-73.9889792,40.7021668],[-73.9891526,40.7021728],
+        [-73.9892997,40.7021779],[-73.9893522,40.7021798]]},
+    {target:[390.63,-346.49],fid:1031082,bin:3000135,roofHeightFt:83.41,
+      ring:[[-73.9872874,40.7021037],[-73.9872875,40.702103],
+        [-73.9872918,40.7021032],[-73.9874341,40.702108],
+        [-73.9874708,40.7021713],[-73.9875086,40.7022365],
+        [-73.9875489,40.7023059],[-73.9875534,40.7023136],
+        [-73.9875494,40.7023824],[-73.9872716,40.702373],
+        [-73.9872716,40.7023729],[-73.9872778,40.7022679],
+        [-73.9872821,40.7021937]]},
+    {target:[358.67,-280.37],fid:1051309,bin:3344163,roofHeightFt:86.5,
+      ring:[[-73.9896642,40.7036985],[-73.9896741,40.7034704],
+        [-73.9896827,40.7032695],[-73.9897988,40.7032724],
+        [-73.9899908,40.7032772],[-73.9899856,40.7033972],
+        [-73.9899464,40.7033962],[-73.9899337,40.7036921],
+        [-73.9899331,40.7037052],[-73.9899261,40.703705]]}
+  ];
+  function matchingDumboOtiPilot(lot,detailBand){
+    if(detailBand!==3||graphicsCompat||!smoothScenery()||
+      !selectedMap.city||lot[6]||lot[7])return null;
+    const [x,z,w,d,h]=lot;
+    if(w<8||d<9||h<10)return null;
+    return DUMBO_OTI_PILOT.find(rec=>
+      Math.abs(x-rec.target[0])<.19&&
+      Math.abs(z-rec.target[1])<.19)||null;
+  }
+  function buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,source,y){
+    const [x,z,w,d,h]=lot,roofY=y+h;
+    // WGS84 lon/lat -> local meters, then a UNIFORM miniature scale
+    // into the already road-cleared PATROL proxy. Source orientation and
+    // concave corners remain, but PATROL placement is not a real map.
+    const ms=source.ring.map(([lon,lat])=>[
+      (lon+73.99)*84300,(lat-40.70)*110900]);
+    const xs=ms.map(p=>p[0]),zs=ms.map(p=>p[1]);
+    const xmin=Math.min(...xs),xmax=Math.max(...xs);
+    const zmin=Math.min(...zs),zmax=Math.max(...zs);
+    const factor=Math.min((w-.66)/(xmax-xmin),(d-.66)/(zmax-zmin));
+    if(!Number.isFinite(factor)||factor<=0)return null;
+    const cx=(xmin+xmax)*.5,cz=(zmin+zmax)*.5;
+    const raw=ms.map(([u,v])=>[x+(u-cx)*factor,z+(v-cz)*factor]);
+    const ring=[];
+    for(const p of raw)
+      if(!ring.length||Math.hypot(p[0]-ring.at(-1)[0],
+        p[1]-ring.at(-1)[1])>.07)ring.push(p);
+    if(ring.length>2&&Math.hypot(ring[0][0]-ring.at(-1)[0],
+      ring[0][1]-ring.at(-1)[1])<.07)ring.pop();
+    if(ring.length<3)return null;
+    const signed=poly=>poly.reduce((sum,a,i)=>{
+      const b=poly[(i+1)%poly.length];
+      return sum+a[0]*b[1]-a[1]*b[0];
+    },0)*.5;
+    if(signed(ring)>0)ring.reverse();
+    // Ring winds clockwise in game X/Z: wall faces outward, roof +Y.
+    const cross=(a,b,c)=>
+      (b[0]-a[0])*(c[1]-a[1])-
+      (b[1]-a[1])*(c[0]-a[0]);
+    // 84 Front Street / the Nexus / source BIN 3389054: a 12-story
+    // 2006-built condominium, NOT a generic historic warehouse. The
+    // architect describes yellow brick and green/blue/silver metal panels.
+    // Source building type/materials are verified; individual panel
+    // positions and shades below are original lightweight interpretation.
+    const nexus=source.fid===1080628;
+    const brickPalette=[
+      [.57,.37,.31],[.47,.30,.29],[.56,.40,.34]];
+    const brick=nexus?[.73,.66,.48]:brickPalette[source.fid%3],
+      stone=nexus?[.77,.78,.76]:[.67,.64,.59],
+      glass=nexus?[.12,.23,.31]:[.13,.24,.31],
+      frame=nexus?[.57,.63,.65]:[.33,.35,.36];
+    const nexusPanels=[[.24,.43,.46],[.34,.48,.42],[.65,.70,.71]];
+    let walls=0,windows=0,roofTriangles=0,parapets=0,roofStepFaces=0,
+      facadeBands=0,metalPanels=0;
+    // FID1080628's 12 stories come from architect documentation, not
+    // interpolated from HEIGHT_ROOF; keep original conservative roof/collider.
+    const floors=nexus?12:Math.max(2,Math.min(6,
+      Math.floor(source.roofHeightFt/22)));
+    // PATROL_DUMBO_OTI_RECESSED_BAYS_V2 — real wall voids, not overlaid
+    // flat glass. Every new face stays inside the old road-cleared proxy.
+    const edges=ring.map((a,i)=>{
+      const b=ring[(i+1)%ring.length];
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      return {len,outZ:len>0?(b[0]-a[0])/len:0};
+    });
+    let doorEdge=-1,bestDoorLength=0;
+    for(let i=0;i<edges.length;i++)
+      if(edges[i].len>3.2&&edges[i].outZ<-.35&&
+        edges[i].len>bestDoorLength){
+        bestDoorLength=edges[i].len;doorEdge=i;
+      }
+    if(doorEdge<0){
+      for(let i=0;i<edges.length;i++)
+        if(edges[i].len>4&&edges[i].len>bestDoorLength){
+          bestDoorLength=edges[i].len;doorEdge=i;
+        }
+    }
+    let doors=0,windowReveals=0;
+    for(let k=0;k<ring.length;k++){
+      const a=ring[k],b=ring[(k+1)%ring.length];
+      const len=edges[k].len;
+      if(len<.075)continue;
+      walls++;
+      const bays=Math.min(4,Math.floor(len/2.15));
+      const nx=-(b[1]-a[1])/len,nz=(b[0]-a[0])/len;
+      const at=(t,yy,out=0)=>[
+        a[0]+(b[0]-a[0])*t+nx*out,yy,
+        a[1]+(b[1]-a[1])*t+nz*out
+      ];
+      const strip=(l,r,y0,y1,tone=brick,id=12,out=0)=>{
+        if(r-l<=.0001||y1-y0<=.0001)return;
+        addQuad(at(l,y0,out),at(r,y0,out),
+          at(r,y1,out),at(l,y1,out),tone,id);
+      };
+      const rows=[];
+      if(bays>0){
+        for(let row=0;row<floors;row++){
+          const floorStep=(h-3.6)/floors;
+          const low=y+2.75+floorStep*row+.21;
+          const high=Math.min(roofY-.40,
+            low+Math.min(1.58,floorStep*.65));
+          if(high>low+.30)rows.push([row,low,high]);
+        }
+      }
+      // Only one broad south-facing side receives an original, clearly
+      // authored ground entrance; no sourced doorway position is implied.
+      const baseTop=rows[0]?.[1]??roofY;
+      if(k===doorEdge&&baseTop>y+2.62&&len>3.2){
+        const half=Math.min(.86/len,.17);
+        const left=.5-half,right=.5+half;
+        const top=y+2.4,doorInset=-.18;
+        strip(0,left,y,top);
+        strip(right,1,y,top);
+        strip(0,1,top,baseTop);
+        addQuad(at(left,y,doorInset),at(right,y,doorInset),
+          at(right,top,doorInset),at(left,top,doorInset),
+          [.12,.20,.22],13);
+        addQuad(at(left,y,0),at(left,y,doorInset),
+          at(left,top,doorInset),at(left,top,0),stone,12);
+        addQuad(at(right,y,doorInset),at(right,y,0),
+          at(right,top,0),at(right,top,doorInset),stone,12);
+        addQuad(at(left,top,doorInset),at(right,top,doorInset),
+          at(right,top,0),at(left,top,0),brick,12);
+        strip(left-.025,right+.025,top+.02,top+.16,stone,12,.065);
+        strip(.495,.505,y+.1,top-.1,frame,12,doorInset+.012);
+        doors++;
+      }else strip(0,1,y,baseTop);
+      let previous=baseTop;
+      for(const [row,low,high] of rows){
+        strip(0,1,previous,low);
+        let cursor=0;
+        for(let j=0;j<bays;j++){
+          const left=(j+.22)/bays,right=(j+.78)/bays;
+          if(nexus && len>3.4 && left-cursor>.05 && (j+row+k)%3!==0){
+            // Raised panel sits in a real polygon-edge spandrel; no box.
+            strip(cursor,left,low,high);
+            strip(cursor+.016,left-.016,low+.035,high-.035,
+              nexusPanels[(j+row+k)%3],4,.046);
+            metalPanels++;
+          }else strip(cursor,left,low,high);
+          const glassInset=-.18;
+          const tone=((source.fid+k*11+row*7+j*13)%7===0)
+            ?[.36,.35,.32]:glass;
+          addQuad(at(left,low,glassInset),at(right,low,glassInset),
+            at(right,high,glassInset),at(left,high,glassInset),
+            tone,13);
+          // Four real, solid reveals enclose the cut opening.
+          addQuad(at(left,low,0),at(left,low,glassInset),
+            at(left,high,glassInset),at(left,high,0),brick,12);
+          addQuad(at(right,low,glassInset),at(right,low,0),
+            at(right,high,0),at(right,high,glassInset),brick,12);
+          addQuad(at(left,low,0),at(right,low,0),
+            at(right,low,glassInset),at(left,low,glassInset),stone,12);
+          addQuad(at(left,high,glassInset),at(right,high,glassInset),
+            at(right,high,0),at(left,high,0),brick,12);
+          // Reuse existing physically shaded metal paint tag 4, NOT
+          // Brooklyn surface 12 whose brick/mortar shader is incorrect
+          // for glass-adjacent aluminum cladding on 84 Front Street.
+          strip(left-.013,right+.013,high+.015,high+.13,
+            nexus?nexusPanels[(row+k)%3]:stone,nexus?4:12,.055);
+          if((row+j)%2===0){
+            const mid=(left+right)*.5;
+            strip(mid-.007,mid+.007,low,high,frame,12,glassInset+.012);
+          }
+          windows++;windowReveals+=4;
+          cursor=right;
+        }
+        strip(cursor,1,low,high);
+        previous=high;
+      }
+      strip(0,1,previous,roofY);
+      // Two actual projecting masonry stringcourse faces follow each official
+      // WGS84-derived edge, not a synthetic rectangular building envelope.
+      if(source.fid===1080628 && len>3.4){
+        const base=roofY-1.18,cap=base+.14,out=.075;
+        addQuad(at(0,base,out),at(1,base,out),
+          at(1,cap,out),at(0,cap,out),stone,12);
+        addQuad(at(0,cap,out),at(1,cap,out),
+          at(1,cap,0),at(0,cap,0),stone,12);
+        facadeBands+=2;
+      }
+      // Retain the original measured-budget roof silhouette.
+      addQuad([a[0],roofY-.12,a[1]],[b[0],roofY-.12,b[1]],
+        [b[0],roofY+.12,b[1]],[a[0],roofY+.12,a[1]],stone,12);
+      parapets++;
+    }
+    const inside=(p,a,b,c)=>
+      cross(a,b,p)<=.000001&&cross(b,c,p)<=.000001&&
+      cross(c,a,p)<=.000001;
+    // PATROL_DUMBO_FID1080628_SOURCE_ROOF_CONTOUR_V1
+    // Official OTI exterior polygon remains unaltered in outline and area.
+    // The internal two-tier partition is a new authored interpretation;
+    // OTI BUILDING provides an outer polygon + HEIGHT_ROOF, NOT measured ridges.
+    const roofFaces=(polygon,yRoof,tint)=>{
+      const ids=polygon.map((_,i)=>i);
+      let guard=0;
+      while(ids.length>=3 && guard++<polygon.length*polygon.length){
+        let clipped=false;
+        for(let i=0;i<ids.length;i++){
+          const ai=ids[(i+ids.length-1)%ids.length],
+            bi=ids[i],ci=ids[(i+1)%ids.length];
+          const a=polygon[ai],b=polygon[bi],c=polygon[ci];
+          if(cross(a,b,c)>=-.000001)continue;
+          if(ids.some(j=>j!==ai&&j!==bi&&j!==ci&&
+            inside(polygon[j],a,b,c)))continue;
+          addTri([a[0],yRoof,a[1]],[b[0],yRoof,b[1]],
+            [c[0],yRoof,c[1]],tint,14);
+          roofTriangles++;
+          ids.splice(i,1);clipped=true;break;
+        }
+        if(!clipped)break;
+      }
+    };
+    const clipHalf=(poly,cut,north)=>{
+      const out=[];
+      for(let i=0;i<poly.length;i++){
+        const a=poly[i],b=poly[(i+1)%poly.length];
+        const aIn=north?a[1]>=cut:a[1]<=cut,
+          bIn=north?b[1]>=cut:b[1]<=cut;
+        if(aIn)out.push(a);
+        if(aIn!==bIn){
+          const t=(cut-a[1])/(b[1]-a[1]);
+          out.push([a[0]+(b[0]-a[0])*t,cut]);
+        }
+      }
+      return out.filter((p,i)=>i===0||
+        Math.hypot(p[0]-out[i-1][0],p[1]-out[i-1][1])>.0001);
+    };
+    let roofStepDrop=0,roofAreas=1;
+    if(source.fid===1080628){
+      // Source ring is approximately one long polygon, so a plan clipping
+      // gives TWO watertight polygonal areas rather than a floating cuboid.
+      const cut=source.target[1],
+        north=clipHalf(ring,cut,true),
+        south=clipHalf(ring,cut,false);
+      const total=Math.abs(signed(north))+Math.abs(signed(south));
+      if(north.length>=3&&south.length>=3&&
+         Math.abs(total-Math.abs(signed(ring)))<.00001){
+        roofStepDrop=.64;roofAreas=2;
+        roofFaces(north,roofY,[.34,.36,.35]);
+        roofFaces(south,roofY-roofStepDrop,[.24,.27,.28]);
+        const seam=north.filter(p=>Math.abs(p[1]-cut)<.0001);
+        const lo=Math.min(...seam.map(p=>p[0])),
+          hi=Math.max(...seam.map(p=>p[0]));
+        if(Number.isFinite(lo)&&Number.isFinite(hi)&&hi-lo>2){
+          addQuad([lo,roofY-roofStepDrop,cut],
+            [hi,roofY-roofStepDrop,cut],[hi,roofY,cut],
+            [lo,roofY,cut],brick,12);
+          addQuad([lo,roofY+.015,cut-.065],
+            [hi,roofY+.015,cut-.065],[hi,roofY+.015,cut+.065],
+            [lo,roofY+.015,cut+.065],stone,12);
+          roofStepFaces=2;
+        }
+      }else roofFaces(ring,roofY,[.33,.35,.34]);
+    }else roofFaces(ring,roofY,[.33,.35,.34]);
+    return {fid:source.fid,ring,roofY,floors,
+      walls,windows,doors,windowReveals,roofTriangles,parapets,
+      roofStepDrop,roofStepFaces,roofAreas,facadeBands,metalPanels,
+      originalArea:Math.abs(signed(ring))};
+  }
+
   function buildCityBuildings(parcels,local=false) {
     const {addTri,addQuad,upload}=createTriangleMesh();
     let detailedDowntown=0;
@@ -6376,6 +6665,14 @@ const CENTRAL_PARK_SITES=[
           addModelBox(addQuad,x+Math.sin(a)*w*0.32,y+height/2,z+Math.cos(a)*d*0.30,
             w*(0.13+i%3*0.037),height,d*(0.14+i%4*0.034),i%3===0?trim:material);
         }
+        continue;
+      }
+      // Three municipal OTI source silhouettes; existing worker lot and collision proxy remain unchanged.
+      const dumbOtiPilot=!local&&bridgeheadBrooklyn &&
+        typeof matchingDumboOtiPilot==='function'
+        ?matchingDumboOtiPilot(lot,detailBand):null;
+      if(dumbOtiPilot){
+        buildDumboOtiPilotSourceMesh(addTri,addQuad,lot,dumbOtiPilot,y);
         continue;
       }
       if(heroDowntown && h>=9.2){
