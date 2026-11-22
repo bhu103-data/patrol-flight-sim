@@ -1,0 +1,50 @@
+name: NYC metre-scale Times Square reference (opt-in QA)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "assets/nyc/times-square-metered-*"
+      - "assets/nyc/times-square-footprints.json"
+      - "tests/nyc-times-square-metered-massing.test.mjs"
+      - "scripts/nyc-times-square-metered-preview-smoke.mjs"
+      - ".github/workflows/nyc-times-square-metered-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  metric-source-and-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate official-source metres, concave polygons and roof heights
+        run: |
+          node --check assets/nyc/times-square-metered-massing.mjs
+          node --check scripts/nyc-times-square-metered-preview-smoke.mjs
+          node --test tests/nyc-times-square-metered-massing.test.mjs
+      - name: Install free browser dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve opt-in reference (does not alter the game)
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-metric-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/assets/nyc/times-square-metered-preview.html >/dev/null
+      - name: Render true metre-scale source massing and test camera orbit
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-times-square-metered-preview-smoke.mjs
+      - name: Upload true metre-scale reference PNGs and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-times-square-metered-reference
+          path: artifacts/nyc-metric-reference/
+          retention-days: 7
+          if-no-files-found: ignore
