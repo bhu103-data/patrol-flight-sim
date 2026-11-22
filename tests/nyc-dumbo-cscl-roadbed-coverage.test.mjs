@@ -45,11 +45,19 @@ test('real official 404 CSCL, 48 buildings and 553 2022 pavement triangles produ
   const network=reconcileMetricStreets(cscl,buildings);
   const audit=auditDumboStreetPavement(network,roadbed);
   assert.equal(audit.roads,295);
+  // Immutable municipal snapshots: genuine bounded Front/Dock coverage,
+  // not a guessed-width line or the entire ~10 km official CSCL network.
+  assert.ok(Math.abs(audit.fullSourceLineMetres-10066.954)<.1,
+    'source CSCL line length changed, independently review source metadata');
+  assert.ok(Math.abs(audit.withinHistoricalRoadbedMetres-267.106)<.1,
+    'measured 2022 paved-footprint coverage changed; never infer lane eligibility');
   assert.equal(audit.pavementTriangles,553);
   assert.equal(audit.byPhysicalId.length,213);
   assert.equal(audit.crossingSamples.length,4);
   assert.deepEqual(audit.crossingSamples.map(x=>x.physicalid),
     [57818,57819,57893,57894]);
+  assert.ok(audit.crossingSamples.every(x=>x.in2022RoadbedMetres===0),
+    'the four source building crossings lie outside this limited 2022 roadbed clip');
   assert.ok(audit.fullSourceLineMetres>8000);
   assert.ok(audit.withinHistoricalRoadbedMetres>0);
   assert.ok(audit.outside2022SourcePavementMetres>0,
