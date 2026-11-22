@@ -45,6 +45,7 @@ def execute(archive: pathlib.Path, out: pathlib.Path):
             for name in expected:
                 pathlib.Path(tmp, name).write_bytes(zipped.read(name))
             with fiona.open(str(pathlib.Path(tmp, SOURCE_TILE + ".shp"))) as features:
+                source_count = len(features)  # Capture before filtered iteration.
                 if not features.crs:
                     raise ValueError("NOAA CUSP source has no CRS")
                 src_crs = features.crs
@@ -83,7 +84,6 @@ def execute(archive: pathlib.Path, out: pathlib.Path):
                             "_source_feature_id": str(feature["id"])
                         },
                     })
-                source_count = len(features)
                 source_crs = str(src_crs)
     if not clipped:
         raise RuntimeError("No NOAA-credited shoreline features in Tracy Arm")
