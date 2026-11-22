@@ -1,0 +1,49 @@
+name: Alaska floe sculpted-cap source-exact WebGL2 A/B
+on:
+  pull_request:
+    paths:
+      - 'assets/alaska/alaska-fjord-detail.js'
+      - 'tests/alaska-floe-cc0-snowcap.test.mjs'
+      - 'tools/alaska/compare_floe_relief.mjs'
+      - '.github/workflows/alaska-floe-relief-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  floe-relief-webgl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test tools
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Serve the unchanged game HTML
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-floe-qa-http.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Read source-exact parent game and floating ice module
+        run: |
+          git show 918685cf4296792df036955bd41107a89da934e4:index.html > alaska-floe-relief-base.html
+          git show 918685cf4296792df036955bd41107a89da934e4:assets/alaska/alaska-fjord-detail.js > assets/alaska/alaska-fjord-detail-baseline-qa.js
+      - name: Capture actual WebGL2 frozen-time 3D snowcap geometry A/B
+        run: node tools/alaska/compare_floe_relief.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alaska-floe-relief-matched-webgl
+          path: artifacts/alaska-floe-relief-*
+          if-no-files-found: ignore
+          retention-days: 7
