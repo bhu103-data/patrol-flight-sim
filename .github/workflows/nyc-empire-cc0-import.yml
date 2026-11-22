@@ -90,4 +90,4 @@ jobs:
             exit 0
           fi
           git commit -m "Import audited CC0 Empire State GLB"
-          git push origin "HEAD:\${TARGET_REF}"
+          git push origin "HEAD:${TARGET_REF}"
