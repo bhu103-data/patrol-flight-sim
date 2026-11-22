@@ -2,6 +2,48 @@
 import math
 from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
+from official_mn05_projection import (
+    ORIGIN_WGS84, METRES_PER_DEG_LONGITUDE, METRES_PER_DEG_LATITUDE)
+
+MODEL_FOOT_IN_METRES = 0.3048  # Rhino UnitSystem.Feet, verified from original 3DM
+
+
+def wgs84_to_local_metres(longitude, latitude):
+    """Convert 2022 WGS84 building footprints to the shared local metre frame."""
+    if not math.isfinite(longitude) or not math.isfinite(latitude):
+        raise ValueError("Non-finite WGS84 building footprint coordinate")
+    if not (-75 < longitude < -72 and 39 < latitude < 42):
+        raise ValueError("Official WGS84 footprint point outside NYC")
+    return ((longitude-ORIGIN_WGS84[0])*METRES_PER_DEG_LONGITUDE,
+            (latitude-ORIGIN_WGS84[1])*METRES_PER_DEG_LATITUDE)
+
+
+def require_feet_model_unit(settings):
+    """Never infer Rhino source Z units from horizontal EPSG:2263 alone."""
+    unit=settings.ModelUnitSystem
+    name=getattr(unit,"name",str(unit).rsplit(".",1)[-1])
+    if name!="Feet":
+        raise ValueError("Original Rhino model units must be Feet, got "+str(name))
+    return name
+
+
+def anchored_source_height_metres(source_z_feet,source_roof_top_z_feet,
+                                  current_roof_height_metres,*,
+                                  source_vertical_unit_verified=False):
+    """Preserve relative 2014 source Z and anchor highest point to 2022 HEIGHTROOF.
+
+    Absolute 2014 vertical datum remains unknown; subtracting the same
+    building's highest source roof Z cancels any constant datum offset.
+    """
+    if not source_vertical_unit_verified:
+        raise ValueError("Rhino source vertical unit is not verified")
+    if not all(math.isfinite(v) for v in (
+        source_z_feet,source_roof_top_z_feet,current_roof_height_metres)):
+        raise ValueError("nonfinite source roof anchor")
+    delta=float(source_z_feet)-float(source_roof_top_z_feet)
+    if delta>5 or delta<-(current_roof_height_metres/MODEL_FOOT_IN_METRES+5):
+        raise ValueError("source facade/roof Z lies outside current building height")
+    return float(current_roof_height_metres)+.35+delta*MODEL_FOOT_IN_METRES
 
 
 def _xyz(p):
