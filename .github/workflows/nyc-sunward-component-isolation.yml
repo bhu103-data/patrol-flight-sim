@@ -1,0 +1,45 @@
+name: NYC source-of-glare test-only shader component isolation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/nyc-sunward-component-isolation-browser.mjs
+      - .github/workflows/nyc-sunward-component-isolation.yml
+
+permissions:
+  contents: read
+jobs:
+  isolate-sunward-physical-terms:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate TEST-only shader component fixture
+        run: |
+          node --check scripts/nyc-sunward-component-isolation-browser.mjs
+          node --test tests/nyc-sunward-horizon-optics.test.mjs
+      - name: Install headless WebGL2 browser dependencies
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve original unmodified PATROL
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-optic-probe-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Verify actual sun/anti bright bands come from BRDF or reflection sources
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-sunward-component-isolation-browser.mjs
+      - name: Upload real screenshots and checks even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-sunward-optical-component-diagnostics
+          path: artifacts/nyc-sunward-component-probe/
+          if-no-files-found: ignore
+          retention-days: 7

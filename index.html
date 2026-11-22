@@ -1769,10 +1769,16 @@ const CENTRAL_PARK_SITES=[
       solarTint*=mix(0.82,1.0,solarCenter);
       horizon=mix(horizon,solarTint,solarEdge*openness*smoothstep(-0.018,0.025,uSun.y));
       float moonAmt=dot(rd,uMoon);
-      if(moonAmt>0.99958 && uMoon.y>-0.025){
+      // The old 0.026-rad lunar disk was almost six times the real apparent
+      // radius and could look like a distant Earth-sized marble over NYC.
+      // Only NYC uses the physical ~0.00455 rad lunar angular radius;
+      // keep Vegas Sphere Show and all other map skies unchanged.
+      float moonAngularRadius=uManhattan?0.00455:0.026;
+      float moonMinDot=uManhattan?0.9999895:0.99958;
+      if(moonAmt>moonMinDot && uMoon.y>-0.025){
         vec3 tangent=normalize(cross(vec3(0.0,1.0,0.0),uMoon+vec3(0.00001,0.0,0.0)));
         vec3 upMoon=cross(uMoon,tangent);
-        vec2 uv=vec2(dot(rd,tangent),dot(rd,upMoon))/0.026;
+        vec2 uv=vec2(dot(rd,tangent),dot(rd,upMoon))/moonAngularRadius;
         float rr=dot(uv,uv);
         vec3 normal=tangent*uv.x+upMoon*uv.y-uMoon*sqrt(max(0.0,1.0-rr));
         float lit=smoothstep(-0.06,0.095,dot(normal,uSun));
@@ -1936,7 +1942,11 @@ const CENTRAL_PARK_SITES=[
           waterCol *= 1.0 + wind * (swell.x * 0.045 + chop.x * 0.19);
           vec3 V = -rd;
           vec3 reflDir = reflect(rd, wn);
-          reflDir.y = abs(reflDir.y);
+          // NYC-only optical correction: a water facet that reflects below the
+          // physical horizon must not be folded upward into a fake sky globe.
+          // #151 independently identified the same bad abs() ray fold.
+          // Keep the prior reflection path bit-for-bit for every other map.
+          reflDir.y = uManhattan ? max(reflDir.y, 0.002) : abs(reflDir.y);
           float ndv = max(dot(wn, V), 0.0001);
           float fresnel = waterFresnel(ndv);
           float meanSquareSlope = (0.003 + 0.00512 * (4.0 + wind * 6.0)) * mix(0.5,1.0,openWater);
@@ -1968,7 +1978,14 @@ const CENTRAL_PARK_SITES=[
             waterCol=mix(waterCol,bottom*waterTransmission*(0.72+focus*0.62),shallowFloor*0.76);
             float back=pow(max(dot(normalize(uSun.xz+vec2(0.0001)),normalize(rd.xz+vec2(0.0001))),0.0),4.0);
             float crest=smoothstep(0.11,0.43,swell.x+chop.x);
-            waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;
+            // The view-sun alignment used by this legacy additive crest term
+            // has no N·L or BRDF response: it paints cyan radiance across NYC
+            // harbor whenever the camera faces the sun. Component-isolation
+            // WebGL QA (#263) proves it causes the broad false turquoise
+            // patches; keep the genuine GGX solar reflection below instead.
+            // Preserve the original crest behavior on every non-NYC map.
+            if(!uManhattan)
+              waterCol+=vec3(0.025,0.24,0.18)*crest*back*sunAbove*clearSky*litFactor;
           }
           vec3 sunTint = mix(vec3(1.0,0.56,0.27), vec3(1.0,0.95,0.82), smoothstep(0.02,0.3,uSun.y));
           vec3 H = normalize(uSun + V + vec3(0.0,0.00001,0.0));

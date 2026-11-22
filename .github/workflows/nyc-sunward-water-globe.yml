@@ -1,0 +1,50 @@
+name: NYC fixed-height sunward water and false globe WebGL QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - index.html
+      - tests/nyc-sunward-horizon-optics.test.mjs
+      - scripts/nyc-sunward-water-globe-browser.mjs
+      - docs/PATROL_CONTEXT.md
+      - .github/workflows/nyc-sunward-water-globe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  nyc-sunward-optics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and physical ray/angular geometry source checks
+        run: |
+          node --check scripts/nyc-sunward-water-globe-browser.mjs
+          node --check tests/nyc-sunward-horizon-optics.test.mjs
+          node --test tests/nyc-sunward-horizon-optics.test.mjs
+      - name: Install free browser for actual WebGL flight (no native GPU claim)
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unmodified source assets
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-water-optics-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Same-altitude sunward/opposite/midnight-moon, C185/ships and other maps
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-sunward-water-globe-browser.mjs
+      - name: Upload authentic canvas A-B screenshots and exact world-state report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-sunward-water-globe-original-webgl
+          path: artifacts/nyc-sunward-water-globe/
+          retention-days: 7
+          if-no-files-found: ignore
