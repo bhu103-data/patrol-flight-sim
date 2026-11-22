@@ -75,7 +75,7 @@ try{
   const before=await page.evaluate(()=>window.geoPilotQA.getFlight());
   if(before?.mode!==true||before.collision)
     throw Error('NYC low-flight source spawn is colliding with building after roof opt-in');
-  await page.keyboard.down('KeyE');await page.waitForTimeout(160);await page.keyboard.up('KeyE');
+  await page.keyboard.down('e');await page.waitForTimeout(160);await page.keyboard.up('e');
   await page.waitForTimeout(160);
   const after=await page.evaluate(()=>window.geoPilotQA.getFlight());
   if(!after.mode||after.collision||after.position?.[1]<=before.position?.[1])
