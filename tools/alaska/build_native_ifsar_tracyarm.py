@@ -10,6 +10,7 @@ It does not edit the production map or flight physics.
 from __future__ import annotations
 import base64,gzip,hashlib,json,math,os,pathlib,time,urllib.request,xml.etree.ElementTree as ET
 import numpy as np
+import urllib.parse
 import rasterio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
@@ -40,25 +41,31 @@ def sha256(path):
 
 def download(url,path,expected):
  if path.exists() and path.stat().st_size==expected:return
+ urls=url if isinstance(url,(list,tuple)) else [url]
  tmp=path.with_suffix(path.suffix+".part")
  last=None
- for attempt in range(4):
-  try:
-   req=urllib.request.Request(url,headers={"User-Agent":"PATROL-USGS-OPR-5m-source-QA/1.0"})
-   with urllib.request.urlopen(req,timeout=120) as response,open(tmp,"wb") as out:
-    length=response.headers.get("Content-Length")
-    if length and int(length)!=expected:raise RuntimeError("USGS Content-Length mismatch "+length)
-    while True:
-     block=response.read(1024*1024)
-     if not block:break
-     out.write(block)
-   if tmp.stat().st_size!=expected:raise RuntimeError("USGS tile byte count mismatch")
-   tmp.replace(path);return
-  except Exception as e:
-   last=e
-   if tmp.exists():tmp.unlink()
-   if attempt<3:time.sleep(2**attempt)
- raise RuntimeError("Failed native USGS tile download: "+str(last))
+ for source_url in urls:
+  for attempt in range(3):
+   try:
+    req=urllib.request.Request(source_url,headers={
+      "User-Agent":"Mozilla/5.0 PATROL-USGS-OPR-5m-source-QA/1.0",
+      "Accept":"image/tiff,application/octet-stream,*/*"})
+    with urllib.request.urlopen(req,timeout=180) as response,open(tmp,"wb") as out:
+     length=response.headers.get("Content-Length")
+     if length and int(length)!=expected:
+      raise RuntimeError("USGS Content-Length mismatch "+length+" for "+source_url)
+     while True:
+      block=response.read(1024*1024)
+      if not block:break
+      out.write(block)
+    if tmp.stat().st_size!=expected:
+     raise RuntimeError("USGS tile byte count mismatch for "+source_url)
+    tmp.replace(path);return
+   except Exception as e:
+    last=RuntimeError(str(e)+" [source "+source_url+"]")
+    if tmp.exists():tmp.unlink()
+    if attempt<2:time.sleep(2**attempt)
+ raise RuntimeError("Failed native USGS download after host fallbacks: "+str(last))
 
 def dist(values):
  a=np.asarray(values,dtype=np.float64)
@@ -110,14 +117,27 @@ def main():
   candidate=candidates[filename]
   if candidate["size"]!=expected_size:raise RuntimeError("Native tile catalog size changed: "+filename)
   tif_path=OUT/filename
-  download(candidate["url"],tif_path,expected_size)
+  key=candidate["key"]
+  encoded=urllib.parse.quote(key,safe="/")
+  urls=[
+   "https://prd-tnm.s3.amazonaws.com/"+encoded,
+   "https://prd-tnm.s3.us-west-2.amazonaws.com/"+encoded,
+   "https://prd-tnm.s3.us-east-1.amazonaws.com/"+encoded
+  ]
+  download(urls,tif_path,expected_size)
   xml_url=candidate["url"][:-4]+".xml"
   xml_path=OUT/(filename[:-4]+".xml")
   xml_name=filename[:-4]+".xml"
   xml_meta=next((x for x in native["objects"] if x["file"]==xml_name),None)
   if not xml_meta or not isinstance(xml_meta.get("size"),int):
    raise RuntimeError("Native OPR per-tile XML metadata missing from official listing: "+xml_name)
-  download(xml_url,xml_path,xml_meta["size"])
+  xml_urls=[xml_url,
+   "https://prd-tnm.s3.us-west-2.amazonaws.com/"+urllib.parse.quote(xml_meta["key"],safe="/"),
+   "https://prd-tnm.s3.us-east-1.amazonaws.com/"+urllib.parse.quote(xml_meta["key"],safe="/")]
+  try:
+   download(xml_urls,xml_path,xml_meta["size"])
+  except Exception as metadata_error:
+   report.setdefault("metadataXmlWarnings",[]).append(str(metadata_error))
   report["sourceTiles"].append({
     "file":filename,"url":candidate["url"],"expectedBytes":expected_size,
     "bytes":tif_path.stat().st_size,"sha256":sha256(tif_path),
