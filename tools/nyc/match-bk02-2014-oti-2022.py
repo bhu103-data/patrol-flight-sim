@@ -95,8 +95,10 @@ def main():
             distance=f["geometry"].centroid.distance(g.centroid)
             if iou>0.01:
                 pairs.append({"otiIndex":i,"sourceUUID":uid,"iou":iou,
-                  "centroidDistanceM":distance,"deltaEastM":s.centroid.x-g.centroid.x,
-                  "deltaSouthM":s.centroid.y-g.centroid.y,
+                  "centroidDistanceM":distance,
+                  # Signed source-minus-OTI offset in local east/south metres.
+                  "deltaEastM":g.centroid.x-f["geometry"].centroid.x,
+                  "deltaSouthM":g.centroid.y-f["geometry"].centroid.y,
                   "sourceToOtiAreaRatio":ratio,
                   "sourceAreaM2":g.area,"otiAreaM2":f["geometry"].area})
     pairs.sort(key=lambda p:(-p["iou"],p["centroidDistanceM"]))
