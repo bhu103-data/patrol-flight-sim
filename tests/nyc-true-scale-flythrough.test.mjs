@@ -87,17 +87,33 @@ test('PATROL launcher routes experimental map to real-source free-flight entry',
   assert.match(page,/not the original aircraft physics/);
 });
 
-// Camera registration is a source-traceable, read-only QA diagnostic.
-test('1:1 flythrough exposes a stable source camera without fake GPS altitude',async()=>{
-  const script=await readFile(new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+
+test('street view uses 3.2m eye height and 1.2m OTI footprint clearance, not 65m aerial',async()=>{
+  const html=await readFile(
+    new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
+  assert.match(html,/Street height \(3\.2m\)/);
+  assert.match(html,/const streetEyeMetres=3\.2,streetClearanceMetres=1\.2;/);
+  assert.match(html,/safeOffsets\.some\(\(\[de,dn\]\)=>/);
+  assert.match(html,/buildingContains\(massing,east\+de,north\+dn,streetEyeMetres\)/);
+  assert.match(html,/position:\[site\[0\],streetEyeMetres,site\[1\]\]/);
+  assert.match(html,/streetClearanceRadiusMetres:streetClearanceMetres/);
+  assert.doesNotMatch(html,/buildingContains\(massing,east,north,65\)/);
+  assert.match(html,/position:\[0,340,Math\.min\(450,span\*\.55\)\]/,
+    'aerial view remains available without affecting the original free-flight map');
+});
+
+// Source-camera evidence uses the existing 3.2m cross-clearance street view.
+// It may not invent a 3D GPS height or substitute a fictional camera pose.
+test('live WGS84 camera registration preserves original 3.2m street safety',async()=>{
+  const html=await readFile(new URL('../assets/nyc/nyc-true-scale-flight.html',import.meta.url),'utf8');
   const smoke=await readFile(new URL('../scripts/nyc-true-scale-flight-browser-smoke.mjs',import.meta.url),'utf8');
-  assert.match(script,/const evidenceEye=new URLSearchParams\(location\.search\)/);
-  assert.match(script,/!buildingContains\(massing,site\.position\[0\]/);
-  assert.match(script,/schema:'patrol-nyc-metric-camera-v1'/);
-  assert.match(script,/eyeAbsoluteAltitudeMeters:null/);
-  assert.match(script,/metersToWgs84\(\[east,north\],massing\.origin\)/);
-  assert.match(script,/qa\.cameraRegistration=cameraRegistration\(frames,w,h\)/);
-  assert.match(smoke,/03-registered-eye-height\.png/);
-  assert.match(smoke,/04-registered-eye-height-repeat\.png/);
-  assert.match(smoke,/normalized\(registered1\.record\)===normalized\(registered2\.record\)/);
+  assert.match(html,/const streetEyeMetres=3\.2,streetClearanceMetres=1\.2;/);
+  assert.match(html,/cameraRegistration\(frame,w,h\)/);
+  assert.match(html,/metersToWgs84\(\[east,north\],massing\.origin\)/);
+  assert.match(html,/eyeAbsoluteAltitudeMeters:null/);
+  assert.match(html,/verticalDatum:'unknown'/);
+  assert.match(html,/qa\.cameraRegistration=cameraRegistration\(frames,w,h\)/);
+  assert.match(smoke,/01b-registered-street-eye-repeat\.png/);
+  assert.match(smoke,/fingerprint\(camera1\)===fingerprint\(camera2\)/);
+  assert.match(smoke,/streetClearanceRadiusMetres===1\.2/);
 });

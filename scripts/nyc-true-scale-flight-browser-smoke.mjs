@@ -39,6 +39,14 @@ try{
   check(report.initial.metresPerWorldUnit===1,'Wrong scene geographic scale');
   check(report.initial.spawnFromOfficialStreet===true,
     'Free-flight spawn is not on an accepted official Seventh Avenue centerline');
+  check(report.initial.safeStreetCandidateCount>=1,
+    'No clearance-checked source street spawn candidates');
+  check(report.initial.streetClearanceRadiusMetres===1.2,
+    'Missing 1.2m official building footprint clearance');
+  check(report.initial.streetEyeMetres===3.2&&
+    Math.abs(report.initial.camera[1]-3.2)<.001,
+    'Labelled street view must be at actual 3.2m eye height, not 65m aerial: '+
+      JSON.stringify(report.initial.camera));
   check(report.initial.windowVisuals>100,'No bounded facade detail');
   check(report.initial.glError===0,'WebGL2 error after first rendered frames');
   const initial=await page.locator('#scene').screenshot({
@@ -51,6 +59,47 @@ try{
   }
   report.visibleSamples=pixels;
   check(pixels>1000,'New NYC scene is blank or black');
+  const camera1=report.initial.cameraRegistration;
+  check(camera1?.schema==='patrol-nyc-metric-camera-v1',
+    'No georeferenced camera evidence in real WebGL scene');
+  check(camera1.eyeENUmeters?.[2]===3.2 &&
+    report.initial.streetEyeMetres===3.2 &&
+    report.initial.streetClearanceRadiusMetres===1.2,
+    'Official street camera missing 3.2m height / 1.2m clearance');
+  check(camera1.originAltitudeMeters===null &&
+    camera1.eyeAbsoluteAltitudeMeters===null &&
+    camera1.verticalDatum==='unknown',
+    'Unknown vertical datum was silently fabricated');
+  check(camera1.sourceBuildingFids.length>=118 &&
+    camera1.viewportPixels.join(',')==='1280,720',
+    'Camera FIDs or image viewport incomplete');
+  await page.waitForTimeout(180);
+  const camera2=await page.evaluate(()=>({
+    ...window.PatrolMetricFlightQA.cameraRegistration,
+    webglError:window.PatrolMetricFlightQA.glError,
+    errors:[...window.PatrolMetricFlightQA.errors]
+  }));
+  check(camera2.webglError===0&&camera2.errors.length===0,
+    'Registered street-level camera WebGL2 error');
+  const fingerprint=v=>JSON.stringify({
+    origin:v.originWGS84LonLat,eye:v.eyeENUmeters,
+    lonlat:v.eyeWGS84LonLat,
+    yaw:v.yawRadians,pitch:v.pitchRadians,
+    fov:v.verticalFovRadians,viewport:v.viewportPixels,
+    fids:v.sourceBuildingFids,quality:v.quality,lighting:v.lighting
+  });
+  check(fingerprint(camera1)===fingerprint(camera2),
+    'Registration drift between the two original same-pose screenshots');
+  const repeated=await page.locator('#scene').screenshot({
+    path:out+'/01b-registered-street-eye-repeat.png',timeout:90000});
+  report.registeredEvidence=[
+    {image:'01-true-scale-flythrough.png',
+      sha256:createHash('sha256').update(initial).digest('hex'),
+      capturedUTC:new Date().toISOString(),record:camera1},
+    {image:'01b-registered-street-eye-repeat.png',
+      sha256:createHash('sha256').update(repeated).digest('hex'),
+      capturedUTC:new Date().toISOString(),record:camera2}
+  ];
   await page.keyboard.down('w');
   await page.waitForTimeout(900);
   await page.keyboard.up('w');
@@ -69,6 +118,8 @@ try{
   const moved=Math.hypot(...before.map((v,i)=>after[i]-v));
   report.flightMetres=moved;
   check(moved>4&&moved<70,'Flight camera did not move plausibly: '+moved);
+  check(Math.abs(after[1]-3.2)<.01,
+    'Horizontal street W flight unexpectedly changed the 3.2m camera eye height');
   const afterPng=await page.locator('#scene').screenshot({
     path:out+'/02-after-flythrough.png',timeout:90000});
   report.initialSHA256=createHash('sha256').update(initial).digest('hex');
@@ -82,57 +133,13 @@ try{
     window.PatrolMetricFlightQA.frames>2,null,{timeout:60000});
   report.fallback=await page.evaluate(()=>window.PatrolMetricFlightQA);
   check(report.fallback.windowVisuals===0,'Low detail still generates window geometry');
+  check(report.fallback.streetEyeMetres===3.2&&
+    Math.abs(report.fallback.camera?.[1]-3.2)<.001,
+    'Low graphics mode lost ground-height source street camera');
   check(report.fallback.sourceStreetCount===report.initial.sourceStreetCount,
     'Fallback lost official centerlines');
   check(report.fallback.sourceBuildingCount===report.initial.sourceBuildingCount,
     'Fallback lost surveyed footprints');
-  // Source-registered eye-height evidence: two UNEDITED canvas PNGs
-  // with full physical camera records for later official street QA.
-  await page.goto(base+'/assets/nyc/nyc-true-scale-flight.html?qaEyeLevel=1',
-    {waitUntil:'domcontentloaded',timeout:45000});
-  await page.waitForFunction(()=>window.PatrolMetricFlightQA?.ready&&
-    window.PatrolMetricFlightQA?.cameraRegistration?.frame>=4,
-    null,{timeout:60000});
-  const capture=async name=>{
-    const record=await page.evaluate(()=>({
-      ...window.PatrolMetricFlightQA.cameraRegistration,
-      evidenceMode:window.PatrolMetricFlightQA.evidenceMode,
-      glError:window.PatrolMetricFlightQA.glError,
-      errors:[...window.PatrolMetricFlightQA.errors]
-    }));
-    check(record.schema==='patrol-nyc-metric-camera-v1'&&
-      record.evidenceMode==='source-centreline-eye-height',
-      'Camera register missing from actual eye-level scene');
-    check(record.originWGS84LonLat.length===2&&
-      record.eyeENUmeters.length===3&&record.eyeWGS84LonLat.length===2,
-      'Incomplete georeferenced camera pose');
-    check(record.originAltitudeMeters===null&&
-      record.eyeAbsoluteAltitudeMeters===null&&record.verticalDatum==='unknown',
-      'Unknown vertical datum was silently invented');
-    check(record.eyeENUmeters[2]===1.8,'Eye height is not 1.8m local');
-    check(record.sourceBuildingFids.length>=118,
-      'No official building FIDs in camera registration');
-    check(record.viewportPixels.join(',')==='1280,720',
-      'Unmatched browser render viewport');
-    check(record.glError===0&&record.errors.length===0,
-      'Eye-level WebGL2 context error');
-    const png=await page.locator('#scene').screenshot({
-      path:out+'/'+name,timeout:90000});
-    return {image:name,sha256:createHash('sha256').update(png).digest('hex'),
-      capturedUTC:new Date().toISOString(),record};
-  };
-  const registered1=await capture('03-registered-eye-height.png');
-  await page.waitForTimeout(180);
-  const registered2=await capture('04-registered-eye-height-repeat.png');
-  const normalized=r=>JSON.stringify({
-    position:r.eyeENUmeters,lonlat:r.eyeWGS84LonLat,
-    yaw:r.yawRadians,pitch:r.pitchRadians,fov:r.verticalFovRadians,
-    viewport:r.viewportPixels,sourceFids:r.sourceBuildingFids,
-    quality:r.quality,lighting:r.lighting
-  });
-  check(normalized(registered1.record)===normalized(registered2.record),
-    'Registered evidence camera drifted between live PNG captures');
-  report.registeredEvidence=[registered1,registered2];
   check(report.errors.length===0,'Browser errors '+report.errors.join('; '));
   report.passed=true;
 }catch(e){report.errors.push(e.stack||String(e));process.exitCode=1}
