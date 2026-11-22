@@ -86,13 +86,14 @@ test('three neighbor shops are NOT PR #93 own first corner building',()=>{
 
 test('real gallery deck, posts, roof, glass and bracing use six bounded batches',()=>{
   const {objects,obstacles,result}=generated();
-  assert.deepEqual(objects.map(m=>m.count),[39,8,27,21,58,3]);
+  assert.deepEqual(objects.map(m=>m.count),[39,8,27,21,58,3,21]);
   assert.equal(result.stats.sites,3);
   assert.equal(result.stats.roofTriangles,2304);
-  assert.equal(result.stats.instances,156);
+  assert.equal(result.stats.instances,177);
   assert.equal(result.stats.stairTreads,6);
-  assert.equal(result.stats.meshes,9);
-  assert.equal(result.stats.batchDraws,6);
+  assert.equal(result.stats.meshes,10);
+  assert.equal(result.stats.batchDraws,7);
+  assert.equal(result.stats.interiorBackings,21);
   assert.equal(result.stats.openFacades,3);
   assert.equal(result.stats.openFacadeTriangles,1872);
   assert.equal(obstacles.length,15);
@@ -109,15 +110,23 @@ test('real gallery deck, posts, roof, glass and bracing use six bounded batches'
 
 test('all 21 panes sit behind physical jambs with varied projecting sashes and sills',()=>{
   const {objects,obstacles,result}=generated();
-  const [,,stone,glass,lattice]=objects;
+  const [,,stone,glass,lattice,,interiors]=objects;
   const sites=result.snapshot();
   assert.equal(glass.transforms.length,21,'seven recessed windows per market shop');
   assert.equal(stone.count,27,'four added upper sills per shop');
   assert.equal(lattice.count,58,'varied timber trim without another GPU draw');
+  assert.equal(interiors.count,21,'one deep interior plane per pane');
   for(const s of sites){
     const panes=glass.transforms.filter(t=>
       Math.abs(t.pos[2]-(s.z+2.11))<.0001&&Math.abs(t.pos[0]-s.x)<9.5);
     assert.equal(panes.length,7);
+    const backs=interiors.transforms.filter(t=>
+      Math.abs(t.pos[2]-(s.z+.92))<.0001&&Math.abs(t.pos[0]-s.x)<9.5);
+    assert.equal(backs.length,7);
+    for(const backing of backs){
+      assert.ok((s.z+2.11)-(backing.pos[2]+backing.scale[2]/2)>1.1,
+        'interior backing must give real >1.1-unit window parallax');
+    }
     for(const card of panes){
       assert.ok((s.z+2.78)-(card.pos[2]+card.scale[2]/2)>.58,
         'recessed glazing must sit at least 0.58 units behind outer wall face');
