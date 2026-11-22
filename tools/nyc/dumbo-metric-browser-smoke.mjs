@@ -30,7 +30,16 @@ try{
  assert.ok(stats.triangles>500&&stats.triangles<4000);
  assert.equal(stats.roadTriangles,553,'rounded 2022 roadbed geometry is visible, 24 degenerate source triangles excluded');
  assert.equal(stats.buildingTriangles,1669,'original 48-building source geometry must be unchanged');
- assert.equal(stats.triangles,stats.roadTriangles+stats.buildingTriangles);
+ assert.equal(stats.centerlineTriangles,590,'295 official source line segments must render without fabrication');
+ assert.equal(stats.cscl.sourceRecords,404);
+ assert.equal(stats.cscl.groundRecords,213);
+ assert.equal(stats.cscl.excludedRecords,191);
+ assert.equal(stats.cscl.segments,295);
+ assert.equal(stats.cscl.streetNames,34);
+ assert.equal(stats.cscl.conflicts.length,4);
+ assert.ok(stats.cscl.networkLengthMetres>8000&&stats.cscl.networkLengthMetres<12000);
+ assert.equal(stats.triangles,stats.roadTriangles+stats.buildingTriangles+stats.centerlineTriangles);
+ assert.equal(stats.triangles,2812);
  assert.equal(stats.roadbed.year,2022);
  assert.equal(stats.roadbed.sourceTriangles,577);
  assert.equal(stats.roadbed.skippedDegenerate,24);
@@ -55,6 +64,20 @@ try{
  const roadFocus=await page.evaluate(()=>window.__metricCamera?.roadFocus);
  assert.ok(Array.isArray(roadFocus)&&roadFocus.length===3&&
    roadFocus.every(Number.isFinite),'Road world coordinate target missing');
+ await page.keyboard.press('c');
+ await page.waitForTimeout(350);
+ const conflictImage=await page.screenshot({path:output+'/04-cscl-source-conflicts.png'});
+ const conflictFocus=await page.evaluate(()=>window.__metricCamera?.conflictFocus);
+ assert.ok(Array.isArray(conflictFocus)&&conflictFocus.length===3&&
+   conflictFocus.every(Number.isFinite),'Conflict 3D camera target missing');
+ const conflictPng=PNG.sync.read(conflictImage);let conflictChanged=0;
+ for(let i=0;i<Math.min(roadPng.data.length,conflictPng.data.length);i+=4*71){
+   if(Math.abs(roadPng.data[i]-conflictPng.data[i])+
+      Math.abs(roadPng.data[i+1]-conflictPng.data[i+1])+
+      Math.abs(roadPng.data[i+2]-conflictPng.data[i+2])>35)conflictChanged++;
+ }
+ assert.ok(conflictChanged>600,
+   'Conflict camera did not actually move: '+conflictChanged);
  const png=PNG.sync.read(image),colors=new Set(),stride=4*13;
  for(let i=0;i<png.data.length;i+=stride){
   colors.add([png.data[i],png.data[i+1],png.data[i+2]].join(','));
@@ -63,9 +86,10 @@ try{
  const report={passed:true,source:'NYC OTI BUILDING_view 5zhs-2jue',
   captureMode:'swiftshader-functional-not-hardware-fps',stats,errors,
   sampledColors:colors.size,sourceBuildings:48,
-  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png'],
-  roadFocus,roadCameraChangedSamples:changed,
-  limitation:'48 OTI roofs + one 2022 Front/Dock paved ROADBED polygon AOI; no complete LION street graph, 2026 lane/signal layout, true road elevation, bridge or flight collisions'};
+  images:['01-oti-metric-oblique.png','02-oti-metric-plan.png','03-front-dock-2022-roadbed.png','04-cscl-source-conflicts.png'],
+  roadFocus,roadCameraChangedSamples:changed,conflictFocus,
+  conflictCameraChangedSamples:conflictChanged,
+  limitation:'48 source OTI roofs, limited 2022 Front/Dock pavement and 295 source CSCL centerline segments; 4 unresolved cross-dataset footprint overlaps; no surveyed curbs, actual 2026 lanes, verified elevation/bridges or flight collisions'};
  await writeFile(output+'/report.json',JSON.stringify(report,null,2)+'\n');
  console.log('PATROL metric DUMBO browser QA:',JSON.stringify(report));
  await page.close();
