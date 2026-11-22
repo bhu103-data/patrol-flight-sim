@@ -143,7 +143,8 @@ def main():
     # Model documented ArcGIS default auto aspect independently from any
     # potentially unreliable service f=json endpoint.
     modelOld=arcgis_default_aspect_bbox(old_meta["bbox"])
-    modelFine=arcgis_default_aspect_bbox(fine_meta["bbox"])
+    modelFine=(fine_meta["bbox"] if fine_meta.get("adjustAspectRatio") is False
+       else arcgis_default_aspect_bbox(fine_meta["bbox"]))
     xmodel=modelFine[0]+(np.arange(256)+.5)*(modelFine[2]-modelFine[0])/256
     ymodel=modelFine[1]+(np.arange(256)+.5)*(modelFine[3]-modelFine[1])/256
     MX,MY=np.meshgrid(
@@ -160,16 +161,43 @@ def main():
       "actualServerJSONCrosscheckRequired":True,
       "esriReference":"https://developers.arcgis.com/rest/services-reference/enterprise/export-image/"
     }
-    report["fineVsCoarseWaterStatus"]={
+    report["historicalWrongBboxWaterStatus"]={
         "coarseWaterFineLandGt20m":int(np.count_nonzero((old_interp<=1)&(fine>20))),
         "coarseLandGt20mFineWater":int(np.count_nonzero((old_interp>20)&(fine<=1))),
         "bothWaterLe1m":int(np.count_nonzero((old_interp<=1)&(fine<=1)))
     }
-    report["edgesFineMinusCoarse"]={
+    report["historicalWrongBboxEdges"]={
       "west":distribution((fine-old_interp)[:,0]),
       "east":distribution((fine-old_interp)[:,-1]),
       "south":distribution((fine-old_interp)[0,:]),
       "north":distribution((fine-old_interp)[-1,:])
+    }
+    provenance=json.loads((ROOT/"assets/alaska/tracy-arm-3dep-actual-extent.json").read_text())
+    if provenance["requestedBboxWgs84"]!=old_meta["bbox"]:
+      raise RuntimeError("Official 30m effective bbox does not match source request")
+    AO=provenance["actualPixelBboxWgs84"]
+    AF=fine_meta.get("actualBboxVerifiedFromServer")
+    if fine_meta.get("adjustAspectRatio") is not False or not isinstance(AF,list) or len(AF)!=4:
+      raise RuntimeError("Fine source has not proved actual 5m pixel extent")
+    if max(abs(x-y) for x,y in zip(AF,fine_meta["bbox"]))>1e-8:
+      raise RuntimeError("Fine source bbox diverges from ArcGIS actual output")
+    fx=AF[0]+(np.arange(256)+.5)*(AF[2]-AF[0])/256
+    fy=AF[1]+(np.arange(256)+.5)*(AF[3]-AF[1])/256
+    DX,DY=np.meshgrid((fx-AO[0])/(AO[2]-AO[0])*256-.5,
+                    (fy-AO[1])/(AO[3]-AO[1])*256-.5)
+    actualCoarse=bilinear(old,DX,DY)
+    correctedDifference=fine-actualCoarse
+    report["fineMinusBakedCoarseUsingVerifiedWgs84Extents"]=distribution(correctedDifference)
+    report["correctedWgs84WaterStatus"]={
+        "coarseWaterFineLandGt20m":int(np.count_nonzero((actualCoarse<=1)&(fine>20))),
+        "coarseLandGt20mFineWater":int(np.count_nonzero((actualCoarse>20)&(fine<=1))),
+        "bothWaterLe1m":int(np.count_nonzero((actualCoarse<=1)&(fine<=1)))
+    }
+    report["edgesFineMinusCoarse"]={
+      "west":distribution(correctedDifference[:,0]),
+      "east":distribution(correctedDifference[:,-1]),
+      "south":distribution(correctedDifference[0,:]),
+      "north":distribution(correctedDifference[-1,:])
     }
     # Diagnostic shifts in ORIGINAL 30m pixels, not automatic repair.
     shifts=[]
@@ -264,7 +292,9 @@ def main():
           a["p95Abs"]<=10 for a in report["edgesFineMinusCoarse"].values()),
         "requiresVisualReview":True,
         "requiresSourceMosaicVerification":True}
-    report["status"]="needs-source-and-border-review"
+    report["status"]=("geospatial-edges-under-10m-further-qa-required"
+      if report["stitchGate"]["allFourSourceBorderEdgesPass"]
+      else "geospatial-border-mismatch-do-not-stitch")
     OUTPUT.parent.mkdir(exist_ok=True,parents=True)
     OUTPUT.write_text(json.dumps(report,indent=2)+"\n")
     print("SOURCE-REGISTRATION AUDIT "+
@@ -272,7 +302,9 @@ def main():
         "fineMinusBakedCoarse","bestCoarsePixelShiftDiagnostic",
         "rmseImprovementVsOriginal","freshOriginalSource","stitchGate",
         "arcgisActualExportExtents","fineMinusCoarseUsingActualArcgisExtents",
-        "expandedBestCoarseShiftDiagnostic","modeledArcgisDefaultAspect"] if k in report}),
+        "expandedBestCoarseShiftDiagnostic","modeledArcgisDefaultAspect",
+        "fineMinusBakedCoarseUsingVerifiedWgs84Extents",
+        "correctedWgs84WaterStatus","edgesFineMinusCoarse"] if k in report}),
       flush=True)
 
 if __name__=="__main__":
