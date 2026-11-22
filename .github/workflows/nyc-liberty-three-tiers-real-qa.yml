@@ -1,0 +1,51 @@
+name: NYC Liberty actual flight camera and aircraft three-tier LOD
+
+on:
+  pull_request:
+    paths:
+      - "scripts/nyc-liberty-three-tiers-real-browser.mjs"
+      - ".github/workflows/nyc-liberty-three-tiers-real-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-game-three-distances:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check independent QA script and source hull rules
+        run: |
+          node --check scripts/nyc-liberty-three-tiers-real-browser.mjs
+          node --test tests/nyc-liberty-cc0-production-optin.test.mjs
+      - name: Install headless Chromium and PNG evidence writer (runner only)
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve exact unchanged PATROL flight game
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-liberty-three-tier-http.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Test actual plane and scenic-camera distances, real WebGL PNGs and frame cadence
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        timeout-minutes: 13
+        run: node scripts/nyc-liberty-three-tiers-real-browser.mjs
+      - name: Upload 3 unaltered original-game screenshots and report, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-liberty-source-matched-three-tier-evidence
+          path: artifacts/nyc-liberty-three-distance-tiers/
+          retention-days: 7
+          if-no-files-found: warn

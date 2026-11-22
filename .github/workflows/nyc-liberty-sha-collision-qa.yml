@@ -1,0 +1,50 @@
+name: NYC Liberty original real game SHA collider sweep
+
+on:
+  pull_request:
+    paths:
+      - "scripts/nyc-liberty-sha-source-collision-browser.mjs"
+      - ".github/workflows/nyc-liberty-sha-collision-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-sha-real-flight-collider:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source, deterministic 16-band bound and test file
+        run: |
+          node --check scripts/nyc-liberty-sha-source-collision-browser.mjs
+          node --test tests/nyc-liberty-actual-collider.test.mjs
+      - name: Install free real WebGL2 software Chromium (QA runner only)
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve unchanged PATROL game and inactive manifest
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-liberty-sweep-http.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8765/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Test 12 actual game corridors, overflight and body hit on authenticated CC0 mesh
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        timeout-minutes: 12
+        run: node scripts/nyc-liberty-sha-source-collision-browser.mjs
+      - name: Preserve original game screenshot and JSON even on test failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-liberty-verified-source-collision-evidence
+          path: artifacts/nyc-liberty-source-collision-sweep/
+          retention-days: 7
+          if-no-files-found: warn

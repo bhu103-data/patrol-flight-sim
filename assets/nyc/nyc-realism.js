@@ -251,8 +251,14 @@ export async function loadNycRealism(gl){
   // QA rollback must skip ALL imported landmark meshes, including the older
   // bundled Liberty GLB, not merely skip the manifest-approved Scenario GLBs.
   // Keep PBR terrain/street photos independent of the landmark choice.
-  const useProceduralLandmarks=typeof location!=='undefined' &&
-    new URLSearchParams(location.search).get('nycModels')==='legacy';
+  const options=typeof location!=='undefined'?new URLSearchParams(location.search):new URLSearchParams();
+  const useProceduralLandmarks=options.get('nycModels')==='legacy';
+  // Explicit, isolated opt-in; the production manifest stays disabled for Liberty.
+  // This uses the SAME reviewed 15.9k CC0 GLB already staged in PR #103.
+  const libertyCC0Pilot=options.get('nycLibertyCC0')==='1' && !useProceduralLandmarks;
+  // Source-verified #103 GLB; never authorize geometry-specific collision by
+  // filename or triangle count alone. No manifest/default enablement.
+  const libertyCC0Sha256='34ed58d06e008adcced5e60376bbcc11d675f3d4ec01434016df92d244f33225';
   const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
     // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
@@ -284,7 +290,9 @@ export async function loadNycRealism(gl){
       if(manifest.schema_version!==1||!manifest.landmarks)return;
       const allowed=new Set(['liberty','trade','empire','chrysler','flatiron','times']);
       await Promise.all(Object.entries(manifest.landmarks).map(async ([kind,spec])=>{
-        if(!allowed.has(kind)||!spec||spec.enabled!==true)return;
+        const stagedLiberty=kind==='liberty'&&libertyCC0Pilot&&
+          spec?.enabled===false&&spec.file==='scenario/liberty.glb';
+        if(!allowed.has(kind)||!spec||(spec.enabled!==true&&!stagedLiberty))return;
         if(typeof spec.file!=='string' ||
            !/^scenario\/[a-z0-9_-]+\.glb$/.test(spec.file) ||
            !Number.isFinite(spec.target_height)||spec.target_height<10||
@@ -305,12 +313,42 @@ export async function loadNycRealism(gl){
           // and decodes need not wait for the independent fallback request.
           if(kind==='liberty')await modelsReady;
           if(gl.isContextLost())return;
+          if(stagedLiberty){
+            // Fail closed before decoding or creating GPU objects: source
+            // collision radius bands are valid only for these exact bytes.
+            if(!globalThis.crypto?.subtle)throw Error('Secure SHA-256 unavailable');
+            const raw=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+            const digest=Array.from(new Uint8Array(raw),value=>
+              value.toString(16).padStart(2,'0')).join('');
+            if(digest!==libertyCC0Sha256)
+              throw Error('Liberty CC0 SHA-256 mismatch; retain bundled fallback');
+          }
           const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles);
+          if(stagedLiberty && (mesh.triangleCount!==15900 ||
+             !mesh.dimensions ||
+             !Number.isFinite(mesh.dimensions.height) ||
+             !Number.isFinite(mesh.dimensions.width) ||
+             !Number.isFinite(mesh.dimensions.depth) ||
+             Math.abs(mesh.dimensions.height-31.3)>0.01 ||
+             Math.abs(mesh.dimensions.width-9.323)>0.04 ||
+             Math.abs(mesh.dimensions.depth-9.323)>0.04)){
+            // Reject mismatched decoded mesh WITHOUT arming scenario collider.
+            for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
+            gl.deleteVertexArray(mesh.vao);
+            if(mesh.texture)gl.deleteTexture(mesh.texture);
+            throw Error('Liberty CC0 dimensions mismatch; retain bundled fallback');
+          }
           mesh.source='scenario';
           if(models[kind]){
-            for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
-            gl.deleteVertexArray(models[kind].vao);
-            if(models[kind].texture)gl.deleteTexture(models[kind].texture);
+            if(stagedLiberty){
+              // Reuse the existing original low-poly GLB as LOD1 and as the
+              // working fallback; never download/copy a second 3D asset.
+              models.libertyLow=models[kind];
+            }else{
+              for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
+              gl.deleteVertexArray(models[kind].vao);
+              if(models[kind].texture)gl.deleteTexture(models[kind].texture);
+            }
           }
           models[kind]=mesh;
         }catch(error){failures.push('scenario '+kind+': '+error.message);}
