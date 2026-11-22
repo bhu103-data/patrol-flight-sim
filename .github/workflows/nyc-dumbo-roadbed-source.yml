@@ -1,0 +1,32 @@
+name: NYC DUMBO official 2022 pavement source extraction
+on:
+  pull_request:
+    paths:
+      - "scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs"
+      - ".github/workflows/nyc-dumbo-roadbed-source.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extract-official-road:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify official source-fetch program syntax
+        run: node --check scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs
+      - name: Install triangulator pinned for offline baking only
+        run: npm install --prefix /tmp/patrol-roadbed --ignore-scripts --no-save --no-audit --no-fund earcut@2.2.4
+      - name: Download bounded NYC OTI real pavement geometry 2022
+        run: node scripts/nyc-dumbo-front-dock-roadbed-fetch.mjs
+      - name: Upload source-traceable geometry and audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-dumbo-front-dock-oti-2022-audit
+          path: artifacts/nyc-dumbo-front-dock-source/
+          retention-days: 14
+          if-no-files-found: warn
