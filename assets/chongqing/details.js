@@ -440,6 +440,25 @@ export function buildChongqingDetails({THREE,scene,ground,riverCenter,rand,box,b
       put(facade,x-9.86,y+7.9,z-5.8,.28,15.7,16.4);
       put(facade,x+9.86,y+7.9,z-5.8,.28,15.7,16.4);
       put(facade,x,y+7.9,z-13.84,19.75,15.7,.32);
+      // The local cliff drops sharply to the east of tea-lane and
+      // stone-stair: the old 21x25 floor plate hung 6–11 units above the
+      // sampled terrain at its downhill side. Ground three real cut-stone
+      // footings along the INSIDE of that sidewall, not the street-facing
+      // window openings. Every support overlaps the underside of the
+      // existing slab but sinks 0.60 into the terrain to avoid floating
+      // after the coarse world-grid interpolation. None changes occupancy.
+      const supportX=x+9.45;
+      for(const offsetZ of [-11.5,-5,1.2]){
+        const supportZ=z+offsetZ;
+        const localGround=ground(supportX,supportZ);
+        const capY=y+.82;
+        const bottomY=localGround-.60;
+        const rise=capY-bottomY;
+        // Flat third market lot needs no gratuitous tall fake buttresses.
+        if(!Number.isFinite(localGround)||rise<=1.85)continue;
+        put('stone',supportX,bottomY+rise*.5,supportZ,.86,rise,1.12);
+        put('steps',supportX,localGround+.03,supportZ,1.55,.54,1.55);
+      }
     }else{
       put(facade,x,y+7.9,z-6,20,15.7,16);
     }
