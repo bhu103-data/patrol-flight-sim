@@ -6,6 +6,7 @@ import {readFileSync} from 'node:fs';
 
 const moduleSource=readFileSync(new URL('../assets/alaska/alaska-fjord-detail.js',import.meta.url),'utf8');
 const renderer=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const qaHarness=readFileSync(new URL('../tools/alaska/compare_harbor_baseline.mjs',import.meta.url),'utf8');
 const {buildAlaskaFjordDetail}=await import('data:text/javascript;base64,'+
   Buffer.from(moduleSource).toString('base64'));
 
@@ -51,4 +52,17 @@ test('floe surface 13 mirrors existing CC0 atlas with color-only fallback',()=>{
     'bounded snowcap luminance lift must occur only in photo-ready glacier shader');
   assert.ok(renderer.slice(photoStart,lift).includes('if(vHarborSurface>12.5)'),
     'floe-only brightness must not affect the old surface 12');
+});
+
+
+test('native Edge GPU QA cannot be mistaken for CI SwiftShader FPS',()=>{
+  assert.ok(qaHarness.includes("process.env.PATROL_NATIVE_GPU==='1'"));
+  assert.ok(qaHarness.includes("channel:browserChannel"));
+  assert.ok(qaHarness.includes('Real GPU cannot be verified'));
+  assert.ok(qaHarness.includes("/swiftshader|llvmpipe|softpipe|software|microsoft basic render|warp|cpu raster/i"));
+  assert.ok(qaHarness.includes('maxIntervals=nativeGpu?180:12'));
+  assert.ok(qaHarness.includes('intervals.length<120'));
+  assert.ok(qaHarness.includes('nativeRafP95Ms'));
+  assert.ok(qaHarness.includes('softwareRafP95Ms'));
+  assert.ok(qaHarness.includes('timer-query execution time'));
 });
