@@ -1,7 +1,6 @@
 name: NYC 2014 authentic MN05 baked Brep rooftop mesh extraction
 on:
   pull_request:
-    branches: [qa/nyc-mn05-roof-surface-true-metre-bounds-20261122-chat]
     paths:
       - 'tools/nyc/extract-mn05-cached-roof-mesh.py'
       - 'tools/nyc/inspect_mn05_support.py'
