@@ -114,7 +114,7 @@ test('five source-exact traffic signal meshes stay finite and in one draw batch'
 });
 
 test('Manhattan only and preserves low graphics and map-switch fallback',()=>{
-  assert.ok(html.includes('if(selectedMap.city && !graphicsCompat){'));
+  assert.ok(html.includes("typeof selectedMap!=='undefined' && selectedMap.city && !graphicsCompat"));
   assert.match(html,/nycTimesSignalMeshes=buildTimesSeventhSignalMeshes\(\)/);
   assert.match(html,/if\(selectedMap\.city && nycTimesSignalMeshes\)/);
   assert.match(html,/nycTimesSignalMeshes=null/);
