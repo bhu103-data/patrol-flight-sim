@@ -87,13 +87,18 @@ function roof(poly,y,color,addTri){
   }
   return emitted;
 }
-export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites}){
+export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bounds,protectedSites,skipFids=null}){
   if(!asset||!Array.isArray(asset.features)||!Array.isArray(bounds)||!Array.isArray(protectedSites))
     throw new TypeError('Invalid NYC GIS asset or scene configuration');
+  if(skipFids!==null && !(skipFids instanceof Set))
+    throw new TypeError('Diagnostic skipFids must be a Set');
+  if(skipFids && [...skipFids].some(fid=>!Number.isSafeInteger(fid)))
+    throw new TypeError('Diagnostic skipFids contains a non-integer source FID');
   const [west,east,south,north]=bounds;
   let buildings=0,pieces=0,roofTriangles=0,windows=0,storefrontQuads=0,windowTrimQuads=0,
     shopfrontFaces=0,shopfrontQuads=0;
   const sourceFids=new Set();
+  let skippedDiagnosticFids=0;
   const exclusions=[
     ...protectedSites.map(s=>[s.x-s.w*.5-.32,s.x+s.w*.5+.32,
       s.z-s.d*.5-.32,s.z+s.d*.5+.32]),
@@ -102,6 +107,7 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
   ];
   for(const rec of asset.features){
     if(pieces>=MAX_PIECES)break;
+    if(skipFids?.has(rec.fid)){skippedDiagnosticFids++;continue;}
     if(!Number.isSafeInteger(rec.fid)||sourceFids.has(rec.fid)||
         !(rec.heightFt>0&&rec.heightFt<2500)||!Array.isArray(rec.rings?.[0])||
         rec.rings[0].length<4||rec.rings[0].length>64)continue;
@@ -326,5 +332,6 @@ export function buildTimesSquareGisInfill(asset,{addQuad,addTri,box,ground,bound
     infillPieces:pieces,roofTriangles,windowQuads:windows,storefrontQuads,
     windowTrimQuads,maximumWindowTrimQuads:MAX_WINDOW_TRIM_QUADS,
     shopfrontFaces,shopfrontQuads,maximumShopfrontFaces:MAX_SHOPFRONT_FACES,
-    maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8]};
+    maximumPieces:MAX_PIECES,visualOnly:true,materialSurfaceIds:[6,7,8],
+    sourceFids:[...sourceFids],skippedDiagnosticFids};
 }
