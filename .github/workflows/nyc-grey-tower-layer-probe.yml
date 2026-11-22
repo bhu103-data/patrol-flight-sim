@@ -1,0 +1,48 @@
+name: NYC grey tower exact render-layer provenance (diagnostic only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "index.html"
+      - "scripts/nyc-grey-tower-layer-probe.mjs"
+      - "tests/nyc-grey-tower-layer-probe.test.mjs"
+      - ".github/workflows/nyc-grey-tower-layer-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  trace-greytower:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify source gates are completely opt-in and syntax-valid
+        run: |
+          node --check scripts/nyc-grey-tower-layer-probe.mjs
+          node --test tests/nyc-grey-tower-layer-probe.test.mjs
+      - name: Install free Chromium with WebGL2 software fallback
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Serve exact repository branch
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/patrol-nyc-layer-probe-http.log 2>&1 &
+          sleep 3
+          curl --fail --silent --show-error http://127.0.0.1:8765/index.html >/dev/null
+      - name: Capture six render groups and restored 44th Street camera
+        env:
+          PATROL_BASE_URL: http://127.0.0.1:8765
+        run: node scripts/nyc-grey-tower-layer-probe.mjs
+      - name: Always upload exact source screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-grey-tower-layer-probe-evidence
+          path: artifacts/nyc-visual-provenance/
+          retention-days: 7
+          if-no-files-found: ignore

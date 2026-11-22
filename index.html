@@ -10776,9 +10776,37 @@ const CENTRAL_PARK_SITES=[
     return mesh.upload();
   });
 
+  // NYC visual provenance probe: test-only layer omission, never enabled by
+  // the standard URL. Geometry, city lots, collisions and map state remain
+  // exactly the same; only the WebGL draw of one scene mesh can be hidden.
+  const nycVisualProbeEnabled=new URLSearchParams(location.search)
+    .get('nycVisualProbe')==='1';
+  let nycVisualProbeHidden='none';
+  const nycVisualProbeOmits=layer=>nycVisualProbeEnabled &&
+    selectedMap.city && nycVisualProbeHidden===layer;
+  if(nycVisualProbeEnabled){
+    const groups=['none','procedural','scenery','gis','hero','landmarks'];
+    window.__patrolNycVisualProbe={
+      groups,
+      setHidden(group){
+        if(!groups.includes(group))throw Error('Unknown NYC visual layer '+group);
+        nycVisualProbeHidden=group;
+        return {hidden:group,city:Boolean(selectedMap.city)};
+      },
+      stats(){return {
+        city:Boolean(selectedMap.city),hidden:nycVisualProbeHidden,
+        proceduralTriangles:(backgroundBuildings?.count||0)/3,
+        sceneryTriangles:(mapScenery?.count||0)/3,
+        gisTriangles:(nycGisMesh?.count||0)/3,
+        heroTriangles:(nycHeroScenery?.count||0)/3,
+        landmarkInstances:selectedMap.city?NEW_YORK_LANDMARKS.length:0
+      }}
+    };
+  }
+
   function drawMapScenery(drawMesh) {
     const identity=mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
-    if(mapScenery)drawMesh(mapScenery,identity);
+    if(mapScenery && !nycVisualProbeOmits('scenery'))drawMesh(mapScenery,identity);
     if(selectedMap.alaska && alaskaDetailMesh?.count)drawMesh(alaskaDetailMesh,identity);
     if(selectedMap.alaska && alaskaIcePose && alaskaIceActors.length){
       for(const actor of alaskaIceActors){
@@ -10789,7 +10817,9 @@ const CENTRAL_PARK_SITES=[
           [cy,0,-sy],[0,1,0],[sy,0,cy],1),false,false,false);
       }
     }
-    if(selectedMap.city && nycGisMesh?.count)drawMesh(nycGisMesh,identity);
+    if(selectedMap.city && nycGisMesh?.count){
+      if(!nycVisualProbeOmits('gis'))drawMesh(nycGisMesh,identity);
+    }
     if(selectedMap.city && nycStreetMesh?.count)drawMesh(nycStreetMesh,identity);
     if(selectedMap.city && nycRoadChunkLevel){
       for(const chunk of nycRoadDetailChunks){
@@ -10798,7 +10828,7 @@ const CENTRAL_PARK_SITES=[
         if(level>=2 && chunk.near.count)drawMesh(chunk.near,identity);
       }
     }
-    if(selectedMap.city && nycHeroScenery?.count)drawMesh(nycHeroScenery,identity);
+    if(selectedMap.city && nycHeroScenery?.count && !nycVisualProbeOmits('hero'))drawMesh(nycHeroScenery,identity);
     if(selectedMap.city && nycParkMesh?.count)drawMesh(nycParkMesh,identity);
     if(dcSurfaceMeshes.length){
       const textured=dcTextureArray&&!directRendering;
@@ -14720,7 +14750,7 @@ const CENTRAL_PARK_SITES=[
     refreshDestroyedCity();
     if (backgroundBuildings || landscapeDetails) {
       const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
-      if (backgroundBuildings) drawMeshWithOutline(backgroundBuildings,identity,false,true);
+      if (backgroundBuildings && !nycVisualProbeOmits('procedural')) drawMeshWithOutline(backgroundBuildings,identity,false,true);
       if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
       for(const hit of buildingHits.values())for(const scar of hit.scars){
         drawMeshWithOutline(scar,identity);
@@ -14736,7 +14766,7 @@ const CENTRAL_PARK_SITES=[
       }
     }
 
-    if (selectedMap.city) {
+    if (selectedMap.city && !nycVisualProbeOmits('landmarks')) {
       for (const mark of NEW_YORK_LANDMARKS) {
         const origin = [mark.x, sampleGroundHeight(mark.x, mark.z) - 0.03, mark.z];
         const model = mat4FromBasis(origin, [1,0,0], [0,1,0], [0,0,1], 1);
