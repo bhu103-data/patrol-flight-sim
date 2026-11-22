@@ -9,12 +9,22 @@ const root='http://127.0.0.1:8765';
 const baselineSha=process.env.PATROL_NATIVE_GPU==='1'
   ? (process.env.PATROL_BASELINE_SHA||'bc155141742811bca3c4b1988672b238bd50a98b')
   : 'bc155141742811bca3c4b1988672b238bd50a98b';
-// Reject accidentally mixing a different baseline file with a claimed SHA.
-// CI and Windows cmd redirection write git-show bytes without recoding.
-for(const [local,gitPath] of [
+// Native mode generates the exact parent snapshot directly from Git: no
+// Windows-shell redirection, PowerShell encoding changes, or manual copies.
+// Default CI retains its existing pinned snapshot setup.
+const comparisonFiles=[
   ['alaska-baseline.html','index.html'],
   ['assets/alaska/alaska-fjord-detail-baseline-qa.js','assets/alaska/alaska-fjord-detail.js']
-]){
+];
+if(process.env.PATROL_NATIVE_GPU==='1'){
+  for(const [local,gitPath] of comparisonFiles){
+    const raw=execFileSync('git',['show',baselineSha+':'+gitPath],
+      {maxBuffer:2_000_000});
+    writeFileSync(local,raw);
+  }
+}
+// Reject accidentally mixing a different baseline file with a claimed SHA.
+for(const [local,gitPath] of comparisonFiles){
   const actual=readFileSync(local,'utf8');
   const expected=execFileSync('git',['show',baselineSha+':'+gitPath],
     {encoding:'utf8',maxBuffer:2_000_000});
@@ -283,8 +293,53 @@ try{
      records.baseline.floePose.yaw!==records.updated.floePose.yaw)
     throw Error('Floe candidate and baseline do not show the same admitted polygon');
   if(nearDrift>.5)throw Error('Near-view QA pose is not identical');
-  console.log('Alaska paired screenshot state:',JSON.stringify(records));
   if(displacement>9||yawDelta>.20)
     throw Error('Baseline/updated harbor camera moved too far for visual comparison');
+
+  if(nativeGpu){
+    const base=records.baseline,candidate=records.updated;
+    if(base.gpu.renderer!==candidate.gpu.renderer||
+       base.gpu.vendor!==candidate.gpu.vendor)
+      throw Error('Physical GPU adapter changed during A/B capture: '+
+        JSON.stringify({baseline:base.gpu,updated:candidate.gpu}));
+    const positiveEnv=name=>{
+      const raw=process.env[name];
+      if(raw===undefined||raw==='')return null;
+      const num=Number(raw);
+      if(!Number.isFinite(num)||num<=0)
+        throw Error(name+' must be a positive finite number: '+raw);
+      return num;
+    };
+    const p95BudgetMs=positiveEnv('PATROL_NATIVE_P95_BUDGET_MS');
+    const maxP95RegressionPct=positiveEnv('PATROL_NATIVE_MAX_P95_REGRESSION_PCT');
+    const p95DeltaMs=candidate.nativeRafP95Ms-base.nativeRafP95Ms;
+    const p50DeltaMs=candidate.nativeRafP50Ms-base.nativeRafP50Ms;
+    const p95RegressionPct=100*p95DeltaMs/base.nativeRafP95Ms;
+    const violations=[];
+    if(p95BudgetMs!==null&&candidate.nativeRafP95Ms>p95BudgetMs)
+      violations.push('candidate RAF P95 exceeds '+p95BudgetMs+' ms');
+    if(maxP95RegressionPct!==null&&p95RegressionPct>maxP95RegressionPct)
+      violations.push('candidate RAF P95 regression exceeds '+maxP95RegressionPct+'%');
+    records.nativeGpuAssessment={
+      evidenceType:'native Edge display RAF intervals, NOT GPU timer-query duration',
+      singleRunOnly:true, // repeat trials on the same physical GPU before release
+      baselineSha,baselineRenderer:base.gpu.renderer,
+      baseline:{p50Ms:base.nativeRafP50Ms,p95Ms:base.nativeRafP95Ms,
+        firstPlayableMs:base.firstPlayableMs,samples:base.nativeRafSamples},
+      candidate:{p50Ms:candidate.nativeRafP50Ms,p95Ms:candidate.nativeRafP95Ms,
+        firstPlayableMs:candidate.firstPlayableMs,samples:candidate.nativeRafSamples},
+      p50DeltaMs,p95DeltaMs,p95RegressionPct,
+      firstPlayableDeltaMs:candidate.firstPlayableMs-base.firstPlayableMs,
+      configuredLimits:{p95BudgetMs,maxP95RegressionPct},
+      status:violations.length?'configured-raf-budget-failed':
+        p95BudgetMs!==null||maxP95RegressionPct!==null
+          ? 'within-configured-raf-budget':'measurement-only',
+      violations
+    };
+  }
+  console.log('Alaska paired screenshot state:',JSON.stringify(records));
   writeFileSync('artifacts/alaska-cabin-port-camera.json',JSON.stringify(records,null,2));
+  if(records.nativeGpuAssessment?.violations.length)
+    throw Error('Native GPU RAF budget exceeded: '+
+      records.nativeGpuAssessment.violations.join('; '));
 }finally{await browser.close();}
