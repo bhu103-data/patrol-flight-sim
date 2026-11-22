@@ -150,13 +150,13 @@ test('live WGS84 camera registration preserves the local 3.2m eye without invent
   const smoke=await readFile(
     new URL('../scripts/nyc-true-scale-flight-browser-smoke.mjs',import.meta.url),'utf8');
   assert.match(html,/metersToWgs84/);
-  assert.match(html,/function cameraRegistration\\(frame,w,h\\)/);
-  assert.match(html,/eyeENUmeters:\\[east,north,camera\\.position\\[1\\]\\]/);
+  assert.match(html,/function cameraRegistration\(frame,w,h\)/);
+  assert.match(html,/eyeENUmeters:\[east,north,camera\.position\[1\]\]/);
   assert.match(html,/eyeAbsoluteAltitudeMeters:null/);
   assert.match(html,/verticalDatum:'unknown'/);
-  assert.match(html,/qa\\.cameraRegistration=cameraRegistration\\(frames,w,h\\)/);
-  assert.match(smoke,/01b-registered-street-eye-repeat\\.png/);
-  assert.match(smoke,/fingerprint\\(camera1\\)===fingerprint\\(camera2\\)/);
+  assert.match(html,/qa\.cameraRegistration=cameraRegistration\(frames,w,h\)/);
+  assert.match(smoke,/01b-registered-street-eye-repeat\.png/);
+  assert.match(smoke,/fingerprint\(camera1\)===fingerprint\(camera2\)/);
   assert.match(smoke,/originAltitudeMeters===null/);
 });
 test('source street view has upstream 3.2m eye and 1.2m footprint clearance, not 65m aerial',async()=>{
