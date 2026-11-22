@@ -4,6 +4,7 @@
 // Wall palettes/windows/road widths/ground treatment are artist-authored
 // illustrative materials: this is NOT surveyed facade or roadbed geometry.
 import {wgs84ToMeters,signedAreaMeters,triangulateSimplePolygon} from './times-square-metered-massing.mjs';
+import earcut from './earcut.mjs';
 
 export const MESH_STRIDE=10;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
@@ -25,7 +26,7 @@ export function buildingContains(massing,east,north,eyeHeight){
   return null;
 }
 
-export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null}={}){
+export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindows=6200,officialRoadbed=null,officialSurfaces=null}={}){
   if(massing.units!=='metres'||massing.heightScale!==1||
      !Array.isArray(massing.buildings)||!massing.buildings.length)
     throw Error('A genuine metre-scale NYC source scene is required');
@@ -39,7 +40,13 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
   const point=([e,n],y=0)=>[e-centerE,y,centerN-n];
   const v=[],counts={buildings:0,roofTriangles:0,wallTriangles:0,
     facadeWindows:0,streetFeatures:0,streetSegments:0,groundTriangles:0,
-    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0};
+    illustrativeRoadBandSegments:0,
+    officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
+    officialPlazaPolygons:0,officialPlazaTriangles:0,
+    officialSidewalkPolygons:0,officialSidewalkTriangles:0,
+    officialSurfaceFeatures:0,officialSurfaceRings:0,officialSurfaceVertices:0,
+    officialSurfaceHoles:0,officialSurfaceTriangles:0,
+    officialSurfaceAreaSquareMetres:0,officialSurfaceMaxAreaError:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -140,9 +147,9 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       }
     }
   }
-  // Actual NYC DCM centrelines in the SAME 1:1 geographic frame.
-  // The width drawn here is a VISUAL placeholder, never a claimed measured
-  // curb or lane width. Disable street asphalt if verified roadbed arrives.
+  // DCM centerlines remain authoritative for alignment/spawn only. When the
+  // bounded official OTI surface set is available, do not draw the old guessed
+  // width bands or centerline-as-lane-looking trace underneath those surfaces.
   for(const road of streetSource.roads){
     const [name,streetWidthFeet,segments]=road;
     if(typeof name!=='string'||!Array.isArray(segments))continue;
@@ -156,27 +163,152 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       const [a,b]=endpoints,dX=b[0]-a[0],dZ=b[2]-a[2],
             len=Math.hypot(dX,dZ);
       if(len<.7)continue;
-      const sx=-dZ/len*visualWidth*.5,sz=dX/len*visualWidth*.5;
-      const A=[a[0]+sx,-.135,a[2]+sz],B=[b[0]+sx,-.135,b[2]+sz],
-            C=[b[0]-sx,-.135,b[2]-sz],D=[a[0]-sx,-.135,a[2]-sz];
-      quad(A,B,C,D,[.18,.205,.23],2);
-      // Thin source-centreline audit trace only; NOT NYCDOT lane markings.
-      const k=.11,tx=-dZ/len*k,tz=dX/len*k;
-      quad([a[0]+tx,-.11,a[2]+tz],[b[0]+tx,-.11,b[2]+tz],
-        [b[0]-tx,-.11,b[2]-tz],[a[0]-tx,-.11,a[2]-tz],
-        [.76,.72,.56],2);
+      if(officialSurfaces===null){
+        const sx=-dZ/len*visualWidth*.5,sz=dX/len*visualWidth*.5;
+        const A=[a[0]+sx,-.135,a[2]+sz],B=[b[0]+sx,-.135,b[2]+sz],
+              C=[b[0]-sx,-.135,b[2]-sz],D=[a[0]-sx,-.135,a[2]-sz];
+        quad(A,B,C,D,[.18,.205,.23],2);
+        // Source-centreline audit trace only; NOT NYCDOT lane markings.
+        const k=.11,tx=-dZ/len*k,tz=dX/len*k;
+        quad([a[0]+tx,-.11,a[2]+tz],[b[0]+tx,-.11,b[2]+tz],
+          [b[0]-tx,-.11,b[2]-tz],[a[0]-tx,-.11,a[2]-tz],
+          [.76,.72,.56],2);
+        counts.illustrativeRoadBandSegments++;
+      }
       counts.streetSegments++;accepted++;
     }
     if(accepted)counts.streetFeatures++;
   }
-  // NYC_OFFICIAL_2022_ROADBED_CORE_V1 — exact source FIDs from OTI's
-  // Roadbed_2022 dataset, simplified from original ArcGIS shapes at <=.061m
-  // Hausdorff/<=.096% area change; this opt-in Times Square core slice is
-  // ONLY 11 road/intersection polygons, not a complete 2026 paving survey.
-  // The original DCM-width bands are explicitly illustrative *outside* the
-  // supplied source polygons. Roadbed faces sit 0.055m above those bands;
-  // the source geometries themselves are never stretched to fit the grid.
-  if(officialRoadbed!==null){
+
+  function ringArea(ring){
+    let sum=0;
+    for(let i=0;i<ring.length;i++){
+      const a=ring[i],b=ring[(i+1)%ring.length];
+      sum+=a[0]*b[1]-b[0]*a[1];
+    }
+    return sum*.5;
+  }
+  function addOtiPolygon(rings,y,color,layerName){
+    if(!Array.isArray(rings)||!rings.length)
+      throw Error('Empty official OTI '+layerName+' polygon');
+    const flat=[],holes=[],cleanRings=[];
+    for(let ringIndex=0;ringIndex<rings.length;ringIndex++){
+      const raw=rings[ringIndex];
+      if(!Array.isArray(raw)||raw.length<3)
+        throw Error('Invalid official OTI '+layerName+' ring');
+      const clean=[];
+      for(const p of raw){
+        if(!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))
+          throw Error('Non-finite official OTI '+layerName+' vertex');
+        const previous=clean.at(-1);
+        if(!previous||Math.hypot(p[0]-previous[0],p[1]-previous[1])>.001)
+          clean.push([p[0],p[1]]);
+      }
+      if(clean.length>3&&Math.hypot(
+        clean[0][0]-clean.at(-1)[0],clean[0][1]-clean.at(-1)[1])<.02)
+        clean.pop();
+      if(clean.length<3)throw Error('Collapsed official OTI '+layerName+' ring');
+      if(ringIndex>0)holes.push(flat.length/2);
+      for(const p of clean)flat.push(p[0],p[1]);
+      cleanRings.push(clean);
+    }
+    const indices=earcut(flat,holes,2);
+    if(!indices.length||indices.length%3)
+      throw Error('Earcut could not triangulate official OTI '+layerName+' polygon');
+    const expected=Math.abs(ringArea(cleanRings[0]))-
+      cleanRings.slice(1).reduce((n,ring)=>n+Math.abs(ringArea(ring)),0);
+    if(!(expected>.01))throw Error('Degenerate official OTI '+layerName+' polygon area');
+    let actual=0;
+    for(let i=0;i<indices.length;i+=3){
+      const ia=indices[i],ib=indices[i+1],ic=indices[i+2];
+      const a=[flat[ia*2],flat[ia*2+1]],
+            b=[flat[ib*2],flat[ib*2+1]],
+            c=[flat[ic*2],flat[ic*2+1]];
+      actual+=Math.abs((b[0]-a[0])*(c[1]-a[1])-
+        (b[1]-a[1])*(c[0]-a[0]))*.5;
+      const pa=point(a,y),pb=point(b,y),pc=point(c,y);
+      // Earcut returns valid 2D triangles; flip only their winding if the
+      // east/up/-north world transform would otherwise face the ground.
+      const uy=pb[2]-pa[2],ux=pb[0]-pa[0],
+            vy=pc[2]-pa[2],vx=pc[0]-pa[0];
+      if(uy*vx-ux*vy<0)tri(pa,pc,pb,color,2);
+      else tri(pa,pb,pc,color,2);
+    }
+    const error=Math.abs(actual-expected)/expected;
+    if(!Number.isFinite(error)||error>.001)
+      throw Error('Official OTI '+layerName+' triangulation area mismatch '+error);
+    counts.officialSurfaceRings+=cleanRings.length;
+    counts.officialSurfaceVertices+=cleanRings.reduce((n,ring)=>n+ring.length,0);
+    counts.officialSurfaceHoles+=Math.max(0,cleanRings.length-1);
+    counts.officialSurfaceTriangles+=indices.length/3;
+    counts.officialSurfaceAreaSquareMetres+=actual;
+    counts.officialSurfaceMaxAreaError=Math.max(
+      counts.officialSurfaceMaxAreaError,error);
+    return indices.length/3;
+  }
+
+  if(officialSurfaces!==null){
+    if(officialRoadbed!==null)
+      throw Error('Use either the complete OTI surface set or the 11-FID local fallback, not both');
+    if(officialSurfaces.schema!=='patrol-nyc-oti-surfaces-2022-runtime-v1'||
+       officialSurfaces.role!=='VISUAL_SOURCE_ONLY_NOT_COLLISION_OR_ROUTE_PERMISSION'||
+       officialSurfaces.imageryYear!==2022||
+       !officialSurfaces.origin||!Number.isFinite(officialSurfaces.origin.lon)||
+       !Number.isFinite(officialSurfaces.origin.lat)||
+       Math.abs(officialSurfaces.origin.lon-massing.origin.lon)>1e-9||
+       Math.abs(officialSurfaces.origin.lat-massing.origin.lat)>1e-9||
+       !officialSurfaces.sources?.roadbeds?.includes('/Roadbed_2022/FeatureServer/20')||
+       !officialSurfaces.sources?.plazas?.includes('/Plaza_2022/FeatureServer/16')||
+       !officialSurfaces.sources?.sidewalks?.includes('/Sidewalk_2022/FeatureServer/22')||
+       !Array.isArray(officialSurfaces.roadbeds)||
+       !Array.isArray(officialSurfaces.plazas)||
+       !Array.isArray(officialSurfaces.sidewalks))
+      throw Error('Invalid official NYC OTI 2022 surface source or incompatible local metre origin');
+
+    const sets=[
+      {key:'roadbeds',layer:'roadbed',y:-.075,
+        color:f=>f.subtype===350010?[.235,.254,.268]:[.178,.194,.205]},
+      {key:'plazas',layer:'plaza',y:-.072,
+        color:()=>[.43,.385,.315]},
+      {key:'sidewalks',layer:'sidewalk',y:-.069,
+        color:f=>f.subtype===380010?[.56,.535,.475]:[.49,.50,.485]}
+    ];
+    for(const set of sets){
+      const features=officialSurfaces[set.key],seen=new Set();
+      const min=set.key==='roadbeds'?70:set.key==='plazas'?10:40;
+      if(features.length<min)
+        throw Error('Incomplete official OTI '+set.key+' layer: '+features.length);
+      for(const feature of features){
+        if(!Number.isSafeInteger(feature.objectId)||seen.has(feature.objectId)||
+           !Array.isArray(feature.polygons)||!feature.polygons.length)
+          throw Error('Invalid or repeated OTI '+set.key+' source OBJECTID');
+        seen.add(feature.objectId);
+        if(set.key==='roadbeds'&&![350000,350010].includes(feature.subtype))
+          throw Error('Unexpected OTI roadbed subtype '+feature.subtype);
+        if(set.key==='plazas'&&feature.subtype!==600000)
+          throw Error('Unexpected OTI plaza subtype '+feature.subtype);
+        if(set.key==='sidewalks'&&![380000,380010].includes(feature.subtype))
+          throw Error('Unexpected OTI sidewalk subtype '+feature.subtype);
+        for(const polygon of feature.polygons){
+          const triangles=addOtiPolygon(
+            polygon,set.y,set.color(feature),set.layer);
+          if(set.key==='roadbeds'){
+            counts.officialRoadbedPolygons++;
+            counts.officialRoadbedTriangles+=triangles;
+            if(feature.subtype===350010)counts.officialRoadbedIntersections++;
+          }else if(set.key==='plazas'){
+            counts.officialPlazaPolygons++;
+            counts.officialPlazaTriangles+=triangles;
+          }else{
+            counts.officialSidewalkPolygons++;
+            counts.officialSidewalkTriangles+=triangles;
+          }
+        }
+        counts.officialSurfaceFeatures++;
+      }
+    }
+  }else if(officialRoadbed!==null){
+    // Offline fallback: the checked-in, simplified 11-FID central roadbed core.
     if(officialRoadbed.v!==1||officialRoadbed.imagery!==2022||
        !Array.isArray(officialRoadbed.origin)||
        officialRoadbed.origin.length!==2||
@@ -196,19 +328,21 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
            p.every(Number.isFinite)))
         throw Error('Invalid NYC OTI roadbed footprint or repeated source FID');
       seen.add(fid);
-      // Ear clip concave contours; never fan triangles across a turning
-      // road edge. A source polygon with holes would need constrained
-      // triangulation and is explicitly out of scope for this 11-FID slice.
       const triangles=triangulateSimplePolygon(ring);
       const pavement=subtype===350010?[.235,.254,.268]:[.178,.194,.205];
       const positions=ring.map(([e,n])=>
         point([e+offsetE,n+offsetN],-.075));
-      for(const [a,b,d] of triangles)
-        tri(positions[a],positions[b],positions[d],pavement,2);
+      for(const [a,b,d] of triangles){
+        const pa=positions[a],pb=positions[b],pc=positions[d];
+        const uy=pb[2]-pa[2],ux=pb[0]-pa[0],
+              vy=pc[2]-pa[2],vx=pc[0]-pa[0];
+        if(uy*vx-ux*vy<0)tri(pa,pc,pb,pavement,2);
+        else tri(pa,pb,pc,pavement,2);
+      }
       counts.officialRoadbedPolygons++;
       counts.officialRoadbedTriangles+=triangles.length;
-      if(subtype===350010)counts.officialRoadbedIntersections++;
     }
+    counts.officialSurfaceTriangles=counts.officialRoadbedTriangles;
   }
   return {interleaved:new Float32Array(v),strideFloats:MESH_STRIDE,
     center:{east:centerE,north:centerN},
@@ -216,7 +350,13 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     counts:{...counts,triangles:v.length/(MESH_STRIDE*3)},
     provenance:{buildings:massing.source,streets:streetSource.source,
       streetSourceDate:streetSource.capturedAt,
-      roadbed:officialRoadbed?.source||null,
-      roadbedImageryYear:officialRoadbed?.imagery||null},
-    caveat:'True 1:1 OTI roof/footprint FIDs, DCM centreline alignment and opt-in 2022 OTI core roadbed polygon boundaries. This only covers 11 road/intersection FIDs; other road widths, 2026 pavement/curbs/lanes, facades and roof finishes remain illustrative or unverified.'};
+      roadbed:officialRoadbed?.source||officialSurfaces?.sources?.roadbeds||null,
+      plaza:officialSurfaces?.sources?.plazas||null,
+      sidewalk:officialSurfaces?.sources?.sidewalks||null,
+      surfaceImageryYear:officialSurfaces?.imageryYear||officialRoadbed?.imagery||null,
+      surfaceTerms:officialSurfaces?.terms||null,
+      surfaceCaptureRules:officialSurfaces?.captureRules||null},
+    caveat:officialSurfaces
+      ?'True 1:1 NYC source footprints and DCM alignment plus the complete bounded 2022 OTI roadbed/plaza/sidewalk polygon layers for the Times Square query tile. These are 2D source planimetrics with display-only millimetre offsets, not 2026 elevations, traffic permissions, curb-ramp heights, collision, lane markings or full-NYC coverage; facades remain illustrative.'
+      :'True 1:1 NYC source footprints and DCM alignment plus the checked-in 11-FID 2022 OTI roadbed fallback only. Other road widths remain illustrative; no 2026 elevation, curb/lane, traffic permission, collision or full-NYC coverage is inferred.'};
 }
