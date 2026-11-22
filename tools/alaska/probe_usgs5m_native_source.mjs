@@ -31,12 +31,27 @@ const report={
 };
 async function getJson(url,label){
   console.log('Querying official USGS '+label+' '+url.toString());
-  const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(90000)});
-  const body=await response.text();
-  if(!response.ok)throw Error(label+' HTTP '+response.status+': '+body.slice(0,300));
-  let data;try{data=JSON.parse(body)}catch{throw Error(label+' returned non-JSON: '+body.slice(0,200))}
-  if(data.error)throw Error(label+' ArcGIS error: '+JSON.stringify(data.error).slice(0,400));
-  return data;
+  let last;
+  for(let attempt=1;attempt<=5;attempt++){
+    try{
+      const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(45000)});
+      const body=await response.text();
+      if(!response.ok){
+        last=Error(label+' HTTP '+response.status+': '+body.slice(0,300));
+        if(![408,425,429,500,502,503,504].includes(response.status))throw last;
+      }else{
+        let data;try{data=JSON.parse(body)}catch{throw Error(label+' returned non-JSON: '+body.slice(0,200))}
+        if(data.error)throw Error(label+' ArcGIS error: '+JSON.stringify(data.error).slice(0,400));
+        return data;
+      }
+    }catch(error){
+      last=error;
+      if(attempt===5)throw last;
+    }
+    console.log('Retry '+attempt+'/5 for '+label+': '+last.message);
+    await new Promise(resolve=>setTimeout(resolve,Math.min(16000,1000*2**attempt)));
+  }
+  throw last||Error(label+' failed');
 }
 function queryUrl(layer,params){
   const url=new URL(base+'/'+layer+'/query');
@@ -64,15 +79,15 @@ function pointInFeature(x,y,feature){
 async function main(){
   const env={geometry:bbox.join(','),geometryType:'esriGeometryEnvelope',
     inSR:4326,spatialRel:'esriSpatialRelIntersects'};
-  console.log('Checking 5m envelope index and project metadata...');
-  const footprintCount=await getJson(queryUrl(3,{...env,returnCountOnly:true}),'5m footprint envelope count');
+  console.log('Checking 5m project metadata over the corrected full source footprint...');
   const metadata=await getJson(queryUrl(20,{...env,returnGeometry:false,
       outFields:'workunit,project,collect_start,collect_end,ql,dem_gsd_meters,horiz_crs,vert_crs,geoid,sourcedem_category,sourcedem_pub_date,metadata_link,sourcedem_link',
       resultRecordCount:100}),'5m source metadata');
-  report.productFootprintFeatures=[{envelopeIntersectCount:footprintCount.count}];
+  report.productFootprintFeatures=[];
   report.metadataCandidates=(metadata.features||[]).map(f=>f.attributes||{})
     .filter(a=>a.dem_gsd_meters===5);
-  const step=8;
+  const step=4;
+  report.denseCoverage.grid=5;report.denseCoverage.total=25;
   for(let row=0;row<=step;row++){
     const checks=[];
     for(let col=0;col<=step;col++){
@@ -89,11 +104,9 @@ async function main(){
       return {...p,count:data.count||0};
     }));
     for(const p of results){if(p.count>0)report.denseCoverage.covered++;else report.denseCoverage.missing++;}
-    console.log('USGS native 5m grid row '+row+': '+results.filter(p=>p.count>0).length+'/9 covered');
+    console.log('USGS native 5m grid row '+row+': '+results.filter(p=>p.count>0).length+'/5 covered');
   }
-  report.denseCoverage.total=81;
-  report.denseCoverage.grid=9;
-  report.denseCoverage.coverageFraction=+(report.denseCoverage.covered/81).toFixed(6);
+  report.denseCoverage.coverageFraction=+(report.denseCoverage.covered/25).toFixed(6);
   const projects=report.metadataCandidates.filter(a=>a.sourcedem_link);
   const prefixes=[...new Set(projects.map(a=>{
     const u=new URL(a.sourcedem_link);return u.searchParams.get('prefix');
@@ -110,9 +123,18 @@ async function main(){
     url.searchParams.set('list-type','2');url.searchParams.set('max-keys','1000');
     url.searchParams.set('prefix',prefix.replace(/\/?$/,'/'));
     console.log('Listing native OPR product directory '+url.toString());
-    const response=await fetch(url,{headers:{Accept:'application/xml'},signal:AbortSignal.timeout(90000)});
-    const xml=await response.text();
-    if(!response.ok)throw Error('Native OPR S3 listing HTTP '+response.status+': '+xml.slice(0,300));
+    let xml='',response=null,last;
+    for(let attempt=1;attempt<=4;attempt++){
+      try{
+        response=await fetch(url,{headers:{Accept:'application/xml'},signal:AbortSignal.timeout(45000)});
+        xml=await response.text();
+        if(response.ok)break;
+        last=Error('Native OPR S3 listing HTTP '+response.status+': '+xml.slice(0,300));
+      }catch(error){last=error}
+      if(attempt===4)throw last;
+      console.log('Retry native OPR listing '+attempt+'/4: '+last.message);
+      await new Promise(resolve=>setTimeout(resolve,1000*2**attempt));
+    }
     const objects=[];
     for(const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)){
       const block=m[1],key=xmlValue(block,'Key'),size=Number(xmlValue(block,'Size'));
