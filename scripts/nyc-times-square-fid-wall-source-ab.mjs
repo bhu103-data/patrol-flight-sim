@@ -127,8 +127,7 @@ try{
   const fids=baselineStats.sourceFids;
   check(Array.isArray(fids)&&fids.length>0,'No actual rendered GIS source FIDs');
   check(baselineStats.skippedDiagnosticFids===0,'Baseline unexpectedly skips a source FID');
-  report.baseline={sourceBuildings:baselineStats.sourceBuildings,
-    sourceFids:fids,sourceCount:fids.length};
+  report.baseline={sourceBuildings:baselineStats.sourceBuildings,sourceFids:fids,sourceCount:fids.length};
   await waitForPaint();
   const baseline=await captureFrame();
   const baselineControl=await captureFrame();
@@ -136,18 +135,23 @@ try{
   for(const [name,roi] of Object.entries(report.rois))
     report.baselineControl[name]=measureStable(baseline,baselineControl,baselineControl,roi);
   report.fidScanStableGate=report.baselineControl.leftWall.stableFraction>=.60;
-  check(report.fidScanStableGate,
-    'Baseline/restore-control left-wall stable pixels fell below 60%');
+  check(report.fidScanStableGate,'Baseline/restore-control left-wall stable pixels fell below 60%');
 
-  for(let index=0;index<fids.length;index++){
-    const fid=fids[index];
-    const omittedStats=await page.evaluate(id=>
-      window.__patrolNycFidProbe.setSkippedFids([id]),fid);
-    check(omittedStats.skippedDiagnosticFids===1&&
-      omittedStats.sourceBuildings===baselineStats.sourceBuildings-1&&
-      !omittedStats.sourceFids.includes(fid)&&
-      omittedStats.sourceFids.length===fids.length-1,
-      'Did not remove exactly one rendered source building: '+fid);
+  // Scan batches first, then bisect the strongest batch. This avoids 118
+  // expensive full-canvas screenshots while still isolating one source FID.
+  const batchSize=12;
+  const batches=[];
+  for(let i=0;i<fids.length;i+=batchSize)batches.push(fids.slice(i,i+batchSize));
+  const batchRows=[];
+  for(let index=0;index<batches.length;index++){
+    const batch=batches[index];
+    const omittedStats=await page.evaluate(ids=>
+      window.__patrolNycFidProbe.setSkippedFids(ids),batch);
+    check(omittedStats.skippedDiagnosticFids===batch.length&&
+      omittedStats.sourceBuildings===baselineStats.sourceBuildings-batch.length&&
+      batch.every(fid=>!omittedStats.sourceFids.includes(fid))&&
+      omittedStats.sourceFids.length===fids.length-batch.length,
+      'Batch did not remove exactly the requested source buildings: '+batch.join(','));
     await waitForPaint();
     const omitted=await captureFrame();
     const regions={};
@@ -158,32 +162,67 @@ try{
     check(restoredStats.skippedDiagnosticFids===0&&
       restoredStats.sourceBuildings===baselineStats.sourceBuildings&&
       JSON.stringify(restoredStats.sourceFids)===JSON.stringify(fids),
-      'Failed to restore exact source-FID inventory after '+fid);
+      'Failed to restore exact FID inventory after batch '+index);
     await waitForPaint();
-    report.fidScan.push({fid,removedExactlyOneSourceBuilding:true,
-      sourceCountBefore:fids.length,sourceCountAfter:omittedStats.sourceFids.length,
-      regions});
-    if((index+1)%10===0){
-      const restoredCheckpoint=await captureFrame();
-      const stability=measureStable(baseline,baselineControl,restoredCheckpoint,report.rois.leftWall);
-      report.restoreCheckpoints=report.restoreCheckpoints||[];
-      report.restoreCheckpoints.push({completedFids:index+1,
-        restoreDrift24Fraction:stability.restoreDrift24Fraction});
-    }
-    if((index+1)%5===0)await checkpoint();
+    batchRows.push({batchIndex:index,fids:batch,regions});
+    report.fidBatchScan=batchRows;
+    if((index+1)%2===0)await checkpoint();
   }
-  report.fidScan.sort((a,b)=>
-    b.regions.leftWall.changed45Fraction-a.regions.leftWall.changed45Fraction);
-  report.fidScanTop=report.fidScan.slice(0,12);
-  const top=report.fidScan[0],runner=report.fidScan[1];
-  check(!!top,'FID scan produced no ranked source objects');
+  batchRows.sort((x,y)=>
+    y.regions.leftWall.changed45Fraction-x.regions.leftWall.changed45Fraction);
+  report.fidScanTop=batchRows.slice(0,12);
+  const topBatch=batchRows[0],runnerBatch=batchRows[1];
+  check(!!topBatch,'FID batch scan produced no candidates');
+  const batchMargin=runnerBatch?
+    topBatch.regions.leftWall.changed45Fraction-runnerBatch.regions.leftWall.changed45Fraction:0;
+  report.fidBatchMargin=Number(batchMargin.toFixed(4));
 
-  // Full paired verification is reserved for the highest-impact FID only.
+  let candidates=topBatch.fids.slice();
+  let finalSplitMargin=0;
+  while(candidates.length>1){
+    const mid=Math.ceil(candidates.length/2);
+    const halves=[candidates.slice(0,mid),candidates.slice(mid)];
+    const measurements=[];
+    for(let side=0;side<halves.length;side++){
+      const group=halves[side];
+      const omittedStats=await page.evaluate(ids=>
+        window.__patrolNycFidProbe.setSkippedFids(ids),group);
+      check(omittedStats.skippedDiagnosticFids===group.length&&
+        omittedStats.sourceBuildings===baselineStats.sourceBuildings-group.length&&
+        group.every(fid=>!omittedStats.sourceFids.includes(fid)),
+        'Bisection did not omit exact FID subset: '+group.join(','));
+      await waitForPaint();
+      const omitted=await captureFrame();
+      const regions={};
+      for(const [name,roi] of Object.entries(report.rois))
+        regions[name]=measureStable(baseline,omitted,baselineControl,roi);
+      const restoredStats=await page.evaluate(()=>
+        window.__patrolNycFidProbe.setSkippedFids([]));
+      check(restoredStats.skippedDiagnosticFids===0&&
+        restoredStats.sourceBuildings===baselineStats.sourceBuildings&&
+        JSON.stringify(restoredStats.sourceFids)===JSON.stringify(fids),
+        'Failed to restore exact FID inventory during bisection');
+      await waitForPaint();
+      measurements.push({side,fids:group,regions});
+    }
+    measurements.sort((x,y)=>
+      y.regions.leftWall.changed45Fraction-x.regions.leftWall.changed45Fraction);
+    finalSplitMargin=measurements[0].regions.leftWall.changed45Fraction-
+      measurements[1].regions.leftWall.changed45Fraction;
+    report.fidScan.push({candidatesBefore:candidates,left:measurements.find(x=>x.side===0),
+      right:measurements.find(x=>x.side===1),chosen:measurements[0].fids});
+    candidates=measurements[0].fids;
+    await checkpoint();
+  }
+  const candidateFid=candidates[0];
+
+  // Exact single-FID before/omit/restore confirmation for the final candidate.
   const before=await captureFrame();
   const omittedStats=await page.evaluate(id=>
-    window.__patrolNycFidProbe.setSkippedFids([id]),top.fid);
+    window.__patrolNycFidProbe.setSkippedFids([id]),candidateFid);
   check(omittedStats.skippedDiagnosticFids===1&&
-    omittedStats.sourceBuildings===baselineStats.sourceBuildings-1,
+    omittedStats.sourceBuildings===baselineStats.sourceBuildings-1&&
+    !omittedStats.sourceFids.includes(candidateFid),
     'Top FID verification did not omit exactly one building');
   await waitForPaint();
   const omitted=await captureFrame();
@@ -192,32 +231,32 @@ try{
   check(restoredStats.skippedDiagnosticFids===0&&
     restoredStats.sourceBuildings===baselineStats.sourceBuildings&&
     JSON.stringify(restoredStats.sourceFids)===JSON.stringify(fids),
-    'Top FID verification failed to restore the exact inventory');
+    'Top FID verification failed to restore exact inventory');
   await waitForPaint();
   const restored=await captureFrame();
   const robustRegions={};
   for(const [name,roi] of Object.entries(report.rois))
     robustRegions[name]=measureStable(before,omitted,restored,roi);
-  report.fidScanBest={...top,robustRegions};
+  report.fidScanBest={fid:candidateFid,sourceCountBefore:fids.length,
+    sourceCountAfter:omittedStats.sourceFids.length,robustRegions,
+    winningBatch:topBatch.fids};
+  report.fidScanMargin=Number(finalSplitMargin.toFixed(4));
+  report.fidScanAmbiguous=!runnerBatch||
+    batchMargin<Math.max(.005,topBatch.regions.leftWall.changed45Fraction*.10)||
+    finalSplitMargin<Math.max(.003,topBatch.regions.leftWall.changed45Fraction*.05);
+  report.fidScanHypothesis=report.fidScanAmbiguous||
+    robustRegions.leftWall.stableFraction<.60||
+    robustRegions.leftWall.changed45Fraction<.025
+      ?'INCONCLUSIVE: no uniquely dominant source FID has a stable left-wall effect'
+      :'Highest-impact single source FID in the left-wall ROI: '+candidateFid;
   report.finalRestoreStable=robustRegions.leftWall.stableFraction>=.60&&
     robustRegions.leftWall.restoreDrift24Fraction<.40;
   check(report.finalRestoreStable,'Final exact FID restore was not visually stable');
-
-  const margin=top&&runner?
-    top.regions.leftWall.changed45Fraction-runner.regions.leftWall.changed45Fraction:0;
-  report.fidScanMargin=Number(margin.toFixed(4));
-  report.fidScanAmbiguous=!runner||
-    margin<Math.max(.005,top.regions.leftWall.changed45Fraction*.10);
-  report.fidScanHypothesis=report.fidScanAmbiguous||
-    top.regions.leftWall.changed45Fraction<.035||
-    robustRegions.leftWall.changed45Fraction<.025
-      ?'INCONCLUSIVE: no uniquely dominant source FID has a stable >=3.5% left-wall effect'
-      :'Highest-impact single source FID in the left-wall ROI: '+top.fid;
-  const name='44th-skip-fid-'+top.fid;
+  const imageName='44th-skip-fid-'+candidateFid;
   await writeFile(dir+'/44th-fid-baseline.png',PNG.sync.write(before));
-  await writeFile(dir+'/'+name+'.png',PNG.sync.write(omitted));
+  await writeFile(dir+'/'+imageName+'.png',PNG.sync.write(omitted));
   await writeFile(dir+'/44th-fid-restored.png',PNG.sync.write(restored));
-  report.screenshots=['44th-fid-baseline.png',name+'.png','44th-fid-restored.png'];
+  report.screenshots=['44th-fid-baseline.png',imageName+'.png','44th-fid-restored.png'];
 
   check(report.errors.length===0,'Browser errors: '+report.errors.join('; '));
   report.passed=true;
