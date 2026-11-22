@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - 'tools/nyc/inspect-mn05-roof-source-roi.py'
-      - 'tools/nyc/actual-roofs-source-preview.html'
+      - 'tools/nyc/mn05-actual-roofs-source-preview.html'
       - 'tools/nyc/mn05_mesh_topology.py'
       - 'scripts/nyc-mn05-source-roof-browser-smoke.mjs'
       - 'tests/nyc-official-2014-roof-mesh-source.test.py'
