@@ -124,13 +124,15 @@ async function start(){
   // 2022 OTI slice. ?roadbed=off retains the prior source-centreline bands
   // for controlled screenshots. The normal PATROL aircraft map is untouched.
   const roadbedOff=params.get('roadbed')==='off';
+  const sourceRoadbedOnly=params.get('roadbed')==='only';
   const roadbedResponse=roadbedOff?null:
     await fetch('./nyc-oti-roadbed-core-2022.json',{cache:'no-cache'});
   if(roadbedResponse&&!roadbedResponse.ok)
     throw Error('OTI roadbed source HTTP '+roadbedResponse.status);
   const roadbed=roadbedResponse?await roadbedResponse.json():null;
   const geometry=buildNeighborhoodMesh(massing,roadSource,
-    {detail:!qualityLow,maxWindows:qualityLow?0:6200,officialRoadbed:roadbed});
+    {detail:!qualityLow,maxWindows:qualityLow?0:6200,
+      officialRoadbed:roadbed,sourceRoadbedOnly});
   const [minE,minN,maxE,maxN]=massing.boundsMeters,
     span=Math.max(maxE-minE,maxN-minN);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -218,7 +220,8 @@ async function start(){
   metadata.textContent='1 world unit = 1 metre · '+stats.facadeWindows+
     ' authored, NOT surveyed windows · '+stats.triangles+' source-aligned triangles · '+
     massing.skipped.multiRing+' building courtyard records excluded · '+
-    stats.officialRoadbedTriangles+' official source pavement triangles';
+    stats.officialRoadbedTriangles+' official source pavement triangles · '+
+    (sourceRoadbedOnly?'source-only: guessed road widths hidden outside 2022 FIDs':'illustrative DCM road-width bands visible');
   const qa=window.PatrolMetricFlightQA={
     ready:true,sourceBuildingCount:stats.buildings,sourceStreetCount:stats.streetFeatures,
     streetSegments:stats.streetSegments,windowVisuals:stats.facadeWindows,
@@ -227,6 +230,7 @@ async function start(){
     officialRoadbedPolygons:stats.officialRoadbedPolygons,
     officialRoadbedIntersections:stats.officialRoadbedIntersections,
     officialRoadbedTriangles:stats.officialRoadbedTriangles,
+    sourceRoadbedOnly,illustrativeRoadBandTriangles:stats.illustrativeRoadBandTriangles,
     roadbedReferenceYear:geometry.provenance.roadbedImageryYear,
     roadbedFullNYCCoverage:false,
     roadbedFocusFID:24700,roadbedFocusOriginWGS84:roadSource.originWGS84,
