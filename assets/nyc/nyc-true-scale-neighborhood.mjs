@@ -83,7 +83,7 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     officialRoadbedPolygons:0,officialRoadbedIntersections:0,officialRoadbedTriangles:0,
     historicalRoofTriangles:0,historicalFacadeTriangles:0,historicalRoofFids:0,historicalFacadeFids:0,
     historicalSourceFacadeWindows:0,historicalSourceFacadeWindowFids:0,
-    historicalSourceFacadeWindowFidList:[]};
+    historicalSourceFacadeWindowFidList:[],dcmFallbackBands:0,dcmFallbackTriangles:0};
   function vertex(p,normal,color,material=0){
     if(![...p,...normal,...color,material].every(Number.isFinite))
       throw Error('Non-finite city vertex');
@@ -343,12 +343,15 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
       const sx=-dZ/len*visualWidth*.5,sz=dX/len*visualWidth*.5;
       const A=[a[0]+sx,-.135,a[2]+sz],B=[b[0]+sx,-.135,b[2]+sz],
             C=[b[0]-sx,-.135,b[2]-sz],D=[a[0]-sx,-.135,a[2]-sz];
-      quad(A,B,C,D,[.18,.205,.23],2);
+      // Explicitly separate illustrative DCM-width fallback material from
+      // verified OTI 2022 pavement. The official polygons use material 2.
+      quad(A,B,C,D,[.18,.205,.23],5);
+      counts.dcmFallbackBands++;counts.dcmFallbackTriangles+=2;
       // Thin source-centreline audit trace only; NOT NYCDOT lane markings.
       const k=.11,tx=-dZ/len*k,tz=dX/len*k;
       quad([a[0]+tx,-.11,a[2]+tz],[b[0]+tx,-.11,b[2]+tz],
         [b[0]-tx,-.11,b[2]-tz],[a[0]-tx,-.11,a[2]-tz],
-        [.76,.72,.56],2);
+        [.76,.72,.56],5);
       counts.streetSegments++;accepted++;
     }
     if(accepted)counts.streetFeatures++;
