@@ -237,7 +237,9 @@ try{
   ['Times Square Street Level','05-times-square-street.png'],
   ['44th Street LED Canyon','06-times-square-led-canyon.png'],
   ['One Times Square','07-one-times-square.png'],
-  ['Duffy Square Street View','08-duffy-square.png']
+  ['Duffy Square Street View','08-duffy-square.png'],
+  // Dedicated real WebGL visibility evidence for FID 212747 in PR #159.
+  ['1515 Broadway · Curtainwall QA','10-one-astor-curtainwall.png']
  ];
  for(const [camera,name] of timesViews){
   await page.locator('#hotelTarget').selectOption({label:camera});
