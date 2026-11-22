@@ -99,13 +99,44 @@ def main() -> None:
         "bbox": ",".join(str(x) for x in bbox), "bboxSR": "4326",
         "imageSR": "4326", "size": f"{SIZE},{SIZE}",
         "format": "tiff", "pixelType": "F32",
-        "interpolation": "RSP_BilinearInterpolation", "f": "image",
+        "interpolation": "RSP_BilinearInterpolation",
+        # Mandatory: ArcGIS otherwise EXPANDS a rectangular WGS84 bbox to a
+        # square in degree-space for 256x256 output, silently misregistering
+        # source elevations by hundreds of metres. Verified in actual USGS
+        # exportImage f=json on 2026-11-22 (see provenance file).
+        "adjustAspectRatio": "false", "f": "image",
     }
+    metadata_args = {**args,"f":"json"}
+    metadata_url = SERVICE + "?" + urllib.parse.urlencode(metadata_args)
+    response = json.loads(fetch(metadata_url,max_bytes=200_000))
+    if "error" in response:
+        raise RuntimeError("USGS adjusted extent metadata refused: " + str(response["error"]))
+    envelope=response.get("extent") or {}
+    actual=[envelope.get(k) for k in ("xmin","ymin","xmax","ymax")]
+    if not all(isinstance(x,(int,float)) and math.isfinite(x) for x in actual):
+        raise RuntimeError("USGS did not provide actual WGS84 export extent")
+    if (envelope.get("spatialReference") or {}).get("wkid")!=4326:
+        raise RuntimeError("USGS export is not WGS84 EPSG4326")
+    if max(abs(a-b) for a,b in zip(actual,bbox))>1e-8:
+        raise RuntimeError("USGS ignored adjustAspectRatio=false; output bbox drifted "+str(actual))
+    if response.get("width")!=256 or response.get("height")!=256:
+        raise RuntimeError("USGS output resolution mismatch")
     url = SERVICE + "?" + urllib.parse.urlencode(args)
     raw = fetch(url, max_bytes=4_000_000)
     if raw[:4] not in (b"II*\0", b"MM\0*"):
         raise RuntimeError("USGS response was not a TIFF")
-    raster = tifffile.imread(io.BytesIO(raw))
+    with tifffile.TiffFile(io.BytesIO(raw)) as tif:
+        raster=tif.asarray()
+        page=tif.pages[0]
+        tiff_geo_tags={}
+        for name in ("ModelPixelScaleTag","ModelTiepointTag",
+                     "ModelTransformationTag","GeoKeyDirectoryTag",
+                     "GeoAsciiParamsTag"):
+            tag=page.tags.get(name)
+            if tag is not None:
+                val=tag.value
+                tiff_geo_tags[name]=val.tolist() if hasattr(val,"tolist") else (
+                    list(val) if isinstance(val,tuple) else val)
     if raster.shape != (SIZE, SIZE) or raster.dtype.kind != "f":
         raise RuntimeError(f"Wrong USGS export shape/dtype {raster.shape} {raster.dtype}")
     # TIFF top row is north; our existing geodesy expects row zero SOUTH.
@@ -144,12 +175,16 @@ def main() -> None:
         "source": "USGS 3DEP Bare Earth ImageServer (public domain)",
         "sourceUrl": SERVICE, "sourceQuery": url,
         "sourceRawTiffSha256": hashlib.sha256(raw).hexdigest(),
+        "adjustAspectRatio": False, "actualBboxVerifiedFromServer": actual,
+        "serverExtentRequest": metadata_url,
+        "tiffGeoTags": tiff_geo_tags,
         "bbox": bbox, "crs": "EPSG:4326",
         "axis": "x=east, z=north, south-first raster rows",
         "width": SIZE, "height": SIZE,
         "metresPerInteger": 0.1, "noDataInt16": -32768,
         "sampleSpacingApproxMeters": [round(x, 3) for x in spacing],
         "parentCoarseCellCentres": [COL0, COL1, ROW0, ROW1],
+        "parentAnchorWarning": "These indices refer to the old stored REQUEST bbox, NOT actual old-raster source pixel centres. 30m source has an ArcGIS-expanded latitude extent.",
         "originalBbox": source["bbox"],
         "projectIndexEvidence": {
             "workunit": project.get("workunit"),
@@ -170,6 +205,8 @@ def main() -> None:
         "rawTiffBytes": len(raw),
         "rawTiffSha256": payload["sourceRawTiffSha256"],
         "sourceQuery": url, "projectQuery": index_url,
+        "actualBboxVerifiedFromServer": actual,
+        "serverExtentRequest": metadata_url, "tiffGeoTags": tiff_geo_tags,
         "bbox": bbox, "grid": [SIZE, SIZE],
         "spacingMeters": payload["sampleSpacingApproxMeters"],
         "validFraction": round(valid_fraction, 6),
