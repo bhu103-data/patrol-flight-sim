@@ -83,7 +83,7 @@ test('metric viewer is WebGL2, no paid tiles or passive import into the flight m
  assert.match(html,/nyc-metric-curbs\.mjs/);
  assert.match(html,/official-curbs\.json/);
  assert.match(html,/不保证反映 2026 年改造/);
- assert.match(html,/经核准的路面及路缘几何/);
+ assert.match(html,/尚无经核准的路面/);
  assert.doesNotMatch(html,/maps\.googleapis\.com|google\.com\/maps\/v1|Cesium|apiKey/i);
  // Syntax of test and of shared node/browser module.
  assert.doesNotThrow(()=>execFileSync(process.execPath,
