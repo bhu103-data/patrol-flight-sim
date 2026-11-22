@@ -16,7 +16,7 @@ SRC=[
  "https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_bk02.zip",
  "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc-3d-model/nyc_3dmodel_bk02.zip"
 ]
-TERMS="https://data.cityofnewyork.us/stories/s/k9k7-3cje"
+TERMS="https://opendata.cityofnewyork.us/overview/"
 DOC="https://www.nyc.gov/assets/planning/download/pdf/data-maps/open-data/nyc-3d-model-metadata.pdf"
 archive=OUT/"bk02-source.zip"
 raw_path=OUT/"bk02-source.3dm"
