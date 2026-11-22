@@ -1,7 +1,7 @@
 name: NYC official 2022 plaza-sidewalk roadbed source and screenshot QA
 on:
   pull_request:
-    branches: [qa/nyc-real-roadbed-polygons-20261122-chat]
+    branches: [feat/nyc-tsq-meter-crs-road-source-20261122-chat]
     paths:
       - 'scripts/nyc-times-pedestrian-plaza-source.mjs'
       - 'tests/nyc-times-pedestrian-plaza-source.test.mjs'
