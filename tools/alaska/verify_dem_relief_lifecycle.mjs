@@ -34,7 +34,12 @@ const samples=[],errors=[],failures=[],warnings=[],demResponses=[];
 const page=await browser.newPage({viewport:{width:1080,height:680},deviceScaleFactor:1});
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{
-  if(m.type()==='error')errors.push('console: '+m.text());
+  // A deliberately injected 503 produces an expected Chromium resource error.
+  // Ignore ONLY that single known status after the DEM route has fired.
+  if(m.type()==='error' &&
+     !(failures.length>0 && m.text().includes('Failed to load resource') &&
+       m.text().includes('503')))
+    errors.push('console: '+m.text());
   if(m.text().includes('Alaska USGS DEM fallback'))warnings.push(m.text());
 });
 page.on('response',r=>{
