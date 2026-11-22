@@ -12,9 +12,12 @@
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 const source=JSON.parse(readFileSync(
   new URL('../../assets/alaska/tracy-arm-3dep.json',import.meta.url),'utf8'));
-if(source.crs!=='EPSG:4326'||source.width!==256||source.height!==256)
-  throw Error('Unexpected source DEM CRS/shape; do not query wrong region');
-const [west,south,east,north]=source.bbox;
+const georef=JSON.parse(readFileSync(
+  new URL('../../assets/alaska/tracy-arm-3dep-actual-extent.json',import.meta.url),'utf8'));
+if(source.crs!=='EPSG:4326'||source.width!==256||source.height!==256||
+   georef.outputCrs!=='EPSG:4326'||!Array.isArray(georef.actualPixelBboxWgs84))
+  throw Error('Unexpected source DEM CRS/shape/georeference; do not query wrong region');
+const [west,south,east,north]=georef.actualPixelBboxWgs84;
 if(!(west<-133&&east>-134&&south>57&&north<59))
   throw Error('Tracy Arm source geographic guard mismatch');
 const base='https://index.nationalmap.gov/arcgis/rest/services/3DEPElevationIndex/MapServer';
@@ -23,10 +26,14 @@ const report={
   sourceName:'USGS 3DEP 5m Alaska coverage index, NOT an actual elevation raster',
   sourceUrl:base+'/3',
   sourceMetadataUrl:base+'/20',
-  exactDemBbox:source.bbox,
-  sourceResolutionMeters:source.sampleSpacingApproxMeters,
+  requestedDemBbox:source.bbox,
+  exactDemBbox:georef.actualPixelBboxWgs84,
+  sourceResolutionMeters:[
+    +( (east-west)*111320*Math.cos(((south+north)/2)*Math.PI/180)/256 ).toFixed(2),
+    +( (north-south)*111320/256 ).toFixed(2)
+  ],
   checkedAt:new Date().toISOString(),
-  lookup:'WGS84 lon/lat 3×3 exact raster-bbox grid point intersections; coverage cannot be extrapolated from envelope intersection',
+  lookup:'WGS84 lon/lat 5×5 exact ACTUAL raster-pixel-bbox grid point intersections; point samples do not certify all pixels',
   points:[],
   tileEnvelope:{},
   metadataCandidates:[],
@@ -37,20 +44,28 @@ async function query(layer,params,tag){
   const url=new URL(base+'/'+layer+'/query');
   for(const [k,v] of Object.entries({f:'json',where:'1=1',...params}))
     url.searchParams.set(k,String(v));
-  let response,text;
-  try{
-    response=await fetch(url,{headers:{Accept:'application/json'},
-      signal:AbortSignal.timeout(18000)});
-    text=await response.text();
-  }catch(e){throw Error('USGS '+tag+' request failure: '+e.message)}
-  if(!response.ok)throw Error('USGS '+tag+' HTTP '+response.status+
-    ': '+text.slice(0,150));
-  let json;
-  try{json=JSON.parse(text)}catch{throw Error('USGS '+tag+' not JSON: '+text.slice(0,120))}
-  if(json.error)throw Error('USGS '+tag+' ArcGIS error '+JSON.stringify(json.error).slice(0,300));
-  saved.push({tag,url:url.toString(),status:response.status,
-    count:json.count??json.features?.length??null});
-  return json;
+  let last;
+  for(let attempt=1;attempt<=5;attempt++){
+    try{
+      const response=await fetch(url,{headers:{Accept:'application/json'},
+        signal:AbortSignal.timeout(45000)});
+      const text=await response.text();
+      if(!response.ok){
+        last=Error('USGS '+tag+' HTTP '+response.status+': '+text.slice(0,150));
+        if(![408,425,429,500,502,503,504].includes(response.status))throw last;
+      }else{
+        let json;
+        try{json=JSON.parse(text)}catch{throw Error('USGS '+tag+' not JSON: '+text.slice(0,120))}
+        if(json.error)throw Error('USGS '+tag+' ArcGIS error '+JSON.stringify(json.error).slice(0,300));
+        saved.push({tag,url:url.toString(),status:response.status,
+          count:json.count??json.features?.length??null});
+        return json;
+      }
+    }catch(error){last=error;if(attempt===5)throw last;}
+    console.log('Retry USGS '+tag+' '+attempt+'/5: '+last.message);
+    await new Promise(resolve=>setTimeout(resolve,Math.min(16000,1000*2**attempt)));
+  }
+  throw last||Error('USGS '+tag+' failed');
 }
 function pointParams(lon,lat){
   return {
@@ -76,8 +91,8 @@ try{
     '5m-project-metadata');
   report.metadataCandidates=(meta.features||[]).map(x=>x.attributes)
     .slice(0,25);
-  const fractions=[.03,.5,.97];
-  for(let row=0;row<3;row++)for(let col=0;col<3;col++){
+  const fractions=[.05,.25,.5,.75,.95];
+  for(let row=0;row<5;row++)for(let col=0;col<5;col++){
     const lon=west+(east-west)*fractions[col],
       lat=south+(north-south)*fractions[row];
     const data=await query(3,pointParams(lon,lat),
@@ -89,16 +104,16 @@ try{
     console.log('USGS 5m grid '+col+','+row+': '+data.count+
       ' index polygon(s) at '+lon.toFixed(6)+','+lat.toFixed(6));
   }
-  report.coverageConfirmed=report.points.length===9&&
+  report.coverageConfirmed=report.points.length===25&&
     report.points.every(x=>x.covered);
   const count=report.points.filter(x=>x.covered).length;
   report.interpretation=report.coverageConfirmed
-    ? 'All nine sample points intersect 5m footprints. This verifies sample coverage, NOT complete polygon coverage or a downloadable DEM at every pixel.'
+    ? 'All 25 sample points intersect 5m footprints over the corrected actual raster extent. This does NOT prove all pixels have coverage or native raster download.'
     : count===0
     ? 'No sampled location intersects the published 5m DEM index. Do NOT describe this tile as having verified 5m source coverage.'
-    : 'Partial sampled footprint coverage ('+count+'/9). Do not replace the full tile or invent 5m detail outside confirmed footprint.';
+    : 'Partial sampled footprint coverage ('+count+'/25). Do not replace the full tile or invent 5m detail outside confirmed footprint.';
   report.uncertainty.push(
-    'Nine sample intersections do not certify full polygon coverage; download exact product extent and raster nodata if proceeding.',
+    'Twenty-five sample intersections do not certify full polygon coverage; inspect native raster extent and NoData before proceeding.',
     '5m index is availability metadata. Actual vertical CRS and acquisition dates require product-specific verification.',
     'No 2025/2026 glacier state can be inferred from older survey data.',
     'NOAA AK1803-CM-T shoreline spans this bbox but survey imagery is 2015-2017; separate vector acquisition is required.'
