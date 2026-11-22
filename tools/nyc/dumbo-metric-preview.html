@@ -184,7 +184,7 @@ const safeSpawn=flySafety.sourceStreetSpawn(network.lines,roadFocus);
 // The spawn uses an actual non-conflicting CSCL line, not a fake aircraft
 // starting point, an invented airfield, or a purported legal flight route.
 let flyMode=false,flyPosition=[...safeSpawn.position],
-  flyYaw=.35,flyPitch=-.12,flightMeters=0,blockedAttempts=0,
+  flyYaw=safeSpawn.headingRadians,flyPitch=-.12,flightMeters=0,blockedAttempts=0,
   lastObstacleFid=null,lastDrawTime=0;
 const flightKeys=new Set(),flightHud=document.getElementById('flightStatus');
 function flyDirection(){
@@ -193,7 +193,8 @@ function flyDirection(){
 }
 function updateFlightStatus(){
   flightHud.textContent=flyMode?
-    'Source-coordinate CAMERA only · physicalid '+safeSpawn.sourcePhysicalId+
+    'Source-coordinate CAMERA only · '+safeSpawn.streetName+
+    ' physicalid '+safeSpawn.sourcePhysicalId+
     ' · east '+flyPosition[0].toFixed(1)+' m, south '+
     flyPosition[2].toFixed(1)+' m, diagnostic Y '+flyPosition[1].toFixed(1)+
     ' m · travelled '+flightMeters.toFixed(1)+' m · blocked '+
@@ -210,7 +211,8 @@ function flyStep(delta){
   return result;
 }
 function enableFly(){
-  flyPosition=[...safeSpawn.position];flyYaw=.35;flyPitch=-.12;
+  flyPosition=[...safeSpawn.position];
+  flyYaw=safeSpawn.headingRadians;flyPitch=-.12;
   flightMeters=0;blockedAttempts=0;lastObstacleFid=null;
   flightKeys.clear();flyMode=true;updateFlightStatus();
 }
@@ -230,7 +232,9 @@ function flyTick(deltaSeconds){
 window.__metricFly={
   enable:enableFly,disable:disableFly,
   getState:()=>({enabled:flyMode,position:[...flyPosition],
-    sourcePhysicalId:safeSpawn.sourcePhysicalId,travelledMetres:flightMeters,
+    sourcePhysicalId:safeSpawn.sourcePhysicalId,streetName:safeSpawn.streetName,
+    headingRadians:flyYaw,openAheadMetres:safeSpawn.openAheadMetres,
+    travelledMetres:flightMeters,
     blockedAttempts,lastObstacleFid,worldUnits:'metres',
     cameraOnly:true,officialGroundAltitudeVerified:false,
     realC185Physics:false,conflictRoadsDriveable:false}),
