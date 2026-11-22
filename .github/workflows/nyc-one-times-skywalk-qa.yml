@@ -1,0 +1,48 @@
+name: NYC One Times Skywalk actual flight-map A/B
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'tests/nyc-one-times-skywalk-source.test.mjs'
+      - 'scripts/nyc-one-times-skywalk-browser-qa.cjs'
+      - '.github/workflows/nyc-one-times-skywalk-qa.yml'
+permissions:
+  contents: read
+jobs:
+  nyc-production-skywalk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-proportions, mesh budget and non-NYC isolation
+        run: node --test tests/nyc-one-times-skywalk-source.test.mjs
+      - name: Install headless Chromium + PNG reader
+        shell: bash
+        run: |
+          mkdir -p /tmp/patrol-browser
+          npm install --prefix /tmp/patrol-browser --no-audit --no-fund --no-save playwright@1.56.1 pngjs@7.0.0
+          /tmp/patrol-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Serve actual PATROL flight-map index.html
+        shell: bash
+        run: |
+          python3 -m http.server 8129 --bind 127.0.0.1 >/tmp/patrol-nyc-skywalk-http.log 2>&1 &
+          for i in {1..25}; do
+            if curl -fsS http://127.0.0.1:8129/index.html -o /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Same scenic camera, off/on PNG, WebGL and software frame pacing
+        timeout-minutes: 8
+        run: node scripts/nyc-one-times-skywalk-browser-qa.cjs
+      - name: Upload unmodified fixed-camera PNGs and performance JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc-one-times-skywalk-production-camera-qa
+          path: artifacts/nyc-one-times-skywalk/
+          retention-days: 14
+          if-no-files-found: warn
