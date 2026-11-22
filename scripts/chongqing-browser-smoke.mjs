@@ -42,14 +42,29 @@ window.__patrolQaOblique=(siteId,side)=>{
 window.__patrolQaFoundation=()=>{
   const site=marketFronts.snapshot().find(s=>s.id==='stone-stair');
   if(!site)throw Error('Missing real stone-stair market shop');
-  const x=site.x+25,z=site.z+15;
-  const y=Math.max(site.base+5.5,ground(x,z)+6);
-  const aim=[site.x+9.45,site.base-2.4,site.z-5];
+  // Earlier #207 `03i` was hidden by the next commercial shop and
+  // gallery post from x+25,z+15: use the genuinely clear 4-unit-wide
+  // corridor between shop x=[x-10,x+10] and east neighbor x+24.
+  // Camera is OUTSIDE the floor collider, looking toward the existing
+  // earth-embedded footing from slightly behind the building.
+  const x=site.x+12.1,z=site.z-19;
+  const y=ground(x,z)+7.5;
+  const footX=site.x+9.45,footZ=site.z-5;
+  const downhillFoot=ground(footX,footZ);
+  const aim=[footX,downhillFoot+2.2,footZ];
+  let minRayTerrainClearance=Infinity;
+  for(let i=0;i<=24;i++){
+    const t=i/24,rx=x+(footX-x)*t,rz=z+(footZ-z)*t;
+    const ry=y+(aim[1]-y)*t;
+    minRayTerrainClearance=Math.min(minRayTerrainClearance,ry-ground(rx,rz));
+  }
   marketInspect={eye:new THREE.Vector3(x,y,z),aim:new THREE.Vector3(...aim)};
   return {siteId:site.id,eye:[x,y,z],aim,
     groundClearance:y-ground(x,z),
-    downhillFoot:ground(site.x+9.45,site.z-5),
-    shopBase:site.base};
+    downhillFoot,shopBase:site.base,minRayTerrainClearance,
+    // shop outer east wall x+10, next west wall x+14
+    corridorFromShop:x-(site.x+10),
+    corridorToNeighbor:(site.x+14)-x};
 };
 `;
   await route.fulfill({response,body:runtime.replace(
@@ -210,7 +225,10 @@ try{
   const footPose=await page.evaluate(()=>window.__patrolQaFoundation?.());
   check(footPose?.siteId==='stone-stair'&&
     footPose.eye.every(Number.isFinite)&&footPose.aim.every(Number.isFinite)&&
-    footPose.groundClearance>=5.9&&
+    footPose.groundClearance>=7.4&&
+    footPose.corridorFromShop>=2&&
+    footPose.corridorToNeighbor>=1.8&&
+    footPose.minRayTerrainClearance>1.5&&
     footPose.shopBase-footPose.downhillFoot>5,
     'Invalid actual-grade pier camera '+JSON.stringify(footPose));
   await page.waitForTimeout(1100);
