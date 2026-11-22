@@ -43,8 +43,10 @@ test('only a unique matched building outline contributes to tag coverage',()=>{
   const report=analyzeOsmFeatures(source,{elements:[way]},{retrievedAt:'2026-11-22T00:00:00Z'});
   assert.equal(report.status,'source-audit-only-no-game-import');
   assert.equal(report.join.uniqueMatches,1);
-  assert.equal(report.join.matches[0].fid,123);
-  assert.equal(report.join.matches[0].osmId,456);
+  assert.equal(report.join.ambiguousCount,0);
+  assert.equal(report.join.unmatchedCount,0);
+  assert.equal('matches' in report.join,false,
+    'do not export paired municipal FIDs and OSM IDs as a combined database');
   assert.equal(report.tagCoverage.matched['building:levels'],1);
   assert.equal(report.tagCoverage.matched['roof:shape'],1);
   assert.equal(report.tagCoverage.matched['building:material'],1);
