@@ -256,6 +256,22 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
   assert.match(game,/if\(key==='Digit8'\)/);
   assert.match(game,/eyeX=site\.x\+3,eyeZ=site\.z\+18/);
   assert.match(game,/viewPitch=key==='Digit8'\?-.22/);
+  // The previous screenshot centered the helmet and hid the actual recesses.
+  // Camera collision origin remains the pilot; only visual aim changes.
+  assert.match(game,/inspectTarget:\[site\.x\+1\.2,site\.base\+6\.8,site\.z\+2\.78\]/);
+  assert.match(game,/inspectCamera:\[site\.x\+13,site\.base\+12,site\.z\+22\]/);
+  assert.match(game,/if\(marketDetailCamera\)cameraDesired\.set\(\.\.\.marketDetailCamera\)/);
+  assert.match(game,/avatar\.visible=!marketDetailCamera/);
+  assert.match(game,/avatar\.visible=!marketDetailCamera;\n  state\.pos\.set\(\.\.\.next\.pos\)/,
+    'viewpoint switch must restore pilot visibility synchronously');
+  assert.match(game,/marketDetailCamera=null;avatar\.visible=true/);
+  assert.match(game,/marketDetailTarget=next\.inspectTarget\?\?null/);
+  assert.match(game,/if\(marketDetailTarget\)cameraAim\.set\(\.\.\.marketDetailTarget\)/);
+  assert.match(game,/if\(marketDetailTarget&&\[/,
+    'flight movement must clear close-up lens target');
+  assert.match(game,/pointerdown',e=>\{marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;dragging=true/);
+  assert.match(game,/pointerdown',e=>\{\n  if\(joystickPointer!==null\)return;\n  e\.preventDefault\(\);marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;joystickPointer/);
+  assert.match(game,/wheel',e=>\{marketDetailTarget=marketDetailCamera=null;avatar\.visible=true;camDistance=/);
   assert.match(html,/<kbd>8<\/kbd> 窗洞特写/);
   const terrain=game.slice(game.indexOf('const riverCenter=x=>'),
     game.indexOf('const worldGeometry='));
@@ -268,7 +284,22 @@ test('Digit8 facade close-up avoids the cliff without moving original Digit7',as
     az=pz+Math.cos(yaw)*Math.cos(pitch)*dist,
     ay=real.ground(px,pz)+18+4.7+Math.sin(pitch)*dist;
   assert.ok(Math.abs(Math.atan2(ax-site.x,az-site.z))<Math.PI/12,
-    'close inspector must face the windowed FRONT, not the blank sidewall');
+    'third-person collision camera must remain directed at the window front');
+  const inspectEye=[site.x+13,real.ground(site.x,site.z)+12,site.z+22],
+    inspectTarget=[site.x+1.2,real.ground(site.x,site.z)+6.8,site.z+2.78];
+  assert.ok(Math.abs(Math.atan2(inspectEye[0]-site.x,
+    inspectEye[2]-(site.z+2.78)))<.75,
+    'QA camera must face actual exterior front, with oblique jamb parallax');
+  assert.ok(inspectEye[1]<real.ground(site.x,site.z)+15,
+    'inspector must remain beneath main roofline, not over the roof');
+  for(let i=0;i<=50;i++){
+    const t=i/50;
+    const x=inspectEye[0]+(inspectTarget[0]-inspectEye[0])*t,
+      y=inspectEye[1]+(inspectTarget[1]-inspectEye[1])*t,
+      z=inspectEye[2]+(inspectTarget[2]-inspectEye[2])*t;
+    assert.ok(y>real.ground(x,z)+4,
+      'new lower-aperture camera ray must clear actual hillside terrain');
+  }
   for(let i=0;i<=36;i++){
     const t=i/36,x=ax+(tx-ax)*t,z=az+(tz-az)*t,
       y=ay+(ty-ay)*t;
