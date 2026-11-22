@@ -65,3 +65,37 @@ test('slow hardware, worsened frame P95 or slower first-load prevent passing',()
   assert.equal(result.status,'FAIL');
   assert.equal(result.checks.firstLoadRegression,false);
 });
+
+test('ABBA rejects switching between two individually valid real GPUs',()=>{
+  const mixed=abba();
+  mixed[2].renderer={
+    unmaskedRenderer:'ANGLE (Intel, Intel Iris Xe Graphics Direct3D11)',
+    unmaskedVendor:'Google Inc. (Intel)'
+  };
+  assert.equal(classifyHardwareRenderer(mixed[2].renderer).accepted,true);
+  assert.throws(()=>assessNativeGpuRuns(mixed,budgets),/Mixed GPU/);
+});
+
+test('one bad candidate pass cannot be hidden by pooling all 440 frames',()=>{
+  const runs=[mk('baseline',20),mk('updated',20),mk('updated',20),mk('baseline',20)];
+  // One candidate run has 15 slow frames out of 220: its own P95 is 28 ms,
+  // but pooled candidate P95 would be 20 ms (15 out of 440 = 3.4%).
+  for(let i=0;i<15;i++)runs[2].intervals[i]=28;
+  const report=assessNativeGpuRuns(runs,budgets);
+  assert.equal(report.candidate.frameP95Ms,20);
+  assert.equal(report.perRun[2].frameP95Ms,28);
+  assert.equal(report.checks.p95Budget,true);
+  assert.equal(report.checks.frameRegression,false);
+  assert.equal(report.status,'FAIL');
+});
+
+test('ABBA rejects invalid raw frame intervals even with a full sample count',()=>{
+  const samples=abba();
+  samples[1].intervals[10]=NaN;
+  assert.throws(()=>assessNativeGpuRuns(samples,budgets),/invalid native frame samples/);
+  samples[1].intervals[10]=0;
+  assert.throws(()=>assessNativeGpuRuns(samples,budgets),/invalid native frame samples/);
+  samples[1].intervals[10]=19;
+  samples[1].intervals.length=219;
+  assert.throws(()=>assessNativeGpuRuns(samples,budgets),/Insufficient/);
+});
