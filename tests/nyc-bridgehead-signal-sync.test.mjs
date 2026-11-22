@@ -12,7 +12,7 @@ const {green,travel}=new Function(js+
   'return {green:bridgeheadSignalGreen,travel:bridgeheadSignalTravel};')();
 
 function actor(slot=0){
-  const stop=196-slot*5.5;
+  const stop=194.5-slot*5.5;
   return {signalized:true,signalQueueSlot:slot,kind:slot?'sedan':'taxi',
     bridgeSegmentCount:1,route:{lengths:[0,200,420],total:420},
     pace:7,offset:stop-35};
@@ -33,12 +33,12 @@ test('NYC red-green control repeats on the same world clock as rendered lens',()
 
 test('arriving on red stops before the crossing; green resumes without a jump',()=>{
   const a=actor();
-  assert.ok(Math.abs(travel(a,5)-196)<1e-9);
+  assert.ok(Math.abs(travel(a,5)-194.5)<1e-9);
   for(const t of [5.001,6,8,10,11.999,12]){
-    assert.ok(Math.abs(travel(a,t)-196)<1e-7,'red must hold at '+t);
+    assert.ok(Math.abs(travel(a,t)-194.5)<1e-7,'red must hold at '+t);
   }
-  assert.ok(travel(a,12.1)>196,'car must depart on green');
-  assert.ok(travel(a,12.1)<197,'departure must not teleport');
+  assert.ok(travel(a,12.1)>194.5,'car must depart on green');
+  assert.ok(travel(a,12.1)<195.5,'departure must not teleport');
   assert.ok(travel(a,18)>travel(a,12.1));
 });
 
