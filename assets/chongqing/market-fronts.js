@@ -256,7 +256,12 @@ export function buildChongqingMarketFronts({
     galleryDecks:sites.length,curvedRoofs:roof.count,stairTreads,
     roofTriangles:32*12*2*roof.count,
     meshes:9,batchDraws:6,openFacades:facades.length,
-    openFacadeTriangles:facades.reduce((v,m)=>v+m.geometry.index.length/3,0),
+    // THREE.BufferGeometry.getIndex() is a BufferAttribute in real WebGL
+    // (.count), unlike the array-based headless fixture (.length).
+    openFacadeTriangles:facades.reduce((v,m)=>{
+      const index=m.geometry.getIndex?.()??m.geometry.index;
+      return v+(index?.count??index?.length??0)/3;
+    },0),
     instances:[beams,braces,stone,glass,lattice,roof]
       .reduce((sum,m)=>sum+m.count,0)
   };
