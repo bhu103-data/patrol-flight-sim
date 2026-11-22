@@ -5,8 +5,9 @@ from shapely.geometry import Polygon
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"/"nyc"))
 from inspect_mn05_facade_support import (
-    face_from_cached_facade_mesh,facade_xy_projection,match_facade_to_building)
-from official_mn05_projection import wgs84_to_local_metres,ORIGIN_WGS84
+    face_from_cached_facade_mesh,facade_xy_projection,match_facade_to_building,
+    wgs84_to_local_metres,require_feet_model_unit,anchored_source_height_metres)
+from official_mn05_projection import ORIGIN_WGS84
 
 class Point:
     def __init__(self,x,y,z):
@@ -34,6 +35,30 @@ def building(fid,ring):
     return {"fid":fid,"geometry":Polygon(ring)}
 
 class CachedFacadeTests(unittest.TestCase):
+    def test_2022_wgs84_footprints_use_wgs84_transform_not_rhino_stateplane(self):
+        self.assertEqual(wgs84_to_local_metres(*ORIGIN_WGS84),(0.0,0.0))
+        with self.assertRaisesRegex(ValueError,"outside NYC"):
+            wgs84_to_local_metres(-100.0,40.75)
+
+    def test_original_rhino_unit_system_must_be_verified_as_feet(self):
+        class Settings:
+            ModelUnitSystem=type("Unit",(),{"name":"Feet"})()
+        self.assertEqual(require_feet_model_unit(Settings()),"Feet")
+        Settings.ModelUnitSystem=type("Unit",(),{"name":"Meters"})()
+        with self.assertRaisesRegex(ValueError,"must be Feet"):
+            require_feet_model_unit(Settings())
+
+    def test_relative_source_z_is_anchored_to_2022_height_without_absolute_datum_claim(self):
+        self.assertAlmostEqual(anchored_source_height_metres(1000,1000,50,
+            source_vertical_unit_verified=True),50.35,5)
+        self.assertAlmostEqual(anchored_source_height_metres(900,1000,50,
+            source_vertical_unit_verified=True),19.87,2)
+        with self.assertRaisesRegex(ValueError,"not verified"):
+            anchored_source_height_metres(900,1000,50)
+        with self.assertRaisesRegex(ValueError,"outside current building height"):
+            anchored_source_height_metres(1006,1000,50,
+                source_vertical_unit_verified=True)
+
     def test_2022_wgs84_footprints_use_wgs84_transform_not_rhino_stateplane(self):
         self.assertEqual(wgs84_to_local_metres(*ORIGIN_WGS84),(0.0,0.0))
         with self.assertRaisesRegex(ValueError,"outside NYC"):
