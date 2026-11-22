@@ -65,8 +65,7 @@ function program(){
     'flat out float vMaterial;',
     'void main(){vColor=aColor;vNormal=aNormal;vPosition=aPos;vMaterial=aMaterial;',
     'gl_Position=uProj*uView*vec4(aPos,1.0);}'
-  ].join('
-'));
+  ].join('\n'));
   const f=shader(gl.FRAGMENT_SHADER,[
     '#version 300 es',
     'precision highp float;',
@@ -86,8 +85,7 @@ function program(){
     'if(vMaterial>1.5)base=vColor*(.80+.20*lit);',
     'float fog=smoothstep(250.,1000.,distance(uEye,vPosition));',
     'color=vec4(mix(base,vec3(.48,.66,.76),fog*.52),1.);}'
-  ].join('
-'));
+  ].join('\n'));
   const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
   gl.deleteShader(v);gl.deleteShader(f);return p;
