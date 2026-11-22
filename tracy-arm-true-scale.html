@@ -35,6 +35,8 @@
 <script type="module">
 import {decodeAlaskaDEM} from './assets/alaska/usgs-dem.js';
 import {decodeAlaskaFiveMetreTile} from './assets/alaska/usgs-5m-tile.js';
+import {loadAlaskaIfsar5m} from './assets/alaska/usgs-ifsar5m.js';
+import {decimateIfsarRaster} from './assets/alaska/ifsar-lod.js';
 import {rasterCellToLocalEnu,rasterCellWgs84,wgs84ToLocalEnu,
   sourceTileOrigin,localEnuToWgs84,sampleSourceElevationMetres,
   validateTracyArmRaster} from './assets/alaska/tracy-arm-geodesy.js';
@@ -190,9 +192,9 @@ gl.disable(gl.CULL_FACE);
 function mesh(vertexArray,indexArray){
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertexArray),gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER,vertexArray instanceof Float32Array?vertexArray:new Float32Array(vertexArray),gl.STATIC_DRAW);
   const ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(indexArray),gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indexArray instanceof Uint32Array?indexArray:new Uint32Array(indexArray),gl.STATIC_DRAW);
   for(const [location,size,offset] of [[0,3,0],[1,3,12],[2,1,24]]){
     gl.enableVertexAttribArray(location);
     gl.vertexAttribPointer(location,size,gl.FLOAT,false,28,offset);
@@ -226,7 +228,7 @@ function multiply(a,b){
 }
 const keys=new Set(),pose={xyz:[0,240,0],yaw:0,pitch:-.12};
 let bounds,dem,land,sea,origin,frameCount=0,previous=0,elapsed=0,active=false;
-let detailMode='coarse-30m',detailWarning=null;
+let detailMode='coarse-30m',detailWarning=null,sourceAudit=null;
 let lastFrameSeconds=0,glErrors=[];
 const initial=()=>{pose.xyz=Array.from(spawn);pose.yaw=-.48;pose.pitch=-.09};
 let spawn=[0,240,0];
@@ -348,12 +350,43 @@ async function boot(){
   // Both 30m and 5m scenes have the same GPS-based ENU world origin;
   // the fine tile never silently re-centers local XY to its own bbox.
   origin=sourceTileOrigin(coarse);
-  if(new URLSearchParams(location.search).get('alaskaDetail')==='5m'){
+  const params=new URLSearchParams(location.search);
+  let nativeSource=null;
+  if(params.get('alaskaSource')==='ifsar5m'){
+    try{
+      nativeSource=await loadAlaskaIfsar5m('./assets/alaska/tracy-arm-ifsar5m-manifest.json');
+      if(nativeSource.width!==1536||nativeSource.height!==2880||
+         nativeSource.bbox.some((v,i)=>Math.abs(v-correctedBbox[i])>1e-8)||
+         nativeSource.sourceVerticalCrs!=='EPSG:5703'||
+         nativeSource.geoid!=='GEOID09'||
+         nativeSource.sourceTileSha256?.length!==2)
+        throw Error('Native IfSAR source metadata does not match the verified full AOI');
+      sourceAudit={
+        sourceCellCount:nativeSource.width*nativeSource.height,
+        sourceResolutionMeters:[...nativeSource.sampleSpacingApproxMeters],
+        sourceHeightRangeMeters:[...nativeSource.sourceElevationRangeMeters],
+        sourceVerticalDatum:nativeSource.verticalDatum,
+        sourceVerticalCrs:nativeSource.sourceVerticalCrs,
+        sourceProject:nativeSource.sourceProject,
+        workunit:nativeSource.workunit,
+        sourceTileSha256:[...nativeSource.sourceTileSha256],
+        sourceCoverageValidFraction:1
+      };
+      dem=decimateIfsarRaster(nativeSource,3);
+      detailMode='source-native-ifsar5m-lod15m';
+    }catch(error){
+      nativeSource=null;sourceAudit=null;
+      detailWarning='Native IfSAR 5m bundle unavailable/invalid; showing georeferenced 30m source: '+error.message;
+      console.warn('[PATROL] '+detailWarning);
+      dem=coarse;
+    }
+  }
+  if(!nativeSource&&params.get('alaskaDetail')==='5m'){
     try{
       const response=await fetch('./assets/alaska/tracy-arm-five-metre-tile.json',
         {cache:'force-cache'});
       if(!response.ok)throw Error('HTTP '+response.status);
-      dem=decodeAlaskaFiveMetreTile(await response.json(),coarseRaw);
+      dem=decodeAlaskaFiveMetreTile(await response.json(),coarse);
       detailMode='source-5m-local';
     }catch(error){
       detailWarning='5m source tile is unavailable/invalid; showing georeferenced original USGS source: '+error.message;
@@ -376,7 +409,7 @@ async function boot(){
     highest=Math.max(highest,elev);
   }
   bounds={minE,maxE,minN,maxN};
-  const vertices=new Float32Array(count*7),indices=[];
+  const vertices=new Float32Array(count*7),indices=new Uint32Array((n-1)*(m-1)*6);
   for(let row=0;row<m;row++)for(let col=0;col<n;col++){
     const i=row*n+col,left=row*n+Math.max(0,col-1),right=row*n+Math.min(n-1,col+1),
       south=Math.max(0,row-1)*n+col,north=Math.min(m-1,row+1)*n+col;
@@ -388,9 +421,11 @@ async function boot(){
     vertices.set([points[i*3],points[i*3+1],points[i*3+2],
       ...normal,0],i*7);
   }
+  let indexOffset=0;
   for(let row=0;row<m-1;row++)for(let col=0;col<n-1;col++){
     const a=row*n+col,b=a+1,c=a+n,d=c+1;
-    indices.push(a,c,b,b,c,d);
+    indices[indexOffset++]=a;indices[indexOffset++]=c;indices[indexOffset++]=b;
+    indices[indexOffset++]=b;indices[indexOffset++]=c;indices[indexOffset++]=d;
   }
   land=mesh(vertices,indices);
   const waterY=.15,sx=minE-4,ex=maxE+4,sz=minN-4,nz=maxN+4;
@@ -406,17 +441,24 @@ async function boot(){
   // GPS anchor from the old REQUESTED cell-centre at (170,105), which is
   // near the interior of our optional fine rectangle. The original TIFF
   // data are now sampled with the CORRECTED effective server bbox.
-  const [spawnLon,spawnLat]=rasterCellWgs84(coarseRaw,170,105);
-  if(sampleSourceElevationMetres(coarse,spawnLon,spawnLat)>3)
-    throw Error('Corrected USGS source anchor unexpectedly on land');
+  const [spawnLon,spawnLat]=rasterCellWgs84(coarse,170,105);
+  const launchElevation=nativeSource
+    ? sampleSourceElevationMetres(nativeSource,spawnLon,spawnLat)
+    : sampleSourceElevationMetres(coarse,spawnLon,spawnLat);
+  if(launchElevation>3)
+    throw Error('Verified USGS source launch anchor unexpectedly on land: '+launchElevation.toFixed(2)+'m');
   const [e,north]=wgs84ToLocalEnu(spawnLon,spawnLat,0,...origin);
   spawn=[e,320,north];
   await loadLocalCC0Atlas();
   initial();
   active=true;
   status.textContent='Source terrain loaded: '+count.toLocaleString()+
-    ' original geographic cells · '+indices.length/3+' terrain triangles · peak '+highest.toFixed(1)+' m'
-    +' · '+detailMode+(detailWarning?'\n'+detailWarning:'');
+    ' mesh vertices · '+indices.length/3+' terrain triangles · peak '+highest.toFixed(1)+' m'
+    +' · '+detailMode+
+    (sourceAudit?'\nUSGS IfSAR source: '+sourceAudit.sourceCellCount.toLocaleString()+
+      ' cells at '+sourceAudit.sourceResolutionMeters.map(x=>x.toFixed(1)).join('×')+
+      'm · rendered at '+dem.sampleSpacingApproxMeters.map(x=>x.toFixed(1)).join('×')+'m LOD':'')+
+    (detailWarning?'\n'+detailWarning:'');
   requestAnimationFrame(draw);
 }
 window.PatrolTrueScaleQA=()=>({
@@ -429,7 +471,20 @@ window.PatrolTrueScaleQA=()=>({
   gpuErrors:[...glErrors],lastFrameSeconds,photoReady,photoMode:'independent-4-layer-array',
   detailMode,detailWarning,bbox:dem?.bbox?[...dem.bbox]:null,
   officialSourceExtentCorrected:true,
-  sourceSpacingMeters:dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null
+  sourceSpacingMeters:sourceAudit?[...sourceAudit.sourceResolutionMeters]:
+    (dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null),
+  meshSpacingMeters:dem?.sampleSpacingApproxMeters?[...dem.sampleSpacingApproxMeters]:null,
+  sourceCellCount:sourceAudit?.sourceCellCount||dem?.width*dem?.height||0,
+  sourceHeightRangeMeters:sourceAudit?[...sourceAudit.sourceHeightRangeMeters]:null,
+  sourcePeak:sourceAudit?.sourceHeightRangeMeters?.[1]??null,
+  sourceVerticalDatum:sourceAudit?.sourceVerticalDatum||null,
+  sourceVerticalCrs:sourceAudit?.sourceVerticalCrs||null,
+  sourceProject:sourceAudit?.sourceProject||null,
+  workunit:sourceAudit?.workunit||null,
+  sourceTileSha256:sourceAudit?[...sourceAudit.sourceTileSha256]:null,
+  sourceCoverageValidFraction:sourceAudit?.sourceCoverageValidFraction??null,
+  meshLodStride:dem?.meshLodStride||1,
+  officialSourceExtentCorrected:true
 });
 boot().catch(e=>{status.textContent='Terrain pilot failed: '+e.message;console.error(e)});
 </script>
