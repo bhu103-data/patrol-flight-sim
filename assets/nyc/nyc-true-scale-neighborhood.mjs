@@ -170,8 +170,8 @@ export function buildNeighborhoodMesh(massing,streetSource,{detail=true,maxWindo
     if(accepted)counts.streetFeatures++;
   }
   // NYC_OFFICIAL_2022_ROADBED_CORE_V1 — exact source FIDs from OTI's
-  // Roadbed_2022 dataset, simplified from original ArcGIS shapes at <=.057m
-  // Hausdorff/<=.088% area change; this opt-in Times Square core slice is
+  // Roadbed_2022 dataset, simplified from original ArcGIS shapes at <=.061m
+  // Hausdorff/<=.096% area change; this opt-in Times Square core slice is
   // ONLY 11 road/intersection polygons, not a complete 2026 paving survey.
   // The original DCM-width bands are explicitly illustrative *outside* the
   // supplied source polygons. Roadbed faces sit 0.055m above those bands;
