@@ -11,6 +11,7 @@ on:
       - "scripts/nyc-metric-pilot-browser.mjs"
       - "tests/nyc-metric-footprint-pilot.test.mjs"
       - "tests/nyc-metric-cscl-centerlines.test.mjs"
+      - "tests/nyc-metric-curb-source.test.mjs"
       - ".github/workflows/nyc-metric-pilot.yml"
   workflow_dispatch:
 permissions:
@@ -25,7 +26,7 @@ jobs:
         with:
           node-version: "22"
       - name: Verify geospatial metre geometry without overlays
-        run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs
+        run: node --test tests/nyc-metric-footprint-pilot.test.mjs tests/nyc-metric-cscl-centerlines.test.mjs tests/nyc-metric-curb-source.test.mjs
       - name: Pin real public NYC street centrelines as QA artifact (never fabricated)
         run: node tools/nyc/fetch-times-square-cscl.mjs
       - name: Verify independent official NYC 2022 planimetric curb geometry
