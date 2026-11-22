@@ -191,7 +191,7 @@ const injection=String.raw`
           pair.minCenter=center;
           pair.closest={time,center,headingDot,
             a:{x:a.x,y:a.y,z:a.z,yaw:a.yaw},
-            b:{x:b.x,y:b.y,z:b.z,yaw:b.y}};
+            b:{x:b.x,y:b.y,z:b.z,yaw:b.yaw}};
         }
         if(pairBodyOverlaps(a,b)){
           pair.obbHits++;
@@ -296,6 +296,10 @@ try{
     traffic.pair.obbHits===0,
     'Long-session bridgehead pairwise center clearance failed: '+
     JSON.stringify(traffic.pair));
+  assert(traffic.pair.closest&&
+    Math.abs(Math.cos(traffic.pair.closest.a.yaw-traffic.pair.closest.b.yaw)-
+      traffic.pair.closest.headingDot)<1e-8,
+    'Closest-pair QA report must record both actual vehicle headings');
   for(const sig of traffic.signalRows){
     assert(sig.signalized===true&&sig.redHoldSamples>=8&&
       sig.greenResumeSamples>0&&sig.movingSamples>0&&
