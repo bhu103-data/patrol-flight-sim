@@ -43,7 +43,7 @@ The 2014 city model roof facets have not yet been matched to this FID.
 
 ## Exact-parent acceptance
 
-Parent #211 exact base: 91fb2191040e088ec26b2cd884aedffc0e5e6171 (main remains
+Parent #211 exact base: c93c6d1fa9c5f9a24eae6cc0cf5a764523dfaffb (main remains
 6aee03e32cd06967451007d15d5fd9502f92de36). The workflow compares the real
 PATROL game at this exact parent against the candidate using the same Chromium
 SwiftShader WebGL2 fixed cameras and an A-B-B-A order. It must report all three
