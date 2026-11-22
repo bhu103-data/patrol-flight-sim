@@ -83,7 +83,9 @@ test('all other 120-source geometry and roof details retain exact position and o
   assert.equal(after.stats.infillPieces,74);
   assert.equal(before.stats.roofTriangles,224);
   assert.equal(after.stats.roofTriangles,222);
-  assert.equal(after.stats.windowQuads,876);
+  assert.equal(after.stats.windowQuads,before.stats.windowQuads,
+    'all glass faces must survive regardless of parent facade PRs');
+  assert.ok(after.stats.windowQuads>=850&&after.stats.windowQuads<=950);
   assert.equal(after.stats.storefrontQuads,201);
   assert.deepEqual(after.stats.materialSurfaceIds,[6,7,8]);
   assert.equal(before.quads.length-after.quads.length,4);
