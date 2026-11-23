@@ -1,0 +1,42 @@
+name: NYC addon offline inventory safety checks
+
+on:
+  pull_request:
+    paths:
+      - 'tools/nyc_addon_batch.py'
+      - 'tools/nyc_addon_batch.example.json'
+      - 'tests/test_nyc_addon_batch.py'
+      - '.github/workflows/nyc-addon-offline-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/nyc_addon_batch.py'
+      - 'tools/nyc_addon_batch.example.json'
+      - 'tests/test_nyc_addon_batch.py'
+      - '.github/workflows/nyc-addon-offline-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-addon-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate addon archive rights gate and zip safety
+        run: python -W error::ResourceWarning -m unittest discover -s tests -p 'test_nyc_addon_batch.py' -v
+      - name: Confirm public sample entries remain non-downloadable and unimported
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/nyc-empty-archives" "$RUNNER_TEMP/nyc-rights"
+          python tools/nyc_addon_batch.py \
+            --manifest tools/nyc_addon_batch.example.json \
+            --archives "$RUNNER_TEMP/nyc-empty-archives" \
+            --evidence "$RUNNER_TEMP/nyc-rights" \
+            --report "$RUNNER_TEMP/nyc-inventory.json"
+          python -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"nyc-inventory.json"; d=json.loads(p.read_text()); assert [r["id"] for r in d["entries"]]==[20546,35245,35536,24123,81670]; assert all(r["status"]=="missing_archive" for r in d["entries"]); print("Public-only manifest preflight passed")'
