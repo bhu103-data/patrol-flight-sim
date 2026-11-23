@@ -121,6 +121,20 @@ class InventoryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid GLB JSON chunk'):
             check_glb(tiny_glb(with_bin=False))
 
+    def test_corrupt_glb_json_type_is_quarantined_and_batch_continues(self):
+        with ZipFile(self.root / 'archive' / 'bad-json.zip', 'w') as z:
+            z.writestr('scenery/broken.glb', tiny_glb(
+                lambda doc: doc.update(asset='not-an-object')))
+        src = self.root / 'malformed.json'
+        src.write_text(json.dumps({'addons': [
+            {'id': 20546, 'archive': 'bad-json.zip'},
+            {'id': 35245, 'archive': 'not-there.zip'}]}))
+        result = run(src, self.root / 'archive', self.root / 'evidence',
+                     self.root / 'malformed-report.json', None)
+        self.assertEqual([v['id'] for v in result['entries']], [20546, 35245])
+        self.assertIn('rejected', result['entries'][0]['glb_candidates'][0])
+        self.assertEqual(result['entries'][1]['status'], 'missing_archive')
+
     def test_external_binary_uri_rejected(self):
         with self.assertRaisesRegex(ValueError, 'external or invalid GLB buffer'):
             check_glb(tiny_glb(lambda d: d['buffers'][0].update(
