@@ -38,6 +38,7 @@ def zip_inventory(path: Path) -> tuple[list[dict], list[tuple[str, bytes]]]:
     glbs = []
     total = 0
     glb_bytes = 0
+    seen_names = set()
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
         if len(members) > MAX_MEMBERS:
@@ -53,6 +54,10 @@ def zip_inventory(path: Path) -> tuple[list[dict], list[tuple[str, bytes]]]:
                 raise ValueError('expanded archive is too large')
             if m.compress_size and m.file_size > max(10 * 1024**2, m.compress_size * 200):
                 raise ValueError('suspicious compression ratio')
+            normalized = str(item)
+            if normalized in seen_names:
+                raise ValueError('duplicate canonical archive member path')
+            seen_names.add(normalized)
             if m.is_dir():
                 continue
             files.append({'name': name, 'bytes': m.file_size})
@@ -128,7 +133,11 @@ def analyze(item: dict, archives: Path, evidence: Path, staging: Path | None) ->
         if zipfile.is_zipfile(path):
             files, glbs = zip_inventory(path)
         elif path.suffix.lower() == '.glb':
-            content = path.read_bytes()
+            if path.stat().st_size > MAX_GLB_BYTES:
+                result['status'] = 'oversized_glb'
+                return result
+            with path.open('rb') as source:
+                content = source.read(MAX_GLB_BYTES + 1)
             files, glbs = ([{'name': path.name, 'bytes': len(content)}], [(path.name, content)])
         else:
             result['status'] = 'unsupported_archive_format'
@@ -164,10 +173,21 @@ def run(manifest: Path, archives: Path, evidence: Path, output: Path, staging: P
     entries = source.get('addons')
     if not isinstance(entries, list):
         raise ValueError('manifest must contain addons array')
-    ids = [i.get('id') for i in entries]
+    ids = [i.get('id') for i in entries if isinstance(i, dict) and type(i.get('id')) is int]
     if len(set(ids)) != len(ids):
         raise ValueError('duplicate addon IDs')
-    rows = [analyze(item, archives, evidence, staging) for item in entries]
+    rows = []
+    for index, item in enumerate(entries):
+        try:
+            if not isinstance(item, dict):
+                raise ValueError('manifest row must be an object')
+            rows.append(analyze(item, archives, evidence, staging))
+        except (ValueError, OSError, TypeError, KeyError, IndexError) as exc:
+            rows.append({'index': index, 'id': item.get('id') if isinstance(item, dict) and
+                         type(item.get('id')) is int else None,
+                         'status': 'invalid_manifest_entry',
+                         'error_type': type(exc).__name__,
+                         'files': [], 'glb_candidates': []})
     report = {'schema': 1, 'entries': rows, 'note':
               'Local inventory only. Permission flags and evidence need human verification. '
               'No runtime manifest changed; no models imported or published.'}
