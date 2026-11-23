@@ -37,6 +37,7 @@ def zip_inventory(path: Path) -> tuple[list[dict], list[tuple[str, bytes]]]:
     files = []
     glbs = []
     total = 0
+    glb_bytes = 0
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
         if len(members) > MAX_MEMBERS:
@@ -56,6 +57,9 @@ def zip_inventory(path: Path) -> tuple[list[dict], list[tuple[str, bytes]]]:
                 continue
             files.append({'name': name, 'bytes': m.file_size})
             if name.lower().endswith('.glb') and m.file_size <= MAX_GLB_BYTES:
+                glb_bytes += m.file_size
+                if len(glbs) >= 128 or glb_bytes > 256 * 1024**2:
+                    raise ValueError('GLB candidate count or memory budget exceeded')
                 with archive.open(m) as handle:
                     glbs.append((name, handle.read(MAX_GLB_BYTES + 1)))
     return files, glbs
