@@ -71,30 +71,172 @@ def zip_inventory(path: Path) -> tuple[list[dict], list[tuple[str, bytes]]]:
 
 
 def check_glb(raw: bytes) -> int:
+    """Check a real, scene-reachable GLB against PATROL's native decoder limits.
+
+    This is an offline *structural* preflight, not browser/GPU/visual approval.
+    """
     if len(raw) < 32 or len(raw) > MAX_GLB_BYTES:
         raise ValueError('GLB size outside PATROL budget')
     magic, version, length = struct.unpack_from('<III', raw, 0)
     if magic != 0x46546c67 or version != 2 or length != len(raw):
         raise ValueError('invalid GLB2 header')
     json_size, json_type = struct.unpack_from('<II', raw, 12)
-    if json_type != 0x4e4f534a or json_size < 2 or 20 + json_size > len(raw):
+    if (json_type != 0x4e4f534a or json_size < 2 or json_size % 4 or
+            20 + json_size + 8 > len(raw)):
         raise ValueError('invalid GLB JSON chunk')
     doc = json.loads(raw[20:20 + json_size].decode('utf-8').rstrip(' \x00'))
-    triangles = 0
+    if not isinstance(doc, dict) or doc.get('asset', {}).get('version') != '2.0':
+        raise ValueError('GLB must contain glTF 2.0 metadata')
+    if doc.get('extensionsRequired'):
+        raise ValueError('GLB has required extensions unsupported by PATROL')
+    bin_header = 20 + json_size
+    bin_size, bin_type = struct.unpack_from('<II', raw, bin_header)
+    bin_start = bin_header + 8
+    if (bin_type != 0x004e4942 or bin_size % 4 or
+            bin_start + bin_size != len(raw)):
+        raise ValueError('missing or invalid GLB BIN chunk')
+    buffers = doc.get('buffers', [])
+    if (len(buffers) != 1 or 'uri' in buffers[0] or
+            type(buffers[0].get('byteLength')) is not int or
+            not 0 < buffers[0]['byteLength'] <= bin_size or
+            bin_size - buffers[0]['byteLength'] > 3):
+        raise ValueError('external or invalid GLB buffer')
+    views = doc.get('bufferViews', [])
     accessors = doc.get('accessors', [])
-    for mesh in doc.get('meshes', []):
-        for prim in mesh.get('primitives', []):
-            if prim.get('mode', 4) != 4:
-                raise ValueError('PATROL supports triangle primitives only')
-            a = prim.get('indices', prim.get('attributes', {}).get('POSITION'))
-            if not isinstance(a, int) or a < 0 or a >= len(accessors):
-                raise ValueError('primitive accessor missing')
-            count = accessors[a].get('count')
-            if not isinstance(count, int) or count < 3 or count % 3:
-                raise ValueError('invalid triangle index count')
-            triangles += count // 3
-    if triangles < 1 or triangles > MAX_TRIANGLES:
-        raise ValueError('triangle budget exceeded or model empty')
+    meshes = doc.get('meshes', [])
+    nodes = doc.get('nodes', [])
+    scenes = doc.get('scenes', [])
+    formats = {5121: ('B', 1), 5123: ('H', 2), 5125: ('I', 4), 5126: ('f', 4)}
+    components = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}
+
+    def view_at(ident: int) -> tuple[int, int, dict]:
+        if type(ident) is not int or not 0 <= ident < len(views):
+            raise ValueError('invalid GLB bufferView index')
+        view = views[ident]
+        offset, size = view.get('byteOffset', 0), view.get('byteLength')
+        if (view.get('buffer') != 0 or type(offset) is not int or
+                type(size) is not int or offset < 0 or size <= 0 or
+                offset + size > buffers[0]['byteLength']):
+            raise ValueError('bufferView outside embedded BIN')
+        return bin_start + offset, size, view
+
+    def accessor_at(ident: int, kind: str | None = None) -> dict:
+        if type(ident) is not int or not 0 <= ident < len(accessors):
+            raise ValueError('invalid GLB accessor index')
+        a = accessors[ident]
+        if a.get('sparse'):
+            raise ValueError('sparse GLB accessor unsupported')
+        c_type, a_type, count = a.get('componentType'), a.get('type'), a.get('count')
+        if (c_type not in formats or a_type not in components or
+                type(count) is not int or count <= 0 or count > 75000):
+            raise ValueError('unsupported GLB accessor layout')
+        if kind and a_type != kind:
+            raise ValueError('GLB accessor type does not match semantic')
+        absolute, length, view = view_at(a.get('bufferView'))
+        width = formats[c_type][1] * components[a_type]
+        stride = view.get('byteStride', width)
+        offset = a.get('byteOffset', 0)
+        if (type(stride) is not int or type(offset) is not int or
+                stride < width or stride > 252 or offset < 0 or
+                offset + (count - 1) * stride + width > length):
+            raise ValueError('GLB accessor exceeds embedded bufferView')
+        return {'count': count, 'type': a_type, 'componentType': c_type,
+                'start': absolute + offset, 'stride': stride}
+
+    def check_texture(texture_index: int) -> None:
+        textures, images = doc.get('textures', []), doc.get('images', [])
+        if type(texture_index) is not int or not 0 <= texture_index < len(textures):
+            raise ValueError('invalid base color texture index')
+        image_id = textures[texture_index].get('source')
+        if type(image_id) is not int or not 0 <= image_id < len(images):
+            raise ValueError('missing base color image')
+        img = images[image_id]
+        if ('uri' in img or img.get('mimeType') not in ('image/png', 'image/jpeg')):
+            raise ValueError('external or unsupported base color image')
+        _, length, _ = view_at(img.get('bufferView'))
+        if not 64 <= length <= 4 * 1024**2:
+            raise ValueError('base color image exceeds PATROL budget')
+
+    chosen_scene = doc.get('scene', 0)
+    if type(chosen_scene) is not int or not 0 <= chosen_scene < len(scenes):
+        raise ValueError('GLB has no valid default scene')
+    triangles = 0
+    used_textures = set()
+    min_y, max_y = float('inf'), float('-inf')
+
+    def walk(node_id: int, lineage: frozenset, depth: int) -> None:
+        nonlocal triangles, min_y, max_y
+        if (type(node_id) is not int or not 0 <= node_id < len(nodes) or
+                node_id in lineage or depth > 32):
+            raise ValueError('invalid/cyclic GLB node hierarchy')
+        node = nodes[node_id]
+        if 'mesh' in node:
+            mesh_id = node['mesh']
+            if type(mesh_id) is not int or not 0 <= mesh_id < len(meshes):
+                raise ValueError('invalid node mesh reference')
+            for prim in meshes[mesh_id].get('primitives', []):
+                if prim.get('mode', 4) != 4 or prim.get('extensions'):
+                    raise ValueError('PATROL requires uncompressed triangle primitives')
+                attrs = prim.get('attributes', {})
+                position = accessor_at(attrs.get('POSITION'), 'VEC3')
+                if position['componentType'] != 5126:
+                    raise ValueError('PATROL positions require Float32 VEC3')
+                for semantic, kind in (('NORMAL', 'VEC3'), ('COLOR_0', None),
+                                       ('TEXCOORD_0', 'VEC2')):
+                    if semantic not in attrs:
+                        continue
+                    extra = accessor_at(attrs[semantic], kind)
+                    if semantic == 'COLOR_0' and extra['type'] not in ('VEC3', 'VEC4'):
+                        raise ValueError('invalid vertex color layout')
+                    if extra['count'] != position['count']:
+                        raise ValueError('GLB vertex attribute count mismatch')
+                if 'indices' in prim:
+                    indices = accessor_at(prim['indices'], 'SCALAR')
+                    if indices['componentType'] not in (5121, 5123, 5125):
+                        raise ValueError('unsupported GLB index component type')
+                    index_count = indices['count']
+                    fmt = '<' + formats[indices['componentType']][0]
+                    for j in range(index_count):
+                        index = struct.unpack_from(fmt, raw,
+                            indices['start'] + j * indices['stride'])[0]
+                        if index >= position['count']:
+                            raise ValueError('GLB index outside position accessor')
+                else:
+                    index_count = position['count']
+                if index_count % 3:
+                    raise ValueError('GLB triangle primitive count not divisible by 3')
+                triangles += index_count // 3
+                if triangles > MAX_TRIANGLES:
+                    raise ValueError('triangle budget exceeded')
+                if 'material' in prim:
+                    materials = doc.get('materials', [])
+                    mat_id = prim['material']
+                    if type(mat_id) is not int or not 0 <= mat_id < len(materials):
+                        raise ValueError('invalid GLB material reference')
+                    diffuse = materials[mat_id].get('pbrMetallicRoughness', {}).get('baseColorTexture')
+                    if diffuse is not None:
+                        if (diffuse.get('texCoord', 0) != 0 or
+                                diffuse.get('extensions', {}).get('KHR_texture_transform') or
+                                'TEXCOORD_0' not in attrs):
+                            raise ValueError('PATROL needs untransformed TEXCOORD_0')
+                        tex_id = diffuse.get('index')
+                        used_textures.add(tex_id)
+                        if len(used_textures) > 1:
+                            raise ValueError('PATROL supports only one diffuse texture atlas')
+                        check_texture(tex_id)
+                for j in range(position['count']):
+                    y = struct.unpack_from('<f', raw, position['start'] +
+                        j * position['stride'] + 4)[0]
+                    if not (-1e9 < y < 1e9):
+                        raise ValueError('non-finite or unbounded GLB positions')
+                    min_y, max_y = min(min_y, y), max(max_y, y)
+        for child in node.get('children', []):
+            walk(child, lineage | {node_id}, depth + 1)
+
+    for root_node in scenes[chosen_scene].get('nodes', []):
+        walk(root_node, frozenset(), 0)
+    if not 0 < triangles <= MAX_TRIANGLES or not max_y > min_y:
+        raise ValueError('empty, over-budget, or vertically flat GLB scene')
     return triangles
 
 
