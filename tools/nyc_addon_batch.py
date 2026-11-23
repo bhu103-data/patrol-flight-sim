@@ -299,7 +299,7 @@ def analyze(item: dict, archives: Path, evidence: Path, staging: Path | None) ->
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(binary)
                 result['glb_candidates'][-1]['local_review_copy'] = str(destination)
-        except (ValueError, UnicodeError, KeyError, TypeError, IndexError) as exc:
+        except (ValueError, UnicodeError, KeyError, TypeError, IndexError, AttributeError, struct.error) as exc:
             result['glb_candidates'].append({'name': filename, 'rejected': str(exc)})
     if not result['rights_reviewed']:
         result['status'] = 'rights_pending'
@@ -324,7 +324,7 @@ def run(manifest: Path, archives: Path, evidence: Path, output: Path, staging: P
             if not isinstance(item, dict):
                 raise ValueError('manifest row must be an object')
             rows.append(analyze(item, archives, evidence, staging))
-        except (ValueError, OSError, TypeError, KeyError, IndexError) as exc:
+        except (ValueError, OSError, TypeError, KeyError, IndexError, AttributeError, struct.error) as exc:
             rows.append({'index': index, 'id': item.get('id') if isinstance(item, dict) and
                          type(item.get('id')) is int else None,
                          'status': 'invalid_manifest_entry',
