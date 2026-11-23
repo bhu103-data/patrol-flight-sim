@@ -66,6 +66,36 @@ class InventoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.call({'id': 20546, 'archive': 'creds.txt'})
 
+    def test_duplicate_normalized_zip_name_rejected(self):
+        with ZipFile(self.root / 'archive' / 'duplicate.zip', 'w') as z:
+            z.writestr('models/bridge.glb', tiny_glb())
+            z.writestr('./models/bridge.glb', tiny_glb())
+        result = self.call({'id': 35245, 'archive': 'duplicate.zip'})
+        self.assertEqual(result['status'], 'unsafe_or_invalid_archive')
+        self.assertIn('duplicate', result['error'])
+
+    def test_oversized_single_glb_skips_without_loading(self):
+        oversized = self.root / 'archive' / 'oversized.glb'
+        with oversized.open('wb') as stream:
+            stream.truncate(8 * 1024**2 + 1)
+        result = self.call({'id': 35245, 'archive': 'oversized.glb'})
+        self.assertEqual(result['status'], 'oversized_glb')
+
+    def test_bad_row_does_not_abort_remaining_addons(self):
+        src = self.root / 'mixed.json'
+        src.write_text(json.dumps({'addons': [
+            {'id': 20546, 'archive': '../creds.txt'},
+            {'id': 35245},
+            'invalid',
+            {'id': 35536, 'archive': 'missing.zip'}]}))
+        result = run(src, self.root / 'archive', self.root / 'evidence',
+                     self.root / 'mixed-report.json', None)
+        self.assertEqual([row['status'] for row in result['entries']],
+                         ['invalid_manifest_entry', 'missing_archive',
+                          'invalid_manifest_entry', 'missing_archive'])
+        self.assertNotIn('creds.txt',
+                         (self.root / 'mixed-report.json').read_text(encoding='utf-8'))
+
     def test_invalid_glb(self):
         with self.assertRaises(ValueError):
             check_glb(b'not a model')
