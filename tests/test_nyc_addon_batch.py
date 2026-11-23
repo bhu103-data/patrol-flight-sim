@@ -10,12 +10,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from nyc_addon_batch import analyze, check_glb, run
 
 
-def tiny_glb():
-    data = json.dumps({'asset': {'version': '2.0'}, 'accessors': [{'count': 3}],
-                       'meshes': [{'primitives': [{'attributes': {'POSITION': 0}}]}]},
-                      separators=(',', ':')).encode()
+def tiny_glb(mutate=None, *, with_bin=True):
+    positions = struct.pack('<9f', 0.0, 0.0, 0.0,
+                             1.0, 0.0, 0.0,
+                             0.0, 1.0, 0.0)
+    doc = {
+        'asset': {'version': '2.0'},
+        'buffers': [{'byteLength': len(positions)}],
+        'bufferViews': [{'buffer': 0, 'byteOffset': 0,
+                         'byteLength': len(positions)}],
+        'accessors': [{'bufferView': 0, 'componentType': 5126,
+                       'count': 3, 'type': 'VEC3'}],
+        'meshes': [{'primitives': [{'attributes': {'POSITION': 0}}]}],
+        'nodes': [{'mesh': 0}],
+        'scenes': [{'nodes': [0]}],
+        'scene': 0
+    }
+    if mutate is not None:
+        mutate(doc)
+    data = json.dumps(doc, separators=(',', ':')).encode()
     data += b' ' * (-len(data) % 4)
-    return struct.pack('<III', 0x46546c67, 2, 20 + len(data)) + struct.pack('<II', len(data), 0x4e4f534a) + data
+    content = struct.pack('<II', len(data), 0x4e4f534a) + data
+    if with_bin:
+        content += struct.pack('<II', len(positions), 0x004e4942) + positions
+    return struct.pack('<III', 0x46546c67, 2, 12 + len(content)) + content
 
 
 class InventoryTest(unittest.TestCase):
@@ -95,6 +113,43 @@ class InventoryTest(unittest.TestCase):
                           'invalid_manifest_entry', 'missing_archive'])
         self.assertNotIn('creds.txt',
                          (self.root / 'mixed-report.json').read_text(encoding='utf-8'))
+
+    def test_scene_reachable_bin_backed_glb_is_accepted(self):
+        self.assertEqual(check_glb(tiny_glb()), 1)
+
+    def test_missing_binary_chunk_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'invalid GLB JSON chunk'):
+            check_glb(tiny_glb(with_bin=False))
+
+    def test_external_binary_uri_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'external or invalid GLB buffer'):
+            check_glb(tiny_glb(lambda d: d['buffers'][0].update(
+                uri='https://example.invalid/scene.bin')))
+
+    def test_scene_with_no_mesh_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'empty'):
+            check_glb(tiny_glb(lambda d: d['scenes'][0].update(nodes=[])))
+
+    def test_out_of_bounds_accessor_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'exceeds'):
+            check_glb(tiny_glb(lambda d: d['accessors'][0].update(byteOffset=100)))
+
+    def test_cyclic_node_tree_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'cyclic'):
+            check_glb(tiny_glb(lambda d: d['nodes'][0].update(children=[0])))
+
+    def test_textured_model_without_uv_rejected(self):
+        def make_textured(doc):
+            doc['materials'] = [{
+                'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}}}]
+            doc['meshes'][0]['primitives'][0]['material'] = 0
+        with self.assertRaisesRegex(ValueError, 'TEXCOORD_0'):
+            check_glb(tiny_glb(make_textured))
+
+    def test_required_extensions_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'required extensions'):
+            check_glb(tiny_glb(lambda d: d.update(
+                extensionsRequired=['KHR_draco_mesh_compression'])))
 
     def test_invalid_glb(self):
         with self.assertRaises(ValueError):
