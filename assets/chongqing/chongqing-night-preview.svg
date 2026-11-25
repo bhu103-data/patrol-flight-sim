@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 243" role="img" aria-label="Chongqing night riverfront preview">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#101b3e"/><stop offset=".62" stop-color="#2c2851"/><stop offset="1" stop-color="#b85d62"/>
+    </linearGradient>
+    <linearGradient id="river" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#182f58"/><stop offset=".5" stop-color="#214b6c"/><stop offset="1" stop-color="#12243f"/>
+    </linearGradient>
+    <linearGradient id="warm" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#ffcc66"/><stop offset="1" stop-color="#ff6d4f"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="2.4"/></filter>
+  </defs>
+  <rect width="432" height="243" fill="url(#sky)"/>
+  <circle cx="338" cy="47" r="29" fill="#f4c784" opacity=".16" filter="url(#glow)"/>
+  <path d="M0 137 34 121 68 132 96 109 133 126 166 98 208 121 247 93 286 119 321 91 361 111 398 86 432 101V166H0Z" fill="#161b36" opacity=".96"/>
+  <path d="M0 165 54 149 103 159 148 136 191 154 232 131 278 150 326 128 375 148 432 128V183H0Z" fill="#252342"/>
+  <path d="M0 177 432 155V243H0Z" fill="url(#river)"/>
+  <g fill="#1b213e" stroke="#12172f" stroke-width="2">
+    <path d="M18 101h42v66H18zM67 88h35v78H67zM109 113h47v54h-47zM164 76h42v91h-42zM214 103h31v64h-31zM252 68h51v99h-51zM312 95h36v72h-36zM356 60h48v107h-48z"/>
+  </g>
+  <g fill="url(#warm)">
+    <g opacity=".95">
+      <path d="M26 111h6v5h-6zM39 111h6v5h-6zM26 126h6v5h-6zM39 126h6v5h-6zM74 101h6v5h-6zM86 101h6v5h-6zM74 118h6v5h-6zM86 118h6v5h-6zM175 91h7v5h-7zM189 91h7v5h-7zM175 108h7v5h-7zM189 108h7v5h-7zM264 83h7v5h-7zM279 83h7v5h-7zM264 101h7v5h-7zM279 101h7v5h-7zM366 76h7v5h-7zM381 76h7v5h-7zM366 95h7v5h-7zM381 95h7v5h-7z"/>
+    </g>
+  </g>
+  <path d="M0 183Q105 168 216 184T432 177" fill="none" stroke="#e4b46c" stroke-width="2" opacity=".7"/>
+  <path d="M0 204Q122 190 240 207T432 199M0 222Q125 211 245 226T432 218" fill="none" stroke="#79a8bd" stroke-width="2" opacity=".42"/>
+  <path d="M120 168v-24M120 144l-23-19M120 144l24-21M120 151l-34-9M120 151l34-12" fill="none" stroke="#e4b46c" stroke-width="3" opacity=".9"/>
+  <circle cx="120" cy="144" r="5" fill="#ffd26b"/>
+  <path d="M330 166v-57M330 109l-20-22M330 109l21-25M330 118l-29-11M330 118l29-12" fill="none" stroke="#ffc966" stroke-width="2" opacity=".8"/>
+  <rect y="231" width="432" height="12" fill="#0b1429" opacity=".55"/>
+</svg>
