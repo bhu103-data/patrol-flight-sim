@@ -1,0 +1,72 @@
+--- a/index.html
++++ b/index.html
+@@ -6807,7 +6807,7 @@
+       }
+       return null;
+     }
+-    function hut(x,z,w,l,color) {
++    function hut(x,z,w,l,color,closeDetail=false) {
+       const pad=dryPad(x,z,w,l,126,3.9);
+       if(!pad)return;
+       x=pad.x;z=pad.z;
+@@ -6868,6 +6868,23 @@
+       }
+       addRideBeam(addQuad,[x,ridge+.075,c],[x,ridge+.075,d],
+         .068,[.30,.34,.36]);
++      // Original near-pier detailing informed by Alaska coastal cabins; the
++      // authored Tracy Arm village does not represent an actual surveyed port.
++      // Only two cabins receive this extra geometry in the existing mesh.
++      if(closeDetail){
++        const edgeTrim=[.33,.29,.23],vent=[.14,.19,.19];
++        for(const zz of [c-.045,d+.045]){
++          addRideBeam(addQuad,[a,wallTop+.045,zz],
++            [x,ridge+.045,zz],.10,edgeTrim);
++          addRideBeam(addQuad,[x,ridge+.045,zz],
++            [b,wallTop+.045,zz],.10,edgeTrim);
++        }
++        // Small slatted vent under the south roof peak, not a flat decal.
++        for(let n=0;n<4;n++){
++          box(x,wallTop+.26+n*.18,c-.050,
++            .84-n*.11,.055,.070,vent);
++        }
++      }
+       // Paneled east wall, north gable and doors replace blank solid facades.
+       // Each pane sits outside the cladding; window trim is framed explicitly.
+       function glazedEast(cz){
+@@ -6920,6 +6937,25 @@
+           const postHeight=Math.max(.25,porch-ground);
+           box(px,ground+postHeight*.5,porchZ,.20,postHeight,.20,[.33,.27,.21]);
+         }
++        // Extra timber joinery appears only on an already terrain-cleared
++        // porch. All rail footprints remain within the original deck outline.
++        if(closeDetail){
++          const rail=[.37,.30,.23];
++          for(const sx of [-1,1]){
++            const railX=doorX+sx*1.20;
++            for(const zz of [porchZ-.70,porchZ+.67]){
++              const base=sampleTerrainHeight(railX,zz);
++              if(base<=WATER_H+.95)continue;
++              box(railX,porch+.43,zz,.095,.86,.095,rail);
++            }
++            box(railX,porch+.84,porchZ,.105,.095,1.54,rail);
++          }
++          for(let n=0;n<5;n++){
++            const zz=porchZ-.76+n*.38;
++            box(doorX,porch+.012,zz,2.64,.027,.055,
++              n%2?[.37,.29,.21]:[.46,.36,.26]);
++          }
++        }
+         // Offset treads follow the downhill elevation, never hang over water.
+         const stepZ=porchZ-1.02,stepGround=sampleTerrainHeight(doorX,stepZ);
+         // Treads project beyond their centerline toward water; inspect edges.
+@@ -6949,8 +6985,8 @@
+       alaskaObstacles.push({x,z,y:floor,halfX:w/2,halfZ:l/2,top:ridge,name:'harbor building'});
+     }
+ 
+-    hut(harbor.x-19,harbor.z-13,10,16,red);
+-    hut(harbor.x-5,harbor.z+7,11,14,[0.36,0.48,0.45]);
++    hut(harbor.x-19,harbor.z-13,10,16,red,true);
++    hut(harbor.x-5,harbor.z+7,11,14,[0.36,0.48,0.45],true);
+     hut(harbor.x+13,harbor.z-6,12,12,[0.69,0.54,0.33]);
+     hut(harbor.x-16,harbor.z+26,9,12,[0.57,0.42,0.28]);
+     hut(harbor.x+15,harbor.z+23,8,12,red);

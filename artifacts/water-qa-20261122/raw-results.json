@@ -1,0 +1,1106 @@
+[
+  {
+    "variant": "baseline",
+    "elevation": 1,
+    "facing": "sun",
+    "sun": [
+      -0.985421189624413,
+      0.01745240643728351,
+      0.1692350216378235
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -328.8256853194638,
+        2.2,
+        -510.76262380692134
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.985421189624413,
+          0.01745240643728351,
+          0.1692350216378235
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -328.8256853194638,
+        2.2,
+        -510.76262380692134
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999891,
+      "p95": 16.799999999999272,
+      "max": 16.80000000000109,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "baseline",
+    "elevation": 1,
+    "facing": "away",
+    "sun": [
+      -0.985421189624413,
+      0.01745240643728351,
+      0.1692350216378235
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        104.82568531946382,
+        2.2,
+        -585.2373761930787
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.985421189624413,
+          0.01745240643728351,
+          0.1692350216378235
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        104.82568531946382,
+        2.2,
+        -585.2373761930787
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999891,
+      "p95": 16.799999999999272,
+      "max": 16.80000000000109,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "baseline",
+    "elevation": 4,
+    "facing": "sun",
+    "sun": [
+      -0.9898563373690983,
+      0.0697564737441253,
+      0.12376778959413867
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -330.3001624451903,
+        2.2,
+        -520.7045960571469
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.9898563373690983,
+          0.0697564737441253,
+          0.12376778959413867
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -330.3001624451903,
+        2.2,
+        -520.7045960571469
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000000728,
+      "max": 16.799999999999272,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "baseline",
+    "elevation": 4,
+    "facing": "away",
+    "sun": [
+      -0.9898563373690983,
+      0.0697564737441253,
+      0.12376778959413867
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        106.30016244519032,
+        2.2,
+        -575.2954039428531
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.9898563373690983,
+          0.0697564737441253,
+          0.12376778959413867
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        106.30016244519032,
+        2.2,
+        -575.2954039428531
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.700000000000728,
+      "p95": 16.700000000000728,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "baseline",
+    "elevation": 15,
+    "facing": "sun",
+    "sun": [
+      -0.965072960817402,
+      0.25881904510252074,
+      -0.040581796305148396
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -331.80575071225974,
+        2.2,
+        -557.2429407560543
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.965072960817402,
+          0.25881904510252074,
+          -0.040581796305148396
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -331.80575071225974,
+        2.2,
+        -557.2429407560543
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000000728,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "baseline",
+    "elevation": 15,
+    "facing": "away",
+    "sun": [
+      -0.965072960817402,
+      0.25881904510252074,
+      -0.040581796305148396
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        107.80575071225977,
+        2.2,
+        -538.7570592439457
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.965072960817402,
+          0.25881904510252074,
+          -0.040581796305148396
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        107.80575071225977,
+        2.2,
+        -538.7570592439457
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000004366,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 1,
+    "facing": "sun",
+    "sun": [
+      -0.985421189624413,
+      0.01745240643728351,
+      0.1692350216378235
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -328.8256853194638,
+        2.2,
+        -510.76262380692134
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.985421189624413,
+          0.01745240643728351,
+          0.1692350216378235
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -328.8256853194638,
+        2.2,
+        -510.76262380692134
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999891,
+      "p95": 16.700000000000728,
+      "max": 16.799999999999272,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 1,
+    "facing": "away",
+    "sun": [
+      -0.985421189624413,
+      0.01745240643728351,
+      0.1692350216378235
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        104.82568531946382,
+        2.2,
+        -585.2373761930787
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.985421189624413,
+          0.01745240643728351,
+          0.1692350216378235
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        104.82568531946382,
+        2.2,
+        -585.2373761930787
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999891,
+      "p95": 16.799999999999272,
+      "max": 16.80000000000109,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 4,
+    "facing": "sun",
+    "sun": [
+      -0.9898563373690983,
+      0.0697564737441253,
+      0.12376778959413867
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -330.3001624451903,
+        2.2,
+        -520.7045960571469
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.9898563373690983,
+          0.0697564737441253,
+          0.12376778959413867
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -330.3001624451903,
+        2.2,
+        -520.7045960571469
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.700000000000728,
+      "p95": 16.700000000000728,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 4,
+    "facing": "away",
+    "sun": [
+      -0.9898563373690983,
+      0.0697564737441253,
+      0.12376778959413867
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        106.30016244519032,
+        2.2,
+        -575.2954039428531
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.9898563373690983,
+          0.0697564737441253,
+          0.12376778959413867
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        106.30016244519032,
+        2.2,
+        -575.2954039428531
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000000728,
+      "max": 16.799999999999272,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 15,
+    "facing": "sun",
+    "sun": [
+      -0.965072960817402,
+      0.25881904510252074,
+      -0.040581796305148396
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        -331.80575071225974,
+        2.2,
+        -557.2429407560543
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.965072960817402,
+          0.25881904510252074,
+          -0.040581796305148396
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        -331.80575071225974,
+        2.2,
+        -557.2429407560543
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000004366,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  },
+  {
+    "variant": "fix",
+    "elevation": 15,
+    "facing": "away",
+    "sun": [
+      -0.965072960817402,
+      0.25881904510252074,
+      -0.040581796305148396
+    ],
+    "camera": {
+      "eye": [
+        -112,
+        9,
+        -548
+      ],
+      "look": [
+        107.80575071225977,
+        2.2,
+        -538.7570592439457
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ],
+      "fov": 58,
+      "attached": true
+    },
+    "state": {
+      "environment": {
+        "sun": [
+          -0.965072960817402,
+          0.25881904510252074,
+          -0.040581796305148396
+        ],
+        "moon": [
+          0,
+          -1,
+          0
+        ],
+        "atmosphere": [
+          1,
+          0,
+          0.16,
+          0
+        ],
+        "climate": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "precipitation": [
+          0,
+          0
+        ]
+      },
+      "camPos": [
+        -112,
+        9,
+        -548
+      ],
+      "camLook": [
+        107.80575071225977,
+        2.2,
+        -538.7570592439457
+      ],
+      "fbo": [
+        1280,
+        720
+      ],
+      "resScale": 1,
+      "selectedMap": "Manhattan"
+    },
+    "glInfo": {
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "canvas": [
+        1075,
+        605
+      ]
+    },
+    "frameMs": {
+      "median": 16.69999999999709,
+      "p95": 16.700000000004366,
+      "max": 16.80000000000291,
+      "samples": 175
+    },
+    "consoleErrors": []
+  }
+]

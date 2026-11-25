@@ -1,0 +1,4 @@
+interface:
+  display_name: "PATROL Context Runner"
+  short_description: "Resume PATROL from one compact context file"
+  default_prompt: "Read docs/PATROL_CONTEXT.md, continue the requested PATROL item, then update the same file with verified evidence and the next action."

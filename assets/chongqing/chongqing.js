@@ -11,14 +11,10 @@ import { SpatialObstacleIndex } from './spatial.js';
 import { createChongqingPBR } from './pbr.js';
 import { createChongqingAtmosphere } from './atmosphere.js';
 import { createChongqingUrbanArchitecture } from './urban-architecture.js';
-import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments,collectChongqingShorelineRoadEnds } from './road-clearance.js';
+import { chongqingTerraceRoads,clipRoadToFreeSegments,sampleChongqingTerraceSurface,clipChongqingDryRoadSegments } from './road-clearance.js';
 import { loadOptionalHongyadong } from './scenario-assets.js';
 import { buildChongqingShorelineBarriers } from './shoreline-barriers.js';
-import { buildChongqingHotpotDisplay } from './hotpot-display.js';
-import { buildChongqingHotpotPaving } from './hotpot-forecourt.js';
-import { buildChongqingHotpotLowerFacade } from './hotpot-lower-facade.js';
-import { buildChongqingHotpotUpperWindows } from './hotpot-upper-windows.js';
-import { gradeChongqingHotpotTerrain } from './hotpot-terrace-grade.js';
+import { buildHongyadongStreetPrototype } from './hongyadong-street.js';
 
 const canvas = document.getElementById('world');
 const hint = document.getElementById('hint');
@@ -127,7 +123,7 @@ function riverDist(x,z){
   const branch=z<18&&z>-620?Math.abs(x-branchCenter(z))-47:Infinity;
   return Math.min(main,branch);
 }
-function ungradedGround(x,z) {
+function ground(x,z) {
   const d=riverDist(x,z);
   if(d<0) return -13;
   // Rounded ledges form a stepped mountain city without abrupt discontinuous ground jumps.
@@ -143,14 +139,6 @@ function ungradedGround(x,z) {
   const cliffRamp=cliffT*cliffT*(3-2*cliffT);
   const hillside=cliffX*cliffRamp*86;
   return Math.max(8, 9+d*0.172+terraces+relief+hillside);
-}
-// Ground, roads, player collision and the GPU terrain mesh all read THIS
-// same graded surface. Do not overlay a visual-only platform that would make
-// the avatar, cars or collision disagree with the visible shop terrace.
-const HOTPOT_TERRACE_FLOOR=ungradedGround(285,253);
-function ground(x,z){
-  return gradeChongqingHotpotTerrain(
-    ungradedGround(x,z),HOTPOT_TERRACE_FLOOR,x,z);
 }
 
 const worldGeometry=new THREE.BufferGeometry();
@@ -341,14 +329,6 @@ const shopY=ground(hotpot.x,hotpot.z+28);
 const hotpotDoor={x:hotpot.x,z:hotpot.z+34,y:shopY+2.7};
 // Photo-grained dark wooden facade, not a plain terracotta cube.
 box(hotpot.x,shopY+10,hotpot.z,72,20,50,pbr.wood);
-// PATROL_CQ_HOTPOT_TERRACE_V1: thin stone skirt at the genuine building
-// footprint. Leave the uphill entrance clear; keep all lips within a small
-// external margin and entirely above the newly shared graded ground.
-box(hotpot.x,shopY+.24,hotpot.z-25.13,72.1,.48,.26,pbr.cutStone);
-for(const side of [-1,1]){
-  box(hotpot.x+side*36.08,shopY+.24,hotpot.z,.18,.48,49.8,pbr.cutStone);
-}
-
 // A physically curved dark-tile roof replaces the floating, flat 80x3x57 slab.
 // Its top remains at/below the original collision top (shopY+23.3).
 {
@@ -407,22 +387,8 @@ for(const x of [hotpot.x-31,hotpot.x-10,hotpot.x+11,hotpot.x+31]){
   }
 }
 sign('重庆老火锅',hotpot.x,shopY+22.9,hotpot.z+29.1,42,7.5,'#dbbb8f','#302822');
-// A ground-aligned, open iron hotpot with distinct spicy/clear broth replaces
-// the giant cartoon red ball. Reuse the original courtyard position and lights.
-const hotpotDisplay=buildChongqingHotpotDisplay({
-  THREE,scene,ground,x:278,z:hotpot.z+31,stone:pbr.cutStone
-});
-// Existing windows, door quest and collision stay untouched; two instanced
-// PBR wall-relief batches sit in front of the lower street-facing wall.
-const hotpotLowerFacade=buildChongqingHotpotLowerFacade({
-  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
-});
-// Rebuild the repeated street-facing window rhythm with physically layered
-// reveal/backing, variable glass, inset muntins and timber jamb depth.
-// Decorative only; does not cut the aircraft/player collision shell.
-const hotpotUpperWindows=buildChongqingHotpotUpperWindows({
-  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
-});
+const cauldron=box(278,shopY+4.5,hotpot.z+31,10,5,10,M.dark);
+ball(278,shopY+7.2,hotpot.z+31,5,M.red);
 const potLight=new THREE.PointLight(0xff693c,85,90,2);
 potLight.position.set(hotpot.x,shopY+13,hotpot.z+34);scene.add(potLight);
 
@@ -567,11 +533,6 @@ scene.add(trees,stems,branches);
 // Detailed foreground is isolated in one lightweight, heavily instanced module.
 // Only the hero corridor receives close-up geometry; long-distance buildings remain simple.
 const detailBuild = buildChongqingDetails({ THREE,scene,ground,riverCenter,rand,box,ball,sign,hotpot,obstacles,pbr });
-// Bounded physical stone courses sit above the old flat paving slab. Keep
-// this independently instanced layer out of collision and landmark batches.
-const hotpotPaving=buildChongqingHotpotPaving({
-  THREE,scene,pbr,shopX:hotpot.x,shopZ:hotpot.z,shopFloor:shopY
-});
 // Place the two high-fidelity landmarks before the spatial collision index is built.
 const landmarkBuild = buildChongqingLandmarks({ THREE,scene,ground,pbr,box,sign,obstacles });
 // Static building/landmark collision registration is now complete. Build one
@@ -595,12 +556,17 @@ function streetSpaceClear(x,z,y,radius=0){
 }
 const streetBuild = buildChongqingStreetlife({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
 const wetStreetBuild = buildChongqingWetStreets({ THREE,scene,ground,riverCenter,isRoadClear:streetSpaceClear });
+// One representative riverside street segment: surface dressing only; existing
+// landmark geometry, collision and flight clearance remain unchanged.
+const hongyadongStreetBuild=buildHongyadongStreetPrototype({THREE,scene,ground,riverCenter,pbr});
 // Match electrical street lighting to the independently selected city environment.
 streetBuild.setTimeOfDay(cqTimeSelect.value);
 wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+hongyadongStreetBuild.setTimeOfDay(cqTimeSelect.value);
 cqTimeSelect.addEventListener('change',()=>{
   streetBuild.setTimeOfDay(cqTimeSelect.value);
   wetStreetBuild.setTimeOfDay(cqTimeSelect.value);
+  hongyadongStreetBuild.setTimeOfDay(cqTimeSelect.value);
   skyline.setTimeOfDay(cqTimeSelect.value);
 });
 const riverBuild = buildChongqingRiverlife({ THREE,scene,riverCenter });
@@ -615,23 +581,29 @@ for(const plan of plannedRoads){
   // Tributary cuts come FIRST; only dry road sections may reach the
   // building-volume clipper, never the river surface or unsupported banks.
   const dryRoads=clipChongqingDryRoadSegments(points,plan.width,ground,riverDist);
-  // Building/skybridge clipping must happen BEFORE selecting the riverbank
-  // safety guard sites. Otherwise a guard can survive inside a building even
-  // when the road section it was supposed to protect no longer exists.
-  const finalDryRoads=[];
+  // Existing roads must NOT keep going across the unbridged tributary.
+  // Install compact reflective guardrails at both dry ends of every cut.
+  for(let k=0;k<dryRoads.length-1;k++){
+    const left=dryRoads[k],right=dryRoads[k+1];
+    if(left.length>1){
+      const p=left.at(-1),q=left.at(-2);
+      shorelineRoadEnds.push({point:p,tangent:[p.x-q.x,p.z-q.z],
+        width:plan.width,intoRoad:-1});
+    }
+    if(right.length>1){
+      const p=right[0],q=right[1];
+      shorelineRoadEnds.push({point:p,tangent:[q.x-p.x,q.z-p.z],
+        width:plan.width,intoRoad:1});
+    }
+  }
   for(const dry of dryRoads){
     const clear=clipRoadToFreeSegments(dry,plan.width,obstacles,.8,2.5);
-    const finalPaths=clear.paths.filter(path=>path.length>=2);
-    finalDryRoads.push(finalPaths);
-    for(const path of finalPaths){
-      road(path,plan.width);roadClearanceStats.paths++;
+    for(const path of clear.paths){
+      if(path.length>=2){road(path,plan.width);roadClearanceStats.paths++;}
     }
     roadClearanceStats.clipped+=clear.stats.clippedSegments;
     roadClearanceStats.removedLength+=clear.stats.removedLength;
   }
-  // Only end guards belonging to surviving road fragments get geometry.
-  shorelineRoadEnds.push(...collectChongqingShorelineRoadEnds(
-    dryRoads,finalDryRoads,plan.width));
 }
 const shorelineSafety=buildChongqingShorelineBarriers({
   THREE,scene,ground,ends:shorelineRoadEnds
@@ -708,6 +680,7 @@ function applyQuality(){
   landmarkBuild.setQuality(qualityMode==='low'?'low':'normal');
   streetBuild.setQuality(qualityMode==='low'?'low':'normal');
   wetStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
+  hongyadongStreetBuild.setQuality(qualityMode==='low'?'low':'normal');
   riverBuild.setQuality(qualityMode==='low'?'low':'normal');
   qualityBtn.textContent=qualityLabels[qualityMode];
   qualityBtn.title='自动平衡帧率与清晰度；按 P 查看性能数据';
@@ -946,24 +919,8 @@ function scenicView(key){
     // The camera is still in the actual compressed city, never in water.
     Digit5:{name:'支流护栏与山城道路',pos:[-472,ground(-472,-271)+8,-271],
       target:[-420,ground(-420,-271)+12,-271]}
+    ,Digit6:{name:'洪崖洞临江步道近景',pos:[155,18,72],target:[155,13,110]}
   };
-  // Inspect a crossing that REALLY survived river/building checks.
-  // No fixed guessed site: the source is the instantiated street network.
-  if(key==='Digit6'){
-    const x=streetBuild.snapshot().crossingXs[0];
-    if(Number.isFinite(x)){
-      const roadZ=xp=>riverCenter(xp)+250+14*Math.sin(xp/115+1);
-      // Look toward the oncoming westbound traffic from EAST of the light:
-      // the lens fronts physically face +X, unlike the old angle which
-      // photographed the black rear housing over the zebra crossing.
-      const nearX=x+12,nearZ=roadZ(nearX)+3.3;
-      destinations.Digit6={
-        name:'双向红绿灯与山城街面',
-        pos:[nearX,ground(nearX,nearZ)+4.7,nearZ],
-        target:[x-7,ground(x-7,roadZ(x-7))+7.6,roadZ(x-7)-3]
-      };
-    }
-  }
   const next=destinations[key];
   if(!next)return false;
   state.pos.set(...next.pos);
@@ -974,7 +931,7 @@ function scenicView(key){
   jumpQueued=false;
   const dx=next.target[0]-state.pos.x,dz=next.target[2]-state.pos.z;
   viewYaw=Math.atan2(dx,-dz);
-  viewPitch=key==='Digit6'?.12:.23;
+  viewPitch=.23;
   cameraPos.copy(state.pos).add(new THREE.Vector3(-Math.sin(viewYaw)*camDistance,7,Math.cos(viewYaw)*camDistance));
   message('观景镜头：'+next.name,3);
   return true;
@@ -1398,6 +1355,7 @@ function frame(){
         '\nSkyline profiles '+skyline.stats.towers+' / 5'+
         '\nTraffic '+streetBuild.stats.vehicles+' cars / '+streetBuild.stats.streetLamps+' streetlamps'+
         '\nPuddles '+wetStreetBuild.stats.puddles+' / lamp reflections '+wetStreetBuild.stats.reflectionStrips+
+        '\nHongyadong '+hongyadongStreetBuild.stats.meshes+' surface meshes / '+hongyadongStreetBuild.stats.drains+' drains'+
         '\nJialing River ferries '+riverBuild.stats.boats+
         '\nStreet cuts '+roadClearanceStats.clipped+' / clear strips '+roadClearanceStats.paths;
     }
@@ -1406,42 +1364,13 @@ function frame(){
 window.PatrolSpaceBridge={getState:()=>({
   map:'chongqing',aircraft:seaplaneMode?'seaplane':'jetpack',playing:!graphicsLost,
   altitude:state.pos.y,climb:state.vel.y,
-  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying,
-  // Exposed only when asked for the actual browser inspector state.
-  signalCrossings:streetBuild.stats.signalizedCrossings,
-  signalMasts:streetBuild.stats.trafficSignals,
-  signalStopLines:streetBuild.stats.stopLines,
-  signalAspect:streetBuild.snapshot().signalAspect,
-  hotpotDisplayParts:hotpotDisplay.partCount,
-  hotpotUpperWindowBays:hotpotUpperWindows.bays,
-  hotpotUpperWindowFrameParts:hotpotUpperWindows.frameCount,
-  hotpotUpperWindowTriangles:hotpotUpperWindows.triangles,
-  hotpotUpperWindowDepth:hotpotUpperWindows.depth,
-  hotpotUpperWindowMaxX:hotpotUpperWindows.maxX,
-  hotpotLowerStoneParts:hotpotLowerFacade.masonryCount,
-  hotpotLowerTimberParts:hotpotLowerFacade.timberCount,
-  hotpotLowerFacadeTriangles:hotpotLowerFacade.totalTriangles,
-  hotpotLowerFacadeTop:hotpotLowerFacade.topY-shopY,
-  hotpotForecourtPavers:hotpotPaving.stoneCount,
-  hotpotForecourtDrainBars:hotpotPaving.drainBarCount,
-  hotpotForecourtTriangles:hotpotPaving.triangleBudget,
-  hotpotDisplayHeight:hotpotDisplay.topY-hotpotDisplay.groundY,
-  // Live visual QA: corner spread must agree with the actual collision
-  // heightmap and not just with a screenshot-only foundation mesh.
-  hotpotTerraceCornerSpread:(()=>{
-    const ys=[-36,36].flatMap(dx=>[-25,25].map(dz=>
-      ground(hotpot.x+dx,hotpot.z+dz)));
-    return Math.max(...ys)-Math.min(...ys);
-  })(),
-  hotpotTerraceFloor:shopY,
-  renderMetrics:{
-    fps:Number.isFinite(measuredFPS)?Math.round(measuredFPS*10)/10:null,
-    drawCalls:renderer.info.render.calls,
-    triangles:renderer.info.render.triangles,
-    pixelRatio:renderRatio,
-    quality:qualityMode
-  }
+  position:state.pos.toArray(),heading:state.heading,avatarFlying:state.flying
 })};
+window.PatrolSpaceBridge.getChongqingStreetDebug=()=>({
+  prototype:hongyadongStreetBuild.getDebug(),
+  renderer:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,pixelRatio:renderRatio},
+  pbr:{textures:['assets/nyc/asphalt_04_diff_1k.jpg','assets/nyc/asphalt_04_nor_gl_1k.jpg','assets/nyc/asphalt_04_arm_1k.jpg','assets/nyc/concrete_wall_008_diff_1k.jpg','assets/nyc/concrete_wall_008_nor_gl_1k.jpg','assets/nyc/concrete_wall_008_arm_1k.jpg']}
+});
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(renderRatio);
