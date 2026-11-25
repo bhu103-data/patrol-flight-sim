@@ -20,7 +20,7 @@ const validMaps = ['manhattan','dc','vegas','alaska','coast','valley','chongqing
 const query = new URLSearchParams(location.search);
 const requestedMap = query.get('from');
 const from = embeddedNY?'manhattan':validMaps.includes(requestedMap) ? requestedMap : 'manhattan';
-const craftName = ['fighter','saucer','jetpack'].includes(query.get('craft')) ? query.get('craft') : 'fighter';
+const craftName = ['fighter','jetpack'].includes(query.get('craft')) ? query.get('craft') : 'fighter';
 const cityOrigin = {
   manhattan: {name:'Manhattan / New York',lat:40.7128,lon:-74.006},
   dc: {name:'Washington, DC',lat:38.8895,lon:-77.0353},
@@ -387,10 +387,7 @@ const ship=new THREE.Group();
 const hullMat=new THREE.MeshStandardMaterial({color:craftName==='jetpack'?0xbe2630:0xa6b8c6,metalness:.72,roughness:.27});
 const trimMat=new THREE.MeshStandardMaterial({color:0xf9c273,metalness:.5,roughness:.35});
 const thrusterMat=new THREE.MeshBasicMaterial({color:0x66dbff});
-if(craftName==='saucer'){
-  const disk=new THREE.Mesh(new THREE.CylinderGeometry(.29,.29,.07,32),hullMat);ship.add(disk);
-  const cap=new THREE.Mesh(new THREE.SphereGeometry(.13,20,12),trimMat);cap.position.y=.045;ship.add(cap);
-}else if(craftName==='jetpack'){
+if(craftName==='jetpack'){ 
   const torso=new THREE.Mesh(new THREE.CapsuleGeometry(.09,.20,3,10),hullMat);ship.add(torso);
   const head=new THREE.Mesh(new THREE.SphereGeometry(.075,12,10),trimMat);head.position.y=.23;ship.add(head);
   for(const x of [-.12,.12]){
