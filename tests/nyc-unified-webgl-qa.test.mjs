@@ -8,7 +8,9 @@ import {fileURLToPath} from 'node:url';
 const scriptUrl=new URL('../scripts/nyc-road-browser-smoke.mjs',import.meta.url);
 const workflowUrl=new URL('../.github/workflows/nyc-bridgehead-browser.yml',import.meta.url);
 const script=await readFile(scriptUrl,'utf8');
-const workflow=await readFile(workflowUrl,'utf8');
+// Normalize checkout line endings so the trigger assertions are portable
+// across Windows and Linux runners.
+const workflow=(await readFile(workflowUrl,'utf8')).replace(/\r\n/g,'\n');
 
 test('ten NYC cameras include near-field building facades and nonblank PNG checks',()=>{
  const named=[
