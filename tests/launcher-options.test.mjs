@@ -9,8 +9,10 @@ test('only New York and Las Vegas remain selectable maps', () => {
     assert.match(html, new RegExp(`value="${map}" disabled`));
   }
   assert.doesNotMatch(html, /value="random"/);
-  assert.match(html, /value="manhattan" checked/);
-  assert.match(html, /value="vegas"/);
+  assert.match(html, /class="map-card demo-map selectable-demo"[\s\S]*?value="manhattan" checked/);
+  assert.match(html, /class="map-card demo-map selectable-demo"[\s\S]*?value="vegas"/);
+  assert.doesNotMatch(html, /value="manhattan" checked[^>]*disabled/);
+  assert.doesNotMatch(html, /value="vegas"[^>]*disabled/);
   assert.match(html, /assets\/chongqing\/chongqing-night-photo\.png/);
 });
 
