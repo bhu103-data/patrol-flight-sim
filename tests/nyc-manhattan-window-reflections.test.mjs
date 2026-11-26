@@ -31,7 +31,7 @@ test('shader executes after GIS but affects neither cars nor other maps',()=>{
  const official=html.indexOf('nyOfficialGisPbr(material,n,surfaceRoughness)',compose);
  const anonymous=html.indexOf('nyManhattanGenericGlazing(material,n,surfaceRoughness)',official);
  assert.ok(compose>0&&official>compose&&anonymous>official);
- assert.ok(html.includes('drawMeshWithOutline(backgroundBuildings,identity,false,true)'));
+ assert.ok(html.includes('drawMeshWithOutline(backgroundBuildings,identity,false,true,true,visible)'));
  assert.ok(html.includes('function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false'));
  assert.ok(html.includes('drawCityTraffic(drawMeshWithOutline)'));
 });

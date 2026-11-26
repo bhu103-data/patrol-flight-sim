@@ -1047,6 +1047,72 @@ const CENTRAL_PARK_SITES=[
       return false;
     }
     if(city)officialLots=officialLots.filter(lot=>!generatedCityRoadOverlap(lot));
+    if(city && (city.manhattanFootprints?.length || city.eastBankFootprints?.length)){
+      const budget=new Map(), occupied=new Map();
+      const cell=(x,z)=>Math.floor(x/16)+','+Math.floor(z/16);
+      const visit=(x,z,w,d,fn)=>{
+        for(let a=Math.floor((x-w/2)/16);a<=Math.floor((x+w/2)/16);a++)
+          for(let b=Math.floor((z-d/2)/16);b<=Math.floor((z+d/2)/16);b++)
+            if(fn(a+','+b))return true;
+        return false;
+      };
+      const index=lot=>visit(...lot.slice(0,4),key=>{
+        if(!occupied.has(key))occupied.set(key,[]);
+        occupied.get(key).push(lot);
+        return false;
+      });
+      officialLots.forEach(index);
+      for(const row of [...(city.manhattanFootprints||[]),...(city.eastBankFootprints||[])]){
+        const [id,x,z,w,d,h,poly,borough=1]=row;
+        const key=cell(x,z);
+        if((budget.get(key)||0)>=6)continue;
+        const [west,east,south,north]=city.timesSquareBounds;
+        if(x+w/2>west&&x-w/2<east&&z+d/2>south&&z-d/2<north)continue;
+        const isPark=([px,pz])=>Math.abs(px-city.tilt*pz-city.offset)<city.parkHalfWidth+1 &&
+          Math.abs(pz-city.parkCenter)<city.parkHalfLength+1;
+        if(isPark([x,z])||poly.some(isPark))continue;
+        if(city.landmarks.some(mark=>Math.abs(x-mark.x)<(mark.w+w)/2+3&&
+          Math.abs(z-mark.z)<(mark.d+d)/2+3))continue;
+        if(!poly.every(([px,pz])=>cityHeight(px,pz)*scale>water+1.2))continue;
+        if(borough!==1){
+          if(borough===2 && (z<=460 || Math.hypot(x,z)>=735))continue;
+          const runway=city.runway, track=city.railway;
+          if(Math.abs(x-runway.x)<runway.halfLength+w/2+5 &&
+             Math.abs(z-runway.z)<runway.halfWidth+d/2+5)continue;
+          if(x<255+w/2 && Math.abs(z+342)<6+d/2)continue;
+          if(track?.enabled && Math.abs(Math.hypot(x-clamp(x,track.west,track.east),z-track.z)
+            -track.radius)<4+Math.hypot(w,d)*.43)continue;
+        }
+        if(generatedCityRoadOverlap([x,z,w,d],2.4))continue;
+        if(visit(x,z,w,d,k=>occupied.get(k)?.some(lot=>
+          Math.abs(x-lot[0])<(w+lot[2])*.5 && Math.abs(z-lot[1])<(d+lot[3])*.5)))continue;
+        const lot=[x,z,w,d,h,(id%101)/101,false,poly,id,borough===1?'manhattan-survey':'east-bank-survey',borough];
+        officialLots.push(lot);
+        index(lot);
+        budget.set(key,(budget.get(key)||0)+1);
+      }
+    }
+    const officialBuckets=new Map();
+    const officialKey=(x,z)=>Math.floor(x/24)+','+Math.floor(z/24);
+    for(const lot of officialLots){
+      const [x,z,w,d]=lot;
+      for(let a=Math.floor((x-w/2)/24);a<=Math.floor((x+w/2)/24);a++)
+        for(let b=Math.floor((z-d/2)/24);b<=Math.floor((z+d/2)/24);b++){
+          const key=a+','+b;
+          if(!officialBuckets.has(key))officialBuckets.set(key,[]);
+          officialBuckets.get(key).push(lot);
+        }
+    }
+    // Reuse the footprint grid for broad-phase AABB checks as well as point queries.
+    function overlapsSurvey(x,z,w,d,pad){
+      const dx=w/2+pad,dz=d/2+pad;
+      for(let a=Math.floor((x-dx)/24);a<=Math.floor((x+dx)/24);a++)
+        for(let b=Math.floor((z-dz)/24);b<=Math.floor((z+dz)/24);b++)
+          if(officialBuckets.get(a+','+b)?.some(lot=>
+            Math.abs(x-lot[0])<dx+lot[2]*.5 &&
+            Math.abs(z-lot[1])<dz+lot[3]*.5))return true;
+      return false;
+    }
     const officialBounds=officialLots.reduce((b,lot)=>{
       b[0]=Math.min(b[0],lot[0]-lot[2]/2);
       b[1]=Math.min(b[1],lot[1]-lot[3]/2);
@@ -1067,7 +1133,7 @@ const CENTRAL_PARK_SITES=[
     function officialLotAt(east,north){
       if(east<officialBounds[0]||east>officialBounds[2]||
          north<officialBounds[1]||north>officialBounds[3])return null;
-      for(const lot of officialLots){
+      for(const lot of officialBuckets.get(officialKey(east,north))||[]){
         if(Math.abs(east-lot[0])<=lot[2]*.5 &&
            Math.abs(north-lot[1])<=lot[3]*.5 &&
            inOfficialPolygon(east,north,lot[7]))return lot;
@@ -1088,7 +1154,7 @@ const CENTRAL_PARK_SITES=[
         if (Math.abs(x)>span/2 || Math.abs(z)>span/2) continue;
         // Keep geometry/collision and terrain heightfields coherent:
         // a parcel not admitted here is not baked into the height map.
-        if(city.focusZones && !city.focusZones.some(zone=>{
+        if(city.focusZones && !city.manhattanFootprints?.length && !city.focusZones.some(zone=>{
           const dx=x-zone[0],dz=z-zone[1];
           return dx*dx+dz*dz<zone[3]*zone[3];
         }))continue;
@@ -1100,13 +1166,15 @@ const CENTRAL_PARK_SITES=[
         // Narrow, varied facades preserve buildings without deleting roads.
         const rawWidth=city.blockWidth*(0.36+tone*0.28);
         const rawLength=city.blockLength*(0.41+hash(ix,iz,531)*0.26);
-        const width=streetGrid?Math.min(rawWidth,9.0):rawWidth;
-        const length=streetGrid?Math.min(rawLength,19.0):rawLength;
+        // Break the repeating slabs in the outer fallback neighborhoods.
+        // Dimensions remain shared by render, terrain and collision.
+        const outerInfill=city.eastBankFootprints?.length && !streetGrid;
+        const compact=outerInfill ? hash(ix,iz,345) : 1;
+        const width=streetGrid?Math.min(rawWidth,9.0):rawWidth*(.62+.38*compact);
+        const length=streetGrid?Math.min(rawLength,19.0):rawLength*(.48+.52*compact);
         // Suppress only anonymous parcels physically overlapping the
         // OTI polygons. Keep other procedural streets and skyline unchanged.
-        if(officialLots.some(lot=>
-          Math.abs(x-lot[0])<(width+lot[2])*.5+1 &&
-          Math.abs(z-lot[1])<(length+lot[3])*.5+1))continue;
+        if(overlapsSurvey(x,z,width,length,1))continue;
         const corners = [[-1,-1],[-1,1],[1,-1],[1,1]];
         if (!corners.every(([i,j])=>Math.abs(cityHeight(x+i*width/2,z+j*length/2)*scale-base)<0.4)) continue;
         // Leave room for the authored road corridors before placing city parcels.
@@ -1184,7 +1252,7 @@ const CENTRAL_PARK_SITES=[
                Math.abs(z-runway.z)<runway.halfWidth+length/2+5)continue;
             const overlaps=(lot)=>Math.abs(x-lot[0])<(width+lot[2])*.5+1.25 &&
               Math.abs(z-lot[1])<(length+lot[3])*.5+1.25;
-            if(officialLots.some(overlaps))continue;
+            if(overlapsSurvey(x,z,width,length,1.25))continue;
             let occupied=false;
             for(const existing of cityParcels.values()){
               if(overlaps(existing)){occupied=true;break;}
@@ -1325,6 +1393,47 @@ const CENTRAL_PARK_SITES=[
     if (options.preview) {
       yield {type:'preview',key:options.key,height};
       return;
+    }
+
+    // NYC reuses the unused vegetation channel for a baked ground contact
+    // mask. Rasterize only each building's local bounds, once per loading.
+    // Height, ground, polygon collision and road geometry are unchanged.
+    if(city){
+      yield {type:'progress',pct:59,label:'BAKING BUILDING CONTACT SHADOWS...'};
+      const minWorld=-span*.5, step=span/N;
+      let bakedParcels=0;
+      for(const lot of cityParcels.values()){
+        const [east,north,w,d,h,,,poly]=lot;
+        const reach=Math.min(6.2,2.5+h*.072);
+        const strength=.60+Math.min(.28,h*.019);
+        const minX=Math.max(0,Math.floor((east-w*.5-reach-minWorld)/step));
+        const maxX=Math.min(last,Math.floor((east+w*.5+reach-minWorld)/step));
+        const minZ=Math.max(0,Math.floor((north-d*.5-reach-minWorld)/step));
+        const maxZ=Math.min(last,Math.floor((north+d*.5+reach-minWorld)/step));
+        for(let iz=minZ;iz<=maxZ;iz++)for(let ix=minX;ix<=maxX;ix++){
+          const idx=iz*N+ix;
+          if(ground[idx]<=water/scale+.012)continue;
+          const x=minWorld+(ix+.5)*step,z=minWorld+(iz+.5)*step;
+          let distance=0;
+          if(poly){
+            if(!inOfficialPolygon(x,z,poly)){
+              let nearest=reach*reach;
+              for(let j=0,k=poly.length-1;j<poly.length;k=j++){
+                const a=poly[k],b=poly[j],dx=b[0]-a[0],dz=b[1]-a[1];
+                const l=dx*dx+dz*dz;
+                const t=l>0?clamp(((x-a[0])*dx+(z-a[1])*dz)/l,0,1):0;
+                const du=x-a[0]-dx*t,dv=z-a[1]-dz*t;
+                nearest=Math.min(nearest,du*du+dv*dv);
+              }
+              distance=Math.sqrt(nearest);
+            }
+          }else distance=Math.hypot(Math.max(0,Math.abs(x-east)-w*.5),
+                                    Math.max(0,Math.abs(z-north)-d*.5));
+          const proximity=clamp(1-distance/reach,0,1);
+          conifer[idx]=Math.max(conifer[idx],strength*proximity*proximity);
+        }
+        if(++bakedParcels%650===0)yield;
+      }
     }
 
     yield { type: 'progress', pct: 64, label: 'BAKING SUNSET SHADOWS...' };
@@ -2096,7 +2205,7 @@ const CENTRAL_PARK_SITES=[
           vec3 forestCol = biome < 0.42
             ? mix(goldTree, orangeTree, biome / 0.42)
             : mix(orangeTree, crimsonTree, (biome - 0.42) / 0.58);
-          if (conifer > 0.5 && alt > 1.8 && alt < 13.5) {
+          if (!uManhattan && conifer > 0.5 && alt > 1.8 && alt < 13.5) {
             forestCol = coniferCol;
           }
 
@@ -2260,7 +2369,26 @@ const CENTRAL_PARK_SITES=[
             float block = hash12(floor(blocks));
             bool park = abs(crossIsland) < ${MANHATTAN_GRID.parkHalfWidth.toFixed(1)}
               && abs(p.z - ${MANHATTAN_GRID.parkCenter.toFixed(1)}) < ${MANHATTAN_GRID.parkHalfLength.toFixed(1)};
-            vec3 pavement = mix(vec3(0.25,0.26,0.29), vec3(0.41,0.42,0.43), smoothstep(2.1, 3.4, alt));
+            // Flight-scale surface detail. No road geometry or collision
+            // added here: cartographic grid tint fades into the real meshes.
+            vec2 edge = abs(fract(blocks+.5)-.5)*vec2(24.0,33.0);
+            float curb = min(edge.x,edge.y);
+            float grain = vnoise(p.xz*.83);
+            float cityPatch = vnoise(p.xz*.035);
+            vec3 lotSurface = mix(vec3(.29,.30,.30),vec3(.43,.42,.39),
+                                  cityPatch*.65+block*.35);
+            vec3 roadSurface = vec3(.19,.21,.23)+vec3(grain*.043);
+            vec3 pavement = mix(roadSurface,lotSurface,smoothstep(2.25,4.3,curb));
+            pavement += vec3(.075,.071,.058)*
+              smoothstep(2.3,3.1,curb)*(1.0-smoothstep(3.6,4.6,curb));
+            pavement *= .93+grain*.14;
+            // Leave true shorelines readable; don't stripe ocean or park water.
+            pavement=mix(vec3(.29,.30,.31),pavement,smoothstep(1.4,2.2,alt));
+            // Suppress painted block edges at actual building bases.
+            // The pre-baked footprint falloff keeps this to a single lookup.
+            float contact=smoothstep(.12,.78,conifer);
+            vec3 foundation=mix(vec3(.22,.23,.24),lotSurface,.26);
+            pavement=mix(pavement,foundation,contact*.92);
             vec3 masonry = mix(vec3(0.42,0.46,0.52), vec3(0.73,0.68,0.61), block);
             albedo = mix(pavement, masonry, smoothstep(4.0, 8.0, alt));
             if (slope > 0.32 && alt > 4.0) {
@@ -2309,6 +2437,10 @@ const CENTRAL_PARK_SITES=[
             warmSun = vec3(0.96, 0.93, 0.82);
             violetAmbient = vec3(0.43, 0.47, 0.53);
           }
+          if(uManhattan){
+            // Cooler, restrained indirect light in street canyons.
+            violetAmbient=mix(vec3(.36,.40,.43),vec3(.24,.28,.32),conifer*.42);
+          }
           if(uVegas){
             warmSun=vec3(0.93,0.64,0.46);
             violetAmbient=vec3(0.49,0.47,0.57);
@@ -2317,6 +2449,7 @@ const CENTRAL_PARK_SITES=[
           vec3 daylight=mix(nightFill,violetAmbient,uAtmosphere.x);
           warmSun=mix(vec3(0.97,0.97,0.91),vec3(1.08,0.67,0.43),uAtmosphere.y*0.75);
           col=albedo*(daylight+warmSun*direct*uAtmosphere.x*(1.0-uAtmosphere.z*0.78));
+          if(uManhattan)col*=1.0-smoothstep(.08,.84,conifer)*.21;
           if(uVegas)col+=vegasSpill(p,n)*albedo*(1.0-uAtmosphere.x*0.92);
           if(uManhattan)col+=manhattanSpill(p,n)*(0.15+albedo*0.70)*(1.0-uAtmosphere.x*0.91);
         }
@@ -2716,7 +2849,8 @@ const CENTRAL_PARK_SITES=[
       bool glass=cls==4 || cls==6;
       // Avoid applying a second generic image projection on a tagged
       // NYC OTI or Times Square footprint material.
-      bool taggedFacadeSurface=vHarborSurface>5.5 && vHarborSurface<14.5;
+      bool taggedFacadeSurface=vHarborSurface>5.5 && (vHarborSurface<14.5 ||
+        (vHarborSurface>16.5 && vHarborSurface<18.5));
       bool commonWall=cls==0 && uCityFacade && !taggedFacadeSurface;
       if(!(stone||metal||glass||commonWall))return;
       vec2 uv=vec2(abs(normal.x)>abs(normal.z)?vWorld.z:vWorld.x,vWorld.y);
@@ -2753,11 +2887,12 @@ const CENTRAL_PARK_SITES=[
     // polygon masonry, authored window planes and triangulated rooftops.
     // Original Poly Haven CC0 maps are already bound by NYC material atlas.
     void nyOfficialGisPbr(inout vec3 albedo,inout vec3 n,inout float roughness){
+      bool surveyedWall=vHarborSurface>16.5 && vHarborSurface<18.5;
       if(!uManhattanView || !uSmooth || uNyStreetQuality<1.5 ||
-          vHarborSurface<5.5 || vHarborSurface>14.5)return;
+          vHarborSurface<5.5 || (vHarborSurface>14.5 && !surveyedWall))return;
       float nearDetail=1.0-smoothstep(98.0,340.0,distance(vWorld,uEye));
       if(nearDetail<0.002)return;
-      float materialClass=mod(floor(vHarborSurface+.5),3.0);
+      float materialClass=surveyedWall?0.0:mod(floor(vHarborSurface+.5),3.0);
       if(materialClass<.5){
         // Stable world-space stone/brick mapping keeps scale consistent even
         // across non-axis-aligned official building footprint edges.
@@ -2784,7 +2919,7 @@ const CENTRAL_PARK_SITES=[
         // faces use staggered masonry courses instead of large flat color
         // blocks. Derivative-width mortar lines fade before aliasing, and
         // remain entirely on surface 12 (no OTI/Times Square or Alaska bleed).
-        if(vHarborSurface>11.5 && vHarborSurface<12.5){
+        if((vHarborSurface>11.5 && vHarborSurface<12.5)||vHarborSurface==18.0){
           // PATROL_DUMBO_BRICK_REAL_SCALE_V2: roughly 22cm long by 8.6cm
           // high brick modules, not the old giant 74cm x 37cm cubes.
           // Distant bricks become a continuous clay surface at subpixel LOD.
@@ -2869,6 +3004,15 @@ const CENTRAL_PARK_SITES=[
           albedo*=mix(1.0,.88+.20*grit,nearDetail*.58);
           albedo=mix(albedo,albedo*.69,
             nearDetail*(line*.17+patches*.21));
+          // Coarse weathering reads from the air while fine tar seams
+          // disappear once they would be narrower than a pixel.
+          vec2 drift=vec2(vWorld.y*.43,vWorld.y*.71);
+          float aging=nyStreetNoise(vWorld.xz*.095+drift);
+          float wetPatch=smoothstep(.43,.82,aging)*
+            clamp(uNyStreetWetness,0.0,1.0);
+          float seamLod=1.0-smoothstep(.24,.87,max(aa.x,aa.y));
+          albedo*=mix(.89,1.10,aging);
+          albedo*=1.0-wetPatch*.19-line*seamLod*.065;
         }
         float wet=clamp(uNyStreetWetness*.39,0.0,.37);
         roughness=mix(roughness,mix(.88,.55,wet),nearDetail*.75);
@@ -3369,7 +3513,7 @@ const CENTRAL_PARK_SITES=[
       }
     }
 
-    function upload() {
+    function upload(rangeStarts) {
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       const buffers = [];
@@ -3385,9 +3529,20 @@ const CENTRAL_PARK_SITES=[
       makeBuf(norm, 1);
       makeBuf(col, 2);
       if(surfaces) makeBuf(surfaces, 3, 1);
-      return { vao, buffers, count: pos.length / 3 };
+      const count=pos.length/3;
+      const ranges=rangeStarts?.map((first,i)=>{
+        const end=rangeStarts[i+1]??count;
+        if(end===first)return null;
+        const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+        for(let j=first*3;j<end*3;j+=3)for(let a=0;a<3;a++){
+          lo[a]=Math.min(lo[a],pos[j+a]);
+          hi[a]=Math.max(hi[a],pos[j+a]);
+        }
+        return {first,count:end-first,lo,hi};
+      }).filter(Boolean);
+      return { vao, buffers, count, ranges };
     }
-    return { addTri, addQuad, upload };
+    return { addTri, addQuad, upload, vertexCount:()=>pos.length/3 };
   }
 
   function buildFighterMesh() {
@@ -5467,6 +5622,7 @@ const CENTRAL_PARK_SITES=[
   }
 
   let backgroundBuildings = null;
+  const nycPerfDebug=new URLSearchParams(location.search).has('nycPerf');
   let landscapeDetails = null;
 
   let cityGroundField = null;
@@ -5574,11 +5730,23 @@ const CENTRAL_PARK_SITES=[
     cityGroundField=ground;
     // This applies to NYC only; all other maps keep their original parcels.
     const safeParcels=selectedMap.city
-      ?parcels.filter(lot=>!nycParcelCrossesRoad(lot))
+      ?parcels.filter(lot=>!nycParcelCrossesRoad(lot,(lot[9]==='manhattan-survey'||lot[9]==='east-bank-survey')?2.4:undefined))
       :parcels;
     if(selectedMap.city)console.info('[PATROL] NYC protected roadway parcels',
       parcels.length-safeParcels.length,'removed from',parcels.length);
     cityLots=safeParcels;
+    if(selectedMap.city){
+      const surveyed=safeParcels.filter(lot=>lot[9]==='manhattan-survey');
+      const districts=[[-525,-245],[-245,55],[55,365],[365,665]]
+        .map(([lo,hi])=>surveyed.filter(lot=>lot[1]>=lo&&lot[1]<hi).length);
+      const eastern=safeParcels.filter(lot=>lot[9]==='east-bank-survey');
+      glCanvas.dataset.bronxBuildings=String(eastern.filter(lot=>lot[10]===2).length);
+      glCanvas.dataset.brooklynBuildings=String(eastern.filter(lot=>lot[10]===3).length);
+      glCanvas.dataset.queensBuildings=String(eastern.filter(lot=>lot[10]===4).length);
+      glCanvas.dataset.manhattanBuildings=String(surveyed.length);
+      glCanvas.dataset.manhattanDistricts=districts.join(',');
+      console.info('[PATROL] Manhattan building coverage',surveyed.length,districts.join(','));
+    }
     lotIndex.clear();
     // Index every spatial cell touched by the full municipal footprint.
     // Center-only indexing misses corners of long walls during road clearance.
@@ -5604,6 +5772,24 @@ const CENTRAL_PARK_SITES=[
     for(const hit of buildingHits.values())for(const mesh of hit.scars)disposeSceneMesh(mesh);
     buildingHits.clear();
     rebuildCity=false;
+  }
+
+  // Clip-space planes, converted to world-space once per frame.
+  function cityFrustumPlanes(m){
+    const planes=[];
+    for(let axis=0;axis<3;axis++)for(const sign of [-1,1])
+      planes.push([3,7,11,15].map(i=>m[i]+sign*m[i-3+axis]));
+    return planes;
+  }
+  function visibleCityRange(range,planes){
+    for(const [a,b,c,d] of planes){
+      const {lo,hi}=range, pad=.12;
+      const x=a>=0?hi[0]+pad:lo[0]-pad;
+      const y=b>=0?hi[1]+pad:lo[1]-pad;
+      const z=c>=0?hi[2]+pad:lo[2]-pad;
+      if(a*x+b*y+c*z+d<0)return false;
+    }
+    return true;
   }
 
   function disposeSceneMesh(mesh) {
@@ -5673,7 +5859,7 @@ const CENTRAL_PARK_SITES=[
   function refreshDestroyedCity() {
     if (rebuildCity) {
       disposeSceneMesh(backgroundBuildings);
-      backgroundBuildings=buildCityBuildings(cityLots);
+      backgroundBuildings=buildCityBuildings(cityLots,false,Boolean(selectedMap.city?.manhattanFootprints?.length));
       rebuildCity=false;
     }
     for (let i=fallingBuildings.length-1;i>=0;i--) {
@@ -5783,7 +5969,18 @@ const CENTRAL_PARK_SITES=[
       [[.70,.66,.58],[.32,.30,.28]]
     ];
     const [stone,glass]=palettes[Math.floor(tone*palettes.length)%palettes.length];
-    const wallTint=isGlass?glass:stone,frameTint=isGlass?[.35,.42,.45]:[.48,.44,.39];
+    const eastBankBrick=lot[9]==='east-bank-survey'&&(lot[10]===2||lot[10]===3)&&!isGlass;
+    const surveyed=lot[9]==='east-bank-survey'||lot[9]==='manhattan-survey';
+    // Midrange real footprints gain shader-window bays without emitting
+    // thousands of extra quads; close physical window models stay untagged.
+    const wallSurface=surveyed&&detailBand===1&&!destroyed
+      ?(eastBankBrick?18:17):(eastBankBrick?12:9);
+    const roofTints=[[.27,.28,.28],[.42,.41,.37],[.36,.39,.39],[.52,.49,.44]];
+    const roofTint=surveyed?roofTints[Math.floor(tone*roofTints.length)%roofTints.length]
+      :isGlass?[.31,.36,.37]:[.47,.44,.40];
+    const roofSurface=surveyed?14:11;
+    const brick=[[.55,.38,.30],[.46,.34,.30],[.59,.46,.38]];
+    const wallTint=eastBankBrick?brick[Math.floor(tone*3)%3]:isGlass?glass:stone,frameTint=isGlass?[.35,.42,.45]:[.48,.44,.39];
     let walls=0,windows=0,roof=0;
     const face=(a,b,c,d,color,surface=0)=>{
       if(sign>0)addQuad(d,c,b,a,color,surface);
@@ -5795,7 +5992,7 @@ const CENTRAL_PARK_SITES=[
       if(length<.10)continue;
       const loA=[a[0],y,a[1]],loB=[b[0],y,b[1]];
       const hiB=[b[0],roofY,b[1]],hiA=[a[0],roofY,a[1]];
-      face(loA,loB,hiB,hiA,wallTint,9);
+      face(loA,loB,hiB,hiA,wallTint,wallSurface);
       walls++;
       if(destroyed||length<1.4||detailBand<2)continue;
       const normal=[sign*dz/length,-sign*dx/length];
@@ -5927,8 +6124,8 @@ const CENTRAL_PARK_SITES=[
         }
         if(blocked)continue;
         const A=[a[0],roofY,a[1]],B=[b[0],roofY,b[1]],C=[c[0],roofY,c[1]];
-        if(sign>0)addTri(C,B,A,isGlass?[.31,.36,.37]:[.47,.44,.40],11);
-        else addTri(A,B,C,isGlass?[.31,.36,.37]:[.47,.44,.40],11);
+        if(sign>0)addTri(C,B,A,roofTint,roofSurface);
+        else addTri(A,B,C,roofTint,roofSurface);
         indices.splice(i,1);roof++;clipped=true;break;
       }
       if(!clipped)break;
@@ -5936,14 +6133,30 @@ const CENTRAL_PARK_SITES=[
     return {walls,windows,roof,expectedRoof:outline.length-2};
   }
 
-  function buildCityBuildings(parcels,local=false) {
-    const {addTri,addQuad,upload}=createTriangleMesh();
+  function buildCityBuildings(parcels,local=false,wideCoverage=false) {
+    const {addTri,addQuad,upload,vertexCount}=createTriangleMesh();
+    // Same VAO and materials, contiguous ranges grouped by world cell.
+    // Rebuilding after demolition preserves the same lot/collision object IDs.
+    const spatial=!local&&typeof vertexCount==='function';
+    const cells=new Map(), rangeStarts=spatial?[]:undefined;
+    if(spatial){
+      for(const lot of parcels){
+        const key=Math.floor(lot[0]/144)+','+Math.floor(lot[1]/144);
+        if(!cells.has(key))cells.set(key,[]);
+        cells.get(key).push(lot);
+      }
+    }
+    const starts=spatial?new Set([...cells.values()].map(group=>group[0])):null;
+    const ordered=spatial?[...cells.values()].flat():parcels;
     let detailedDowntown=0;
-    for(const lot of parcels){
+    for(const lot of ordered){
+      if(starts?.has(lot))rangeStarts.push(vertexCount());
       const [east,north,w,d,h,tone,destroyed]=lot;
       // Local collapsing rubble must bypass regional LOD; it is positioned
       // later by a model transform and does not live at world origin.
-      const detailBand=local?2:nycDetailBand(east,north);
+      const surveyed=lot[9]==='manhattan-survey'||lot[9]==='east-bank-survey';
+      const detailBand=local?2:surveyed?
+        (h>=9&&tone<.22&&nycDetailBand(east,north)>=2?2:1):Math.max(wideCoverage?1:0,nycDetailBand(east,north));
       if(detailBand===0)continue;
       const x=local?0:east,z=local?0:north,y=local?0:WATER_H+2.38;
       if(!local&&lot[7]){
@@ -6407,7 +6620,7 @@ const CENTRAL_PARK_SITES=[
         detailedDowntown++;
       }
     }
-    return upload();
+    return upload(rangeStarts);
   }
 
   function tintSeed(x,z){return Math.sin(x*0.137+z*0.087)*1.9;}
@@ -6567,10 +6780,17 @@ const CENTRAL_PARK_SITES=[
     // forest geometry is available. Keep them in compatibility fallback.
     const patches = alaska && !graphicsCompat ? [] : alaska
       ? [[-176,-430],[160,-330],[-185,-160],[166,12],[-142,205],[169,255]]
-      : [[79,160],[90,255]];
+      : selectedMap.city&&!graphicsCompat ? [] : [[79,160],[90,255]];
     for (const [cx,cz] of patches) for (let i=0;i<28;i++) {
       const x = cx+Math.sin(i*4.32+cz)*30;
       const z = cz+Math.cos(i*3.82+cx)*(alaska?53:48);
+      // Legacy city trees may still be used by compatibility rendering.
+      // Terrain height alone can't detect the raised scenic lake surface.
+      if(selectedMap.city){
+        const u=x-MANHATTAN_GRID.tilt*z-MANHATTAN_GRID.offset;
+        if(CENTRAL_PARK_WATERS.some(f=>Math.hypot((u-f.cx)/f.rx,(z-f.cz)/f.rz)<1.17))
+          continue;
+      }
       const y = sampleGroundHeight(x,z);
       if (y<WATER_H+1.8 || y>34) continue;
       const h = 3.3+(i%7)*0.62;
@@ -7538,7 +7758,11 @@ const CENTRAL_PARK_SITES=[
           // existing building collision volumes when the terrain is ready.
           isClear:(x,z,r=.5)=>[[0,0],[-r,-r],[-r,r],[r,-r],[r,r]]
             .every(([dx,dz])=>!cityLotAt(x+dx,z+dz)),
-          detailBand:nycDetailBand,grid:MANHATTAN_GRID,
+          northEastGrid:Boolean(selectedMap.city.eastBankFootprints?.length),
+          detailBand:(x,z)=>selectedMap.city.eastBankFootprints?.length &&
+            x-MANHATTAN_GRID.tilt*z-MANHATTAN_GRID.offset>205 && z>=250 && z<650
+              ?Math.max(2,nycDetailBand(x,z)):nycDetailBand(x,z),
+          grid:MANHATTAN_GRID,
           streetY:STREET_Y,waterY:WATER_H,
           timesBounds:TIMES_SQUARE.bounds,
           existingStreets:[...CITY_STREETS,CITY_EXPRESSWAY.points,CITY_EXPRESSWAY.ramp],
@@ -7587,7 +7811,7 @@ const CENTRAL_PARK_SITES=[
     // Park geometry uses a separate, bounded triangle batch, but the same
     // WebGL renderer as Manhattan. Load only when the city is active.
     if(selectedMap.city && !graphicsCompat && smoothScenery()){
-      Promise.all([import('./assets/nyc/central-park.js'),
+      Promise.all([import('./assets/nyc/central-park.js?v=water2'),
         import('./assets/nyc/central-park-amenities.js')]).then(([{buildCentralPark},{buildCentralParkAmenities}])=>{
         if(!selectedMap.city||heroEpoch!==nycHeroEpoch||gl.isContextLost())return;
         const detail=createTriangleMesh();
@@ -11113,6 +11337,10 @@ const CENTRAL_PARK_SITES=[
       detail:'Wedge-shaped masonry landmark'},
     {name:'Skyline Rescue',x:40,z:-70,height:31,bearing:156,radius:67,rise:18,
       detail:'Watch the rescue climber and drone projections. Press J to start.'},
+    {name:'South Bronx · Aerial',x:366,z:530,height:10,bearing:212,radius:118,rise:62,
+      detail:'South Bronx blocks from NYC CityGML, adapted to the flight map'},
+    {name:'Western Queens · Aerial',x:448,z:305,height:12,bearing:220,radius:108,rise:54,
+      detail:'Aerial view of the Queens-side street blocks and skyline'},
     // Central Park viewpoints are city-only and do not teleport aircraft.
     {name:'Central Park · Reservoir Aerial',x:88.8,z:245,height:11,bearing:216,radius:82,rise:23,
       detail:'Reservoir shoreline and park canopy from overhead'},
@@ -12537,7 +12765,8 @@ const CENTRAL_PARK_SITES=[
       setupCityLots(data.parcels,data.ground);
       disposeSceneMesh(backgroundBuildings);
       disposeSceneMesh(landscapeDetails);
-      backgroundBuildings = selectedMap.city ? buildCityBuildings(cityLots) : null;
+      backgroundBuildings = selectedMap.city ?
+        buildCityBuildings(cityLots,false,Boolean(selectedMap.city.manhattanFootprints?.length)) : null;
       if(selectedMap.city && smoothScenery())prepareNycRealismAssets();
       landscapeDetails = smoothScenery() ? createLandscapeDetails() : null;
       prepareAlaskaLandmarks();
@@ -12722,6 +12951,42 @@ const CENTRAL_PARK_SITES=[
         console.warn('[PATROL] NYC official footprint fallback:',error);
         selectedMap.city.officialFootprints=[];
       }
+    }
+    if(selectedMap.city){
+      const city=selectedMap.city;
+      const configs=[['manhattanFootprints','manhattan-footprints-v1',1],
+        ['eastBankFootprints','east-bank-footprints-v2',2]];
+      const readPacked=()=>import('./assets/nyc/footprint-pack.mjs');
+      await Promise.all(configs.map(async ([key,name,kind])=>{
+        if(Array.isArray(city[key])&&city[key].length)return;
+        try{
+          loadStep.textContent='Loading compact NYC building geometry…';
+          const [codec,response]=await Promise.all([
+            readPacked(),fetch('./assets/nyc/'+name+'.nfp')]);
+          if(!response.ok)throw Error('HTTP '+response.status);
+          city[key]=codec.decodeFootprints(await response.arrayBuffer(),kind);
+        }catch(error){
+          // Stale static deployments and broken packs can still use the
+          // human-readable source. Retry on the next flight if both fail.
+          console.warn('[PATROL] NYC compact footprint fallback:',name,error);
+          try{
+            const response=await fetch('./assets/nyc/'+name+'.json');
+            if(!response.ok)throw Error('HTTP '+response.status);
+            const data=await response.json();
+            if(data.schema!=='patrol-'+name||!Array.isArray(data.footprints)||
+              data.footprints.length>50000||!data.footprints.every(r=>
+                Array.isArray(r)&&r.length===(kind===1?7:8)&&
+                r.slice(0,6).every(Number.isFinite)&&r[3]>0&&r[4]>0&&r[5]>0&&
+                Array.isArray(r[6])&&r[6].length>=3&&r[6].length<=64&&
+                r[6].every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))&&
+                (kind===1||[2,3,4].includes(r[7]))))throw Error('Invalid NYC source geometry');
+            city[key]=data.footprints.sort((a,b)=>b[5]-a[5]||a[0]-b[0]);
+          }catch(error){
+            console.warn('[PATROL] NYC footprints unavailable:',name,error);
+            city[key]=[];
+          }
+        }
+      }));
     }
     const terrainOptions={
       size:MAP_SIZE,span:MAP_SPAN,landmarks:selectedMap.landmarks,
@@ -14175,7 +14440,11 @@ const CENTRAL_PARK_SITES=[
       gl.activeTexture(gl.TEXTURE0);
     }
 
-    function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true) {
+    function drawMeshWithOutline(mesh,modelMat,emissive=false,cityFacade=false,outlined=true,ranges=null) {
+      const submit=()=>{
+        if(ranges){for(const r of ranges)gl.drawArrays(gl.TRIANGLES,r.first,r.count);}
+        else gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+      };
       const hasBlenderDiffuse=Boolean(selectedMap.city && mesh.texture);
       gl.uniform1f(uMesh.scenarioDiffuseReady,hasBlenderDiffuse?1:0);
       if(hasBlenderDiffuse){
@@ -14193,20 +14462,30 @@ const CENTRAL_PARK_SITES=[
         gl.uniform1f(uMesh.outline, 0.045);
         gl.uniform1f(uMesh.isOutline, 1.0);
         gl.uniform1f(uMesh.emissive, 0.0);
-        gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+        submit();
         gl.cullFace(gl.BACK);
       }
       gl.disable(gl.CULL_FACE);
       gl.uniform1f(uMesh.outline, 0.0);
       gl.uniform1f(uMesh.isOutline, 0.0);
       gl.uniform1f(uMesh.emissive, emissive ? 1.0 : 0.0);
-      gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+      submit();
     }
 
     refreshDestroyedCity();
     if (backgroundBuildings || landscapeDetails) {
       const identity = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
-      if (backgroundBuildings) drawMeshWithOutline(backgroundBuildings,identity,false,true);
+      if(backgroundBuildings){
+        const planes=cityFrustumPlanes(viewProj);
+        const visible=backgroundBuildings.ranges?.filter(r=>visibleCityRange(r,planes));
+        if(!visible||visible.length)drawMeshWithOutline(backgroundBuildings,identity,false,true,true,visible);
+        // Opt-in browser QA only: no per-frame DOM writes in normal gameplay.
+        if(nycPerfDebug){
+          glCanvas.dataset.cityVertices=String(backgroundBuildings.count);
+          glCanvas.dataset.cityVisibleVertices=String(visible?
+            visible.reduce((sum,r)=>sum+r.count,0):backgroundBuildings.count);
+        }
+      }
       if (landscapeDetails) drawMeshWithOutline(landscapeDetails,identity);
       for(const hit of buildingHits.values())for(const scar of hit.scars){
         drawMeshWithOutline(scar,identity);
@@ -14227,8 +14506,7 @@ const CENTRAL_PARK_SITES=[
         const origin = [mark.x, sampleGroundHeight(mark.x, mark.z) - 0.03, mark.z];
         const model = mat4FromBasis(origin, [1,0,0], [0,1,0], [0,0,1], 1);
         const meshes=newYorkMeshes[mark.kind];
-        const imported=smoothScenery()&&!graphicsCompat?
-          nycRealismAssets?.models[mark.kind]:null;
+        const imported=nycRealismAssets?.models[mark.kind]||null;
         // The old 13K low-poly Empire GLB does not supersede the
         // more detailed Art Deco mesh. Imported models must earn the switch.
         // Approved Blender exports have already passed their manifest gates;

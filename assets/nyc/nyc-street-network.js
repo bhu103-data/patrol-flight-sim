@@ -4,7 +4,8 @@
 // Roads reuse PATROL's CC0 Photo/PBR street materials in the main mesh shader.
 export function buildNycStreetNetwork({
   addQuad, addTri, box, beam, ribbon, terrainAt, detailBand,
-  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true
+  grid, streetY, waterY, timesBounds, existingStreets, lettering, pavementText, isClear=()=>true,
+  northEastGrid=false
 }) {
   const asphalt=[.25,.28,.30],sidewalk=[.53,.54,.51],granite=[.59,.58,.54],
     paint=[.85,.86,.81],yellow=[.83,.73,.45],iron=[.26,.30,.32],
@@ -445,6 +446,16 @@ export function buildNycStreetNetwork({
   for(let j=-12;j<=-7;j++)for(let i=9;i<=19;i++){
     const z=j*grid.blockLength;
     streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
+  }
+  // Flight-scale connecting streets, not surveyed centerlines. Use the
+  // same swept footprint and water checks as the downtown street batch.
+  if(northEastGrid){
+    for(let i=9;i<=18;i++)for(let j=8;j<=18;j++){
+      const z=j*grid.blockLength,n=z+grid.blockLength;
+      if(Math.hypot(avenueX(i,z),z)>722)continue;
+      streetSegment([avenueX(i,z),z],[avenueX(i,n),n],'avenue',i,j);
+      streetSegment([avenueX(i,z),z],[avenueX(i+1,z),z],'street',i,j);
+    }
   }
   function signal(x,z,phase=0,i=0,j=0){
     const base=streetY+.16;

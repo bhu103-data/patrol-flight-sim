@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Reviewed same-origin landmark GLB replacements; only original audited assets are enabled. Remaining landmarks use procedural fallback.",
+  "description": "Reviewed landmark GLBs only; Manhattan building footprints use the separate city parcel pipeline.",
   "source_plugin": "https://github.com/scenario-labs/blender-plugin",
   "max_glb_bytes": 8388608,
   "landmarks": {

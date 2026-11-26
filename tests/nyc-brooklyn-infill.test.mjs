@@ -30,7 +30,7 @@ test('bridgehead infill remains bounded and cannot bypass spatial safeguards',()
   assert.match(section,/brooklynGapFills>=32/);
   assert.match(section,/if\(base<=water\+1\.2\)continue/);
   assert.match(section,/generatedCityRoadOverlap\(\[x,z,width,length\],5\.85\)/);
-  assert.match(section,/if\(officialLots\.some\(overlaps\)\)continue/);
+  assert.match(section,/if\(overlapsSurvey\(x,z,width,length,1\.25\)\)continue/);
   assert.match(section,/if\(occupied\)continue/);
   assert.match(section,/cityParcels\.set\(key,\[x,z,width,length,height,tone/);
 });

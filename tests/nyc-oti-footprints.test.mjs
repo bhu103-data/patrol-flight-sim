@@ -31,6 +31,25 @@ const triArea3D=(a,b,c)=>{
   );
 };
 
+test('midrange surveyed brick and masonry use shader windows without extra facade triangles',()=>{
+  const poly=[[300,480],[305,480],[305,485],[300,485]];
+  const make=(tag,borough,band)=>{
+    const wall=[],roof=[];
+    const stats=mesh((a,b,c,tint,surface)=>roof.push(surface),
+      (a,b,c,d,tint,surface)=>wall.push(surface),
+      [302.5,482.5,5,5,6,.17,false,poly,123,tag,borough],14.58,band);
+    return {wall,roof,stats};
+  };
+  const brick=make('east-bank-survey',2,1);
+  const stone=make('manhattan-survey',1,1);
+  assert.deepEqual(brick.wall,[18,18,18,18]);
+  assert.deepEqual(stone.wall,[17,17,17,17]);
+  assert.deepEqual(brick.roof,[14,14]);
+  assert.equal(stone.stats.windows,0);
+  assert.ok(!make('east-bank-survey',2,2).wall.includes(18),
+    'near geometry must not get a second window layer');
+});
+
 test('NYC government provenance, schema, unique building identifiers and bounded input',()=>{
   assert.equal(snapshot.schema,'patrol-nyc-oti-footprints-v1');
   assert.match(snapshot.provider,/NYC Office of Technology and Innovation/);

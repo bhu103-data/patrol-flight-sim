@@ -65,8 +65,8 @@ test('Brooklyn style does not leak beyond bridgehead',()=>{
 });
 
 test('Brooklyn PBR tags do not impersonate surveyed NYC footprint source IDs',()=>{
-  assert.match(html,/vHarborSurface<5\.5 \|\| vHarborSurface>14\.5/);
-  assert.match(html,/taggedFacadeSurface=vHarborSurface>5\.5 && vHarborSurface<14\.5/);
+  assert.match(html,/vHarborSurface<5\.5 \|\| \(vHarborSurface>14\.5 && !surveyedWall\)/);
+  assert.match(html,/taggedFacadeSurface=vHarborSurface>5\.5 && \(vHarborSurface<14\.5 \|\|\s*\(vHarborSurface>16\.5 && vHarborSurface<18\.5\)\)/);
   assert.match(html,/vHarborSurface==13\.0/);
   assert.match(html,/12\/13\/14 mark \*procedural Brooklyn\*/);
 });

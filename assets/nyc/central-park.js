@@ -134,13 +134,19 @@ export function buildCentralPark({
   }
   function lake(f,k){
     const center=[ex(f.cx,f.cz),waterTop,f.cz];
+    // Interpolate a shared shoreline color at each vertex. A different
+    // flat color per triangle produced a pinwheel visible from the air.
+    const centerTint=k===0?[.088,.208,.274]:darkWater;
+    const shoreTint=(u,z)=>{
+      const swell=Math.sin(u*.13+z*.082)*.006+Math.sin(z*.21-u*.09)*.004;
+      return [.124+swell,.275+swell,.315+swell];
+    };
     const N=64;
     for(let i=0;i<N;i++){
       const [u0,z0]=riverContour(f,i),[u1,z1]=riverContour(f,i+1);
       const a=[ex(u0,z0),waterTop,z0],b=[ex(u1,z1),waterTop,z1];
       // Water and ring are separate surfaces with coherent upward normals.
-      const variation=(i%7===0?[.12,.30,.35]:i%5===0?[.11,.26,.31]:darkWater);
-      addTri(center,b,a,k===0?variation:water);
+      addTri(center,b,a,[centerTint,shoreTint(u1,z1),shoreTint(u0,z0)]);
       // Shoreline restores the terrain above the water surface.
       const [ou0,oz0]=riverContour(f,i,1.09);
       const [ou1,oz1]=riverContour(f,i+1,1.09);
@@ -159,7 +165,8 @@ export function buildCentralPark({
       addQuad([ex(u-dx,z-dz),waterTop+.013,z-dz],
         [ex(u-dx,z+dz),waterTop+.013,z+dz],
         [ex(u+dx,z+dz),waterTop+.013,z+dz],
-        [ex(u+dx,z-dz),waterTop+.013,z-dz],[.21,.36,.39]);
+        [ex(u+dx,z-dz),waterTop+.013,z-dz],
+        [[.12,.27,.32],[.12,.27,.32],[.15,.30,.34],[.15,.30,.34]]);
     }
     stats.waterBodies++;
     stats.shoreTriangles+=64*3;
