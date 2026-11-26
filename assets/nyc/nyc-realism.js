@@ -19,7 +19,7 @@ function nodeMatrix(node){
   ];
 }
 // Named export permits real-browser GLB smoke tests without loading paid assets.
-export async function decodeGLB(gl,buffer,targetHeight){
+export async function decodeGLB(gl,buffer,targetHeight,minTriangles=1){
   const dv=new DataView(buffer);
   if(buffer.byteLength<28||dv.getUint32(0,true)!==0x46546c67||
     dv.getUint32(4,true)!==2||dv.getUint32(8,true)!==buffer.byteLength)
@@ -71,10 +71,17 @@ export async function decodeGLB(gl,buffer,targetHeight){
     const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
     const n0=cross(c1,c2),n1=cross(c2,c0),n2=cross(c0,c1);
     const det=c0[0]*n0[0]+c0[1]*n0[1]+c0[2]*n0[2];
+    const normalSign=Math.sign(det||1);
     if(node.mesh!==undefined){
       for(const primitive of document.meshes[node.mesh].primitives||[]){
         if(primitive.mode!==undefined&&primitive.mode!==4)continue;
-        const p=readAccessor(primitive.attributes.POSITION);
+        const positionId=primitive.attributes.POSITION;
+        const vertexCount=document.accessors[primitive.indices??positionId]?.count;
+        if(!Number.isSafeInteger(vertexCount)||vertexCount<0)
+          throw Error('Invalid GLB vertex count');
+        if(pos.length+Math.floor(vertexCount/3)*9>240000)
+          throw Error('GLB is empty, too large or flat');
+        const p=readAccessor(positionId);
         if(p.components!==3)throw Error('Expected VEC3 positions');
         const n=primitive.attributes.NORMAL!==undefined?
           readAccessor(primitive.attributes.NORMAL):null;
@@ -103,8 +110,7 @@ export async function decodeGLB(gl,buffer,targetHeight){
           if(uv.components!==2 || uv.count!==p.count)
             throw Error('Bad GLB texture coordinates');
         }
-        const length=idx?idx.count:p.count;
-        for(let k=0;k+2<length;k+=3){
+        for(let k=0;k+2<vertexCount;k+=3){
           for(let j=0;j<3;j++){
             const index=idx?idx.result[k+j]:k+j;
             if(index<0||index>=p.count)throw Error('Index out of range');
@@ -118,20 +124,16 @@ export async function decodeGLB(gl,buffer,targetHeight){
             minZ=Math.min(minZ,wz);maxZ=Math.max(maxZ,wz);
             if(n){
               const nx=n.result[index*3],ny=n.result[index*3+1],nz=n.result[index*3+2];
-              const sign=Math.sign(det||1);
-              const ax=(n0[0]*nx+n1[0]*ny+n2[0]*nz)*sign;
-              const ay=(n0[1]*nx+n1[1]*ny+n2[1]*nz)*sign;
-              const az=(n0[2]*nx+n1[2]*ny+n2[2]*nz)*sign;
+              const ax=(n0[0]*nx+n1[0]*ny+n2[0]*nz)*normalSign;
+              const ay=(n0[1]*nx+n1[1]*ny+n2[1]*nz)*normalSign;
+              const az=(n0[2]*nx+n1[2]*ny+n2[2]*nz)*normalSign;
               const len=Math.hypot(ax,ay,az)||1;
               nor.push(ax/len,ay/len,az/len);
             }else nor.push(0,0,0);
-            const tint=color0
-              ?[color0.result[index*color0.components],
-                color0.result[index*color0.components+1],
-                color0.result[index*color0.components+2]]
-              :[1,1,1];
-            col.push(faceColor[0]*tint[0],faceColor[1]*tint[1],
-              faceColor[2]*tint[2]);
+            if(color0){
+              const at=index*color0.components,tint=color0.result;
+              col.push(faceColor[0]*tint[at],faceColor[1]*tint[at+1],faceColor[2]*tint[at+2]);
+            }else col.push(faceColor[0],faceColor[1],faceColor[2]);
             uvMask.push(uv?uv.result[index*2]:0,
               uv?uv.result[index*2+1]:0,uv?1:0);
           }
@@ -154,8 +156,9 @@ export async function decodeGLB(gl,buffer,targetHeight){
   }
   for(const id of document.scenes?.[document.scene||0]?.nodes||[])
     walk(id,identity);
-  if(pos.length===0||pos.length>240000||!(maxY>minY))
+  if(pos.length===0||!(maxY>minY))
     throw Error('GLB is empty, too large or flat');
+  if(pos.length/9<minTriangles)throw Error('Not enough triangles for premium mesh');
   const scale=targetHeight/(maxY-minY),mx=(minX+maxX)*0.5,mz=(minZ+maxZ)*0.5;
   for(let i=0;i<pos.length;i+=3){
     pos[i]=(pos[i]-mx)*scale;
@@ -251,9 +254,7 @@ export async function loadNycRealism(gl){
   const useProceduralLandmarks=typeof location!=='undefined' &&
     new URLSearchParams(location.search).get('nycModels')==='legacy';
   const modelsReady=useProceduralLandmarks?Promise.resolve():Promise.all([
-    // The original Empire State Building mesh has significantly more
-    // distinctive facade geometry than the 13 KB approximate GLB.
-    // Keep it instead of replacing it with an even simpler block.
+    // Keep the bundled Liberty mesh as a fallback for optional replacements.
     ['liberty','statue-of-liberty.glb',31]
   ].map(async ([kind,filename,height])=>{
     try{
@@ -282,7 +283,6 @@ export async function loadNycRealism(gl){
       const manifest=await response.json();
       if(manifest.schema_version!==1||!manifest.landmarks)return;
       const allowed=new Set(['liberty','trade','empire','chrysler','flatiron','times']);
-      await modelsReady;
       await Promise.all(Object.entries(manifest.landmarks).map(async ([kind,spec])=>{
         if(!allowed.has(kind)||!spec||spec.enabled!==true)return;
         if(typeof spec.file!=='string' ||
@@ -296,18 +296,16 @@ export async function loadNycRealism(gl){
         try{
           const file=await fetch('./assets/nyc/'+spec.file);
           if(!file.ok)throw Error('HTTP '+file.status);
-          const bytes=await file.arrayBuffer();
-          if(bytes.byteLength>8388608||
-             bytes.byteLength>(Number(manifest.max_glb_bytes)||8388608))
+          const maxBytes=Math.min(8388608,Number(manifest.max_glb_bytes)||8388608);
+          if(Number(file.headers?.get('Content-Length'))>maxBytes)
             throw Error('GLB exceeds import limit');
+          const bytes=await file.arrayBuffer();
+          if(bytes.byteLength>maxBytes)throw Error('GLB exceeds import limit');
+          // Only Liberty can replace an already loaded mesh. Other downloads
+          // and decodes need not wait for the independent fallback request.
+          if(kind==='liberty')await modelsReady;
           if(gl.isContextLost())return;
-          const mesh=await decodeGLB(gl,bytes,spec.target_height);
-          if(mesh.count<spec.min_triangles*3){
-            for(const buffer of mesh.buffers)gl.deleteBuffer(buffer);
-            gl.deleteVertexArray(mesh.vao);
-            if(mesh.texture)gl.deleteTexture(mesh.texture);
-            throw Error('Not enough triangles for premium mesh');
-          }
+          const mesh=await decodeGLB(gl,bytes,spec.target_height,spec.min_triangles);
           mesh.source='scenario';
           if(models[kind]){
             for(const buffer of models[kind].buffers)gl.deleteBuffer(buffer);
