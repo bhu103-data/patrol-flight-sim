@@ -316,6 +316,7 @@
   </div>
 </div>
 
+<script src="./assets/nyc/manhattan-bridge-subway.js"></script>
 <script>
 (() => {
   'use strict';
@@ -4934,6 +4935,11 @@ const CENTRAL_PARK_SITES=[
     const left=bridge.x-bridge.halfLength, right=bridge.x+bridge.halfLength;
     buildBridgeDeck(addQuad,box);
     buildBridgeRiverfront(addQuad,box);
+    // Real-world B/D and N/Q rail corridor is on MANHATTAN Bridge, not Brooklyn Bridge.
+    // Fixed, original game-scale girder/rail geometry joins the existing WebGL city batch.
+    if(typeof window!=='undefined'&&window.PatrolNycManhattanSubway)
+      window.PatrolNycManhattanSubway.build({addQuad,box,
+      beam:(a,b,w,color)=>addRideBeam(addQuad,a,b,w,color)});
     for (const x of [left-bridge.ramp-1,right+bridge.ramp+1]) {
       for (let stripe=-3;stripe<=3;stripe++) {
         box(x,STREET_Y+0.067,bridge.z+stripe*0.91,0.65,0.025,0.46,[0.82,0.83,0.77]);
@@ -5580,6 +5586,18 @@ const CENTRAL_PARK_SITES=[
     if (!selectedMap.city && !selectedMap.vegas && !selectedMap.dc) return;
     const origin = mat4FromBasis([0,0,0],[1,0,0],[0,1,0],[0,0,1],1);
     if (bridgeRails) drawMesh(bridgeRails,origin);
+    // Active subway pilot: two continuous four-car runs on the Manhattan Bridge.
+    // Reuse the original NYC train mesh, timing, distance LOD and camera matrices.
+    if(selectedMap.city&&typeof window!=='undefined'&&window.PatrolNycManhattanSubway){
+      const subway=window.PatrolNycManhattanSubway;
+      for(const run of subway.runs)for(let car=0;car<4;car++){
+        const {x,y,z,yaw,visible}=subway.trainPose(sceneryTime,run,car);
+        if(!visible||(x-camPos[0])**2+(z-camPos[2])**2>455*455)continue;
+        const front=[Math.sin(yaw),0,Math.cos(yaw)];
+        drawMesh(streetMeshes.train,mat4FromBasis([x,y,z],
+          [front[2],0,-front[0]],worldUp,front,1));
+      }
+    }
     for (const actor of cityTraffic) {
       if(actor.kind==='train'){
         for(let car=0;car<4;car++){
@@ -11317,6 +11335,16 @@ const CENTRAL_PARK_SITES=[
       detail:'Stone towers, suspension cables and lit approaches'},
     {name:'Brooklyn Bridge · Deck View',x:82,z:-342,height:15.0,bearing:115,radius:41,rise:8,
       detail:'Close to the suspension cables, raised timber walkway and limestone towers'},
+    // Separate rail bridge: original compressed-game structural prototype,
+    // not the roadway-only Brooklyn Bridge and not a surveyed 1:1 structure.
+    {name:'Manhattan Bridge · Subway Tracks',x:86,z:-285,height:14,
+      bearing:165,radius:44,rise:9,
+      detail:'Watch D/Q trains on the four-track steel truss; B/D north, N/Q south'},
+    // A river-level broadside camera makes the rolling stock visible beneath
+    // the two upper side road decks, without deleting the real deck structure.
+    {name:'Manhattan Bridge · Subway Rail Level',x:86,z:-285,height:12,
+      bearing:176,radius:49,rise:3,
+      detail:'Eye-level railway profile under the side road decks; view does not teleport the plane'},
     // Dedicated close-view camera lets CI inspect Brooklyn street façades
     // and block infill, rather than only the suspension bridge foreground.
     {name:'DUMBO · Warehouse Blocks',x:345,z:-300,height:11,bearing:235,radius:54,rise:13,
